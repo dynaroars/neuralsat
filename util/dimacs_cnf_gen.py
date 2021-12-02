@@ -75,4 +75,4 @@ if __name__ == '__main__':
 
     cnf_formula = CNF(num_vars, num_clauses, clause_length)
     cnf_formula.show()
-    cnf_formula.export('dimacs_cnf.txt')
+    cnf_formula.export('../data/dimacs_cnf.txt')

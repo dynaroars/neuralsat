@@ -1,5 +1,5 @@
 def dimacs_parse(filename):
-    formula = []
+    clauses = []
     for line in open(filename):
         if line.startswith('c'): 
             continue
@@ -7,8 +7,8 @@ def dimacs_parse(filename):
             nvars, nclauses = line.split()[2:4]
             continue
         clause = [int(x) for x in line[:-2].split()]
-        formula.append(clause)
-    return formula, int(nvars)
+        clauses.append(clause)
+    return clauses, int(nvars)
 
 
 if __name__ == '__main__':

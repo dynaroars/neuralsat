@@ -1,4 +1,4 @@
-from utils import dimacs_parse as parse
+from util.utils import dimacs_parse as parse
 from settings import *
 import random
 
