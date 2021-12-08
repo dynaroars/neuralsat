@@ -16,7 +16,7 @@ class Clause(object):
 
     def gen_random_clause(self, num_vars):
         self.lits = []
-        length = random.randint(1, self.length)
+        length = random.randint(self.length//2, self.length)
         while len(self.lits) < length:  # Set the variables of the clause
             new_lit = random.randint(1, num_vars)  # New random variable
             if new_lit not in self.lits:  # If the variable is not already in the clause
@@ -29,7 +29,7 @@ class Clause(object):
         return " ".join(map(str, self.lits)) + " 0" 
 
 
-class CNF(object):
+class DimacsGenerator(object):
     """A CNF formula randomly generated"""
 
     def __init__(self, num_vars, num_clauses, clause_length):
@@ -73,6 +73,6 @@ if __name__ == '__main__':
     num_clauses = 7
     clause_length = 5
 
-    cnf_formula = CNF(num_vars, num_clauses, clause_length)
+    cnf_formula = DimacsGenerator(num_vars, num_clauses, clause_length)
     cnf_formula.show()
     cnf_formula.export('../data/dimacs_cnf.txt')

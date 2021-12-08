@@ -3,7 +3,7 @@ SUPPORTED_DECIDER = ['ORDERED', 'VSIDS', 'MINISAT']
 SUPPORTED_RESTARTER = ['GEOMETRIC', 'LUBY']
 
 # variable for decider
-DECIDER = 'MINISAT'
+DECIDER = 'ORDERED'
 
 INCREASE = 1 # Score increases when literal is found in a conflict clause
 DECAY = 0.85 # Scores decays after each conflict
