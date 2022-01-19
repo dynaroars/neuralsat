@@ -113,6 +113,7 @@ class CDCL:
         self._level = 0
         # List of clauses where each clause is stored as a list of literals 
         self._clauses = []
+        self._orig_clauses = []
 
         # Mapping a literal to the list of clauses the literal watches
         self._clauses_watched_by_l = {}
@@ -160,14 +161,14 @@ class CDCL:
     def _add_clause(self, clause):
         # remove duplicate instances
         # clause = list(OrderedDict.fromkeys(clause))
+        self._orig_clauses.append(clause)
 
         # Unary clause
         if len(clause) == 1:
             # Get the literal
             lit = clause[0]
-            value_to_set = lit > 0
             var = abs(lit)
-
+            value_to_set = lit > 0
             if var not in self._variable_to_assignment_nodes:
                 # Increment the number of implications as it is an implication
                 self.stats._num_implications += 1
@@ -565,7 +566,7 @@ class CDCL:
                 if assigned_node.level > maximum_level_before_conflict_level:
                     maximum_level_before_conflict_level = assigned_node.level
         # Return the backtrack level and the literal at conflict level
-        print(conflict_clause, conflict_level, literal_at_conflict_level)
+        # print(conflict_clause, conflict_level, literal_at_conflict_level)
         return maximum_level_before_conflict_level, literal_at_conflict_level
 
 
@@ -899,5 +900,31 @@ class CDCL:
                     self.stats._complete_time = time.time()
                     break
 
+    @classmethod
+    def reproduce(cls):
+        return cls()
 
+    def _export(self, clauses):
+        with open('data/tmp_cnf.txt', 'w') as f:
+            f.write(f"p cnf {self._num_vars} {len(clauses)}\n")
+            for clause in clauses:
+                f.write(' '.join([str(self._num_vars-c) 
+                    if self._is_negative_literal(c) else str(c) 
+                    for c in clause]) + ' 0 \n')
 
+    @property
+    def unsat_core(self):
+        self._unsat_core = []
+        unknown = self._orig_clauses.copy()
+        while unknown:
+            random.shuffle(unknown)
+            c = unknown.pop(0)
+            _solver = self.reproduce()
+            self._export(unknown + self._unsat_core)
+            _solver.solve('data/tmp_cnf.txt')
+            if _solver.stats._result == 'SAT':
+                self._unsat_core.append(c)
+        os.remove('data/tmp_cnf.txt')
+        return self._unsat_core
+
+    

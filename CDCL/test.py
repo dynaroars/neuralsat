@@ -19,7 +19,10 @@ def test_cdcl():
     solver.solve(filename)
     # solver.stats.print_stats()
 
-    print('v ' + ' '.join([f'{var}' if solver._variable_to_assignment_nodes[var].value else f'{-var}' for var in solver._variable_to_assignment_nodes]) + ' 0')
+    # print('v ' + ' '.join([f'{var}' if solver._variable_to_assignment_nodes[var].value else f'{-var}' for var in solver._variable_to_assignment_nodes]) + ' 0')
+
+    # print(solver._variable_to_assignment_nodes)
+    print(solver.unsat_core)
 
 if __name__ == '__main__':
     test_cdcl()

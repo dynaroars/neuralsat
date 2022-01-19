@@ -1,6 +1,7 @@
 def dimacs_parse(filename):
     clauses = []
     for line in open(filename):
+        line = line.strip()
         if line.startswith('c'): 
             continue
         if line.startswith('p'):
