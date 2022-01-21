@@ -17,6 +17,8 @@ if __name__ == '__main__':
         'in': '(and (x >= 2) (a = 2.1x))',
         'out': '(a >= 4.2)'
     }
+    f_str = '(and (3 + -1x0 <= 0) (3 + -1z < 0))'
+
     # parsed_input = Parser.parse(f_str)
     # pprint(parsed_input.row_dict)
     # pprint(parsed_input.col_dict)

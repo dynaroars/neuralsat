@@ -159,3 +159,14 @@ conditions = {
 2. Input interface
 3. Adopt substitution + Optimize constraints in Theory propagate.
 4. Optimize `Simplex`
+5. Finding Unsat core when unsat occurred
+6. Compare with Reluplex
+7. Behavior SAT/Unsat
+
+
+### Dummy Ideas
+
+1. Decide multiple variables in a same layer at once? If UNSAT then backtrack + add conflict clause
+2. Strategy for choosing variables?
+3. What if some variables can be used to imply the others? Choosing wrong value leads to UNSAT => conflict clause => next time the algorithm should decide smarter?
+4. UNSAT core for finding these conflict variables? (Actually don't need that)

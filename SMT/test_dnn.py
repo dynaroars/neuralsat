@@ -1,6 +1,6 @@
 from dnn_solver.dnn_solver import DNNSolver
 
-meta = {
+dnn = {
     'a00': [1, '1x0 - 1x1'],
     'a01': [2, '1x0 + 1x1'],
     'a10': [3, '0.5n00 - 0.2n01'],
@@ -14,7 +14,5 @@ conditions = {
     'out': '(y0 > y1)'
 }
 
-# print(1 in {1: {'value': False, 'clause': None, 'level': 0, 'idx': 0}})
-# exit()
-solver = DNNSolver(meta, conditions)
+solver = DNNSolver(dnn, conditions)
 print(solver.solve())
