@@ -5,17 +5,17 @@ import z3.z3core as z3core
 
 
 
-def main():
+def test():
     y = z3.Real('y')
     z = z3.Real('z')
+    return y - 3*z
 
-    t = z3.simplify(z3.substitute(-y + 1, (y, z-2))) <= 0
-    print(dir(t))
-    print(vars(t))
-    print(vars(t.ctx))
-    print(dir(t.ctx.eh))
-
-    print(str(t).replace('*', ''))
+def main():
+    b = z3.Real('k')
+    c = z3.Real('c')
+    t = test(
+        )
+    print(z3.substitute(t, (b, 2*c)))
 
 
 if __name__ == '__main__':

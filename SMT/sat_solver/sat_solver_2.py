@@ -7,7 +7,7 @@ from pprint import pprint
 
 class SATSolver2(Solver):
 
-    def __init__(self, formula=None, meta=None, first_var=None, max_new_clauses=float('inf'), 
+    def __init__(self, formula=None, vars_mapping=None, first_var=None, max_new_clauses=float('inf'), 
         halving_period=10000, theory_solver=None):
     
         super().__init__()
@@ -43,19 +43,12 @@ class SATSolver2(Solver):
         for clause in self._formula:
             self._add_clause(clause)
 
-        self._all_vars = set({})
-        self._mapping_vars = {}
-
-        for key, value in meta.items():
-            if key.startswith('a'):
-                self._all_vars.add(value[0])
-                self._mapping_vars[key] = value[0]
-
-        self._reversed_mapping_vars = {v: k for k, v in self._mapping_vars.items()}
+        self._all_vars = set(list(vars_mapping.values()))
+        self._vars_mapping = vars_mapping
 
         # print(self._all_vars)
-        # print(self._mapping_vars)
-        # print(self._reversed_mapping_vars)
+        # print(self._vars_mapping)
+        # print(self._reversed_vars_mapping)
 
         # print('[+] self._literal_to_clause')
         # pprint(self._literal_to_clause)
@@ -255,6 +248,9 @@ class SATSolver2(Solver):
         conflict_clause = set(conflict_clause)
         while True:
             last_literal, prev_max_level, max_level, max_level_count = self._find_last_literal(conflict_clause)
+            if last_literal is None:
+                return frozenset(conflict_clause), last_literal, prev_max_level
+                
             clause_on_incoming_edge = self._assignment[abs(last_literal)]["clause"]
             if (max_level_count == 1) or (clause_on_incoming_edge is None):
                 if max_level_count != 1:

@@ -14,10 +14,9 @@ if __name__ == '__main__':
     f_str = '(and (and (and (and (and (and (and (and (x0 < 0) (x1 > 1)) (n00 = 0)) (and (n01 >= 0) (n01 = 1x0 + 1x1))) (n10 = 0)) (and (n11 >= 0) (n11 = -0.5n00 + 0.1n01))) (y0 = 1n10 - 1n11)) (y1 = -1n10 + 1n11)) (not (not (y0 > y1))))'
 
     conditions = {
-        'in': '(and (x >= 2) (a = 2.1x))',
+        'in': '(and (x >= 2) (a = 2.1*x))',
         'out': '(a >= 4.2)'
     }
-    f_str = '(and (3 + -1x0 <= 0) (3 + -1z < 0))'
 
     # parsed_input = Parser.parse(f_str)
     # pprint(parsed_input.row_dict)
@@ -36,6 +35,7 @@ if __name__ == '__main__':
     # if feasible:
     #     print(solver.get_assignment())
     
+    f_str = '(and (and (and (and (x0 < 0) (x1 > 1)) (x0 + -1*x1 <= 0)) (x0 + x1 > 0)) (not (0.1*x0 + 0.1*x1 <= 0)))'
     solver = RealSolver(f_str)
     print(solver.solve())
     # print(solver.get_assignment())
