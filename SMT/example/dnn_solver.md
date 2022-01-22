@@ -155,18 +155,17 @@ conditions = {
 
 ### TODO
 
-1. Try with larger DNN
-2. Input interface
-3. Adopt substitution + Optimize constraints in Theory propagate.
-4. Optimize `Simplex`
-5. Finding Unsat core when unsat occurred
-6. Compare with Reluplex
-7. Behavior SAT/Unsat
+- [x] Try with larger DNN => Simplex Issue: Singular Matrix
+- [x] Input interface
+- [x] Adopt substitution + Optimize constraints in Theory propagate.
+- [ ] Optimize `Simplex`
+- [ ] Finding Unsat core when unsat occurred (Actually don't need that)
+- [ ] Compare with Reluplex
+- [ ] Behavior SAT/Unsat (time consuming)
 
 
 ### Dummy Ideas
 
-1. Decide multiple variables in a same layer at once? If UNSAT then backtrack + add conflict clause
-2. Strategy for choosing variables?
-3. What if some variables can be used to imply the others? Choosing wrong value leads to UNSAT => conflict clause => next time the algorithm should decide smarter?
-4. UNSAT core for finding these conflict variables? (Actually don't need that)
+- [ ] Decide multiple variables in a same layer at once? If UNSAT then backtrack + add conflict clause
+- [ ] Strategy for choosing variables?
+- [ ] What if some chosen variables can be used to imply the others? Choosing wrong value leads to UNSAT => conflict clause => next time the algorithm should decide smarter?

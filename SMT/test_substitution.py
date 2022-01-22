@@ -20,3 +20,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    a = set({1, 2, 3})
+    print()

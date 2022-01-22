@@ -1,6 +1,6 @@
 import copy
 import z3
-
+import re
 
 z3.set_option(rational_to_decimal=True)
 
@@ -18,6 +18,10 @@ class Utils:
     def Prove(term1, term2):
         return Utils.And(term1, Utils.Not(term2))
 
+def clean(string):
+    string = string.replace('?', '')
+    string = re.sub(r'\n', ' ', string)
+    return string
 
 class DNNConstraint:
 
@@ -71,6 +75,8 @@ class DNNConstraint:
         if not nodes:
             return None
 
+        print('nodes =============>', nodes)
+
         constraint = self.conditions['in']
 
         for node, status in assignment.items():
@@ -84,17 +90,19 @@ class DNNConstraint:
                 # f = self._construct_constraint_node(node, flip_assignment)
                 # constraint = Utils.And(constraint, '(%s)' % str(f <= 0))
 
+        constraint = clean(constraint)
         implies = {}
         if nodes[0].startswith('y'):
             tmp = self.conditions['out']
             for node in nodes:
-                tmp = tmp.replace(node, str(self._construct_constraint_node(node, assignment)))
+                tmp = tmp.replace(node, clean(str(self._construct_constraint_node(node, assignment))))
             constraint = Utils.And(constraint, tmp) # prove(f, not(g)) = f and g
             # return constraint
         else:
             for node in nodes:
                 f = self._construct_constraint_node(node, assignment)
-                implies[node] = [Utils.Prove(constraint, '(%s)' % str(f <= 0)), Utils.Prove(constraint, '(%s)' % str(f > 0))]
+                implies[node] = [clean(Utils.Prove(constraint, '(%s)' % str(f <= 0))), clean(Utils.Prove(constraint, '(%s)' % str(f > 0)))]
+
         return constraint, implies
 
 
@@ -115,19 +123,19 @@ if __name__ == '__main__':
     # }
 
     dnn = {
-        'a00': [(1.0, 'x0'), (-1.0, 'x1')],
-        'a01': [(1.0, 'x0'), (1.0, 'x1')],
-        'a10': [(0.5, 'n00'), (-0.2, 'n01')],
-        'a11': [(-0.5, 'n00'), (0.1, 'n01')],
-        'y0' : [(1.0, 'n10'), (-1.0, 'n11')],
-        'y1' : [(-1.0, 'n10'), (1.0, 'n11')],
+        'a0_0': [(1.0, 'x0'), (-1.0, 'x1')],
+        'a0_1': [(1.0, 'x0'), (1.0, 'x1')],
+        'a1_0': [(0.5, 'n0_0'), (-0.2, 'n0_1')],
+        'a1_1': [(-0.5, 'n0_0'), (0.1, 'n0_1')],
+        'y0' : [(1.0, 'n1_0'), (-1.0, 'n1_1')],
+        'y1' : [(-1.0, 'n1_0'), (1.0, 'n1_1')],
     }
 
     assignment = {
-        'a00': False,
-        'a01': True,
-        'a10': True,
-        'a11': False,
+        'a0_0': False,
+        'a0_1': True,
+        'a1_0': True,
+        'a1_1': False,
     }
 
 

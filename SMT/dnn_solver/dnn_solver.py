@@ -55,6 +55,13 @@ class DNNSolver(TheorySolver):
 
         # theory checking
         theory_constraints, implication_constraints = self.constraint_generator(assignment)
+
+        # print('----------------------------')
+        # print(theory_constraints)
+        # print('----------------------------')
+        # print(implication_constraints)
+        # print('----------------------------')
+
         print('\n- Theory constraints:', theory_constraints)
         stat = RealSolver(theory_constraints).solve()
         if not stat[0]:
@@ -74,16 +81,17 @@ class DNNSolver(TheorySolver):
         for node, constraints in implication_constraints.items():
             constraint_neg, constraint_pos = constraints
 
+            print(f'    - Deduction: `{node} <= 0`')
+            print(f'    - Constraints: `{constraint_neg}`')
             stat_neg = RealSolver(constraint_neg).solve()
             if not stat_neg[0]:
-                print(f'    - Constraints: `{constraint_neg}`')
-                print(f'    - Deduction: `{node} <= 0`')
                 new_assignments.append(-self.vars_mapping[node])
                 continue
+            print(f'    - Deduction: `{node} > 0`')
+            print(f'    - Constraints: `{constraint_pos}`')
             stat_pos = RealSolver(constraint_pos).solve()
             if not stat_pos[0]:
-                print(f'    - Constraints: `{constraint_pos}`')
-                print(f'    - Deduction: `{node} > 0`')
+                print('    - Result:', True)
                 new_assignments.append(self.vars_mapping[node])
 
         print(f'    - New assignment: `{new_assignments}`')

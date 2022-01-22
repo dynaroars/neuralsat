@@ -1,7 +1,8 @@
 from collections import deque, Counter
 from solver.solver import Solver
-from operator import or_
 from functools import reduce
+from operator import or_
+import sortedcontainers
 
 from pprint import pprint
 
@@ -43,7 +44,10 @@ class SATSolver2(Solver):
         for clause in self._formula:
             self._add_clause(clause)
 
-        self._all_vars = set(list(vars_mapping.values()))
+        self._all_vars = sortedcontainers.SortedList()
+        for v in vars_mapping:
+            self._all_vars.add(vars_mapping[v])
+
         self._vars_mapping = vars_mapping
 
         # print(self._all_vars)
@@ -122,7 +126,8 @@ class SATSolver2(Solver):
         # pprint(self._assignment[variable])
 
 
-        self._all_vars.remove(variable)
+        self._all_vars.discard(variable)
+        # self._all_vars.remove(variable)
 
         print(f'- Assign `variable={variable}`, `value={literal>0}`')
         print(f'- Unassigned variables = `{self._all_vars}`\n')
@@ -312,7 +317,7 @@ class SATSolver2(Solver):
         while self._last_assigned_literals:
             watch_literal = self._last_assigned_literals.popleft()
             # print(f'[+] watch_literal={watch_literal}')
-            if self._literal_to_watched_clause:
+            if abs(watch_literal) in self._literal_to_watched_clause:
                 for clause in self._literal_to_watched_clause[abs(watch_literal)].copy():
                     # print(f'[+] clause={clause}', clause in self._satisfied_clauses)
                     if clause not in self._satisfied_clauses:
@@ -406,8 +411,9 @@ class SATSolver2(Solver):
                 print(f'[+] literal={literal}, count={count}')
                 self._assign(None, literal)
         else:
-            for literal in self._all_vars:
-                break
+            # for literal in self._all_vars:
+            #     break
+            literal = self._all_vars.pop(0)
             print(f'- Choose: variable=`{literal}`\n')
 
             self._assign(None, literal)
