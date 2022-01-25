@@ -1,8 +1,9 @@
 from collections import deque, Counter
 from solver.solver import Solver
-import sortedcontainers
+import settings
 
 from pprint import pprint
+import sortedcontainers
 
 class CustomSATSolver(Solver):
 
@@ -111,7 +112,8 @@ class CustomSATSolver(Solver):
         """
         # print('================> _assign')
 
-        print('##### Assign\n')
+        if settings.DEBUG:
+            print('##### Assign\n')
 
         variable = abs(literal)
         # print(f'[+] variable={variable}')
@@ -127,8 +129,9 @@ class CustomSATSolver(Solver):
         self._all_vars.discard(variable)
         # self._all_vars.remove(variable)
 
-        print(f'- Assign `variable={variable}`, `value={literal>0}`')
-        print(f'- Unassigned variables = `{self._all_vars}`\n')
+        if settings.DEBUG:
+            print(f'- Assign `variable={variable}`, `value={literal>0}`')
+            print(f'- Unassigned variables = `{self._all_vars}`\n')
 
 
         # Update satisfied clauses
@@ -157,7 +160,8 @@ class CustomSATSolver(Solver):
 
 
     def propagate(self) -> bool:
-        print('##### Propagate\n')
+        if settings.DEBUG:
+            print('##### Propagate\n')
         # print('[+] self._last_assigned_literals:', self._last_assigned_literals)
 
         if (not self._last_assigned_literals) and (self._theory_solver is not None) \
@@ -195,9 +199,10 @@ class CustomSATSolver(Solver):
         Non-chronological backtracking.
         """
         # print('================> backtrack')
-        print('##### Backtrack\n')
+        if settings.DEBUG:
+            print('##### Backtrack\n')
+            print(f'- Backtrack to `level={level}`')
 
-        print(f'- Backtrack to `level={level}`')
 
         self._last_assigned_literals = deque()
         while len(self._assignment_by_level) > level + 1:
@@ -213,7 +218,8 @@ class CustomSATSolver(Solver):
         """
         Unassigns the given variable.
         """
-        print(f'- Unassign `variable={variable}`')
+        if settings.DEBUG:
+            print(f'- Unassign `variable={variable}`')
 
         del self._assignment[variable]
         self._all_vars.add(variable)
@@ -226,7 +232,8 @@ class CustomSATSolver(Solver):
         Adds a conflict clause to the formula.
         """
         # print('================> _add_conflict_clause')
-        print(f'- Add conflict clause: `{list(conflict_clause)}`\n')
+        if settings.DEBUG:
+            print(f'- Add conflict clause: `{list(conflict_clause)}`\n')
 
         if self._max_new_clauses <= 0:
             return
@@ -239,6 +246,8 @@ class CustomSATSolver(Solver):
                 self._literal_to_watched_clause[abs(literal)].discard(clause_to_remove)
 
         self._new_clauses.append(conflict_clause)
+        if settings.DEBUG:
+            print('    [+] _new_clauses =', len(self._new_clauses))
         self._add_clause(conflict_clause)
 
 
@@ -247,14 +256,27 @@ class CustomSATSolver(Solver):
         Learns conflict clauses using implication graphs, with the Unique Implication Point heuristic.
         """
         # print('================> _conflict_resolution', conflict_clause)
-        print('##### Analyze\n')
+        if settings.DEBUG:
+            print('##### Analyze\n')
         conflict_clause = set(conflict_clause)
+
+        conflict_assignment_dict = {}
+
         while True:
             last_literal, prev_max_level, max_level, max_level_count = self._find_last_literal(conflict_clause)
+            
+            # print('[+] prev_max_level:', prev_max_level)
+            # print('[+] max_level_count:', max_level_count)
+            # print('[+] max_level:', max_level)
+            # print('[+] last_literal:', last_literal)
+
             if last_literal is None:
                 return frozenset(conflict_clause), last_literal, prev_max_level
                 
             clause_on_incoming_edge = self._assignment[abs(last_literal)]["clause"]
+
+            # print('[+] clause_on_incoming_edge:', clause_on_incoming_edge)
+
             if (max_level_count == 1) or (clause_on_incoming_edge is None):
                 if max_level_count != 1:
                     # If the last literal was assigned because of the theory, there is no incoming edge
@@ -266,16 +288,34 @@ class CustomSATSolver(Solver):
                 # If the last assigned literal is the only one from the last decision level:
                 # return the conflict clause, the next literal to assign (which should be the
                 # watch literal of the conflict clause), and the decision level to jump to
-                print(f'- Backtrack `level={prev_max_level}`\n')
+                if settings.DEBUG:
+                    print(f'- Backtrack `level={prev_max_level}`\n')
 
+                return frozenset(conflict_clause), last_literal, prev_max_level
+
+
+            if -last_literal not in clause_on_incoming_edge:
                 return frozenset(conflict_clause), last_literal, prev_max_level
 
             # Resolve the conflict clause with the clause on the incoming edge
             # Might be the case that the last literal was assigned because of the
             # theory, and in that case it is impossible to do resolution
+            # print('[+] conflict_clause before:', conflict_clause)
             conflict_clause |= clause_on_incoming_edge
+
+            # print('[+] conflict_clause after:', conflict_clause)
+            # print()
+
             conflict_clause.remove(last_literal)
             conflict_clause.remove(-last_literal)
+
+            if last_literal not in conflict_assignment_dict:
+                conflict_assignment_dict[last_literal] = conflict_clause
+            else:
+                if conflict_assignment_dict[last_literal] == conflict_clause:
+                    print('[!] warning: loop forever')
+                    return frozenset(conflict_clause), last_literal, prev_max_level
+
 
 
 
@@ -396,23 +436,27 @@ class CustomSATSolver(Solver):
         # print('================> _decide')
         # print(self._first_var, self._theory_solver, (self._first_var not in self._assignment))
 
-        print('##### Decide\n')
+        if settings.DEBUG:
+            print('##### Decide\n')
 
         self.create_new_decision_level()
         if self._formula:
             if self._first_var and self._theory_solver and (self._first_var not in self._assignment):
                 self._assign(None, self._first_var)
-                print(self._first_var, self._assignment)
+                if settings.DEBUG:
+                    print(self._first_var, self._assignment)
                 del self._unassigned_vsids_count[self._first_var]
             else:
                 literal, count = self._unassigned_vsids_count.most_common(1).pop()
-                print(f'[+] literal={literal}, count={count}')
+                if settings.DEBUG:
+                    print(f'[+] literal={literal}, count={count}')
                 self._assign(None, literal)
         else:
             # for literal in self._all_vars:
             #     break
             literal = self._all_vars.pop(0)
-            print(f'- Choose: variable=`{literal}`\n')
+            if settings.DEBUG:
+                print(f'- Choose: variable=`{literal}`\n')
 
             self._assign(None, literal)
 
@@ -444,12 +488,13 @@ class CustomSATSolver(Solver):
         # print('[+] self._formula:', self._formula)
         # print('[+] self._satisfied_clauses:', self._satisfied_clauses)
         # print('_assignment', [self._assignment.keys()])
-        print('##### Check SAT\n')
+        if settings.DEBUG:
+            print('##### Check SAT\n')
 
-        if not self._all_vars:
-            print(f'- Unassigned variables = `{self._all_vars}` => `SAT`\n')
-        else:
-            print(f'- Unassigned variables = `{self._all_vars}` => `None`\n')
+            if not self._all_vars:
+                print(f'- Unassigned variables = `{self._all_vars}` => `SAT`\n')
+            else:
+                print(f'- Unassigned variables = `{self._all_vars}` => `None`\n')
 
         if self._formula:
             return self._formula.issubset(self._satisfied_clauses)

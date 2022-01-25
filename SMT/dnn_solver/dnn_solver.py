@@ -6,6 +6,7 @@ from sat_solver.custom_sat_solver import CustomSATSolver
 from linear_solver.linear_solver import LinearSolver
 from dnn_solver.helpers import DNNConstraint
 from solver.solver import Solver
+import settings
 
 class TheorySolver(Solver):
 
@@ -41,14 +42,16 @@ class DNNSolver(TheorySolver):
         self.constraint_generator = DNNConstraint(dnn, conditions)
 
     def propagate(self):
-        print('- Theory propagate\n')
+        if settings.DEBUG:
+            print('- Theory propagate\n')
 
         new_assignments = []
         conflict_clause = set()
 
         assignment = {self.reversed_vars_mapping[k]: v['value'] for k, v in self._solver._assignment.items()}
 
-        print('- Assignment:', assignment)
+        if settings.DEBUG:
+            print('- Assignment:', assignment)
 
         # theory checking
         theory_constraints, implication_constraints = self.constraint_generator(assignment)
@@ -59,46 +62,58 @@ class DNNSolver(TheorySolver):
         # print(implication_constraints)
         # print('----------------------------')
 
-        print(f'\n- Theory constraints: `{theory_constraints}`')
+        if settings.DEBUG:
+            print(f'\n- Theory constraints: `{theory_constraints}`')
         stat = LinearSolver(theory_constraints).solve()
         if not stat[0]:
-            print('    - Check T-SAT: `UNSAT`')
+            if settings.DEBUG:
+                print('    - Check T-SAT: `UNSAT`')
             for variable, value in self._solver.iterable_assignment():
                 conflict_clause.add(-variable if value else variable)
             conflict_clause = frozenset(conflict_clause)
-            print(f'    - Conflict clause: `{list(conflict_clause)}`')
-            print()
+            if settings.DEBUG:
+                print(f'    - Conflict clause: `{list(conflict_clause)}`')
+                print()
             return conflict_clause, []
 
-        print('    - Check T-SAT: `SAT`')
+        if settings.DEBUG:
+            print('    - Check T-SAT: `SAT`')
         conflict_clause = None
  
         # deduce next layers
-        print(f'\n- Deduction')
+        if settings.DEBUG:
+            print(f'\n- Deduction')
         for node, constraints in implication_constraints.items():
             constraint_neg, constraint_pos = constraints
 
-            print(f'    - Deduction: `{node} <= 0`')
-            print(f'    - Constraints: `{constraint_neg}`')
+            if settings.DEBUG:
+                print(f'    - Deduction: `{node} <= 0`')
+                print(f'    - Constraints: `{constraint_neg}`')
             stat_neg = LinearSolver(constraint_neg).solve()
             if not stat_neg[0]:
-                print('        - Result:', True)
+                if settings.DEBUG:
+                    print('        - Result:', True)
                 new_assignments.append(-self.vars_mapping[node])
                 continue
             else:
-                print('        - Result:', False)
+                if settings.DEBUG:
+                    print('        - Result:', False)
 
-            print(f'    - Deduction: `{node} > 0`')
-            print(f'    - Constraints: `{constraint_pos}`')
+            if settings.DEBUG:
+                print(f'    - Deduction: `{node} > 0`')
+                print(f'    - Constraints: `{constraint_pos}`')
             stat_pos = LinearSolver(constraint_pos).solve()
             if not stat_pos[0]:
-                print('        - Result:', True)
+                if settings.DEBUG:
+                    print('        - Result:', True)
                 new_assignments.append(self.vars_mapping[node])
             else:
-                print('        - Result:', False)
+                if settings.DEBUG:
+                    print('        - Result:', False)
 
-        print(f'    - New assignment: `{new_assignments}`')
-        print()
+        if settings.DEBUG:
+            print(f'    - New assignment: `{new_assignments}`')
+            print()
         return conflict_clause, new_assignments
 
 
