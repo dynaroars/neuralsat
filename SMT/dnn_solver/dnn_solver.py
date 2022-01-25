@@ -59,7 +59,7 @@ class DNNSolver(TheorySolver):
         # print(implication_constraints)
         # print('----------------------------')
 
-        print('\n- Theory constraints:', theory_constraints)
+        print(f'\n- Theory constraints: `{theory_constraints}`')
         stat = LinearSolver(theory_constraints).solve()
         if not stat[0]:
             print('    - Check T-SAT: `UNSAT`')
@@ -82,14 +82,20 @@ class DNNSolver(TheorySolver):
             print(f'    - Constraints: `{constraint_neg}`')
             stat_neg = LinearSolver(constraint_neg).solve()
             if not stat_neg[0]:
+                print('        - Result:', True)
                 new_assignments.append(-self.vars_mapping[node])
                 continue
+            else:
+                print('        - Result:', False)
+
             print(f'    - Deduction: `{node} > 0`')
             print(f'    - Constraints: `{constraint_pos}`')
             stat_pos = LinearSolver(constraint_pos).solve()
             if not stat_pos[0]:
-                print('    - Result:', True)
+                print('        - Result:', True)
                 new_assignments.append(self.vars_mapping[node])
+            else:
+                print('        - Result:', False)
 
         print(f'    - New assignment: `{new_assignments}`')
         print()

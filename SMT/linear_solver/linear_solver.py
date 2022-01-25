@@ -1,6 +1,6 @@
 from simplex.clause import Clause, Formula
-from simplex.parser import Parser
 from simplex.linprog import linprog
+from simplex.parser import Parser
 
 from pprint import pprint
 import numpy as np
@@ -22,9 +22,9 @@ class ClauseConflictException(Exception):
 class LinearSolver:
 
     def __init__(self, formula_str):
-        print('-----------------------------------------------')
-        print(formula_str)
-        print('-----------------------------------------------')
+        # print('-----------------------------------------------')
+        # print(formula_str)
+        # print('-----------------------------------------------')
         self.parsed_input = Parser.parse(formula_str)
         self.my_simplex = None
 

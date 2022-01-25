@@ -19,16 +19,16 @@ vars_mapping = {
 }
 
 conditions = {
-    'in': '(and (x0 < 0) (x2 > 1))',
+    'in': '(and (x0 < 0) (x1 > 1))',
     'out': '(y0 > y1)'
 }
 
-model = model_random(3, [5], 4)
-dnn, vars_mapping = InputParser.parse(model)
+# model = model_random(3, [5], 4)
+# dnn, vars_mapping = InputParser.parse(model)
 
-pprint(dnn)
+# pprint(dnn)
 
-pprint(vars_mapping)
+# pprint(vars_mapping)
 
 
 

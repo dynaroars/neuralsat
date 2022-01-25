@@ -4,7 +4,7 @@
 
 1. Architecture
     
-    **custom** `DPLL` <===> `Linear` solver (`Simplex` solver <=> **standard** `DPLL`)
+    **Custom** `DPLL` <===> `Linear` solver (`Simplex` (phase 1) <=> **Standard** `DPLL`)
 
 2. Custom DPLL:
     - Start with `formula=[]`, set of unassigned variables `vars={1, 2, ...}`
@@ -158,7 +158,7 @@ conditions = {
 - [x] Try with larger DNN => Simplex Issue: Singular Matrix
 - [x] Input interface
 - [x] Adopt substitution + Optimize constraints in Theory propagate.
-- [ ] Optimize `Simplex`
+- [x] Optimize `Simplex`
 - [ ] Finding Unsat core when unsat occurred (Actually don't need that)
 - [ ] Compare with Reluplex
 - [ ] Behavior SAT/Unsat (time consuming)
