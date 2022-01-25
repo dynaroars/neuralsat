@@ -1,12 +1,10 @@
 from collections import deque, Counter
 from solver.solver import Solver
-from functools import reduce
-from operator import or_
 import sortedcontainers
 
 from pprint import pprint
 
-class SATSolver2(Solver):
+class CustomSATSolver(Solver):
 
     def __init__(self, formula=None, vars_mapping=None, first_var=None, max_new_clauses=float('inf'), 
         halving_period=10000, theory_solver=None):

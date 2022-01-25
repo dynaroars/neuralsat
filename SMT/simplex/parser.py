@@ -3,18 +3,16 @@ import numpy as np
 import re
 
 from simplex.clause import Clause, Formula
-from simplex.simplex import SimplexUtils
+from simplex.simplex_utils import SimplexUtils
 
 class ParsedInput:
 
-    def __init__(self, A, b, cnf, row_dict, col_dict, vars_dict):
-        self.A = A
-        self.b = b
-        self.cnf = cnf
-        self.row_dict = row_dict
-        self.col_dict = col_dict
+    def __init__(self, cnf, dict_var_to_eqn, input_vars_dict, vars_dict):
+        self.dict_var_to_eqn = dict_var_to_eqn
         self.vars_dict = vars_dict
         self.reversed_vars_dict = {v: k for k, v in vars_dict.items()}
+        self.cnf = cnf
+        self.input_vars_dict = input_vars_dict
 
     @property
     def formula(self):
@@ -160,13 +158,13 @@ class Parser:
 
         operator, left_term, right_term = Parser.get_operator_and_variables(new_term)
 
-        # print(left_term, operator, right_term)
 
         if ParserUtils.is_math_equation(left_term):
             left_term = Parser.get_associated_variable(left_term)
 
         if right_term and ParserUtils.is_math_equation(right_term):
             right_term = Parser.get_associated_variable(right_term)
+
 
         left_var, right_var = left_term, right_term
         if not ParserUtils.is_literal(left_term):
@@ -259,6 +257,11 @@ class Parser:
 
 
     def parse(formula_str):
+        # reset Parser
+        Parser.equation_counter = 0
+        Parser.equation_dictionary = {}
+
+        # print(Parser.equation_dictionary, Parser.equation_counter)
 
         if not ParserUtils.balanced_parentheses(formula_str):
             raise "Input does not have balanced parentheses."
@@ -267,19 +270,30 @@ class Parser:
         # print(cnf)
         obj_cnf = Parser.convert_to_obj_cnf(cnf)
 
-        dict_var_to_eqn = {}
-        for key, val in Parser.equation_dictionary.items():
-            dict_var_to_eqn[val] = key
-            dict_var_to_eqn['~'+val] = SimplexUtils.negate_simplex(key)
-
-        A, b, row_dict, col_dict = Parser.convert_to_simplex_interface(dict_var_to_eqn)
-
         vars_dict = {}
         for i, var in enumerate(obj_cnf.vars):
             vars_dict[var] = i+1
             vars_dict['~' + var] = -(i+1)
 
-        parsed_input = ParsedInput(A, b, obj_cnf, row_dict, col_dict, vars_dict)
+        # print('formula_str:', formula_str)
+        # print(vars_dict)
+
+        count = 0
+        dict_var_to_eqn = {}
+        input_vars_dict = {}
+        for key, val in Parser.equation_dictionary.items():
+            dict_var_to_eqn[vars_dict[val]] = key
+            dict_var_to_eqn[vars_dict['~'+val]] = SimplexUtils.negate_simplex(key)
+
+            for v in key.left_hand_side:
+                if v not in input_vars_dict:
+                    input_vars_dict[v] = count
+                    count += 1
+
+
+        # A, b, row_dict, col_dict = Parser.convert_to_simplex_interface(dict_var_to_eqn)
+
+        parsed_input = ParsedInput(obj_cnf, dict_var_to_eqn, input_vars_dict, vars_dict)
 
         return parsed_input
 

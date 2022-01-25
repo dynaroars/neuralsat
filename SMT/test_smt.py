@@ -22,14 +22,16 @@ def main():
         (declare-fun x1 () Real)
         (declare-fun x2 () Real)
 
-        (assert (and (<= (x1) 1) (<= (-x2) -3))
-        (assert (and (<= (x1) 2) (<= (-x1) -1))
+        (assert (or (<= (x1) 1) (<= (-x2) -3))
+        (assert (and (>= (x1) 2) (<= (-x1) -1))
     '''
 
 
-    solver = SMTSolver(formula)
-    print(solver.solve())
-    print(solver.get_assignment())
+    # solver = SMTSolver(formula)
+    # print(solver.solve())
+    # print(solver.get_assignment())
+    from utils.formula_parser import FormulaParser
+    print(FormulaParser.import_tq(formula)[-1])
 
 if __name__ == '__main__':
     main()

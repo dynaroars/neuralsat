@@ -17,17 +17,18 @@ if __name__ == '__main__':
         'in': '(and (x >= 2) (a = 2.1*x))',
         'out': '(a >= 4.2)'
     }
+    f_str = '(and (x0 + 2*x2 <= 0) (x1 >= 1))'
 
-    # parsed_input = Parser.parse(f_str)
-    # pprint(parsed_input.row_dict)
-    # pprint(parsed_input.col_dict)
-    # print('col_dict', parsed_input.col_dict)
-    # print('vars_dict', parsed_input.vars_dict)
-    # print('reversed_vars_dict', parsed_input.reversed_vars_dict)
+    parsed_input = Parser.parse(f_str)
+    pprint(parsed_input.row_dict)
+    pprint(parsed_input.col_dict)
+    print('col_dict', parsed_input.col_dict)
+    print('vars_dict', parsed_input.vars_dict)
+    print('reversed_vars_dict', parsed_input.reversed_vars_dict)
 
-    # print(parsed_input.A)
-    # print(parsed_input.b)
-    # exit()
+    print(parsed_input.A)
+    print(parsed_input.b)
+    exit()
 
     # solver = Simplex(parsed_input, rows=[1, 2])
     # feasible = solver.solve()
@@ -35,7 +36,6 @@ if __name__ == '__main__':
     # if feasible:
     #     print(solver.get_assignment())
     
-    f_str = '(and (and (and (and (and (and (and (and (and (x0 < 0) (x1 > 1)) (0.3428747653*x0 + 0.1191892027*x1 + -0.3442705273*x2 > 0)) (0.4022843837*x0 + 0.3385578393*x1 + -0.6574112176*x2 > 0)) (-0.0505836606*x0 + 0.2380395531*x1 + 0.3830572366*x2 > 0)) (0.5419781208*x0 + 0.2346444129*x1 + -0.1017882227*x2 > 0)) (0.3075127601*x0 + 0.2864566445*x1 + 0.2507228851*x2 > 0)) (0.1208061575*x0 + 0.1779784560*x1 + 0.2350426912*x2 > 0)) (0.0671699643*x0 + -0.2187577188*x1 + -0.5578975677*x2 > 0)) (not (-0.2631770948*x0 + -0.3188667095*x1 + -0.2357685142*x2 <= 0)))'
     solver = RealSolver(f_str)
     print(solver.solve())
     # print(solver.get_assignment())

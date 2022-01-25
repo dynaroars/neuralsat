@@ -43,8 +43,6 @@ class SATSolver(Solver):
         for clause in self._formula:
             self._add_clause(clause)
 
-        self._all_vars = {_: False for _ in  set([abs(v) for c in formula for v in c])}
-
         # print('[+] self._literal_to_clause')
         # pprint(self._literal_to_clause)
         
@@ -111,7 +109,6 @@ class SATSolver(Solver):
             "idx": len(self._assignment_by_level[-1])       # Defines an assignment order in the same level
         }
         # pprint(self._assignment[variable])
-        self._all_vars[variable] = True
 
         # Update satisfied clauses
         newly_satisfied_clauses = self._literal_to_clause[literal] - self._satisfied_clauses
@@ -188,8 +185,6 @@ class SATSolver(Solver):
         for cur_sign in [variable, -variable]:
             self._unassigned_vsids_count[cur_sign] = self._assigned_vsids_count[cur_sign]
             del self._assigned_vsids_count[cur_sign]
-
-        self._all_vars[variable] = False
 
     def _add_conflict_clause(self, conflict_clause):
         """

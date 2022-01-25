@@ -1,13 +1,10 @@
-from solver.theory_solver import TheorySolver
-from simplex.simplex import Simplex
-from simplex.parser import Parser
 from pprint import pprint
 import numpy as np
 import copy
 
-from dnn_solver.helpers import Utils, DNNConstraint
-from sat_solver.sat_solver_2 import SATSolver2
-from real_solver.real_solver import RealSolver
+from sat_solver.custom_sat_solver import CustomSATSolver
+from linear_solver.linear_solver import LinearSolver
+from dnn_solver.helpers import DNNConstraint
 from solver.solver import Solver
 
 class TheorySolver(Solver):
@@ -15,11 +12,11 @@ class TheorySolver(Solver):
     def __init__(self, formula, vars_mapping, first_var=None, max_new_clauses=float('inf'), halving_period=10000):
         super().__init__()
 
-        self._solver = SATSolver2(formula,
-                                  vars_mapping,
-                                  max_new_clauses=max_new_clauses,
-                                  halving_period=halving_period,
-                                  theory_solver=self)
+        self._solver = CustomSATSolver(formula,
+                                       vars_mapping,
+                                       max_new_clauses=max_new_clauses,
+                                       halving_period=halving_period,
+                                       theory_solver=self)
 
     def get_assignment(self) -> dict:
         pass
@@ -63,7 +60,7 @@ class DNNSolver(TheorySolver):
         # print('----------------------------')
 
         print('\n- Theory constraints:', theory_constraints)
-        stat = RealSolver(theory_constraints).solve()
+        stat = LinearSolver(theory_constraints).solve()
         if not stat[0]:
             print('    - Check T-SAT: `UNSAT`')
             for variable, value in self._solver.iterable_assignment():
@@ -83,13 +80,13 @@ class DNNSolver(TheorySolver):
 
             print(f'    - Deduction: `{node} <= 0`')
             print(f'    - Constraints: `{constraint_neg}`')
-            stat_neg = RealSolver(constraint_neg).solve()
+            stat_neg = LinearSolver(constraint_neg).solve()
             if not stat_neg[0]:
                 new_assignments.append(-self.vars_mapping[node])
                 continue
             print(f'    - Deduction: `{node} > 0`')
             print(f'    - Constraints: `{constraint_pos}`')
-            stat_pos = RealSolver(constraint_pos).solve()
+            stat_pos = LinearSolver(constraint_pos).solve()
             if not stat_pos[0]:
                 print('    - Result:', True)
                 new_assignments.append(self.vars_mapping[node])

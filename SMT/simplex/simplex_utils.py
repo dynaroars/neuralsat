@@ -13,7 +13,9 @@ class Equation:
     def __str__(self):
         s = ''
         s += str(self.left_hand_side)
+        s += ' '
         s += str(self.operator)
+        s += ' '
         s += str(self.right_hand_side)
         return s
 
@@ -26,7 +28,7 @@ class Equation:
 class SimplexUtils:
 
     EQUATION_OPERATORS = ['<', '<=', '=', '>=', '>']
-    EPS = 0.000001
+    EPS = 1.0E-12
 
     POSTFIX_PP = 'pp'
     POSTFIX_P = 'p'
@@ -103,7 +105,7 @@ class SimplexUtils:
             pass
         
         b_side += b_side_epsilon
-        simplex_ax_side = SimplexUtils.convert_to_unrestricted_form(simplex_ax_side)
+        # simplex_ax_side = SimplexUtils.convert_to_unrestricted_form(simplex_ax_side)
         return Equation(simplex_ax_side, op, b_side)
 
 
@@ -180,137 +182,137 @@ class SimplexUtils:
         return (coefficient, variable)
 
 
-class Simplex:
+# class Simplex:
 
-    def __init__(self, parsed_input, rows=None, c=None):
-        if rows != None:
-            self.A = parsed_input.A[rows]
-            self.b = parsed_input.b[rows]
-        else:
-            self.A = parsed_input.A
-            self.b = parsed_input.b
+#     def __init__(self, parsed_input, rows=None, c=None):
+#         if rows != None:
+#             self.A = parsed_input.A[rows]
+#             self.b = parsed_input.b[rows]
+#         else:
+#             self.A = parsed_input.A
+#             self.b = parsed_input.b
 
-        self.col_dict = parsed_input.col_dict
-        self.c = c
-        self.B = []
-        self.I = []
+#         self.col_dict = parsed_input.col_dict
+#         self.c = c
+#         self.B = []
+#         self.I = []
 
-        # print('A', self.A)
-        # print('b', self.b)
+#         # print('A', self.A)
+#         # print('b', self.b)
 
-        # print(parsed_input.row_dict)
-        # print(parsed_input.col_dict)
+#         # print(parsed_input.row_dict)
+#         # print(parsed_input.col_dict)
 
-    def init_phase(self):
-        m, n = self.A.shape
-        if np.all(self.b >= 0):
-            self.I = np.arange(1 + m + n)
-            return True
+#     def init_phase(self):
+#         m, n = self.A.shape
+#         if np.all(self.b >= 0):
+#             self.I = np.arange(1 + m + n)
+#             return True
         
-        self.A = np.concatenate((
-            -np.ones((m, 1), np.float32), 
-            self.A, 
-            np.identity(m, np.float32)), 1)
+#         self.A = np.concatenate((
+#             -np.ones((m, 1), np.float32), 
+#             self.A, 
+#             np.identity(m, np.float32)), 1)
 
-        idx = np.arange(self.A.shape[1])
-        B = idx[-m:]
-        I = idx[:n+1]
-        self.c = np.zeros(1+m+n, np.float32)
-        self.c[0] = -1
+#         idx = np.arange(self.A.shape[1])
+#         B = idx[-m:]
+#         I = idx[:n+1]
+#         self.c = np.zeros(1+m+n, np.float32)
+#         self.c[0] = -1
 
-        # Force x0 to enter
-        B, I, obj, _ = self.pivot(B, I, True)
-        terminated = False
-        while not terminated:
-            B, I, obj, terminated = self.pivot(B, I, False)
+#         # Force x0 to enter
+#         B, I, obj, _ = self.pivot(B, I, True)
+#         terminated = False
+#         while not terminated:
+#             B, I, obj, terminated = self.pivot(B, I, False)
 
-        self.B = B
-        self.I = I
+#         self.B = B
+#         self.I = I
 
-        if obj < 0.0:
-            return False # Infeasible
-        return True # Feasible
+#         if obj < 0.0:
+#             return False # Infeasible
+#         return True # Feasible
 
 
-    def pivot(self, B, I, forced):
-        Ab = self.A[:,B]
-        Ai = self.A[:,I]
-        cb = self.c[B]
-        ci = self.c[I]
+#     def pivot(self, B, I, forced):
+#         Ab = self.A[:,B]
+#         Ai = self.A[:,I]
+#         cb = self.c[B]
+#         ci = self.c[I]
 
-        # pi = Ab \ cb
+#         # pi = Ab \ cb
 
-        pi = np.linalg.solve(np.transpose(Ab), cb)
-        obj = np.dot(pi, self.b)
-        c_hat = ci - np.dot(pi, Ai)
+#         pi = np.linalg.solve(np.transpose(Ab), cb)
+#         obj = np.dot(pi, self.b)
+#         c_hat = ci - np.dot(pi, Ai)
 
-        # Choose enter index
-        if forced:
-            enter = 0
-        else:
-            if (c_hat.max() <= 0):
-                return B, I, obj, True # Done
-            enter = np.argmax(c_hat)
+#         # Choose enter index
+#         if forced:
+#             enter = 0
+#         else:
+#             if (c_hat.max() <= 0):
+#                 return B, I, obj, True # Done
+#             enter = np.argmax(c_hat)
 
-        b_hat = np.linalg.solve(Ab, self.b)
-        a_j_hat = -np.linalg.solve(Ab, self.A[:, I[enter]])
+#         b_hat = np.linalg.solve(Ab, self.b)
+#         a_j_hat = -np.linalg.solve(Ab, self.A[:, I[enter]])
 
-        # Search for leave index
-        if forced:
-            leave = self.b.argmin()
-            leavelim = -b_hat[leave] / a_j_hat[leave]
-        else:
-            leave = -1
-            leavelim = np.Inf
-            for i in np.arange(Ab.shape[0]):
-                if a_j_hat[i] < 0:
-                    ll = -b_hat[i] / a_j_hat[i]
-                    if ll < leavelim:
-                        leavelim = ll
-                        leave = i
-            if leave == -1:
-                return B, I, obj, True # Unbounded
+#         # Search for leave index
+#         if forced:
+#             leave = self.b.argmin()
+#             leavelim = -b_hat[leave] / a_j_hat[leave]
+#         else:
+#             leave = -1
+#             leavelim = np.Inf
+#             for i in np.arange(Ab.shape[0]):
+#                 if a_j_hat[i] < 0:
+#                     ll = -b_hat[i] / a_j_hat[i]
+#                     if ll < leavelim:
+#                         leavelim = ll
+#                         leave = i
+#             if leave == -1:
+#                 return B, I, obj, True # Unbounded
 
-        temp = I[enter]
-        I[enter] = B[leave]
-        B[leave] = temp
+#         temp = I[enter]
+#         I[enter] = B[leave]
+#         B[leave] = temp
 
-        obj= np.dot(pi, self.b) + c_hat[enter] * leavelim
-        return B, I, obj, False
+#         obj= np.dot(pi, self.b) + c_hat[enter] * leavelim
+#         return B, I, obj, False
 
-    def get_assignment(self):
-        result_dict = {}
-        m, n = self.A.shape
+#     def get_assignment(self):
+#         result_dict = {}
+#         m, n = self.A.shape
 
-        for i in self.I:
-            result_dict[i] = 0
+#         for i in self.I:
+#             result_dict[i] = 0
 
-        idx = 0
-        for i in self.B:
-            Ab = self.A[:,self.B]
-            Ai = self.A[:,self.I]
-            b_hat = np.linalg.solve(Ab, self.b)
-            result_dict[i] = b_hat[idx]
-            idx += 1
+#         idx = 0
+#         for i in self.B:
+#             Ab = self.A[:,self.B]
+#             Ai = self.A[:,self.I]
+#             b_hat = np.linalg.solve(Ab, self.b)
+#             result_dict[i] = b_hat[idx]
+#             idx += 1
 
-        result = []
-        for key, val in self.col_dict.items():
-            if val <= n:
-                result.append((key, result_dict[val+1]))
-        orig_variables = {}
-        for ans in result:
-            var, value = ans[0], ans[1]
-            if SimplexUtils.POSTFIX_PP in var:
-                var = var.replace(SimplexUtils.POSTFIX_PP, '')
-                value *= -1
-            else:
-                var = var.replace(SimplexUtils.POSTFIX_P, '')
+#         result = []
+#         for key, val in self.col_dict.items():
+#             if val <= n:
+#                 result.append((key, result_dict[val+1]))
+#         orig_variables = {}
+#         for ans in result:
+#             var, value = ans[0], ans[1]
+#             if SimplexUtils.POSTFIX_PP in var:
+#                 var = var.replace(SimplexUtils.POSTFIX_PP, '')
+#                 value *= -1
+#             else:
+#                 var = var.replace(SimplexUtils.POSTFIX_P, '')
 
-            if var not in orig_variables:
-                orig_variables[var] = 0
-            orig_variables[var] += value
-        return orig_variables
+#             if var not in orig_variables:
+#                 orig_variables[var] = 0
+#             orig_variables[var] += value
+#         return orig_variables
 
-    def solve(self):
-        return self.init_phase()
+#     def solve(self):
+#         return self.init_phase()
 
