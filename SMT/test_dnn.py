@@ -1,6 +1,7 @@
 from dnn_solver.utils import InputParser, model_random
 from dnn_solver.dnn_solver import DNNSolver
 from pprint import pprint
+import time
 
 conditions = {
     'in': '(and (x0 < 0) (x1 > 1))',
@@ -30,6 +31,7 @@ pprint(dnn)
 
 pprint(vars_mapping)
 
-
 solver = DNNSolver(dnn, vars_mapping, layers_mapping, conditions)
+tic = time.time()
 print(solver.solve())
+print(time.time() - tic)

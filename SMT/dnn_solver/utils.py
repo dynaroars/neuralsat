@@ -3,6 +3,7 @@ warnings.filterwarnings('ignore')
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
+from tensorflow.keras import initializers
 from tensorflow.keras import Input
 from pprint import pprint
 import sortedcontainers
@@ -13,11 +14,20 @@ z3.set_option(rational_to_decimal=True)
 
 
 def model_random(input_shape, hidden_shapes, output_shape):
+    bias_initializer = initializers.HeNormal()
     model = Sequential()
     model.add(Input(shape=(input_shape,), dtype='float32'))
     for unit in hidden_shapes:
-        model.add(Dense(units=unit, activation='relu', dtype='float32'))
-    model.add(Dense(units=output_shape, activation=None, dtype='float32'))
+        model.add(Dense(
+            units=unit, 
+            activation='relu', 
+            bias_initializer=bias_initializer, 
+            dtype='float32'))
+    model.add(Dense(
+        units=output_shape, 
+        bias_initializer=bias_initializer, 
+        activation=None, 
+        dtype='float32'))
     return model
 
 class InputParser:
@@ -54,31 +64,23 @@ class InputParser:
                     idx += 1
                 for p, q in zip(weights[:, i], prev_nodes):
                     dnn[node].append((p, q))
+                dnn[node].append(biases[i])
             prev_nodes = cur_nodes
 
         return dnn, vars_mapping, layers_mapping
 
 
-dnn = {
-    'a0_0': [(1.0, 'x0'), (-1.0, 'x1')],
-    'a0_1': [(1.0, 'x0'), (1.0, 'x1')],
-    'a1_0': [(0.5, 'n0_0'), (-0.2, 'n0_1')],
-    'a1_1': [(-0.5, 'n0_0'), (0.1, 'n0_1')],
-    'y0' : [(1.0, 'n1_0'), (-1.0, 'n1_1')],
-    'y1' : [(-1.0, 'n1_0'), (1.0, 'n1_1')],
-}
-
 
 if __name__ == '__main__':
 
 
-    model = model_random(2, [4, 2, 2, 4], 2)
+    model = model_random(2, [2, 2], 2)
     dnn, vars_mapping, layers_mapping = InputParser.parse(model)
 
     pprint(dnn)
-    print()
-    pprint(vars_mapping)
-    pprint(layers_mapping)
+    # print()
+    # pprint(vars_mapping)
+    # pprint(layers_mapping)
 
     reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
     pprint(reversed_layers_mapping)

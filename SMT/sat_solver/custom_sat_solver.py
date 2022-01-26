@@ -264,6 +264,7 @@ class CustomSATSolver(Solver):
         if settings.DEBUG:
             print('##### Analyze\n')
         conflict_clause = set(conflict_clause)
+        orig_conflic_clause = set(conflict_clause)
 
         conflict_assignment_dict = {}
 
@@ -276,7 +277,7 @@ class CustomSATSolver(Solver):
             # print('[+] last_literal:', last_literal)
 
             if last_literal is None:
-                return frozenset(conflict_clause), last_literal, prev_max_level
+                return frozenset(orig_conflic_clause), last_literal, prev_max_level
                 
             clause_on_incoming_edge = self._assignment[abs(last_literal)]["clause"]
 
@@ -300,7 +301,7 @@ class CustomSATSolver(Solver):
 
 
             if -last_literal not in clause_on_incoming_edge:
-                return frozenset(conflict_clause), last_literal, prev_max_level
+                return frozenset(orig_conflic_clause), last_literal, prev_max_level
 
             # Resolve the conflict clause with the clause on the incoming edge
             # Might be the case that the last literal was assigned because of the

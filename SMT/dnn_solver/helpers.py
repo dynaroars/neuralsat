@@ -35,7 +35,7 @@ class DNNConstraint:
         for out_node, in_nodes in self.dnn.items():
             if out_node in assigned_nodes:
                 continue
-            tmp = set([i[1].replace('n', 'a') for i in in_nodes])
+            tmp = set([i[1].replace('n', 'a') for i in in_nodes[:-1]])
             if tmp.issubset(assigned_nodes) or \
                 len(list(tmp)) == len(list(filter(lambda x: x.startswith('x'), tmp))): 
                 nodes.append(out_node)
@@ -47,8 +47,8 @@ class DNNConstraint:
         if assignment.get(node_name, None) is False:
             return [], z3.RealVal(0)
 
-        output = 0
-        for weight, name in self.dnn[node_name]:
+        output = self.dnn[node_name][-1]
+        for weight, name in self.dnn[node_name][:-1]:
             v = z3.Real(name)
             if not name.startswith('x'):
                 variables.append(v)
@@ -123,19 +123,19 @@ if __name__ == '__main__':
     # }
 
     dnn = {
-        'a0_0': [(1.0, 'x0'), (-1.0, 'x1')],
-        'a0_1': [(1.0, 'x0'), (1.0, 'x1')],
-        'a1_0': [(0.5, 'n0_0'), (-0.2, 'n0_1')],
-        'a1_1': [(-0.5, 'n0_0'), (0.1, 'n0_1')],
-        'y0' : [(1.0, 'n1_0'), (-1.0, 'n1_1')],
-        'y1' : [(-1.0, 'n1_0'), (1.0, 'n1_1')],
+        'a0_0': [(1.0, 'x0'), (-1.0, 'x1'), 1],
+        'a0_1': [(1.0, 'x0'), (1.0, 'x1'), 2],
+        'a1_0': [(0.5, 'n0_0'), (-0.2, 'n0_1'), 3],
+        'a1_1': [(-0.5, 'n0_0'), (0.1, 'n0_1'), 4],
+        'y0' : [(1.0, 'n1_0'), (-1.0, 'n1_1'), 5],
+        'y1' : [(-1.0, 'n1_0'), (1.0, 'n1_1'), 6],
     }
 
     assignment = {
-        'a0_0': False,
+        'a0_0': True,
         'a0_1': True,
-        'a1_0': True,
-        'a1_1': False,
+        # 'a1_0': True,
+        # 'a1_1': False,
     }
 
 
