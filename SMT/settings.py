@@ -1,3 +1,4 @@
 DEBUG = True
 
 N_DECISIONS = 5
+RANDOM_DECISION = True

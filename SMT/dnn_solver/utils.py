@@ -80,7 +80,7 @@ if __name__ == '__main__':
     pprint(dnn)
     # print()
     # pprint(vars_mapping)
-    # pprint(layers_mapping)
 
     reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
+    pprint(layers_mapping)
     pprint(reversed_layers_mapping)

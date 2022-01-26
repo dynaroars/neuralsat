@@ -1,6 +1,7 @@
 from collections import deque, Counter
 from solver.solver import Solver
 import settings
+import random
 
 from pprint import pprint
 import sortedcontainers
@@ -13,6 +14,8 @@ class CustomSATSolver(Solver):
         super().__init__()
         if formula is None:
             formula = frozenset()
+
+        self._signs = [-1, 1]
 
         self._first_var = first_var
         self._formula = formula
@@ -446,32 +449,37 @@ class CustomSATSolver(Solver):
             print('##### Decide\n')
 
         # self.create_new_decision_level()
-        if self._formula:
-            if self._first_var and self._theory_solver and (self._first_var not in self._assignment):
-                self._assign(None, self._first_var)
-                if settings.DEBUG:
-                    print(self._first_var, self._assignment)
-                del self._unassigned_vsids_count[self._first_var]
+        # if self._formula:
+        #     if self._first_var and self._theory_solver and (self._first_var not in self._assignment):
+        #         self._assign(None, self._first_var)
+        #         if settings.DEBUG:
+        #             print(self._first_var, self._assignment)
+        #         del self._unassigned_vsids_count[self._first_var]
+        #     else:
+        #         literal, count = self._unassigned_vsids_count.most_common(1).pop()
+        #         if settings.DEBUG:
+        #             print(f'[+] literal={literal}, count={count}')
+        #         self._assign(None, literal)
+        # else:
+
+        variable = self._all_vars[0]
+        orig_variable = variable
+        count = 0
+        while variable in self._layers_mapping[self._reversed_layers_mapping[orig_variable]]:
+            self.create_new_decision_level()
+            if settings.RANDOM_DECISION:
+                sign = random.choice(self._signs)
             else:
-                literal, count = self._unassigned_vsids_count.most_common(1).pop()
-                if settings.DEBUG:
-                    print(f'[+] literal={literal}, count={count}')
-                self._assign(None, literal)
-        else:
-            literal = self._all_vars[0]
-            first_var_decision = abs(literal)
-            count = 0
-            while abs(literal) in self._layers_mapping[self._reversed_layers_mapping[abs(first_var_decision)]]:
-                self.create_new_decision_level()
-                self._assign(None, literal)
-                count += 1
-                if settings.DEBUG:
-                    print(f'- [{count}] Choose: variable=`{literal}`\n')
-                if count == settings.N_DECISIONS:
-                    break
-                if not self._all_vars:
-                    break
-                literal = self._all_vars[0]
+                sign = 1
+            self._assign(None, variable * sign)
+            count += 1
+            if settings.DEBUG:
+                print(f'- [{count}] Choose: variable=`{variable}`\n')
+            if count == settings.N_DECISIONS:
+                break
+            if not self._all_vars:
+                break
+            variable = self._all_vars[0]
 
     def _increment_step(self):
         """
