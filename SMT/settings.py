@@ -1,2 +1,3 @@
 DEBUG = True
 
+N_DECISIONS = 5

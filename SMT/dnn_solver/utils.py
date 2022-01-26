@@ -5,6 +5,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import Input
 from pprint import pprint
+import sortedcontainers
 import numpy as np
 import z3
 
@@ -29,12 +30,15 @@ class InputParser:
     def parse(model):
         dnn = {}
         vars_mapping = {}
+        layers_mapping = {}
         idx = 1
         n_inputs = model.input_shape[1]
         n_layers = len(model.layers)
 
         prev_nodes = [f"x{n}" for n in range(n_inputs)]
         for lid, layer in enumerate(model.layers):
+            if lid < n_layers - 1:
+                layers_mapping[lid] = sortedcontainers.SortedList()
             weights, biases = layer.get_weights()
             cur_nodes = []
             for i in range(layer.output_shape[1]): # #nodes in layer
@@ -46,12 +50,13 @@ class InputParser:
                     dnn[node] = []
                 if node not in vars_mapping and node.startswith('a'):
                     vars_mapping[node] = idx
+                    layers_mapping[lid].add(idx)
                     idx += 1
                 for p, q in zip(weights[:, i], prev_nodes):
                     dnn[node].append((p, q))
             prev_nodes = cur_nodes
 
-        return dnn, vars_mapping
+        return dnn, vars_mapping, layers_mapping
 
 
 dnn = {
@@ -65,9 +70,15 @@ dnn = {
 
 
 if __name__ == '__main__':
-    model = model_random(2, [4, 2], 2)
-    dnn, vars_mapping = InputParser.parse(model)
+
+
+    model = model_random(2, [4, 2, 2, 4], 2)
+    dnn, vars_mapping, layers_mapping = InputParser.parse(model)
 
     pprint(dnn)
     print()
     pprint(vars_mapping)
+    pprint(layers_mapping)
+
+    reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
+    pprint(reversed_layers_mapping)

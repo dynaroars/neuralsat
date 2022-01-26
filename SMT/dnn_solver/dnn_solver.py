@@ -10,11 +10,12 @@ import settings
 
 class TheorySolver(Solver):
 
-    def __init__(self, formula, vars_mapping, first_var=None, max_new_clauses=float('inf'), halving_period=10000):
+    def __init__(self, formula, vars_mapping, layers_mapping, first_var=None, max_new_clauses=float('inf'), halving_period=10000):
         super().__init__()
 
         self._solver = CustomSATSolver(formula,
                                        vars_mapping,
+                                       layers_mapping,
                                        max_new_clauses=max_new_clauses,
                                        halving_period=halving_period,
                                        theory_solver=self)
@@ -30,9 +31,9 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, dnn, vars_mapping, conditions):
+    def __init__(self, dnn, vars_mapping, layers_mapping, conditions):
 
-        super().__init__(formula=None, vars_mapping=vars_mapping)
+        super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
 
         self.dnn = dnn
         self.conditions = conditions
