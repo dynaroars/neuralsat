@@ -17,3 +17,5 @@
 - [x] Strategy for choosing variables (from `low` to `high` id)
 - [x] Strategy for assigning variables (randomly `True`/`False`)
 - [ ] Think of better strategy for choosing/assigning variables
+- [ ] Abstract Interpretation
+- [ ] Connected Component
