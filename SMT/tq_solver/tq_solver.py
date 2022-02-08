@@ -32,13 +32,10 @@ class TQSolver(TheorySolver):
                 False: (-np.array(clause[1], dtype=np.float64), -np.array(clause[2] + epsilon, dtype=np.float64))
             }
 
-        pprint(self._tseitin_variable_to_np)
-
 
     def propagate(self):
         conflict_clause, a_matrix, b = set(), [], []
         for variable, value in self._solver.iterable_assignment():
-            print(variable, value)
             if variable in self._tseitin_variable_to_np:
                 a_matrix.append(self._tseitin_variable_to_np[variable][value][0])
                 b.append(self._tseitin_variable_to_np[variable][value][1])

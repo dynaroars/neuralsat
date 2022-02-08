@@ -52,7 +52,7 @@ class DNNSolver(TheorySolver):
         assignment = {self.reversed_vars_mapping[k]: v['value'] for k, v in self._solver._assignment.items()}
 
         if settings.DEBUG:
-            print('- Assignment:', assignment)
+            print('- Assignment:', {k: v['value'] for k, v in self._solver._assignment.items()})
 
         # theory checking
         theory_constraints, implication_constraints = self.constraint_generator(assignment)

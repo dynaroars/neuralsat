@@ -1,3 +1,4 @@
+import time
 import copy
 import z3
 import re
@@ -42,24 +43,32 @@ class DNNConstraint:
         return nodes
 
     def _construct_formula(self, node, assignment):
+        # tic = time.time()
         variables = []
         node_name = str(node).replace('n', 'a')
         if assignment.get(node_name, None) is False:
             return [], z3.RealVal(0)
 
-        output = self.dnn[node_name][-1]
+        output = self.dnn[node_name][-1] # bias
         for weight, name in self.dnn[node_name][:-1]:
             v = z3.Real(name)
             if not name.startswith('x'):
                 variables.append(v)
             output += weight * v
-        del v
+
+        # print('    - [+] _construct_formula:', time.time() - tic)
+
         return variables, output
 
     def _construct_constraint_node(self, node, assignment):
+        # print('[+] _construct_constraint_node')
+        # tic = time.time()
         variables, formula = self._construct_formula(node, assignment)
+        # print('    - _construct_formula:', time.time() - tic)
+        # tic = time.time()
         while variables:
             variables, formula = self._recursive(variables, formula, assignment)
+        # print('    - while loop:', time.time() - tic)
         return z3.simplify(formula)
 
     def _recursive(self, vs, f, assignment):
@@ -79,18 +88,22 @@ class DNNConstraint:
 
         constraint = self.conditions['in']
 
+        # tic = time.time()
         for node, status in assignment.items():
-            f = self._construct_constraint_node(node, assignment)
+            # f = self._construct_constraint_node(node, assignment)
             if status:
-                # f = self._construct_constraint_node(node, assignment)
+                f = self._construct_constraint_node(node, assignment)
                 constraint = Utils.And(constraint, '(%s)' % str(f > 0))
             # else:
                 # flip_assignment = copy.deepcopy(assignment)
                 # flip_assignment[node] = not status
                 # f = self._construct_constraint_node(node, flip_assignment)
                 # constraint = Utils.And(constraint, '(%s)' % str(f <= 0))
+        # print('    - assignment constraints:', time.time() - tic)
 
         constraint = clean(constraint)
+
+        # tic = time.time()
         implies = {}
         if nodes[0].startswith('y'):
             tmp = self.conditions['out']
@@ -102,6 +115,7 @@ class DNNConstraint:
             for node in nodes:
                 f = self._construct_constraint_node(node, assignment)
                 implies[node] = [clean(Utils.Prove(constraint, '(%s)' % str(f <= 0))), clean(Utils.Prove(constraint, '(%s)' % str(f > 0)))]
+        # print('    - implication constraints:', time.time() - tic)
 
         return constraint, implies
 

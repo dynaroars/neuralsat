@@ -5,6 +5,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import initializers
 from tensorflow.keras import Input
+from tensorflow import keras
 from pprint import pprint
 import sortedcontainers
 import numpy as np
@@ -74,7 +75,10 @@ class InputParser:
 if __name__ == '__main__':
 
 
-    model = model_random(2, [2, 2], 2)
+    # model = model_random(2, [2, 2], 2)
+    # model.save('../example/model.keras')
+    model = keras.models.load_model('../example/model.keras')
+
     dnn, vars_mapping, layers_mapping = InputParser.parse(model)
 
     pprint(dnn)

@@ -1,5 +1,6 @@
 from dnn_solver.utils import InputParser, model_random
 from dnn_solver.dnn_solver import DNNSolver
+from tensorflow import keras
 from pprint import pprint
 import time
 
@@ -24,14 +25,25 @@ conditions = {
 #     'a1_1': 4,
 # }
 
-model = model_random(3, [10]*2, 4)
+# layers_mapping = {
+#     0: [1, 2],
+#     1: [3, 4]
+# }
+
+model = model_random(2, [5]*2, 2)
+# model.save('example/model_5x2_unsat.keras')
+# model = keras.models.load_model('example/model_2.keras')
+
 dnn, vars_mapping, layers_mapping = InputParser.parse(model)
+# print(layers_mapping)
 
-pprint(dnn)
 
-pprint(vars_mapping)
+# pprint(dnn)
+
+# pprint(vars_mapping)
 
 solver = DNNSolver(dnn, vars_mapping, layers_mapping, conditions)
-tic = time.time()
+# tic = time.time()
 print(solver.solve())
-print(time.time() - tic)
+# print({k: v['value'] for k, v in solver._solver._assignment.items()})
+# print(time.time() - tic)

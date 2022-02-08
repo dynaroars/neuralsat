@@ -5,6 +5,7 @@ __pycache__/
 
 *.html
 *.txt
+*.keras
 
 # C extensions
 *.so

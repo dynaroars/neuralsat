@@ -132,7 +132,6 @@ class LinearSolver(Solver):
 
 
     def _solve_auxiliary_problem(self) -> bool:
-        print('he')
         new_a_matrix = np.concatenate((-np.ones((self._rows, 1)), self._a_matrix_n), axis=1)
         new_c = np.concatenate((np.array([-1]), np.zeros(self._cols)))
         self._aux_solver = LinearSolver(new_a_matrix, self._x_b_star, new_c, auxiliary=True)

@@ -5,7 +5,7 @@
 - [x] Adopt substitution + optimize constraints in theory propagate.
 - [x] Optimize `Simplex` (copy from `scipy` library)
 - [x] Compare with Reluplex (relation among input dimensions)
-- [ ] Find `UNSAT Core` when unsat occurred (Really? For what?)
+- [ ] Find `UNSAT Core` when unsat occurred
 - [ ] Evaluate behavior `SAT`/`UNSAT` (time consuming)
 - [ ] Use cache mechanism in constraint generation
 - [ ] Verify the correctness of the solver
