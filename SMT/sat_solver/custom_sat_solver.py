@@ -135,7 +135,7 @@ class CustomSATSolver(Solver):
             variable = abs(literal)
 
             # what??
-            if variable in removed_vars:
+            if (variable in removed_vars) or (variable not in self._assignment):
                 continue
 
             level, idx = self._assignment[variable]["level"], self._assignment[variable]["idx"]
@@ -162,6 +162,8 @@ class CustomSATSolver(Solver):
         removed_vars = []
         while True:
             last_literal, prev_max_level, max_level, max_level_count = self._find_last_literal(conflict_clause, removed_vars)
+            if last_literal is None:
+                return None, None, -1
             clause_on_incoming_edge = self._assignment[abs(last_literal)]["clause"]
             # print(last_literal, prev_max_level, max_level, max_level_count, clause_on_incoming_edge)
             if (max_level_count == 1) or (clause_on_incoming_edge is None):
@@ -288,6 +290,8 @@ class CustomSATSolver(Solver):
         return None
 
     def propagate(self) -> bool:
+        if not self._constraint_propagation_to_exhaustion(self._tcp):
+            return False
         while self._last_assigned_literals:
             if (not self._constraint_propagation_to_exhaustion(self._bcp)) or \
                     ((self._theory_solver is not None) and (not self._constraint_propagation_to_exhaustion(self._tcp))):
@@ -324,19 +328,29 @@ class CustomSATSolver(Solver):
         Decides which literal to assign next, using the VSIDS decision heuristic.
         """
         # print('--------------_decide--------------')
-        self.create_new_decision_level()
 
         variable = self._all_vars[0]
         orig_variable = variable
+        count = 0
+        while variable in self._layers_mapping[self._reversed_layers_mapping[orig_variable]]:
+            self.create_new_decision_level()
 
-        count_pos = self._unassigned_vsids_count.get(variable, 0)
-        count_neg = self._unassigned_vsids_count.get(-variable, 0)
-        if count_pos >= count_neg:
-            self._unassigned_vsids_count.pop(variable)
-            self._assign(None, variable)
-        else:
-            self._unassigned_vsids_count.pop(-variable)
-            self._assign(None, -variable)
+            count_pos = self._unassigned_vsids_count.get(variable, 0)
+            count_neg = self._unassigned_vsids_count.get(-variable, 0)
+            if count_pos >= count_neg:
+                self._unassigned_vsids_count.pop(variable)
+                self._assign(None, variable)
+            else:
+                self._unassigned_vsids_count.pop(-variable)
+                self._assign(None, -variable)
+            count += 1
+            if settings.DEBUG:
+                print(f'- [{count}] Choose: variable=`{variable}`\n')
+            if count == settings.N_DECISIONS:
+                break
+            if not self._all_vars:
+                break
+            variable = self._all_vars[0]
 
         # print()
         # print()

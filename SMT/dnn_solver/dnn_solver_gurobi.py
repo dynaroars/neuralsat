@@ -4,7 +4,7 @@ import copy
 
 from sat_solver.custom_sat_solver import CustomSATSolver
 from linear_solver.linear_solver import LinearSolver
-from dnn_solver.helpers import DNNConstraint3 as DNNConstraint
+from dnn_solver.helpers import DNNConstraintGurobi as DNNConstraint
 from solver.solver import Solver
 import settings
 
@@ -66,12 +66,8 @@ class DNNSolver(TheorySolver):
         # print('-------------implication_constraints---------------')
         # print(implication_constraints)
         # print('----------------------------')
-        # exit()
 
-        if settings.DEBUG:
-            print(f'\n- Theory constraints: `{theory_constraints}`')
-        stat = LinearSolver(theory_constraints).solve()
-        if not stat[0]:
+        if not theory_constraints:
             if settings.DEBUG:
                 print('    - Check T-SAT: `UNSAT`')
             for variable, value in self._solver.iterable_assignment():
@@ -89,36 +85,22 @@ class DNNSolver(TheorySolver):
         # deduce next layers
         if settings.DEBUG:
             print(f'\n- Deduction')
-        for node, constraints in implication_constraints.items():
-            constraint_neg, constraint_pos = constraints
-
+        for node in implication_constraints:
             if settings.DEBUG:
-                print(f'    - Deduction: `node {node} <= 0`')
-                print(f'    - Constraints: `{constraint_neg}`')
-            stat_neg = LinearSolver(constraint_neg).solve()
-            if not stat_neg[0]:
-                if settings.DEBUG:
-                    print('        - Result:', True)
+                print(f'    - `node {node} <= 0`:', implication_constraints[node]['neg'])
+            
+            if implication_constraints[node]['neg']:
                 new_assignments.append(-node)
                 continue
-            else:
-                if settings.DEBUG:
-                    print('        - Result:', False)
 
             if settings.DEBUG:
-                print(f'    - Deduction: `node {node} > 0`')
-                print(f'    - Constraints: `{constraint_pos}`')
-            stat_pos = LinearSolver(constraint_pos).solve()
-            if not stat_pos[0]:
-                if settings.DEBUG:
-                    print('        - Result:', True)
+                print(f'    - `node {node} > 0`:', implication_constraints[node]['pos'])
+
+            if implication_constraints[node]['pos']:
                 new_assignments.append(node)
-            else:
-                if settings.DEBUG:
-                    print('        - Result:', False)
 
         if settings.DEBUG:
-            print(f'    - New assignment: `{new_assignments}`')
+            print(f'\n- New assignment: `{new_assignments}`')
             print()
         return conflict_clause, new_assignments
 

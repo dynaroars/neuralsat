@@ -4,14 +4,43 @@ warnings.filterwarnings('ignore')
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import initializers
+from tensorflow.keras import activations
 from tensorflow.keras import Input
 from tensorflow import keras
 from pprint import pprint
+import tensorflow as tf
 import sortedcontainers
 import numpy as np
-import z3
 
-z3.set_option(rational_to_decimal=True)
+
+def model_pa4():
+    model = Sequential()
+    model.add(Input(shape=(2,), dtype='float32'))
+    model.add(Dense(units=2,
+                    activation=activations.relu,
+                    kernel_initializer=tf.constant_initializer(
+                        [[1.0, 1.0], [-1.0, 1.0]]),
+                    bias_initializer=tf.constant_initializer(
+                        [[0.0], [0.0]]),
+                    dtype='float32'
+                    ))
+    model.add(Dense(units=2,
+                    activation=activations.relu,
+                    kernel_initializer=tf.constant_initializer(
+                        [[0.5, -0.5], [-0.2, 0.1]]),
+                    bias_initializer=tf.constant_initializer(
+                        [[0.0], [0.0]]),
+                    dtype='float32'
+                    ))
+    model.add(Dense(units=2,
+                    activation=None,
+                    kernel_initializer=tf.constant_initializer(
+                        [[1.0, -1.0], [-1.0, 1.0]]),
+                    bias_initializer=tf.constant_initializer(
+                        [[0.0], [0.0]]),
+                    dtype='float32'
+                    ))
+    return model
 
 
 def model_random(input_shape, hidden_shapes, output_shape):
@@ -39,7 +68,6 @@ class InputParser:
         return f'y{neuron_id}'
 
     def parse(model):
-        dnn = {}
         vars_mapping = {}
         layers_mapping = {}
         idx = 1
@@ -50,25 +78,14 @@ class InputParser:
         for lid, layer in enumerate(model.layers):
             if lid < n_layers - 1:
                 layers_mapping[lid] = sortedcontainers.SortedList()
-            weights, biases = layer.get_weights()
-            cur_nodes = []
             for i in range(layer.output_shape[1]): # #nodes in layer
-                node = InputParser.neuron_name(lid, i, n_layers)
-                cur_nodes.append(node)
-
-                node = node.replace('n', 'a')
-                if node not in dnn:
-                    dnn[node] = []
+                node = InputParser.neuron_name(lid, i, n_layers).replace('n', 'a')
                 if node not in vars_mapping and node.startswith('a'):
                     vars_mapping[node] = idx
                     layers_mapping[lid].add(idx)
                     idx += 1
-                for p, q in zip(weights[:, i], prev_nodes):
-                    dnn[node].append((p, q))
-                dnn[node].append(biases[i])
-            prev_nodes = cur_nodes
 
-        return dnn, vars_mapping, layers_mapping
+        return vars_mapping, layers_mapping
 
 
 
@@ -79,11 +96,11 @@ if __name__ == '__main__':
     # model.save('../example/model.keras')
     model = keras.models.load_model('../example/model.keras')
 
-    dnn, vars_mapping, layers_mapping = InputParser.parse(model)
+    vars_mapping, layers_mapping = InputParser.parse(model)
 
-    pprint(dnn)
+    # pprint(dnn)
     # print()
-    # pprint(vars_mapping)
+    pprint(vars_mapping)
 
     reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
     pprint(layers_mapping)
