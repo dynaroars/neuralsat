@@ -213,7 +213,6 @@ class DNNConstraintGurobi:
         substitute_dict = {}
 
         for layer_id, layer in enumerate(self.dnn.layers):
-            layer = self.dnn.layers[layer_id]
             weight, bias = layer.get_weights()
             variables = self.layers_mapping.get(layer_id, None)
 

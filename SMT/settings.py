@@ -1,4 +1,4 @@
-DEBUG = False
+DEBUG = True
 
 N_DECISIONS = 50
 # RANDOM_DECISION = False
