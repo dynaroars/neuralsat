@@ -4,7 +4,7 @@ import copy
 
 from sat_solver.custom_sat_solver import CustomSATSolver
 from linear_solver.linear_solver import LinearSolver
-from dnn_solver.helpers import DNNConstraintGurobi as DNNConstraint
+from dnn_solver.dnn_constraint import DNNConstraintGurobi as DNNConstraint
 from solver.solver import Solver
 import settings
 
