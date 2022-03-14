@@ -278,7 +278,7 @@ class DNNConstraintGurobi:
                 implies[node] = {'pos': False, 'neg': False}
                 # neg
                 ci = self.model.addConstr(substitute_dict[node] >= DNNConstraintGurobi.epsilon)
-                # self.model.update()
+                self.model.update()
 
                 # print(self.model.getConstrs(), ci)
                 self.model.optimize()
@@ -288,15 +288,15 @@ class DNNConstraintGurobi:
                 if self.model.status == grb.GRB.INFEASIBLE:
                     implies[node]['neg'] = True
                     self.model.remove(ci)
-                    # self.model.update()
+                    self.model.update()
                     continue
                 self.model.remove(ci)
-                # self.model.update()
+                self.model.update()
                 # self.model.remove(self.model.getConstrs(ci))
 
                 # pos
                 ci = self.model.addConstr(substitute_dict[node] <= 0)
-                # self.model.update()
+                self.model.update()
                 self.model.optimize()
                 # print(self.model.status)
                 # self.model.write(f'{node}_pos_gurobi.lp')
@@ -305,10 +305,11 @@ class DNNConstraintGurobi:
                     # self.model.remove(self.model.getConstrs(ci))
                     self.model.remove(ci)
                     # self.model.remove(ci)
-                    # self.model.update()
+                    self.model.update()
+                else:
                 # self.model.remove(self.model.getConstrs(ci))
-                self.model.remove(ci)
-                # self.model.update()
+                    self.model.remove(ci)
+                    self.model.update()
 
 
                 # implies[node] = [
@@ -318,14 +319,20 @@ class DNNConstraintGurobi:
         self.model.write(f'gurobi/{self.count}.lp')
         # output
         if return_output:
-            # constraint = Utils.And(constraint, output_condition) # prove(f, not(g)) = f and g
+            if type(output_constraint) is np.bool_:
+                self.model.remove(constraints)
+                self.model.update()
+                return output_constraint, []
+
             co = self.model.addConstr(output_constraint)
             self.model.optimize()
             if self.model.status == grb.GRB.INFEASIBLE:
                 self.model.remove(constraints)
                 self.model.remove(co)
-                # self.model.update()
+                self.model.update()
                 return False, None
+            self.model.remove(co)
+            self.model.update()
 
         self.model.remove(constraints)
         self.model.update()
@@ -340,23 +347,6 @@ class DNNConstraintGurobi:
 if __name__ == '__main__':
         
     from utils import model_pa4
-    # dnn = {
-    #     'a00': '1x0 - 1x1',
-    #     'a01': '1x0 + 1x1',
-    #     'a10': '0.5n00 - 0.2n01',
-    #     'a11': '-0.5n00 + 0.1n01',
-    #     'y0': '1n10 - 1n11',
-    #     'y1': '-1n10 + 1n11',
-    # }
-
-    # dnn = {
-    #     'a0_0': [(1.0, 'x0'), (-1.0, 'x1'), 1],
-    #     'a0_1': [(1.0, 'x0'), (1.0, 'x1'), 2],
-    #     'a1_0': [(0.5, 'n0_0'), (-0.2, 'n0_1'), 3],
-    #     'a1_1': [(-0.5, 'n0_0'), (0.1, 'n0_1'), 4],
-    #     'y0' : [(1.0, 'n1_0'), (-1.0, 'n1_1'), 5],
-    #     'y1' : [(-1.0, 'n1_0'), (1.0, 'n1_1'), 6],
-    # }
 
     dnn = model_pa4()
 

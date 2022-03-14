@@ -13,7 +13,7 @@ if __name__ == '__main__':
     # for i in b:
     #     print(i.shape)
 
-    dnn = Network('example/random.nnet')
+    dnn = Network('benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.nnet')
 
 
     for layer_id, layer in enumerate(dnn.layers):
@@ -21,7 +21,7 @@ if __name__ == '__main__':
         print(weight.shape, bias.shape)
 
 
-    vars_mapping, layers_mapping = InputParser.parse(dnn)
+    # vars_mapping, layers_mapping = InputParser.parse(dnn)
 
-    print(vars_mapping)
-    print(layers_mapping)
+    # print(vars_mapping)
+    # print(layers_mapping)
