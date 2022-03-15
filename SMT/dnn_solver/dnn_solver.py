@@ -4,7 +4,7 @@ import copy
 
 from sat_solver.custom_sat_solver import CustomSATSolver
 from linear_solver.linear_solver import LinearSolver
-from dnn_solver.helpers import DNNConstraint3 as DNNConstraint
+from dnn_solver.helpers_bak import DNNConstraint3 as DNNConstraint
 from solver.solver import Solver
 import settings
 

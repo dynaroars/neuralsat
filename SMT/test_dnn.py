@@ -1,6 +1,6 @@
 from dnn_solver.utils import InputParser, model_random, model_pa4
-from dnn_solver.dnn_solver_gurobi import DNNSolver
-# from dnn_solver.dnn_solver import DNNSolver
+# from dnn_solver.dnn_solver_gurobi import DNNSolver
+from dnn_solver.dnn_solver import DNNSolver
 from utils.read_nnet import Network
 from tensorflow import keras
 from pprint import pprint
