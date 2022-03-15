@@ -20,17 +20,19 @@ class DNNConstraintGurobi:
         self.model.setParam('OutputFlag', False)
         self.model.setParam('Threads', 16)
 
-        # self.gurobi_vars = [self.model.addVar(
-        #         name=f'x{i}', 
-        #         lb=-grb.GRB.INFINITY, 
-        #         ub=grb.GRB.INFINITY) 
-        #     for i in range(self.n_inputs)]
+        try:
+            self.gurobi_vars = [self.model.addVar(
+                    name=f'x{i}', 
+                    lb=dnn.input_lower_bounds[i], 
+                    ub=dnn.input_upper_bounds[i]) 
+                for i in range(self.n_inputs)]
+        except AttributeError:
+            self.gurobi_vars = [self.model.addVar(
+                    name=f'x{i}', 
+                    lb=-grb.GRB.INFINITY, 
+                    ub=grb.GRB.INFINITY) 
+                for i in range(self.n_inputs)]
 
-        self.gurobi_vars = [self.model.addVar(
-                name=f'x{i}', 
-                lb=dnn.input_lower_bounds[i], 
-                ub=dnn.input_upper_bounds[i]) 
-            for i in range(self.n_inputs)]
 
         self.model.setObjective(0, grb.GRB.MAXIMIZE)
         self.model.update()
