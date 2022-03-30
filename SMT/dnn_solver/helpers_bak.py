@@ -115,6 +115,8 @@ class DNNConstraint3:
             if status:
                 constraint = Utils.And(constraint, '(%s > 0)' % str(substitute_dict[node]))
             else:
+                if str(substitute_dict[node]) == '0.0':
+                    continue
                 constraint = Utils.And(constraint, '(%s <= 0)' % str(substitute_dict[node]))
 
         # implies

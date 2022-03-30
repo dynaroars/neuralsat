@@ -10,7 +10,8 @@ import settings
 
 class TheorySolver(Solver):
 
-    def __init__(self, formula, vars_mapping, layers_mapping, first_var=None, max_new_clauses=float('inf'), halving_period=10000):
+    def __init__(self, formula, vars_mapping, layers_mapping, first_var=None, 
+        max_new_clauses=float('inf'), halving_period=10000):
         super().__init__()
 
         self._solver = CustomSATSolver(formula,
@@ -31,43 +32,30 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, dnn, vars_mapping, layers_mapping, conditions):
+    def __init__(self, dnn, vars_mapping, layers_mapping):
 
         super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
 
         # self.dnn = dnn
-        self.conditions = conditions
-        self.vars_mapping = vars_mapping
-        self.reversed_vars_mapping = {v: k for k, v in vars_mapping.items()}
-
-        self.constraint_generator = DNNConstraint(dnn, copy.deepcopy(layers_mapping), conditions)
+        self.constraint_generator = DNNConstraint(dnn, copy.deepcopy(layers_mapping))
 
     def propagate(self):
         if settings.DEBUG:
             print('- Theory propagate\n')
 
+        conflict_clause = None
         new_assignments = []
-        conflict_clause = set()
 
         assignment = {k: v['value'] for k, v in self._solver._assignment.items()}
-        # assignment = {self.reversed_vars_mapping[k]: v['value'] for k, v in self._solver._assignment.items()}
 
         if settings.DEBUG:
             print('- Assignment:', assignment)
 
         # theory checking
-        theory_constraints, implication_constraints = self.constraint_generator(assignment)
+        theory_stat, implication_constraints = self.constraint_generator(assignment)
 
-        # print('DEBUG ==================>', len(implication_constraints))
-        # print('- Assignment:', assignment)
-
-        # print('-------------theory_constraints---------------')
-        # print(theory_constraints)
-        # print('-------------implication_constraints---------------')
-        # print(implication_constraints)
-        # print('----------------------------')
-
-        if not theory_constraints:
+        if not theory_stat:
+            conflict_clause = set()
             if settings.DEBUG:
                 print('    - Check T-SAT: `UNSAT`')
             for variable, value in self._solver.iterable_assignment():
@@ -76,11 +64,10 @@ class DNNSolver(TheorySolver):
             if settings.DEBUG:
                 print(f'    - Conflict clause: `{list(conflict_clause)}`')
                 print()
-            return conflict_clause, []
+            return conflict_clause, new_assignments
 
         if settings.DEBUG:
             print('    - Check T-SAT: `SAT`')
-        conflict_clause = None
  
         # deduce next layers
         if settings.DEBUG:
@@ -103,8 +90,6 @@ class DNNSolver(TheorySolver):
             print(f'\n- New assignment: `{new_assignments}`')
             print()
         return conflict_clause, new_assignments
-
-
 
 
     def get_assignment(self) -> dict:

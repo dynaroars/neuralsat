@@ -37,5 +37,6 @@ dummy:
         + heuristic
 
     - over-approximate + prune search space:
-        + abstract interpretation: symbolic interval
+        + abstract interpretation: ERAN
+        + symbolic interval: check boundaries on each node
         + reachability
