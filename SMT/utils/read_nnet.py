@@ -1,7 +1,8 @@
 import numpy as np 
 import torch
+import torch.nn.functional as F
 
-class Layer:
+class Linear:
     
     def __init__(self, weight, bias):
         self.weight = weight
@@ -20,30 +21,30 @@ class ReLU:
     def __str__(self):
         return 'ReLU'
 
-class Network:
+# class Network:
 
-    def __init__(self, nnet_path):
-        self.layers = []
+#     def __init__(self, nnet_path):
+#         self.layers = []
 
-        weights, biases, lbs, ubs, means, ranges = read_nnet(nnet_path, with_norm=True)
+#         weights, biases, lbs, ubs, means, ranges = read_nnet(nnet_path, with_norm=True)
 
-        for i in range(len(weights)):
-            w = weights[i].transpose()
-            b = biases[i]
-            self.layers.append(Layer(w, b))
+#         for i in range(len(weights)):
+#             w = weights[i].transpose()
+#             b = biases[i]
+#             self.layers.append(Linear(w, b))
 
-        self.input_shape = (None, weights[0].shape[1])
-        self.output_shape = (None, weights[-1].shape[0])
+#         self.input_shape = (None, weights[0].shape[1])
+#         self.output_shape = (None, weights[-1].shape[0])
 
-        self.input_lower_bounds = lbs
-        self.input_upper_bounds = ubs
-        self.input_means = means[:-1]
-        self.input_ranges = ranges[:-1]
+#         self.input_lower_bounds = lbs
+#         self.input_upper_bounds = ubs
+#         self.input_means = means[:-1]
+#         self.input_ranges = ranges[:-1]
 
-        self.output_mean = means[-1]
-        self.output_range = ranges[-1]
+#         self.output_mean = means[-1]
+#         self.output_range = ranges[-1]
 
-        self.path = nnet_path
+#         self.path = nnet_path
 
 class NetworkDeepZono:
 
@@ -54,12 +55,36 @@ class NetworkDeepZono:
 
         n_layers = len(weights)
         for i in range(n_layers):
-            w = torch.tensor(weights[i]).float()
-            b = torch.tensor(biases[i]).float()
-            self.layers.append(Layer(w, b))
+            w = torch.Tensor(weights[i]).float()
+            b = torch.Tensor(biases[i]).float()
+            self.layers.append(Linear(w, b))
             if i < n_layers - 1:
                 self.layers.append(ReLU())
 
+        self.input_shape = (None, weights[0].shape[1])
+        self.output_shape = (None, weights[-1].shape[0])
+        
+        self.input_lower_bounds = lbs
+        self.input_upper_bounds = ubs
+        self.input_means = means[:-1]
+        self.input_ranges = ranges[:-1]
+
+        self.output_mean = means[-1]
+        self.output_range = ranges[-1]
+
+    def forward(self, x):
+        x = x.unsqueeze(0)
+        for layer in self.layers:
+            if type(layer) is Linear:
+                x = F.linear(x, layer.weight, layer.bias)
+            elif type(layer) is ReLU:
+                x = x.relu()
+            else:
+                raise NotImplementedError
+        return x
+
+    def __call__(self, x):
+        return self.forward(x)
 
 def read_nnet(nnet_file, with_norm=False):
     '''

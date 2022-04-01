@@ -1,0 +1,40 @@
+Testing property 2
+Set parameter Username
+Academic license - for non-commercial use only - expires 2022-04-29
+10 benchmark/acasxu/nnet/ACASXU_run2a_2_1_batch_2000.nnet True 88.07852125167847
+11 benchmark/acasxu/nnet/ACASXU_run2a_2_2_batch_2000.nnet True 2.6469292640686035
+12 benchmark/acasxu/nnet/ACASXU_run2a_2_3_batch_2000.nnet True 78.3001823425293
+13 benchmark/acasxu/nnet/ACASXU_run2a_2_4_batch_2000.nnet True 4.85870099067688
+14 benchmark/acasxu/nnet/ACASXU_run2a_2_5_batch_2000.nnet True 1.1272482872009277
+15 benchmark/acasxu/nnet/ACASXU_run2a_2_6_batch_2000.nnet True 27.34857964515686
+16 benchmark/acasxu/nnet/ACASXU_run2a_2_7_batch_2000.nnet True 45.19918417930603
+17 benchmark/acasxu/nnet/ACASXU_run2a_2_8_batch_2000.nnet True 3.1190690994262695
+18 benchmark/acasxu/nnet/ACASXU_run2a_2_9_batch_2000.nnet True 82.6594877243042
+19 benchmark/acasxu/nnet/ACASXU_run2a_3_1_batch_2000.nnet True 27.563856840133667
+20 benchmark/acasxu/nnet/ACASXU_run2a_3_2_batch_2000.nnet True 186.27061128616333
+21 benchmark/acasxu/nnet/ACASXU_run2a_3_3_batch_2000.nnet False 1015.0381155014038
+22 benchmark/acasxu/nnet/ACASXU_run2a_3_4_batch_2000.nnet True 358.989990234375
+23 benchmark/acasxu/nnet/ACASXU_run2a_3_5_batch_2000.nnet True 28.804631233215332
+24 benchmark/acasxu/nnet/ACASXU_run2a_3_6_batch_2000.nnet True 8.703573942184448
+25 benchmark/acasxu/nnet/ACASXU_run2a_3_7_batch_2000.nnet True 28.38562798500061
+26 benchmark/acasxu/nnet/ACASXU_run2a_3_8_batch_2000.nnet True 59.664745569229126
+27 benchmark/acasxu/nnet/ACASXU_run2a_3_9_batch_2000.nnet True 5.912742614746094
+28 benchmark/acasxu/nnet/ACASXU_run2a_4_1_batch_2000.nnet True 55.94740700721741
+29 benchmark/acasxu/nnet/ACASXU_run2a_4_2_batch_2000.nnet False 1906.7527375221252
+30 benchmark/acasxu/nnet/ACASXU_run2a_4_3_batch_2000.nnet True 4.114503383636475
+31 benchmark/acasxu/nnet/ACASXU_run2a_4_4_batch_2000.nnet True 16.443179607391357
+32 benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet True 622.5111474990845
+33 benchmark/acasxu/nnet/ACASXU_run2a_4_6_batch_2000.nnet True 28.719645738601685
+34 benchmark/acasxu/nnet/ACASXU_run2a_4_7_batch_2000.nnet True 12.524312973022461
+35 benchmark/acasxu/nnet/ACASXU_run2a_4_8_batch_2000.nnet True 19.455217361450195
+36 benchmark/acasxu/nnet/ACASXU_run2a_4_9_batch_2000.nnet True 289.7760965824127
+37 benchmark/acasxu/nnet/ACASXU_run2a_5_1_batch_2000.nnet True 0.8107600212097168
+38 benchmark/acasxu/nnet/ACASXU_run2a_5_2_batch_2000.nnet True 32.2689311504364
+39 benchmark/acasxu/nnet/ACASXU_run2a_5_3_batch_2000.nnet True 670.060120344162
+40 benchmark/acasxu/nnet/ACASXU_run2a_5_4_batch_2000.nnet True 2.5912060737609863
+41 benchmark/acasxu/nnet/ACASXU_run2a_5_5_batch_2000.nnet True 91.01288628578186
+42 benchmark/acasxu/nnet/ACASXU_run2a_5_6_batch_2000.nnet True 18.32265019416809
+43 benchmark/acasxu/nnet/ACASXU_run2a_5_7_batch_2000.nnet True 60.2355535030365
+44 benchmark/acasxu/nnet/ACASXU_run2a_5_8_batch_2000.nnet True 6.583227157592773
+45 benchmark/acasxu/nnet/ACASXU_run2a_5_9_batch_2000.nnet True 702.4553062915802
+6593.456382513046

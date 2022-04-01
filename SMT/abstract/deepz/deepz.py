@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 
+from utils.read_nnet import ReLU, Linear
 import utils
 
 def relu_transform(center, error):
@@ -103,9 +104,9 @@ def forward_nnet(net, lower, upper):
     error = error.reshape((h, h))
 
     for layer in net.layers:
-        if type(layer) is utils.read_nnet.Layer:
+        if type(layer) is Linear:
             center, error = linear_transform(layer, center, error)
-        elif type(layer) is utils.read_nnet.ReLU:
+        elif type(layer) is ReLU:
             center, error = relu_transform(center, error)
         else:
             raise NotImplementedError

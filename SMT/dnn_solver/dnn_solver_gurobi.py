@@ -2,10 +2,11 @@ from pprint import pprint
 import numpy as np
 import copy
 
+from dnn_solver.dnn_theorem_prover import DNNTheoremProver
 from sat_solver.custom_sat_solver import CustomSATSolver
-from linear_solver.linear_solver import LinearSolver
-from dnn_solver.dnn_constraint import DNNConstraintGurobi as DNNConstraint
-from solver.solver import Solver
+from sat_solver.sat_solver import Solver
+from dnn_solver.utils import InputParser
+from utils.read_nnet import NetworkDeepZono
 import settings
 
 class TheorySolver(Solver):
@@ -32,12 +33,13 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, dnn, vars_mapping, layers_mapping):
+    def __init__(self, model_path, p=1):
+
+        self.dnn = NetworkDeepZono(model_path)
+        vars_mapping, layers_mapping = InputParser.parse(self.dnn)
 
         super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
-
-        # self.dnn = dnn
-        self.constraint_generator = DNNConstraint(dnn, copy.deepcopy(layers_mapping))
+        self.dnn_theorem_prover = DNNTheoremProver(self.dnn, copy.deepcopy(layers_mapping), p=p)
 
     def propagate(self):
         if settings.DEBUG:
@@ -52,9 +54,9 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
-        theory_stat, implication_constraints = self.constraint_generator(assignment)
+        theory_sat, implications = self.dnn_theorem_prover(assignment)
 
-        if not theory_stat:
+        if not theory_sat:
             conflict_clause = set()
             if settings.DEBUG:
                 print('    - Check T-SAT: `UNSAT`')
@@ -72,18 +74,18 @@ class DNNSolver(TheorySolver):
         # deduce next layers
         if settings.DEBUG:
             print(f'\n- Deduction')
-        for node in implication_constraints:
+        for node in implications:
             if settings.DEBUG:
-                print(f'    - `node {node} <= 0`:', implication_constraints[node]['neg'])
+                print(f'    - `node {node} <= 0`:', implications[node]['neg'])
             
-            if implication_constraints[node]['neg']:
+            if implications[node]['neg']:
                 new_assignments.append(-node)
                 continue
 
             if settings.DEBUG:
-                print(f'    - `node {node} > 0`:', implication_constraints[node]['pos'])
+                print(f'    - `node {node} > 0`:', implications[node]['pos'])
 
-            if implication_constraints[node]['pos']:
+            if implications[node]['pos']:
                 new_assignments.append(node)
 
         if settings.DEBUG:
@@ -94,3 +96,7 @@ class DNNSolver(TheorySolver):
 
     def get_assignment(self) -> dict:
         pass
+
+    def get_solution(self):
+        return self.dnn_theorem_prover.solution
+
