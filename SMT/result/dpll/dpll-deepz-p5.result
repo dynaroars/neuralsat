@@ -1,0 +1,119 @@
+ ----------- Testing property 5 ----------- 
+1 1 benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.nnet False 655.6756110191345
+655.6838266849518
+
+1 2 benchmark/acasxu/nnet/ACASXU_run2a_1_2_batch_2000.nnet False 254.98355388641357
+2 3 benchmark/acasxu/nnet/ACASXU_run2a_1_3_batch_2000.nnet True 290.23575615882874
+    - solution: tensor([-0.3228,  0.0318, -0.4992, -0.2273, -0.2988])
+    - output: tensor([[0.0171, 0.0178, 0.0174, 0.0040, 0.0045]])
+3 4 benchmark/acasxu/nnet/ACASXU_run2a_1_4_batch_2000.nnet True 0.9880809783935547
+    - solution: tensor([-0.3228,  0.0632, -0.4992, -0.2273, -0.3030])
+    - output: tensor([[ 0.0010, -0.0021, -0.0017, -0.0108, -0.0098]])
+4 5 benchmark/acasxu/nnet/ACASXU_run2a_1_5_batch_2000.nnet False 384.7712416648865
+5 6 benchmark/acasxu/nnet/ACASXU_run2a_1_6_batch_2000.nnet True 0.4346506595611572
+    - solution: tensor([-0.3228,  0.0318, -0.4992, -0.2273, -0.4918])
+    - output: tensor([[-0.0092, -0.0145, -0.0165, -0.0122, -0.0125]])
+6 7 benchmark/acasxu/nnet/ACASXU_run2a_1_7_batch_2000.nnet True 0.616253137588501
+    - solution: tensor([-0.3218,  0.0628, -0.5000, -0.4936, -0.5000])
+    - output: tensor([[-0.0040,  0.0073, -0.0072,  0.0101, -0.0028]])
+7 8 benchmark/acasxu/nnet/ACASXU_run2a_1_8_batch_2000.nnet True 0.5658261775970459
+    - solution: tensor([-0.3243,  0.0318, -0.5000, -0.3299, -0.1723])
+    - output: tensor([[-0.0203, -0.0191, -0.0190, -0.0180, -0.0180]])
+8 9 benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.nnet True 0.3769214153289795
+    - solution: tensor([-0.3243,  0.0318, -0.4998, -0.4812, -0.5000])
+    - output: tensor([[-0.0190, -0.0138, -0.0169, -0.0126, -0.0160]])
+9 10 benchmark/acasxu/nnet/ACASXU_run2a_2_1_batch_2000.nnet True 2.186506748199463
+    - solution: tensor([-0.3243,  0.0583, -0.5000, -0.3998, -0.4480])
+    - output: tensor([[0.3917, 0.3747, 0.3888, 0.3642, 0.3642]])
+10 11 benchmark/acasxu/nnet/ACASXU_run2a_2_2_batch_2000.nnet True 2.793943166732788
+    - solution: tensor([-0.3243,  0.0614, -0.4996, -0.4806, -0.4633])
+    - output: tensor([[0.5911, 0.5592, 0.5722, 0.5623, 0.5592]])
+11 12 benchmark/acasxu/nnet/ACASXU_run2a_2_3_batch_2000.nnet True 0.7267546653747559
+    - solution: tensor([-0.3225,  0.0612, -0.5000, -0.5000, -0.4154])
+    - output: tensor([[0.3695, 0.3293, 0.3632, 0.3101, 0.3440]])
+12 13 benchmark/acasxu/nnet/ACASXU_run2a_2_4_batch_2000.nnet True 2.1516146659851074
+    - solution: tensor([-0.3240,  0.0406, -0.5000, -0.4678, -0.3809])
+    - output: tensor([[0.0792, 0.0391, 0.0877, 0.0159, 0.0792]])
+13 14 benchmark/acasxu/nnet/ACASXU_run2a_2_5_batch_2000.nnet True 0.887265682220459
+    - solution: tensor([-0.3243,  0.0350, -0.5000, -0.4714, -0.5000])
+    - output: tensor([[0.2473, 0.2155, 0.2405, 0.1947, 0.1964]])
+14 15 benchmark/acasxu/nnet/ACASXU_run2a_2_6_batch_2000.nnet True 0.4615669250488281
+    - solution: tensor([-0.3243,  0.0627, -0.4992, -0.5000, -0.4473])
+    - output: tensor([[0.0753, 0.0227, 0.0787, 0.0474, 0.0775]])
+15 16 benchmark/acasxu/nnet/ACASXU_run2a_2_7_batch_2000.nnet True 0.6325473785400391
+    - solution: tensor([-0.3239,  0.0637, -0.5000, -0.2448, -0.4018])
+    - output: tensor([[ 0.0224, -0.0203,  0.0196, -0.0156,  0.0199]])
+16 17 benchmark/acasxu/nnet/ACASXU_run2a_2_8_batch_2000.nnet True 0.5163085460662842
+    - solution: tensor([-0.3218,  0.0615, -0.5000, -0.3327, -0.4291])
+    - output: tensor([[ 0.0231, -0.0215,  0.0191, -0.0165,  0.0204]])
+17 18 benchmark/acasxu/nnet/ACASXU_run2a_2_9_batch_2000.nnet True 0.73598313331604
+    - solution: tensor([-0.3243,  0.0637, -0.5000, -0.2478, -0.5000])
+    - output: tensor([[ 0.0213, -0.0203,  0.0192, -0.0169,  0.0201]])
+18 19 benchmark/acasxu/nnet/ACASXU_run2a_3_1_batch_2000.nnet False 804.4475657939911
+19 20 benchmark/acasxu/nnet/ACASXU_run2a_3_2_batch_2000.nnet True 48.64618515968323
+    - solution: tensor([-0.3238,  0.0318, -0.5000, -0.4974, -0.4643])
+    - output: tensor([[0.8462, 0.8350, 0.8487, 0.7711, 0.8023]])
+20 21 benchmark/acasxu/nnet/ACASXU_run2a_3_3_batch_2000.nnet True 40.750195026397705
+    - solution: tensor([-0.3243,  0.0318, -0.5000, -0.4990, -0.4802])
+    - output: tensor([[0.6879, 0.7023, 0.7237, 0.6240, 0.6754]])
+21 22 benchmark/acasxu/nnet/ACASXU_run2a_3_4_batch_2000.nnet True 37.49457001686096
+    - solution: tensor([-0.3243,  0.0318, -0.5000, -0.5000, -0.4025])
+    - output: tensor([[0.3014, 0.2858, 0.3000, 0.2581, 0.2733]])
+22 23 benchmark/acasxu/nnet/ACASXU_run2a_3_5_batch_2000.nnet False 169.33952283859253
+23 24 benchmark/acasxu/nnet/ACASXU_run2a_3_6_batch_2000.nnet True 0.42363452911376953
+    - solution: tensor([-0.3243,  0.0377, -0.5000, -0.2423, -0.1667])
+    - output: tensor([[ 0.0236,  0.0216, -0.0214,  0.0239, -0.0148]])
+24 25 benchmark/acasxu/nnet/ACASXU_run2a_3_7_batch_2000.nnet True 0.32120442390441895
+    - solution: tensor([-0.3243,  0.0318, -0.5000, -0.2319, -0.4993])
+    - output: tensor([[ 0.0289,  0.0253, -0.0210,  0.0242, -0.0153]])
+25 26 benchmark/acasxu/nnet/ACASXU_run2a_3_8_batch_2000.nnet True 0.5214080810546875
+    - solution: tensor([-0.3219,  0.0617, -0.5000, -0.2273, -0.5000])
+    - output: tensor([[ 0.0207,  0.0192, -0.0206,  0.0202, -0.0159]])
+26 27 benchmark/acasxu/nnet/ACASXU_run2a_3_9_batch_2000.nnet True 0.7111444473266602
+    - solution: tensor([-0.3243,  0.0611, -0.5000, -0.3703, -0.5000])
+    - output: tensor([[ 0.0316,  0.0197, -0.0201,  0.0211, -0.0160]])
+27 28 benchmark/acasxu/nnet/ACASXU_run2a_4_1_batch_2000.nnet True 7.59526252746582
+    - solution: tensor([-0.3243,  0.0395, -0.5000, -0.3289, -0.4331])
+    - output: tensor([[0.3421, 0.3144, 0.3358, 0.2982, 0.3144]])
+28 29 benchmark/acasxu/nnet/ACASXU_run2a_4_2_batch_2000.nnet True 0.5316956043243408
+    - solution: tensor([-0.3240,  0.0318, -0.4992, -0.2344, -0.1667])
+    - output: tensor([[0.1268, 0.0885, 0.1266, 0.0709, 0.1216]])
+29 30 benchmark/acasxu/nnet/ACASXU_run2a_4_3_batch_2000.nnet True 17.76232361793518
+    - solution: tensor([-0.3224,  0.0369, -0.5000, -0.5000, -0.4314])
+    - output: tensor([[0.4750, 0.4720, 0.4847, 0.4335, 0.4335]])
+30 31 benchmark/acasxu/nnet/ACASXU_run2a_4_4_batch_2000.nnet True 0.424332857131958
+    - solution: tensor([-0.3218,  0.0614, -0.5000, -0.3515, -0.1692])
+    - output: tensor([[ 0.0311, -0.0046,  0.0335, -0.0162,  0.0283]])
+31 32 benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet True 0.4987919330596924
+    - solution: tensor([-0.3243,  0.0553, -0.5000, -0.4087, -0.4877])
+    - output: tensor([[0.0635, 0.0480, 0.0574, 0.0234, 0.0519]])
+32 33 benchmark/acasxu/nnet/ACASXU_run2a_4_6_batch_2000.nnet True 0.38523077964782715
+    - solution: tensor([-0.3243,  0.0594, -0.5000, -0.4349, -0.3406])
+    - output: tensor([[ 0.0303, -0.0150,  0.0321, -0.0055,  0.0318]])
+33 34 benchmark/acasxu/nnet/ACASXU_run2a_4_7_batch_2000.nnet True 1.042609691619873
+    - solution: tensor([-0.3243,  0.0487, -0.5000, -0.3499, -0.4792])
+    - output: tensor([[ 0.0293, -0.0165,  0.0237, -0.0102,  0.0249]])
+34 35 benchmark/acasxu/nnet/ACASXU_run2a_4_8_batch_2000.nnet True 0.5612285137176514
+    - solution: tensor([-0.3218,  0.0504, -0.5000, -0.4956, -0.1667])
+    - output: tensor([[ 0.0219, -0.0186,  0.0202, -0.0156,  0.0207]])
+35 36 benchmark/acasxu/nnet/ACASXU_run2a_4_9_batch_2000.nnet True 0.5298111438751221
+    - solution: tensor([-0.3227,  0.0510, -0.4992, -0.3296, -0.4137])
+    - output: tensor([[ 0.0222, -0.0187,  0.0191, -0.0185,  0.0196]])
+36 37 benchmark/acasxu/nnet/ACASXU_run2a_5_1_batch_2000.nnet False 231.01246619224548
+37 38 benchmark/acasxu/nnet/ACASXU_run2a_5_2_batch_2000.nnet False 379.98889660835266
+38 39 benchmark/acasxu/nnet/ACASXU_run2a_5_3_batch_2000.nnet False 295.2535276412964
+39 40 benchmark/acasxu/nnet/ACASXU_run2a_5_4_batch_2000.nnet False 1117.7713077068329
+40 41 benchmark/acasxu/nnet/ACASXU_run2a_5_5_batch_2000.nnet False 58.38338899612427
+41 42 benchmark/acasxu/nnet/ACASXU_run2a_5_6_batch_2000.nnet True 0.5179300308227539
+    - solution: tensor([-0.3235,  0.0483, -0.5000, -0.5000, -0.3532])
+    - output: tensor([[ 0.0443,  0.0394, -0.0038,  0.0409,  0.0075]])
+42 43 benchmark/acasxu/nnet/ACASXU_run2a_5_7_batch_2000.nnet True 0.4214057922363281
+    - solution: tensor([-0.3243,  0.0318, -0.5000, -0.3420, -0.4938])
+    - output: tensor([[ 0.0231,  0.0216, -0.0184,  0.0222, -0.0154]])
+43 44 benchmark/acasxu/nnet/ACASXU_run2a_5_8_batch_2000.nnet True 0.4232320785522461
+    - solution: tensor([-0.3218,  0.0318, -0.5000, -0.4763, -0.1831])
+    - output: tensor([[ 0.0217,  0.0185, -0.0193,  0.0196, -0.0171]])
+44 45 benchmark/acasxu/nnet/ACASXU_run2a_5_9_batch_2000.nnet True 0.6485552787780762
+    - solution: tensor([-0.3218,  0.0358, -0.5000, -0.3869, -0.3454])
+    - output: tensor([[ 0.0189,  0.0186, -0.0194,  0.0196, -0.0172]])
+4160.732274532318

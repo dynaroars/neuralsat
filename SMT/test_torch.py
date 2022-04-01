@@ -3,9 +3,9 @@ import time
 
 if __name__ == '__main__':
     
-    i = 2
+    i = 1
     j = 9
-    p = 2
+    p = 7
 
     name = f'benchmark/acasxu/nnet/ACASXU_run2a_{i}_{j}_batch_2000.nnet'
     # name = 'benchmark/acasxu/nnet/ACASXU_run2a_3_3_batch_2000.nnet'

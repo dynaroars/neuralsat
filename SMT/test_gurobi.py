@@ -8,21 +8,10 @@ x1 = model.addVar(name='x1', lb=0, ub=1)
 x2 = model.addVar(name='x2', lb=0, ub=1)
 var = [x1, x2]
 
-constrs = []
-constrs.append(model.addConstr(False))
-constrs.append(model.addConstr(0.22 <= x1 + x2))
-constrs.append(model.addConstr(0.3 <= x2))
-constrs.append(model.addConstr(x2 <= 0.4))
 model.update()
-print(model)
+print(c)
 
-model.remove([])
-model.update()
-print(model)
-model.remove(constrs)
-model.update()
-
-print(model)
+# print(model)
 
 # model.setObjective(-1000, grb.GRB.MAXIMIZE)
 

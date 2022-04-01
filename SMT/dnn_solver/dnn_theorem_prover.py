@@ -11,6 +11,13 @@ from utils.read_nnet import ReLU, Linear
 from abstract.deepz import deepz
 import settings
 
+
+class DNFConstraint:
+
+    def __init__(self, constraints):
+        self.constraints = constraints
+
+
 class DNNTheoremProver:
 
     epsilon = 1e-5
@@ -40,12 +47,11 @@ class DNNTheoremProver:
 
         self.model.setObjective(0, grb.GRB.MAXIMIZE)
         
-        self.p = p
+        self.p = p # property
 
         self.restore_input_bounds(intial=True)
-
         
-        self.count = 0
+        self.count = 0 # debug
 
         self.solution = None
         self.constraints = []
@@ -233,16 +239,32 @@ class DNNTheoremProver:
 
         # output
         if return_output:
-            if type(output_constraint) is list:
-                self.constraints += [self.model.addConstr(_) for _ in output_constraint]
+            if type(output_constraint) is DNFConstraint:
+                flag_sat = False
+                for cnf in output_constraint.constraints:
+                    ci = [self.model.addConstr(_) for _ in cnf]
+                    self._optimize()
+                    if self.model.status == grb.GRB.OPTIMAL:
+                        flag_sat = True
+                    self.model.remove(ci)
+                    if flag_sat:
+                        break
+                if flag_sat:
+                    self.solution = self.get_solution()
+                else:
+                    return False, None
+
             else:
-                self.constraints.append(self.model.addConstr(output_constraint))
+                if type(output_constraint) is list:
+                    self.constraints += [self.model.addConstr(_) for _ in output_constraint]
+                else:
+                    self.constraints.append(self.model.addConstr(output_constraint))
 
-            self._optimize()
-            if self.model.status == grb.GRB.INFEASIBLE:
-                return False, None
+                self._optimize()
+                if self.model.status == grb.GRB.INFEASIBLE:
+                    return False, None
 
-            self.solution = self.get_solution()
+                self.solution = self.get_solution()
 
         return True, implications
 
@@ -264,21 +286,37 @@ class DNNTheoremProver:
 
         properties = {
             0: { # debug
-                'lbs': [-30, -30, -30],
+                'lbs' : [-30, -30, -30],
                 'ubs' : [30, 30, 30],
             },
             1: {
-                'lbs': [55947.691, -3.141593, -3.141593, 1145, 0],
-                'ubs' : [60760, 3.141593, 3.141593, 1200, 60],
+                'lbs' : [55947.691, -3.141593,  -3.141593, 1145,  0],
+                'ubs' : [60760,      3.141593,   3.141593, 1200, 60],
             }, 
             2: {
-                'lbs': [55947.691, -3.141593, -3.141593, 1145, 0],
-                'ubs' : [60760, 3.141593, 3.141593, 1200, 60],
+                'lbs' : [55947.691, -3.141593, -3.141593, 1145,  0],
+                'ubs' : [60760,      3.141593,  3.141593, 1200, 60],
             },  
             3: {
-                'lbs': [1500, -0.06, 3.1, 980, 960],
-                'ubs' : [1800, 0.06, 3.141592653589793, 1200, 1200],
+                'lbs' : [1500, -0.06, 3.1,                980,  960],
+                'ubs' : [1800,  0.06, 3.141592653589793, 1200, 1200],
+            },  
+            4: {
+                'lbs' : [1500, -0.06, 0, 1000, 700],
+                'ubs' : [1800,  0.06, 0, 1200, 800],
             }, 
+            5: {
+                'lbs' : [250, 0.2, -3.141592,           100,   0],
+                'ubs' : [400, 0.4, -3.1365920000000003, 400, 400],
+            }, 
+            7: {
+                'lbs' : [0,     -3.141592, -3.141592,  100,    0],
+                'ubs' : [60760,  3.141592,  3.141592, 1200, 1200],
+            },
+            8: {
+                'lbs' : [    0, -3.141592,          -0.1,  600, 1200],
+                'ubs' : [60760, -2.3561940000000003, 0.1, 1200, 1200],
+            },
         }
 
         lbs = properties[self.p]['lbs']
@@ -295,42 +333,117 @@ class DNNTheoremProver:
 
 
     def get_output_property_torch(self, output):
-        properties = {
-            0: self._get_equation(output[0]) >= -1e-6,
-            1: self._get_equation(output[0]) >= (1500 - self.dnn.output_mean) / self.dnn.output_range,
-            2: [
-                self._get_equation(output[0]) >= self._get_equation(output[1]),
-                self._get_equation(output[0]) >= self._get_equation(output[2]),
-                self._get_equation(output[0]) >= self._get_equation(output[3]),
-                self._get_equation(output[0]) >= self._get_equation(output[4])
-            ],
-            3: [
-                self._get_equation(output[0]) <= self._get_equation(output[1]),
-                self._get_equation(output[0]) <= self._get_equation(output[2]),
-                self._get_equation(output[0]) <= self._get_equation(output[3]),
-                self._get_equation(output[0]) <= self._get_equation(output[4])
+        if self.p == 0:
+            return self._get_equation(output[0]) >= 1e-6
 
-            ],
-        }
+        if self.p == 1:
+            return self._get_equation(output[0]) >= (1500 - self.dnn.output_mean) / self.dnn.output_range
 
-        return properties[self.p]
+        if self.p == 2:
+            return [self._get_equation(output[0]) >= self._get_equation(output[1]),
+                    self._get_equation(output[0]) >= self._get_equation(output[2]),
+                    self._get_equation(output[0]) >= self._get_equation(output[3]),
+                    self._get_equation(output[0]) >= self._get_equation(output[4])]
+
+        if self.p == 3 or self.p == 4:
+            return [self._get_equation(output[0]) <= self._get_equation(output[1]),
+                    self._get_equation(output[0]) <= self._get_equation(output[2]),
+                    self._get_equation(output[0]) <= self._get_equation(output[3]),
+                    self._get_equation(output[0]) <= self._get_equation(output[4])]
+
+        if self.p == 5:
+            return DNFConstraint([ # or
+                [self._get_equation(output[0]) <= self._get_equation(output[4])], # and
+                [self._get_equation(output[1]) <= self._get_equation(output[4])], # and
+                [self._get_equation(output[2]) <= self._get_equation(output[4])], # and
+                [self._get_equation(output[3]) <= self._get_equation(output[4])], # and
+            ]) 
+
+        if self.p == 7:
+            return DNFConstraint([ # or
+                [ # and
+                    self._get_equation(output[3]) <= self._get_equation(output[0]),
+                    self._get_equation(output[3]) <= self._get_equation(output[1]),
+                    self._get_equation(output[3]) <= self._get_equation(output[2]),
+                ], 
+                [ # and
+                    self._get_equation(output[4]) <= self._get_equation(output[0]),
+                    self._get_equation(output[4]) <= self._get_equation(output[1]),
+                    self._get_equation(output[4]) <= self._get_equation(output[2]),
+
+                ], 
+            ])
+
+        if self.p == 8:
+            return DNFConstraint([ # or
+                [ # and
+                    self._get_equation(output[2]) <= self._get_equation(output[0]),
+                    self._get_equation(output[2]) <= self._get_equation(output[1]),
+                ], 
+                [ # and
+                    self._get_equation(output[3]) <= self._get_equation(output[0]),
+                    self._get_equation(output[3]) <= self._get_equation(output[1]),
+                ], 
+                [ # and
+                    self._get_equation(output[4]) <= self._get_equation(output[0]),
+                    self._get_equation(output[4]) <= self._get_equation(output[1]),
+                ], 
+            ])
+
+
+        raise NotImplementedError
 
 
     def check_deep_zono(self, lbs, ubs):
-        properties = {
-            1: ubs[0][0] >= (1500 - self.dnn.output_mean) / self.dnn.output_range,
-            2: all([
-                    ubs[0][0] >= lbs[0][1],
-                    ubs[0][0] >= lbs[0][2],
-                    ubs[0][0] >= lbs[0][3],
-                    ubs[0][0] >= lbs[0][4],
-                ]),
-            3: all([
-                    ubs[0][1] >= lbs[0][0],
-                    ubs[0][2] >= lbs[0][0],
-                    ubs[0][3] >= lbs[0][0],
-                    ubs[0][4] >= lbs[0][0],
-                ]),
-        }
-        return properties[self.p]
+        if self.p == 0:
+            return ubs[0][0] >= 1e-6
+
+        if self.p == 1:
+            return ubs[0][0] >= (1500 - self.dnn.output_mean) / self.dnn.output_range
+
+        if self.p == 2:
+            return all([ubs[0][0] >= lbs[0][1],
+                        ubs[0][0] >= lbs[0][2],
+                        ubs[0][0] >= lbs[0][3],
+                        ubs[0][0] >= lbs[0][4]])
+            
+        if self.p == 3 or self.p == 4:
+            return all([ubs[0][1] >= lbs[0][0],
+                        ubs[0][2] >= lbs[0][0],
+                        ubs[0][3] >= lbs[0][0],
+                        ubs[0][4] >= lbs[0][0]])
+
+        if self.p == 5:
+            return any([ubs[0][4] >= lbs[0][0],
+                        ubs[0][4] >= lbs[0][1],
+                        ubs[0][4] >= lbs[0][2],
+                        ubs[0][4] >= lbs[0][3]])
+
+        if self.p == 7:
+            return any([ # or
+                all([ubs[0][0] >= lbs[0][3], # and
+                     ubs[0][1] >= lbs[0][3],
+                     ubs[0][2] >= lbs[0][3]]
+                ), 
+                all([ubs[0][0] >= lbs[0][4], # and
+                     ubs[0][1] >= lbs[0][4],
+                     ubs[0][2] >= lbs[0][4]]
+                ),
+            ])
+
+        if self.p == 8:
+            return any([ # or
+                all([ubs[0][0] >= lbs[0][2], # and
+                     ubs[0][1] >= lbs[0][2]]
+                ), 
+                all([ubs[0][0] >= lbs[0][3], # and
+                     ubs[0][1] >= lbs[0][3]]
+                ), 
+                all([ubs[0][0] >= lbs[0][4], # and
+                     ubs[0][1] >= lbs[0][4]]
+                ),
+            ])
+
+
+        raise NotImplementedError
 
