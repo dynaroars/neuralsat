@@ -191,12 +191,17 @@ class DNNTheoremProver:
             if settings.HEURISTIC_DEEPZONO: 
                 lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
                 ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
-
+                
+                # eran deepzono
                 center, error = deepz.forward_nnet(self.dnn, lbs, ubs)
                 error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
                 upper = center + error_apt
                 lower = center - error_apt
-                self.restore_input_bounds()
+
+                # TODO: reluval
+                if 0:
+                    lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
+
                     
                 if settings.DEBUG:
                     print('[+] HEURISTIC_DEEPZONO input')
@@ -207,6 +212,7 @@ class DNNTheoremProver:
                     print('\t- lower:', lower.data)
                     print('\t- upper:', upper.data)
 
+                self.restore_input_bounds()
                 if not self.check_deep_zono(lower[0], upper[0]): # conflict
                     return False, None
 
