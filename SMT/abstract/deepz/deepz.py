@@ -4,6 +4,7 @@ import torch
 from utils.read_nnet import ReLU, Linear
 import utils
 
+
 def relu_transform(center, error):
     # bounds
     error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
@@ -38,7 +39,7 @@ def relu_transform(center, error):
     new_error[:n_error, case_idx[1]] = error_select * slopes.unsqueeze(0)
 
     for e in range(n_new_error):
-        new_error[n_error+e, case_idx[1][e]] = mu[e]
+        new_error[n_error + e, case_idx[1][e]] = mu[e]
 
     return new_center, new_error
 
@@ -50,6 +51,7 @@ def linear_transform(layer, center, error):
         center += layer.bias
     error = error.mm(layer.weight.permute(1, 0))
     return center, error
+
 
 def flatten_transform(center, error):
     center = center.view(1, -1)
@@ -68,6 +70,7 @@ def print_bound(name, center, error):
     print('\t- lb:', lb.data)
     print('\t- ub:', ub.data)
     print()
+
 
 def forward(net, lower, upper):
     center = (upper + lower) / 2

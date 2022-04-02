@@ -25,4 +25,4 @@ def test_cdcl():
     print(solver.unsat_core)
 
 if __name__ == '__main__':
-    test_cdcl()
+    test_dpll()

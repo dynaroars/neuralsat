@@ -9,6 +9,7 @@ import os
 
 from utils.read_nnet import ReLU, Linear
 from abstract.deepz import deepz
+from abstract.reluval import reluval
 import settings
 
 
@@ -199,10 +200,8 @@ class DNNTheoremProver:
                 lower = center - error_apt
 
                 # TODO: reluval
-                if 0:
-                    lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
+                lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
 
-                    
                 if settings.DEBUG:
                     print('[+] HEURISTIC_DEEPZONO input')
                     print('\t- lower:', lbs.data)

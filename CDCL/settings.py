@@ -16,4 +16,4 @@ LUBY_BASE = 512
 LIMIT_MULT = 2 # Conflict limit will be multiplied after each restart
 
 # logging
-DEBUG = False
+DEBUG = True
