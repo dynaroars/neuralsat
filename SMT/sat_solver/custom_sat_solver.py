@@ -191,7 +191,7 @@ class CustomSATSolver(Solver):
             # print()
             conflict_clause.remove(last_literal)
             conflict_clause.remove(-last_literal)
-            print('last_literal:', last_literal, '=> conflict_clause:', conflict_clause)
+            # print('last_literal:', last_literal, '=> conflict_clause:', conflict_clause)
             removed_vars.append(abs(last_literal))
 
     def _bcp(self):
