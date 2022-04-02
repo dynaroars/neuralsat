@@ -207,7 +207,7 @@ class DNNTheoremProver:
                     print('\t- lower:', lower.data)
                     print('\t- upper:', upper.data)
 
-                if not self.check_deep_zono(lower, upper): # conflict
+                if not self.check_deep_zono(lower[0], upper[0]): # conflict
                     return False, None
 
         # imply next hidden nodes
@@ -396,51 +396,51 @@ class DNNTheoremProver:
 
     def check_deep_zono(self, lbs, ubs):
         if self.p == 0:
-            return ubs[0][0] >= 1e-6
+            return ubs[0] >= 1e-6
 
         if self.p == 1:
-            return ubs[0][0] >= (1500 - self.dnn.output_mean) / self.dnn.output_range
+            return ubs[0] >= (1500 - self.dnn.output_mean) / self.dnn.output_range
 
         if self.p == 2:
-            return all([ubs[0][0] >= lbs[0][1],
-                        ubs[0][0] >= lbs[0][2],
-                        ubs[0][0] >= lbs[0][3],
-                        ubs[0][0] >= lbs[0][4]])
+            return all([ubs[0] >= lbs[1],
+                        ubs[0] >= lbs[2],
+                        ubs[0] >= lbs[3],
+                        ubs[0] >= lbs[4]])
             
         if self.p == 3 or self.p == 4:
-            return all([ubs[0][1] >= lbs[0][0],
-                        ubs[0][2] >= lbs[0][0],
-                        ubs[0][3] >= lbs[0][0],
-                        ubs[0][4] >= lbs[0][0]])
+            return all([ubs[1] >= lbs[0],
+                        ubs[2] >= lbs[0],
+                        ubs[3] >= lbs[0],
+                        ubs[4] >= lbs[0]])
 
         if self.p == 5:
-            return any([ubs[0][4] >= lbs[0][0],
-                        ubs[0][4] >= lbs[0][1],
-                        ubs[0][4] >= lbs[0][2],
-                        ubs[0][4] >= lbs[0][3]])
+            return any([ubs[4] >= lbs[0],
+                        ubs[4] >= lbs[1],
+                        ubs[4] >= lbs[2],
+                        ubs[4] >= lbs[3]])
 
         if self.p == 7:
             return any([ # or
-                all([ubs[0][0] >= lbs[0][3], # and
-                     ubs[0][1] >= lbs[0][3],
-                     ubs[0][2] >= lbs[0][3]]
+                all([ubs[0] >= lbs[3], # and
+                     ubs[1] >= lbs[3],
+                     ubs[2] >= lbs[3]]
                 ), 
-                all([ubs[0][0] >= lbs[0][4], # and
-                     ubs[0][1] >= lbs[0][4],
-                     ubs[0][2] >= lbs[0][4]]
+                all([ubs[0] >= lbs[4], # and
+                     ubs[1] >= lbs[4],
+                     ubs[2] >= lbs[4]]
                 ),
             ])
 
         if self.p == 8:
             return any([ # or
-                all([ubs[0][0] >= lbs[0][2], # and
-                     ubs[0][1] >= lbs[0][2]]
+                all([ubs[0] >= lbs[2], # and
+                     ubs[1] >= lbs[2]]
                 ), 
-                all([ubs[0][0] >= lbs[0][3], # and
-                     ubs[0][1] >= lbs[0][3]]
+                all([ubs[0] >= lbs[3], # and
+                     ubs[1] >= lbs[3]]
                 ), 
-                all([ubs[0][0] >= lbs[0][4], # and
-                     ubs[0][1] >= lbs[0][4]]
+                all([ubs[0] >= lbs[4], # and
+                     ubs[1] >= lbs[4]]
                 ),
             ])
 

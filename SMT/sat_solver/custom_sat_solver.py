@@ -188,10 +188,10 @@ class CustomSATSolver(Solver):
             # theory, and in that case it is impossible to do resolution
             # print('conflict_clause:', conflict_clause, 'last_literal:', last_literal)
             conflict_clause |= clause_on_incoming_edge
-            # print('conflict_clause:', conflict_clause, 'last_literal:', last_literal)
             # print()
             conflict_clause.remove(last_literal)
             conflict_clause.remove(-last_literal)
+            print('last_literal:', last_literal, '=> conflict_clause:', conflict_clause)
             removed_vars.append(abs(last_literal))
 
     def _bcp(self):

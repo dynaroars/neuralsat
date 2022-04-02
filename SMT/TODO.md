@@ -40,3 +40,18 @@ dummy:
         + abstract interpretation: ERAN
         + symbolic interval: check boundaries on each node
         + reachability
+
+
+paper DPLL4DNN:
+    - intro
+    - overview
+        + concrete example (1)
+        + give it a name lol
+    - algorithm (2)
+    - impact of heuristic (3)
+    - difference between existing algorithm with proposed method
+        + limitation (4)
+        + how to solve (5)
+
+
+
