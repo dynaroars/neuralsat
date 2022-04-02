@@ -3,6 +3,7 @@ import numpy as np
 # import pypolycontain as pp
 import matplotlib.pyplot as plt
 from abstract.deepz import deepz, network
+from abstract.reluval import reluval
 
 
 def plot_z():
@@ -15,8 +16,8 @@ def plot_z():
 def test():
 
     torch.manual_seed(0)
-    # net = network.FC(input_size=3, hidden_sizes=[3, 4, 5, 6, 9])
-    net = network.CorinaNet()
+    net = network.FC(input_size=2, hidden_sizes=[3, 4, 5, 6, 5])
+    # net = network.CorinaNet()
 
     # x = torch.rand([1, 3])
     # print(net(x))
@@ -31,7 +32,7 @@ def test():
     lower = torch.Tensor([-5, -4,])
     upper = torch.Tensor([-1, -2,])
     center, error = deepz.forward(net, lower, upper)
-    deepz.print_bound('Random', center, error)
+    deepz.print_bound('Deepz', center, error)
 
     
     # upper = torch.Tensor([-1, -2, -3])
@@ -44,6 +45,13 @@ def test():
     # lower = torch.Tensor([-5, -4, -10])
     # center, error = deepz.forward(net, lower, upper)
     # deepz.print_bound('Random', center, error)
+
+    lower = torch.Tensor([-5, -4,])
+    upper = torch.Tensor([-1, -2,])
+    lb, ub = reluval.forward(net, lower, upper)
+    print('Reluval')
+    print('\t- lb:', lb.data)
+    print('\t- ub:', ub.data)
 
 
 

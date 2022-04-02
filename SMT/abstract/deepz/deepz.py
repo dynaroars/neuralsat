@@ -64,9 +64,7 @@ def print_bound(name, center, error):
     # bounds
     ub = center + error_apt
     lb = center - error_apt
-    print('\nAfter:', name)
-    print('\t- center:', center.data)
-    print('\t- error:\n', error.data)
+    print(name)
     print('\t- lb:', lb.data)
     print('\t- ub:', ub.data)
     print()
@@ -92,7 +90,7 @@ def forward(net, lower, upper):
         # print(center.data)
         # print(error.data)
         # print('---------------')
-        print_bound(type(layer), center, error)
+        # print_bound(type(layer), center, error)
 
     return center, error
 

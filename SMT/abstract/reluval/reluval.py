@@ -42,7 +42,6 @@ def relu_transform(eq_lower, eq_upper, input_lower, input_upper, output_lower=No
 
 def linear_transform(layer, eq_lower, eq_upper):
     weight = layer.weight
-    print(weight.shape)
     pos_weight, neg_weight = _pos(weight), _neg(weight)
     out_eq_upper = eq_upper @ pos_weight.T + eq_lower @ neg_weight.T
     out_eq_lower = eq_lower @ pos_weight.T + eq_upper @ neg_weight.T
@@ -57,25 +56,12 @@ def flatten_transform(eq_lower, eq_upper):
     return eq_lower, eq_upper
 
 
-def print_bound(name, center, error):
-    error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
-    # bounds
-    ub = center + error_apt
-    lb = center - error_apt
-    print('\nAfter:', name)
-    print('\t- center:', center.data)
-    print('\t- error:\n', error.data)
-    print('\t- lb:', lb.data)
-    print('\t- ub:', ub.data)
-    print()
-
 
 def forward(net, lower, upper):
     input_features = lower.numel()
 
     # initialize lower and upper equation
-    eq_lower = torch.concat([torch.eye(input_features),
-                             torch.zeros(1, input_features)], dim=1)
+    eq_lower = torch.concat([torch.eye(input_features), torch.zeros(1, input_features)], dim=0)
     eq_upper = eq_lower.clone()
 
     output_lower = lower.clone()
@@ -89,11 +75,6 @@ def forward(net, lower, upper):
         else:
             raise NotImplementedError
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, lower, upper)
-        # print('---------------')
-        # print(center.data)
-        # print(error.data)
-        # print('---------------')
-        print_bound(type(layer), output_lower, output_upper)
 
     return output_lower, output_upper
 
@@ -102,8 +83,7 @@ def forward_nnet(net, lower, upper):
     input_features = lower.numel()
 
     # initialize lower and upper equation
-    eq_lower = torch.concat([torch.eye(input_features),
-                             torch.zeros(1, input_features)], dim=0)
+    eq_lower = torch.concat([torch.eye(input_features), torch.zeros(1, input_features)], dim=0)
     eq_upper = eq_lower.clone()
 
     output_lower = lower.clone()
@@ -117,10 +97,6 @@ def forward_nnet(net, lower, upper):
         else:
             raise NotImplementedError
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, lower, upper)
-        # print('---------------')
-        # print(center.data)
-        # print(error.data)
-        # print('---------------')
-        print_bound(type(layer), output_lower, output_upper)
+
 
     return output_lower, output_upper
