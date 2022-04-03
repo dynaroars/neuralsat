@@ -31,6 +31,7 @@ def relu_transform(eq_lower, eq_upper, input_lower, input_upper, output_lower=No
     for i, (lb, ub) in enumerate(zip(output_lower, output_upper)):
         if ub <= 0:
             output_eq_lower[:, i] = 0
+            output_eq_upper[:, i] = 0
         elif lb >= 0:
             pass
         else:
@@ -41,13 +42,12 @@ def relu_transform(eq_lower, eq_upper, input_lower, input_upper, output_lower=No
 
 
 def linear_transform(layer, eq_lower, eq_upper):
-    weight = layer.weight
-    pos_weight, neg_weight = _pos(weight), _neg(weight)
+    pos_weight, neg_weight = _pos(layer.weight), _neg(layer.weight)
     out_eq_upper = eq_upper @ pos_weight.T + eq_lower @ neg_weight.T
     out_eq_lower = eq_lower @ pos_weight.T + eq_upper @ neg_weight.T
-    if bias := layer.bias is not None:
-        out_eq_lower[-1] += bias
-        out_eq_upper[-1] += bias
+    if layer.bias is not None:
+        out_eq_lower[-1] += layer.bias
+        out_eq_upper[-1] += layer.bias
     return out_eq_lower, out_eq_upper
 
 
@@ -56,7 +56,7 @@ def flatten_transform(eq_lower, eq_upper):
     return eq_lower, eq_upper
 
 
-
+@torch.no_grad()
 def forward(net, lower, upper):
     input_features = lower.numel()
 
@@ -68,9 +68,9 @@ def forward(net, lower, upper):
     output_upper = upper.clone()
 
     for layer in net.layers:
-        if isinstance(layer, nn.modules.linear.Linear):
+        if isinstance(layer, nn.Linear):
             eq_lower, eq_upper = linear_transform(layer, eq_lower, eq_upper)
-        elif isinstance(layer, nn.modules.activation.ReLU):
+        elif isinstance(layer, nn.ReLU):
             eq_lower, eq_upper = relu_transform(eq_lower, eq_upper, lower, upper, output_lower, output_upper)
         else:
             raise NotImplementedError

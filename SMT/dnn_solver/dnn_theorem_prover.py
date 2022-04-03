@@ -201,6 +201,13 @@ class DNNTheoremProver:
 
                 # TODO: reluval
                 lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
+                print('lower:')
+                print(lower)
+                print(lower2)
+                print('upper:')
+                print(upper)
+                print(upper2)
+                print()
 
                 if settings.DEBUG:
                     print('[+] HEURISTIC_DEEPZONO input')
