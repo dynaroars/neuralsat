@@ -164,5 +164,5 @@ def backward_nnet(net, output_grad, grad_mask):
 def smear(lower, upper,
           grad_lower, grad_upper):
     ranges = upper - lower
-    grad = torch.stack([grad_lower, grad_upper]).abs().max(1).values
+    grad = torch.stack([grad_lower, grad_upper]).abs().max(0).values
     return grad * ranges
