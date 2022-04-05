@@ -8,8 +8,9 @@ import re
 import os
 
 from utils.read_nnet import ReLU, Linear
-from abstract.deepz import deepz
 from abstract.reluval import reluval
+from abstract.deepz import deepz
+from abstract.eran import eran
 import settings
 
 
@@ -57,6 +58,11 @@ class DNNTheoremProver:
         self.solution = None
         self.constraints = []
 
+
+        if settings.HEURISTIC_DEEPPOLY:
+            self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
+
+
         # clean trash
         os.system('rm -rf gurobi/*')
 
@@ -73,11 +79,23 @@ class DNNTheoremProver:
     def update_input_bounds(self, lbs, ubs):
         if lbs is None or ubs is None:
             return True
+        lbs = np.array(lbs)
+        ubs = np.array(ubs)
+        flag = lbs > ubs
 
-        if np.any(np.array(lbs) > np.array(ubs)):
-            return False
+        if np.any(flag):
+            if not np.all(lbs[flag] - ubs[flag] < DNNTheoremProver.skip):
+                # print('lower:', lbs)
+                # print('upper:', ubs)
+                # self.model.write(f'gurobi/debug_{self.count}.lp')
+                # raise
+                return False
 
         for i, var in enumerate(self.gurobi_vars):
+            if abs(lbs[i] - ubs[i]) < DNNTheoremProver.skip: # concretize
+                var.lb = lbs[i]
+                var.ub = lbs[i]
+                continue
             if (abs(var.lb - lbs[i]) > DNNTheoremProver.skip):
                 var.lb = lbs[i]
             if (abs(var.ub - ubs[i]) > DNNTheoremProver.skip):
@@ -159,6 +177,7 @@ class DNNTheoremProver:
 
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
+            self.restore_input_bounds()
             return False, None
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -166,21 +185,27 @@ class DNNTheoremProver:
             if settings.DEBUG:
                 print('[+] TIGHTEN_BOUND ')
 
-            # lower
-            self.model.setObjective(sum(self.gurobi_vars), grb.GRB.MINIMIZE)
-            self._optimize()
-            if self.model.status == grb.GRB.OPTIMAL:
-                lbs = [var.X for var in self.gurobi_vars]
-            else:
-                lbs = None
-
             # upper
             self.model.setObjective(sum(self.gurobi_vars), grb.GRB.MAXIMIZE)
             self._optimize()
             if self.model.status == grb.GRB.OPTIMAL:
                 ubs = [var.X for var in self.gurobi_vars]
+                # TODO
+                # self.constraints += [self.model.addConstr(var <= ubs[i]) for i, var in enumerate(self.gurobi_vars)]
             else:
+                # print(self.model.status)
                 ubs = None
+
+            # lower
+            self.model.setObjective(sum(self.gurobi_vars), grb.GRB.MINIMIZE)
+            self._optimize()
+            if self.model.status == grb.GRB.OPTIMAL:
+                lbs = [var.X for var in self.gurobi_vars]
+                # TODO
+                # self.constraints += [self.model.addConstr(var >= lbs[i]) for i, var in enumerate(self.gurobi_vars)]
+            else:
+                # print(self.model.status)
+                lbs = None
                 
             if not self.update_input_bounds(lbs, ubs): # conflict
                 self.restore_input_bounds()
@@ -194,20 +219,10 @@ class DNNTheoremProver:
                 ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
                 
                 # eran deepzono
-                center, error = deepz.forward_nnet(self.dnn, lbs, ubs)
-                error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
-                upper = center + error_apt
-                lower = center - error_apt
+                lower, upper = deepz.forward(self.dnn, lbs, ubs)
 
                 # TODO: reluval
-                lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
-                print('lower:')
-                print(lower)
-                print(lower2)
-                print('upper:')
-                print(upper)
-                print(upper2)
-                print()
+                # lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
 
                 if settings.DEBUG:
                     print('[+] HEURISTIC_DEEPZONO input')
@@ -215,11 +230,34 @@ class DNNTheoremProver:
                     print('\t- upper:', ubs.data)
 
                     print('[+] HEURISTIC_DEEPZONO output')
-                    print('\t- lower:', lower.data)
-                    print('\t- upper:', upper.data)
+                    print('\t- lower:', lower)
+                    print('\t- upper:', upper)
 
-                self.restore_input_bounds()
-                if not self.check_deep_zono(lower[0], upper[0]): # conflict
+                # self.restore_input_bounds()
+                if not self.check_output_reachability(lower, upper): # conflict
+                    self.restore_input_bounds()
+                    return False, None
+
+
+            if settings.HEURISTIC_DEEPPOLY: 
+                lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
+                ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
+                
+                # eran deeppoly
+                lower, upper = self.deeppoly(lbs, ubs)
+
+                if settings.DEBUG:
+                    print('[+] HEURISTIC_DEEPPOLY input')
+                    print('\t- lower:', lbs.data)
+                    print('\t- upper:', ubs.data)
+
+                    print('[+] HEURISTIC_DEEPPOLY output')
+                    print('\t- lower:', lower)
+                    print('\t- upper:', upper)
+
+                # self.restore_input_bounds()
+                if not self.check_output_reachability(lower, upper): # conflict
+                    self.restore_input_bounds()
                     return False, None
 
         # imply next hidden nodes
@@ -264,6 +302,7 @@ class DNNTheoremProver:
                 if flag_sat:
                     self.solution = self.get_solution()
                 else:
+                    self.restore_input_bounds()
                     return False, None
 
             else:
@@ -274,6 +313,7 @@ class DNNTheoremProver:
 
                 self._optimize()
                 if self.model.status == grb.GRB.INFEASIBLE:
+                    self.restore_input_bounds()
                     return False, None
 
                 self.solution = self.get_solution()
@@ -326,8 +366,16 @@ class DNNTheoremProver:
                 'ubs' : [60760,  3.141592,  3.141592, 1200, 1200],
             },
             8: {
-                'lbs' : [    0, -3.141592,          -0.1,  600, 1200],
+                'lbs' : [    0, -3.141592,          -0.1,  600,  600],
                 'ubs' : [60760, -2.3561940000000003, 0.1, 1200, 1200],
+            },
+            9: {
+                'lbs' : [2000, -0.40, -3.141592,           100,   0],
+                'ubs' : [7000, -0.14, -3.1315920000000004, 150, 150],
+            },
+            10: {
+                'lbs' : [36000, 0.7,     -3.141592,            900,  600],
+                'ubs' : [60760, 3.141592,-3.1315920000000004, 1200, 1200],
             },
         }
 
@@ -402,11 +450,28 @@ class DNNTheoremProver:
                 ], 
             ])
 
+        if self.p == 9:
+            return DNFConstraint([ # or
+                [self._get_equation(output[0]) <= self._get_equation(output[3])], 
+                [self._get_equation(output[1]) <= self._get_equation(output[3])], 
+                [self._get_equation(output[2]) <= self._get_equation(output[3])], 
+                [self._get_equation(output[4]) <= self._get_equation(output[3])], 
+            ]) 
+
+
+        if self.p == 10:
+            return DNFConstraint([ # or
+                [self._get_equation(output[1]) <= self._get_equation(output[0])], 
+                [self._get_equation(output[2]) <= self._get_equation(output[0])], 
+                [self._get_equation(output[3]) <= self._get_equation(output[0])], 
+                [self._get_equation(output[4]) <= self._get_equation(output[0])], 
+            ]) 
+
 
         raise NotImplementedError
 
 
-    def check_deep_zono(self, lbs, ubs):
+    def check_output_reachability(self, lbs, ubs):
         if self.p == 0:
             return ubs[0] >= 1e-6
 
@@ -456,6 +521,17 @@ class DNNTheoremProver:
                 ),
             ])
 
+        if self.p == 9:
+            return any([ubs[3] >= lbs[0],
+                        ubs[3] >= lbs[1],
+                        ubs[3] >= lbs[2],
+                        ubs[3] >= lbs[4]])
+
+        if self.p == 10:
+            return any([ubs[0] >= lbs[1],
+                        ubs[0] >= lbs[2],
+                        ubs[0] >= lbs[3],
+                        ubs[0] >= lbs[4]])
 
         raise NotImplementedError
 

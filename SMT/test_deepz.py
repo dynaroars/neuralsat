@@ -4,6 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from abstract.deepz import deepz, network
 from abstract.reluval import reluval
+from abstract.eran import eran
+import time
+
+from utils.read_nnet import NetworkDeepZono
 
 
 def plot_z():
@@ -16,43 +20,39 @@ def plot_z():
 def test():
 
     torch.manual_seed(0)
-    net = network.FC(input_size=2, hidden_sizes=[3, 4, 5, 6, 5])
+    # net = network.FC(input_size=5, hidden_sizes=[50, 50, 50, 50, 50, 5])
     # net = network.CorinaNet()
 
-    # x = torch.rand([1, 3])
+    # x = torch.rand([1, net.input_size])
     # print(net(x))
     # x = x / x.abs().max()
 
-    # torch.onnx.export(net, x, 'test.onnx')
+    # torch.onnx.export(net, x, 'example/test.onnx')
 
     # print(x)
 
     # eps = 0.01
+    lower = torch.Tensor([-5, -4, -1, -0.2, -0.3])
+    upper = torch.Tensor([-1, -2, 1, 0.5, 1.5])
 
-    lower = torch.Tensor([-5, -4,])
-    upper = torch.Tensor([-1, -2,])
-    center, error = deepz.forward(net, lower, upper)
-    deepz.print_bound('Deepz', center, error)
+    path = 'benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000'
+    net = NetworkDeepZono(path + '.nnet')
 
-    
-    # upper = torch.Tensor([-1, -2, -3])
-    # lower = torch.Tensor([-3, -4, -10])
-    # center, error = deepz.forward(net, lower, upper)
-    # deepz.print_bound('Random', center, error)
+    tic = time.time()
+    lbs, ubs = deepz.forward(net, lower, upper)
+    print('DeepZ', time.time() - tic)
+    print('lbs:', lbs)
+    print('ubs:', ubs)
 
 
-    # upper = torch.Tensor([-3, -2, -3])
-    # lower = torch.Tensor([-5, -4, -10])
-    # center, error = deepz.forward(net, lower, upper)
-    # deepz.print_bound('Random', center, error)
+    # cac = eran.ERAN('example/test.onnx', 'deeppoly')
+    cac = eran.ERAN(path + '.onnx', 'deeppoly')
 
-    lower = torch.Tensor([-5, -4,])
-    upper = torch.Tensor([-1, -2,])
-    lb, ub = reluval.forward(net, lower, upper)
-    print('Reluval')
-    print('\t- lb:', lb.data)
-    print('\t- ub:', ub.data)
-
+    tic = time.time()
+    lbs, ubs = cac(lower, upper)
+    print('DeepPoly', time.time() - tic)
+    print('lbs:', lbs)
+    print('ubs:', ubs)
 
 
 if __name__ == '__main__':

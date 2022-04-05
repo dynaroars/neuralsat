@@ -105,9 +105,6 @@ def test_property_5(args):
     for i in range(5):
         for j in range(9):
             name = f'benchmark/acasxu/nnet/ACASXU_run2a_{i+1}_{j+1}_batch_2000.nnet'
-            if '1_1' in name:
-                continue
-
             solver = DNNSolver(name, p=args.p)
             tic_2 = time.time()
             status = solver.solve()
@@ -147,6 +144,7 @@ def test_property_7(args):
 
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-p',
@@ -168,6 +166,6 @@ if __name__ == '__main__':
         test_property_5(args)
     elif args.p == 6:
         raise NotImplementedError
-    elif args.p == 7:
+    elif args.p in [7, 8, 9, 10]:
         test_property_7(args)
 

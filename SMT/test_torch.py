@@ -3,9 +3,9 @@ import time
 
 if __name__ == '__main__':
     
-    i = 1
-    j = 2
-    p = 7
+    i = 2
+    j = 9
+    p = 8
 
     name = f'benchmark/acasxu/nnet/ACASXU_run2a_{i}_{j}_batch_2000.nnet'
     # name = 'benchmark/acasxu/nnet/ACASXU_run2a_3_3_batch_2000.nnet'
@@ -13,6 +13,8 @@ if __name__ == '__main__':
     # name = f'example/random.nnet'
     tic = time.time()
     solver = DNNSolver(name, p)
+    print('Running:', name)
+    print('Property:', p)
     status = solver.solve()
     print(name, status , time.time() - tic)
 

@@ -1,5 +1,8 @@
 import torch.nn as nn
 import torch
+import itertools
+from joblib import Parallel, delayed
+import os
 
 from utils.read_nnet import ReLU, Linear
 import utils
@@ -59,17 +62,15 @@ def flatten_transform(center, error):
     return center, error
 
 
-def print_bound(name, center, error):
+
+def get_bound(center, error):
     error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
-    # bounds
     ub = center + error_apt
     lb = center - error_apt
-    print(name)
-    print('\t- lb:', lb.data)
-    print('\t- ub:', ub.data)
-    print()
+    return lb.squeeze(), ub.squeeze()
 
 
+@torch.no_grad()
 def forward(net, lower, upper):
     center = (upper + lower) / 2
     error = (upper - lower) / 2
@@ -80,36 +81,27 @@ def forward(net, lower, upper):
     error = error.reshape((h, h))
 
     for layer in net.layers:
-        if type(layer) is nn.modules.linear.Linear:
+        if isinstance(layer, Linear) or isinstance(layer, nn.Linear):
             center, error = linear_transform(layer, center, error)
-        elif type(layer) is nn.modules.activation.ReLU:
-            center, error = relu_transform(center, error)
-        else:
-            raise NotImplementedError
-        # print('---------------')
-        # print(center.data)
-        # print(error.data)
-        # print('---------------')
-        # print_bound(type(layer), center, error)
-
-    return center, error
-
-
-def forward_nnet(net, lower, upper):
-    center = (upper + lower) / 2
-    error = (upper - lower) / 2
-
-    h = lower.shape[0]
-
-    error = torch.diag(torch.ones(h) * error.flatten())
-    error = error.reshape((h, h))
-
-    for layer in net.layers:
-        if type(layer) is Linear:
-            center, error = linear_transform(layer, center, error)
-        elif type(layer) is ReLU:
+        elif isinstance(layer, ReLU) or isinstance(layer, nn.ReLU):
             center, error = relu_transform(center, error)
         else:
             raise NotImplementedError
 
-    return center, error
+    return get_bound(center, error)
+
+
+
+@torch.no_grad()
+def forward2(net, lower, upper, steps=2):
+    bounds = [(l, u) for l, u in zip(lower, upper)]
+    bounds = [torch.linspace(b[0], b[1], steps=steps) for b in bounds]
+    bounds = [[torch.Tensor([b[i], b[i+1]]) for i in range(b.shape[0] - 1)] for b in bounds]
+    bounds = itertools.product(*bounds)
+    splits = [(torch.Tensor([_[0] for _ in b]), torch.Tensor([_[1] for _ in b])) for b in bounds]
+
+    bounds = Parallel(n_jobs=os.cpu_count())(delayed(forward)(net, l, u) for l,u in splits)
+    lbs = torch.stack([b[0] for b in bounds]).squeeze()
+    ubs = torch.stack([b[1] for b in bounds]).squeeze()
+    return lbs.min(0).values, ubs.max(0).values
+
