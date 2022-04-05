@@ -82,7 +82,7 @@ def flatten_transform(eq_lower, eq_upper):
 
 
 @torch.no_grad()
-def forward(net, lower, upper):
+def forward(net, lower, upper, return_grad_mask=False):
     input_features = lower.numel()
 
     # initialize lower and upper equation
@@ -103,7 +103,9 @@ def forward(net, lower, upper):
             raise NotImplementedError
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, lower, upper)
 
-    return (output_lower, output_upper), grad_mask
+    if return_grad_mask:
+        return (output_lower, output_upper), grad_mask
+    return output_lower, output_upper
 
 
 @torch.no_grad()
@@ -157,3 +159,10 @@ def backward_nnet(net, output_grad, grad_mask):
             raise NotImplementedError
 
     return grad_lower, grad_upper
+
+
+def smear(lower, upper,
+          grad_lower, grad_upper):
+    ranges = upper - lower
+    grad = torch.stack([grad_lower, grad_upper]).abs().max(1).values
+    return grad * ranges
