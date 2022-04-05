@@ -72,12 +72,14 @@ class NetworkDeepZono:
         self.output_mean = means[-1]
         self.output_range = ranges[-1]
 
+        self.path = nnet_path
+
     def forward(self, x):
         x = x.unsqueeze(0)
         for layer in self.layers:
-            if type(layer) is Linear:
+            if isinstance(layer, Linear) or isinstance(layer, torch.nn.Linear):
                 x = F.linear(x, layer.weight, layer.bias)
-            elif type(layer) is ReLU:
+            elif isinstance(layer, ReLU) or isinstance(layer, torch.nn.ReLU):
                 x = x.relu()
             else:
                 raise NotImplementedError

@@ -6,6 +6,7 @@ class FC(nn.Module):
     def __init__(self, input_size, hidden_sizes):
         super().__init__()
 
+        self.input_size = input_size
         layers = []
         prev_size = input_size
         for idx, size in enumerate(hidden_sizes):
