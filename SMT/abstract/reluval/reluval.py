@@ -21,10 +21,14 @@ def _evaluate(eq_lower, eq_upper, input_lower, input_upper):
     return o_l.sum(0) + eq_lower[-1], o_u.sum(0) + eq_upper[-1]
 
 
-def relu_transform(eq_lower, eq_upper, input_lower, input_upper, output_lower=None, output_upper=None):
+def relu_transform(eq_lower, eq_upper,
+                   input_lower, input_upper,
+                   output_lower=None, output_upper=None):
     # evaluate output ranges
     output_eq_lower = eq_lower.clone()
     output_eq_upper = eq_upper.clone()
+    grad_mask = torch.zeros(input_lower.size(0))
+
     if output_lower is None or output_upper is None:
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, input_lower, input_upper)
 
@@ -32,13 +36,28 @@ def relu_transform(eq_lower, eq_upper, input_lower, input_upper, output_lower=No
         if ub <= 0:
             output_eq_lower[:, i] = 0
             output_eq_upper[:, i] = 0
+            grad_mask[i] = 0
         elif lb >= 0:
-            pass
+            grad_mask[i] = 2
         else:
             output_eq_lower[:, i] = 0
             output_eq_upper[:-1, i] = 0
             output_eq_upper[-1, i] = ub
-    return output_eq_lower, output_eq_upper
+            grad_mask[i] = 1
+    return (output_eq_lower, output_eq_upper), grad_mask
+
+
+def backward_relu_transform(grad_lower, grad_upper, grad_mask):
+    # always negative
+    zero_inds = grad_mask.eq(0)
+    grad_lower[zero_inds] = 0
+    grad_upper[zero_inds] = 0
+
+    # lower < 0 and upper > 0
+    one_inds = grad_mask.eq(1)
+    grad_upper[one_inds] = grad_upper[one_inds].clamp(0, torch.inf)
+    grad_lower[one_inds] = grad_lower[one_inds].clamp(-torch.inf, 0)
+    return grad_lower, grad_upper
 
 
 def linear_transform(layer, eq_lower, eq_upper):
@@ -51,13 +70,19 @@ def linear_transform(layer, eq_lower, eq_upper):
     return out_eq_lower, out_eq_upper
 
 
+def backward_linear_transform(layer, grad_lower, grad_upper):
+    pos_weight, neg_weight = _pos(layer.weight), _neg(layer.weight)
+    input_grad_lower = grad_lower @ pos_weight + grad_upper @ neg_weight
+    input_grad_upper = grad_upper @ pos_weight + grad_lower @ neg_weight
+    return input_grad_lower, input_grad_upper
+
+
 def flatten_transform(eq_lower, eq_upper):
-    # TODO: ?
-    return eq_lower, eq_upper
+    raise NotImplementedError
 
 
 @torch.no_grad()
-def forward(net, lower, upper):
+def forward(net, lower, upper, return_grad_mask=False):
     input_features = lower.numel()
 
     # initialize lower and upper equation
@@ -66,17 +91,37 @@ def forward(net, lower, upper):
 
     output_lower = lower.clone()
     output_upper = upper.clone()
+    grad_mask = {}
 
-    for layer in net.layers:
+    for layer_id, layer in enumerate(net.layers):
         if isinstance(layer, nn.Linear):
             eq_lower, eq_upper = linear_transform(layer, eq_lower, eq_upper)
         elif isinstance(layer, nn.ReLU):
-            eq_lower, eq_upper = relu_transform(eq_lower, eq_upper, lower, upper, output_lower, output_upper)
+            (eq_lower, eq_upper), grad_mask_l = relu_transform(eq_lower, eq_upper, lower, upper)
+            grad_mask[layer_id] = grad_mask_l
         else:
             raise NotImplementedError
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, lower, upper)
 
+    if return_grad_mask:
+        return (output_lower, output_upper), grad_mask
     return output_lower, output_upper
+
+
+@torch.no_grad()
+def backward(net, output_grad, grad_mask):
+    grad_lower = grad_upper = output_grad
+
+    for layer_id in reversed(range(len(net.layers))):
+        layer = net.layers[layer_id]
+        if isinstance(layer, nn.Linear):
+            grad_lower, grad_upper = backward_linear_transform(layer, grad_lower, grad_upper)
+        elif isinstance(layer, nn.ReLU):
+            grad_lower, grad_upper = backward_relu_transform(grad_lower, grad_upper, grad_mask[layer_id])
+        else:
+            raise NotImplementedError
+
+    return grad_lower, grad_upper
 
 
 def forward_nnet(net, lower, upper):
@@ -98,5 +143,26 @@ def forward_nnet(net, lower, upper):
             raise NotImplementedError
         output_lower, output_upper = _evaluate(eq_lower, eq_upper, lower, upper)
 
-
     return output_lower, output_upper
+
+
+def backward_nnet(net, output_grad, grad_mask):
+    grad_lower = grad_upper = output_grad
+
+    for layer_id in reversed(range(len(net.layers))):
+        layer = net.layers[layer_id]
+        if isinstance(layer, Linear):
+            grad_lower, grad_upper = backward_linear_transform(layer, grad_lower, grad_upper)
+        elif isinstance(layer, ReLU):
+            grad_lower, grad_upper = backward_relu_transform(grad_lower, grad_upper, grad_mask[layer_id])
+        else:
+            raise NotImplementedError
+
+    return grad_lower, grad_upper
+
+
+def smear(lower, upper,
+          grad_lower, grad_upper):
+    ranges = upper - lower
+    grad = torch.stack([grad_lower, grad_upper]).abs().max(0).values
+    return grad * ranges
