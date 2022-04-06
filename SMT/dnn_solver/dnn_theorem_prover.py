@@ -166,9 +166,9 @@ class DNNTheoremProver:
                 if flag_break and (not return_output):
                     break
 
-        for node, status in assignment.items():
-            if node not in substitute_dict_torch:
-                print('[!] Missing node:', node, 'status:', status)
+        for node in substitute_dict_torch:
+            status = assignment.get(node, None)
+            if status is None:
                 continue
             if status:
                 self.constraints.append(self.model.addConstr(substitute_dict_torch[node] >= DNNTheoremProver.epsilon))
@@ -219,7 +219,7 @@ class DNNTheoremProver:
                 ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
                 
                 # eran deepzono
-                lower, upper = deepz.forward(self.dnn, lbs, ubs)
+                (lower, upper), hidden_bounds = deepz.forward(self.dnn, lbs, ubs)
 
                 # TODO: reluval
                 # lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
@@ -238,6 +238,21 @@ class DNNTheoremProver:
                     self.restore_input_bounds()
                     return False, None
 
+                signs = {}
+                for idx, (lb, ub) in enumerate(hidden_bounds):
+                    sign = 2 * torch.ones(len(lb), dtype=int) 
+                    sign[lb >= 0] = 1
+                    sign[ub == 0] = -1
+                    signs.update(dict(zip(self.layers_mapping[idx], sign.numpy())))
+
+                for node, status in assignment.items():
+                    if signs[node] == 2:
+                        continue
+                    abt_status = signs[node] == 1
+                    if abt_status != status:
+                        self.restore_input_bounds()
+                        return False, None
+                        raise
 
             if settings.HEURISTIC_DEEPPOLY: 
                 lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
@@ -282,6 +297,13 @@ class DNNTheoremProver:
                     self.model.remove(ci)
                 else:
                     self.model.remove(ci)
+
+        if settings.TIGHTEN_BOUND and settings.HEURISTIC_DEEPZONO:
+            for node, value in signs.items():
+                if node in implications or node in assignment:
+                    continue
+                if node != 2:
+                    implications[node] = {'pos': value==1, 'neg': value==-1}
 
         # debug
         if settings.DEBUG:
@@ -358,24 +380,24 @@ class DNNTheoremProver:
                 'ubs' : [1800,  0.06, 0, 1200, 800],
             }, 
             5: {
-                'lbs' : [250, 0.2, -3.141592,           100,   0],
-                'ubs' : [400, 0.4, -3.1365920000000003, 400, 400],
+                'lbs' : [250, 0.2, -3.141592, 100,   0],
+                'ubs' : [400, 0.4, -3.136592, 400, 400],
             }, 
             7: {
                 'lbs' : [0,     -3.141592, -3.141592,  100,    0],
                 'ubs' : [60760,  3.141592,  3.141592, 1200, 1200],
             },
             8: {
-                'lbs' : [    0, -3.141592,          -0.1,  600,  600],
-                'ubs' : [60760, -2.3561940000000003, 0.1, 1200, 1200],
+                'lbs' : [    0, -3.141592, -0.1,  600,  600],
+                'ubs' : [60760, -2.356194,  0.1, 1200, 1200],
             },
             9: {
-                'lbs' : [2000, -0.40, -3.141592,           100,   0],
-                'ubs' : [7000, -0.14, -3.1315920000000004, 150, 150],
+                'lbs' : [2000, -0.40, -3.141592, 100,   0],
+                'ubs' : [7000, -0.14, -3.131592, 150, 150],
             },
             10: {
-                'lbs' : [36000, 0.7,     -3.141592,            900,  600],
-                'ubs' : [60760, 3.141592,-3.1315920000000004, 1200, 1200],
+                'lbs' : [36000, 0.7,     -3.141592,  900,  600],
+                'ubs' : [60760, 3.141592,-3.131592, 1200, 1200],
             },
         }
 

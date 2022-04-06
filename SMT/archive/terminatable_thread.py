@@ -63,3 +63,45 @@ class TerminateableThread(threading.Thread):
 
     def is_terminated(self):
         return self._terminate_event.is_set()
+
+
+if __name__ == '__main__':
+    import numpy as np
+    import time
+
+    running_threads = []
+    start_event = threading.Event()
+    start_time = time.time()
+
+    def foo():
+        current_thread = threading.current_thread()
+        start_event.wait()
+        while True:
+            try:
+                if np.random.rand() < 0.01:
+                    now = time.time()
+                    print(f'Result found by {current_thread.name} at {now - start_time:.03f}s')
+                    # terminate other threads
+                    for thread in running_threads:
+                        if thread.name != current_thread.name:
+                            thread.terminate()
+                    break
+                else:
+                    time.sleep(0.1)
+            except ThreadTerminatedError:
+                now = time.time()
+                print(f'{current_thread.name} terminated  at {now - start_time:.03f}s')
+                break
+
+    for i in range(10):  # initialize some threads and add to running_threads list
+        thread = TerminateableThread(target=foo, name=f'Thread {i}', daemon=True)
+        thread.start()
+        running_threads.append(thread)
+
+    # this assures all threads jump inside while True loop concurrently
+    start_event.set()
+
+    # wait til done
+    for thread in running_threads:
+        thread.join()
+    print('Done...')

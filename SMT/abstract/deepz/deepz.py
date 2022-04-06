@@ -80,28 +80,32 @@ def forward(net, lower, upper):
     error = torch.diag(torch.ones(h) * error.flatten())
     error = error.reshape((h, h))
 
+    hidden_bounds = []
+
     for layer in net.layers:
         if isinstance(layer, Linear) or isinstance(layer, nn.Linear):
             center, error = linear_transform(layer, center, error)
         elif isinstance(layer, ReLU) or isinstance(layer, nn.ReLU):
             center, error = relu_transform(center, error)
+            hidden_bounds.append(get_bound(center, error))
         else:
             raise NotImplementedError
 
-    return get_bound(center, error)
+    return get_bound(center, error), hidden_bounds
 
 
 
-@torch.no_grad()
-def forward2(net, lower, upper, steps=2):
-    bounds = [(l, u) for l, u in zip(lower, upper)]
-    bounds = [torch.linspace(b[0], b[1], steps=steps) for b in bounds]
-    bounds = [[torch.Tensor([b[i], b[i+1]]) for i in range(b.shape[0] - 1)] for b in bounds]
-    bounds = itertools.product(*bounds)
-    splits = [(torch.Tensor([_[0] for _ in b]), torch.Tensor([_[1] for _ in b])) for b in bounds]
 
-    bounds = Parallel(n_jobs=os.cpu_count())(delayed(forward)(net, l, u) for l,u in splits)
-    lbs = torch.stack([b[0] for b in bounds]).squeeze()
-    ubs = torch.stack([b[1] for b in bounds]).squeeze()
-    return lbs.min(0).values, ubs.max(0).values
+# @torch.no_grad()
+# def forward2(net, lower, upper, steps=2):
+#     bounds = [(l, u) for l, u in zip(lower, upper)]
+#     bounds = [torch.linspace(b[0], b[1], steps=steps) for b in bounds]
+#     bounds = [[torch.Tensor([b[i], b[i+1]]) for i in range(b.shape[0] - 1)] for b in bounds]
+#     bounds = itertools.product(*bounds)
+#     splits = [(torch.Tensor([_[0] for _ in b]), torch.Tensor([_[1] for _ in b])) for b in bounds]
+
+#     bounds = Parallel(n_jobs=os.cpu_count())(delayed(forward)(net, l, u) for l,u in splits)
+#     lbs = torch.stack([b[0] for b in bounds]).squeeze()
+#     ubs = torch.stack([b[1] for b in bounds]).squeeze()
+#     return lbs.min(0).values, ubs.max(0).values
 

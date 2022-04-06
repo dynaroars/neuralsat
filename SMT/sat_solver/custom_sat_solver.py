@@ -271,6 +271,8 @@ class CustomSATSolver(Solver):
         conflict_clause = propagation_func()
         while conflict_clause is not None:
             conflict_clause, watch_literal, level_to_jump_to = self._conflict_resolution(conflict_clause)
+            # print('watch_literal:', watch_literal, '\nlen:', len(list(conflict_clause)), '\nconflict_clause:', conflict_clause)
+            # print()
             if level_to_jump_to == -1:
                 # An assignment that satisfies the formula's unit clauses causes a conflict, so the formula is UNSAT
                 return False
