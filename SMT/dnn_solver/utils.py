@@ -86,7 +86,10 @@ class InputParser:
 
         return vars_mapping, layers_mapping
 
+class DNFConstraint:
 
+    def __init__(self, constraints):
+        self.constraints = constraints
 
 if __name__ == '__main__':
 

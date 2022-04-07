@@ -7,17 +7,12 @@ import copy
 import re
 import os
 
+from dnn_solver.utils import DNFConstraint
 from utils.read_nnet import ReLU, Linear
 from abstract.reluval import reluval
 from abstract.deepz import deepz
-from abstract.eran import eran
+# from abstract.eran import eran
 import settings
-
-
-class DNFConstraint:
-
-    def __init__(self, constraints):
-        self.constraints = constraints
 
 
 class DNNTheoremProver:
@@ -25,43 +20,33 @@ class DNNTheoremProver:
     epsilon = 1e-5
     skip = 1e-4
 
-    def __init__(self, dnn, layers_mapping, p=1):
+    def __init__(self, dnn, layers_mapping, spec):
         self.dnn = dnn
         self.layers_mapping = layers_mapping
+        self.spec = spec
 
         self.model = grb.Model()
         self.model.setParam('OutputFlag', False)
-        self.model.setParam('Threads', 16)
+        self.model.setParam('Threads', 2)
 
-        try:
-            self.gurobi_vars = [self.model.addVar(
-                    name=f'x{i}', 
-                    lb=(dnn.input_lower_bounds[i] - dnn.input_means[i]) / dnn.input_ranges[i], 
-                    ub=(dnn.input_upper_bounds[i] - dnn.input_means[i]) / dnn.input_ranges[i])
-                for i in range(self.n_inputs)]
-        except AttributeError:
-            self.gurobi_vars = [self.model.addVar(
-                    name=f'x{i}', 
-                    lb=-grb.GRB.INFINITY, 
-                    ub=grb.GRB.INFINITY) 
-                for i in range(self.n_inputs)]
+        # bounds = self.get_intial_input_bounds()
+        self.lbs_init = torch.Tensor(spec.lower)
+        self.ubs_init = torch.Tensor(spec.upper)
 
+        self.gurobi_vars = [
+            self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
+            for i in range(self.n_inputs)
+        ]
 
         self.model.setObjective(0, grb.GRB.MAXIMIZE)
-        
-        self.p = p # property
-
-        self.restore_input_bounds(intial=True)
         
         self.count = 0 # debug
 
         self.solution = None
         self.constraints = []
 
-
-        if settings.HEURISTIC_DEEPPOLY:
-            self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
-
+        # if settings.HEURISTIC_DEEPPOLY:
+        #     self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
 
         # clean trash
         os.system('rm -rf gurobi/*')
@@ -85,10 +70,7 @@ class DNNTheoremProver:
 
         if np.any(flag):
             if not np.all(lbs[flag] - ubs[flag] < DNNTheoremProver.skip):
-                # print('lower:', lbs)
-                # print('upper:', ubs)
                 # self.model.write(f'gurobi/debug_{self.count}.lp')
-                # raise
                 return False
 
         for i, var in enumerate(self.gurobi_vars):
@@ -139,7 +121,9 @@ class DNNTheoremProver:
             if variables is None: # output layer
                 output = layer.weight.mm(inputs)
                 output[:, -1] += layer.bias
-                output_constraint = self.get_output_property_torch(output)
+                output_constraint = self.spec.get_output_property(
+                    [self._get_equation(output[i]) for i in range(self.n_outputs)]
+                )
             else:
                 if type(layer) is Linear:
                     output = layer.weight.mm(inputs)
@@ -177,7 +161,6 @@ class DNNTheoremProver:
 
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
-            self.restore_input_bounds()
             return False, None
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -190,10 +173,7 @@ class DNNTheoremProver:
             self._optimize()
             if self.model.status == grb.GRB.OPTIMAL:
                 ubs = [var.X for var in self.gurobi_vars]
-                # TODO
-                # self.constraints += [self.model.addConstr(var <= ubs[i]) for i, var in enumerate(self.gurobi_vars)]
             else:
-                # print(self.model.status)
                 ubs = None
 
             # lower
@@ -201,10 +181,7 @@ class DNNTheoremProver:
             self._optimize()
             if self.model.status == grb.GRB.OPTIMAL:
                 lbs = [var.X for var in self.gurobi_vars]
-                # TODO
-                # self.constraints += [self.model.addConstr(var >= lbs[i]) for i, var in enumerate(self.gurobi_vars)]
             else:
-                # print(self.model.status)
                 lbs = None
                 
             if not self.update_input_bounds(lbs, ubs): # conflict
@@ -233,9 +210,8 @@ class DNNTheoremProver:
                     print('\t- lower:', lower)
                     print('\t- upper:', upper)
 
-                # self.restore_input_bounds()
-                if not self.check_output_reachability(lower, upper): # conflict
-                    self.restore_input_bounds()
+                self.restore_input_bounds()
+                if not self.spec.check_output_reachability(lower, upper): # conflict
                     return False, None
 
                 signs = {}
@@ -250,31 +226,10 @@ class DNNTheoremProver:
                         continue
                     abt_status = signs[node] == 1
                     if abt_status != status:
-                        self.restore_input_bounds()
                         return False, None
                         raise
 
-            if settings.HEURISTIC_DEEPPOLY: 
-                lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
-                ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
-                
-                # eran deeppoly
-                lower, upper = self.deeppoly(lbs, ubs)
-
-                if settings.DEBUG:
-                    print('[+] HEURISTIC_DEEPPOLY input')
-                    print('\t- lower:', lbs.data)
-                    print('\t- upper:', ubs.data)
-
-                    print('[+] HEURISTIC_DEEPPOLY output')
-                    print('\t- lower:', lower)
-                    print('\t- upper:', upper)
-
-                # self.restore_input_bounds()
-                if not self.check_output_reachability(lower, upper): # conflict
-                    self.restore_input_bounds()
-                    return False, None
-
+            self.restore_input_bounds()
         # imply next hidden nodes
         implications = {}
         if imply_nodes:
@@ -324,7 +279,6 @@ class DNNTheoremProver:
                 if flag_sat:
                     self.solution = self.get_solution()
                 else:
-                    self.restore_input_bounds()
                     return False, None
 
             else:
@@ -335,7 +289,6 @@ class DNNTheoremProver:
 
                 self._optimize()
                 if self.model.status == grb.GRB.INFEASIBLE:
-                    self.restore_input_bounds()
                     return False, None
 
                 self.solution = self.get_solution()
@@ -356,204 +309,8 @@ class DNNTheoremProver:
         return None
 
 
-    def restore_input_bounds(self, intial=False):
-
-        properties = {
-            0: { # debug
-                'lbs' : [-30, -30, -30],
-                'ubs' : [30, 30, 30],
-            },
-            1: {
-                'lbs' : [55947.691, -3.141593,  -3.141593, 1145,  0],
-                'ubs' : [60760,      3.141593,   3.141593, 1200, 60],
-            }, 
-            2: {
-                'lbs' : [55947.691, -3.141593, -3.141593, 1145,  0],
-                'ubs' : [60760,      3.141593,  3.141593, 1200, 60],
-            },  
-            3: {
-                'lbs' : [1500, -0.06, 3.1,                980,  960],
-                'ubs' : [1800,  0.06, 3.141592653589793, 1200, 1200],
-            },  
-            4: {
-                'lbs' : [1500, -0.06, 0, 1000, 700],
-                'ubs' : [1800,  0.06, 0, 1200, 800],
-            }, 
-            5: {
-                'lbs' : [250, 0.2, -3.141592, 100,   0],
-                'ubs' : [400, 0.4, -3.136592, 400, 400],
-            }, 
-            7: {
-                'lbs' : [0,     -3.141592, -3.141592,  100,    0],
-                'ubs' : [60760,  3.141592,  3.141592, 1200, 1200],
-            },
-            8: {
-                'lbs' : [    0, -3.141592, -0.1,  600,  600],
-                'ubs' : [60760, -2.356194,  0.1, 1200, 1200],
-            },
-            9: {
-                'lbs' : [2000, -0.40, -3.141592, 100,   0],
-                'ubs' : [7000, -0.14, -3.131592, 150, 150],
-            },
-            10: {
-                'lbs' : [36000, 0.7,     -3.141592,  900,  600],
-                'ubs' : [60760, 3.141592,-3.131592, 1200, 1200],
-            },
-        }
-
-        lbs = properties[self.p]['lbs']
-        ubs = properties[self.p]['ubs']
-        if intial:
-            for i, var in enumerate(self.gurobi_vars):
-                self.model.addConstr(var >= (lbs[i] - self.dnn.input_means[i]) / self.dnn.input_ranges[i])
-                self.model.addConstr(var <= (ubs[i] - self.dnn.input_means[i]) / self.dnn.input_ranges[i])
-        else:
-            for i, var in enumerate(self.gurobi_vars):
-                var.lb = (lbs[i] - self.dnn.input_means[i]) / self.dnn.input_ranges[i]
-                var.ub = (ubs[i] - self.dnn.input_means[i]) / self.dnn.input_ranges[i]
+    def restore_input_bounds(self):
+        for i, var in enumerate(self.gurobi_vars):
+            var.lb = self.lbs_init[i]
+            var.ub = self.ubs_init[i]
         self.model.update()
-
-
-    def get_output_property_torch(self, output):
-        if self.p == 0:
-            return self._get_equation(output[0]) >= 1e-6
-
-        if self.p == 1:
-            return self._get_equation(output[0]) >= (1500 - self.dnn.output_mean) / self.dnn.output_range
-
-        if self.p == 2:
-            return [self._get_equation(output[0]) >= self._get_equation(output[1]),
-                    self._get_equation(output[0]) >= self._get_equation(output[2]),
-                    self._get_equation(output[0]) >= self._get_equation(output[3]),
-                    self._get_equation(output[0]) >= self._get_equation(output[4])]
-
-        if self.p == 3 or self.p == 4:
-            return [self._get_equation(output[0]) <= self._get_equation(output[1]),
-                    self._get_equation(output[0]) <= self._get_equation(output[2]),
-                    self._get_equation(output[0]) <= self._get_equation(output[3]),
-                    self._get_equation(output[0]) <= self._get_equation(output[4])]
-
-        if self.p == 5:
-            return DNFConstraint([ # or
-                [self._get_equation(output[0]) <= self._get_equation(output[4])], # and
-                [self._get_equation(output[1]) <= self._get_equation(output[4])], # and
-                [self._get_equation(output[2]) <= self._get_equation(output[4])], # and
-                [self._get_equation(output[3]) <= self._get_equation(output[4])], # and
-            ]) 
-
-        if self.p == 7:
-            return DNFConstraint([ # or
-                [ # and
-                    self._get_equation(output[3]) <= self._get_equation(output[0]),
-                    self._get_equation(output[3]) <= self._get_equation(output[1]),
-                    self._get_equation(output[3]) <= self._get_equation(output[2]),
-                ], 
-                [ # and
-                    self._get_equation(output[4]) <= self._get_equation(output[0]),
-                    self._get_equation(output[4]) <= self._get_equation(output[1]),
-                    self._get_equation(output[4]) <= self._get_equation(output[2]),
-
-                ], 
-            ])
-
-        if self.p == 8:
-            return DNFConstraint([ # or
-                [ # and
-                    self._get_equation(output[2]) <= self._get_equation(output[0]),
-                    self._get_equation(output[2]) <= self._get_equation(output[1]),
-                ], 
-                [ # and
-                    self._get_equation(output[3]) <= self._get_equation(output[0]),
-                    self._get_equation(output[3]) <= self._get_equation(output[1]),
-                ], 
-                [ # and
-                    self._get_equation(output[4]) <= self._get_equation(output[0]),
-                    self._get_equation(output[4]) <= self._get_equation(output[1]),
-                ], 
-            ])
-
-        if self.p == 9:
-            return DNFConstraint([ # or
-                [self._get_equation(output[0]) <= self._get_equation(output[3])], 
-                [self._get_equation(output[1]) <= self._get_equation(output[3])], 
-                [self._get_equation(output[2]) <= self._get_equation(output[3])], 
-                [self._get_equation(output[4]) <= self._get_equation(output[3])], 
-            ]) 
-
-
-        if self.p == 10:
-            return DNFConstraint([ # or
-                [self._get_equation(output[1]) <= self._get_equation(output[0])], 
-                [self._get_equation(output[2]) <= self._get_equation(output[0])], 
-                [self._get_equation(output[3]) <= self._get_equation(output[0])], 
-                [self._get_equation(output[4]) <= self._get_equation(output[0])], 
-            ]) 
-
-
-        raise NotImplementedError
-
-
-    def check_output_reachability(self, lbs, ubs):
-        if self.p == 0:
-            return ubs[0] >= 1e-6
-
-        if self.p == 1:
-            return ubs[0] >= (1500 - self.dnn.output_mean) / self.dnn.output_range
-
-        if self.p == 2:
-            return all([ubs[0] >= lbs[1],
-                        ubs[0] >= lbs[2],
-                        ubs[0] >= lbs[3],
-                        ubs[0] >= lbs[4]])
-            
-        if self.p == 3 or self.p == 4:
-            return all([ubs[1] >= lbs[0],
-                        ubs[2] >= lbs[0],
-                        ubs[3] >= lbs[0],
-                        ubs[4] >= lbs[0]])
-
-        if self.p == 5:
-            return any([ubs[4] >= lbs[0],
-                        ubs[4] >= lbs[1],
-                        ubs[4] >= lbs[2],
-                        ubs[4] >= lbs[3]])
-
-        if self.p == 7:
-            return any([ # or
-                all([ubs[0] >= lbs[3], # and
-                     ubs[1] >= lbs[3],
-                     ubs[2] >= lbs[3]]
-                ), 
-                all([ubs[0] >= lbs[4], # and
-                     ubs[1] >= lbs[4],
-                     ubs[2] >= lbs[4]]
-                ),
-            ])
-
-        if self.p == 8:
-            return any([ # or
-                all([ubs[0] >= lbs[2], # and
-                     ubs[1] >= lbs[2]]
-                ), 
-                all([ubs[0] >= lbs[3], # and
-                     ubs[1] >= lbs[3]]
-                ), 
-                all([ubs[0] >= lbs[4], # and
-                     ubs[1] >= lbs[4]]
-                ),
-            ])
-
-        if self.p == 9:
-            return any([ubs[3] >= lbs[0],
-                        ubs[3] >= lbs[1],
-                        ubs[3] >= lbs[2],
-                        ubs[3] >= lbs[4]])
-
-        if self.p == 10:
-            return any([ubs[0] >= lbs[1],
-                        ubs[0] >= lbs[2],
-                        ubs[0] >= lbs[3],
-                        ubs[0] >= lbs[4]])
-
-        raise NotImplementedError
-
