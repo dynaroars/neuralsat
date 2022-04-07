@@ -27,7 +27,7 @@ class DNNTheoremProver:
 
         self.model = grb.Model()
         self.model.setParam('OutputFlag', False)
-        self.model.setParam('Threads', 2)
+        self.model.setParam('Threads', 96)
 
         # bounds = self.get_intial_input_bounds()
         self.lbs_init = torch.Tensor(spec.lower)

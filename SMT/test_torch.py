@@ -44,7 +44,7 @@ def test_one():
 def test_multithread():
 
     bounds = get_acasxu_bounds(p)
-    splits = split_bounds(bounds)
+    splits = split_bounds(bounds, steps=5)
 
     q = queue.Queue()
     for i, s in enumerate(splits):
@@ -83,8 +83,8 @@ def test_multithread():
             return None
 
 
-
-    for i in range(8):  # initialize some threads and add to running_threads list
+    tic = time.time()
+    for i in range(16):  # initialize some threads and add to running_threads list
         thread = TerminateableThread(
             target=wrapper_target, 
             args=(worker, q, name),
@@ -99,7 +99,7 @@ def test_multithread():
     for thread in running_threads:
         thread.join()
 
-    print('done')
+    print('done', time.time() - tic)
 
 
 if __name__ == '__main__':
