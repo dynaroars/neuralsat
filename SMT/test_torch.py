@@ -3,9 +3,11 @@ from dnn_solver.dnn_solver import DNNSolver
 from archive.terminatable_thread import TerminateableThread, ThreadTerminatedError
 
 from joblib import Parallel, delayed
+import multiprocessing
 import threading
 import queue
 import time
+
 
 def worker(name, spec):
     solver = DNNSolver(name, spec)
@@ -23,6 +25,7 @@ j = 2
 p = 2
 name = f'benchmark/acasxu/nnet/ACASXU_run2a_{i}_{j}_batch_2000.nnet'
 
+
 def test_one():
     bounds = get_acasxu_bounds(p)
     spec = Specification(p=p, bounds=bounds)
@@ -31,7 +34,7 @@ def test_one():
     print('\nRunning:', name)
     print('Property:', p)
     status = solver.solve()
-    print(name, status , time.time() - tic)
+    print(name, status, time.time() - tic)
 
     if status:
         solution = solver.get_solution()
@@ -41,8 +44,8 @@ def test_one():
         print('solution:', solution)
         print('output:', output)
 
-def test_multithread():
 
+def test_multithread():
     bounds = get_acasxu_bounds(p)
     splits = split_bounds(bounds, steps=5)
 
@@ -82,18 +85,16 @@ def test_multithread():
             # print(f'{current_thread.name} terminated')
             return None
 
-
     tic = time.time()
     for i in range(16):  # initialize some threads and add to running_threads list
         thread = TerminateableThread(
-            target=wrapper_target, 
+            target=wrapper_target,
             args=(worker, q, name),
-            name=f'Thread {i}', 
+            name=f'Thread {i}',
             daemon=True
         )
         thread.start()
         running_threads.append(thread)
-
 
     # wait til done
     for thread in running_threads:
@@ -102,5 +103,61 @@ def test_multithread():
     print('done', time.time() - tic)
 
 
+def multiprocess_wrapper_target(f, q, name, done_event):
+    current_process = multiprocessing.current_process()
+    while not done_event.is_set():
+        try:
+            spec = q.get(timeout=1)
+        except queue.Empty:
+            return None
+
+        status, solution, output = f(name, spec)
+        print('[+]', current_process.name)
+        print('\t- lower:', spec.lower.data)
+        print('\t- upper:', spec.upper.data)
+        print('\t- status:', status)
+        print('\t\t- solution:', solution)
+        print('\t\t- output:', output)
+
+        if status:
+            print('clear queue')
+            done_event.set()
+            break
+
+
+def test_multiprocess():
+    bounds = get_acasxu_bounds(p)
+    splits = split_bounds(bounds, steps=5)
+
+    q = multiprocessing.Queue()
+    done_event = multiprocessing.Event()
+
+    for i, s in enumerate(splits):
+        spec = Specification(p=p, bounds=s)
+        q.put(spec)
+
+    running_processes = []
+
+    tic = time.time()
+    for i in range(16):  # initialize some threads and add to running_threads list
+        process = multiprocessing.Process(
+            target=multiprocess_wrapper_target,
+            args=(worker, q, name, done_event),
+            name=f'Process {i}',
+            daemon=True
+        )
+        process.start()
+        running_processes.append(process)
+
+    # wait til done
+    done_event.wait()
+    while not q.empty():
+        q.get()
+    for process in running_processes:
+        process.terminate()
+
+    print('done', time.time() - tic)
+
+
 if __name__ == '__main__':
-    test_multithread()
+    test_multiprocess()
