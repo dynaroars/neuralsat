@@ -11,7 +11,7 @@ from dnn_solver.utils import DNFConstraint
 from utils.read_nnet import ReLU, Linear
 from abstract.reluval import reluval
 from abstract.deepz import deepz
-# from abstract.eran import eran
+from abstract.eran import eran
 import settings
 
 
@@ -27,7 +27,7 @@ class DNNTheoremProver:
 
         self.model = grb.Model()
         self.model.setParam('OutputFlag', False)
-        self.model.setParam('Threads', 96)
+        self.model.setParam('Threads', 16)
 
         # bounds = self.get_intial_input_bounds()
         self.lbs_init = torch.Tensor(spec.lower)
@@ -45,8 +45,8 @@ class DNNTheoremProver:
         self.solution = None
         self.constraints = []
 
-        # if settings.HEURISTIC_DEEPPOLY:
-        #     self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
+        if settings.HEURISTIC_DEEPPOLY:
+            self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
 
         # clean trash
         os.system('rm -rf gurobi/*')
@@ -228,6 +228,18 @@ class DNNTheoremProver:
                     if abt_status != status:
                         return False, None
                         raise
+
+
+            if settings.HEURISTIC_DEEPPOLY: 
+                lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
+                ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
+                
+                # eran deepzono
+                lower, upper = self.deeppoly(lbs, ubs)
+
+                self.restore_input_bounds()
+                if not self.spec.check_output_reachability(lower, upper): # conflict
+                    return False, None
 
             self.restore_input_bounds()
         # imply next hidden nodes
