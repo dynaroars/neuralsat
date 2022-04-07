@@ -77,7 +77,7 @@ def split_bounds(bounds, steps=3):
     bs = itertools.product(*bs)
     splits = [{'lbs': torch.Tensor([_[0] for _ in b]),
                'ubs': torch.Tensor([_[1] for _ in b])} for b in bs]
-    random.shuffle(splits)
+    # random.shuffle(splits)
     return splits
 
 class Specification:
