@@ -20,8 +20,8 @@ def worker(name, spec):
     return status, None, None
 
 
-i = 3
-j = 2
+i = 2
+j = 7
 p = 2
 name = f'benchmark/acasxu/nnet/ACASXU_run2a_{i}_{j}_batch_2000.nnet'
 
@@ -127,7 +127,7 @@ def multiprocess_wrapper_target(f, q, name, done_event):
 
 def test_multiprocess():
     bounds = get_acasxu_bounds(p)
-    splits = split_bounds(bounds, steps=5)
+    splits = split_bounds(bounds, steps=3)
 
     q = multiprocessing.Queue()
     done_event = multiprocessing.Event()
