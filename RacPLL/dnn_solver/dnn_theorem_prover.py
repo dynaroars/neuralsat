@@ -11,7 +11,7 @@ from dnn_solver.utils import DNFConstraint
 from utils.read_nnet import ReLU, Linear
 from abstract.reluval import reluval
 from abstract.deepz import deepz
-from abstract.eran import eran
+# from abstract.eran import eran
 import settings
 
 
