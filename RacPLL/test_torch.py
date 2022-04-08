@@ -101,10 +101,10 @@ def test_multithread(name, p):
 def multiprocess_wrapper_target(f, q, name, done_event):
     current_process = multiprocessing.current_process()
     while not done_event.is_set():
-        try:
+        if not q.empty():
             spec = q.get(timeout=1)
-        except queue.Empty:
-            return None
+        else:
+            break
 
         status, solution, output = f(name, spec)
         print('[+]', current_process.name, name, status)
@@ -118,7 +118,16 @@ def multiprocess_wrapper_target(f, q, name, done_event):
             break
 
 
+def check_queue_empty_worker(q, done_event):
+    while not done_event.is_set():
+        if q.empty():
+            done_event.set()
+            print('Deo ra gi ca')
+        time.sleep(0.01)
+
+
 def test_multiprocess(name, p):
+    n_processes = 16
     bounds = get_acasxu_bounds(p)
     splits = split_bounds(bounds, steps=3)
 
@@ -132,7 +141,7 @@ def test_multiprocess(name, p):
     running_processes = []
 
     tic = time.time()
-    for i in range(16):  # initialize some threads and add to running_threads list
+    for i in range(n_processes):  # initialize some threads and add to running_threads list
         process = multiprocessing.Process(
             target=multiprocess_wrapper_target,
             args=(worker, q, name, done_event),
@@ -142,12 +151,17 @@ def test_multiprocess(name, p):
         process.start()
         running_processes.append(process)
 
+    check_queue_empty_thread = threading.Thread(target=check_queue_empty_worker,
+                                                args=(q, done_event),
+                                                name='Check queue empty thread',
+                                                daemon=True)
+    check_queue_empty_thread.start()
+
     # wait til done
     done_event.wait()
-    while not q.empty():
-        q.get()
     for process in running_processes:
         process.terminate()
+    check_queue_empty_thread.join()
 
     print('done', time.time() - tic)
 
