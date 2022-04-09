@@ -1,3 +1,0 @@
-test_sat.onnx,test_prop.vnnlib,7200
-test_unsat.onnx,test_prop.vnnlib,7200
-test_zipped.onnx.gz,test_prop.vnnlib,60

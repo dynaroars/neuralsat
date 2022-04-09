@@ -1,7 +1,3 @@
-# DNN Falsifer
+# RacPLL
 
-#### Baselines:
-    
-- Reluplex
-- z3
-- dreal
+#### Rac version of DPLL(T)
