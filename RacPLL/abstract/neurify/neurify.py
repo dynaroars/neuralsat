@@ -24,6 +24,17 @@ def _evaluate(eq_lower, eq_upper,
     return o_l_l, o_u_u
 
 
+def _evaluate_inner_bounds(eq_lower, eq_upper,
+                           input_lower, input_upper):
+    input_lower = input_lower.view(-1, 1)
+    input_upper = input_upper.view(-1, 1)
+    o_l_u = _pos(eq_upper[:-1]) * input_upper + _neg(eq_lower[:-1]) * input_lower
+    o_u_l = _pos(eq_upper[:-1]) * input_lower + _neg(eq_lower[:-1]) * input_upper
+    o_l_u = o_l_u.sum(0) + eq_lower[-1]
+    o_u_l = o_u_l.sum(0) + eq_upper[-1]
+    return o_l_u, o_u_l
+
+
 def relu_transform(eq_lower, eq_upper,
                    input_lower, input_upper,
                    input_bounds=None):
@@ -35,9 +46,12 @@ def relu_transform(eq_lower, eq_upper,
     if input_bounds is not None:
         o_l_l, o_u_u = input_bounds
     else:
-        o_l_l, o_u_u = _evaluate(eq_lower, eq_upper, input_lower, input_upper)
+        o_l_l, o_u_u = _evaluate(eq_lower, eq_upper,
+                                 input_lower, input_upper)
+    o_l_u, o_u_l = _evaluate_inner_bounds(eq_lower, eq_upper,
+                                          input_lower, input_upper)
 
-    for i, (ll, uu) in enumerate(zip(o_l_l, o_u_u)):
+    for i, (ll, lu, uu, ul) in enumerate(zip(o_l_l, o_l_u, o_u_u, o_u_l)):
         if uu <= 0:
             grad_mask[i] = 0
             output_eq_lower[:, i] = 0
@@ -46,9 +60,13 @@ def relu_transform(eq_lower, eq_upper,
             grad_mask[i] = 2
         else:
             grad_mask[i] = 1
-            output_eq_lower[:, i] = 0
-            output_eq_upper[:-1, i] = 0
-            output_eq_upper[-1, i] = uu
+            if ul < 0:
+                output_eq_upper[:, i] = eq_upper[:, i] * uu / (uu - ul)
+                output_eq_upper[-1, i] -= uu * ul / (uu - ul)
+            if lu < 0:
+                output_eq_lower[:, i] = 0
+            else:
+                output_eq_lower[:, i] = eq_lower[:, i] * lu / (lu - ll)
     return (output_eq_lower, output_eq_upper), grad_mask
 
 
@@ -129,10 +147,3 @@ def backward(net, output_grad, grad_mask):
             raise NotImplementedError
 
     return grad_lower, grad_upper
-
-
-def smear(lower, upper,
-          grad_lower, grad_upper):
-    ranges = upper - lower
-    grad = torch.stack([grad_lower, grad_upper]).abs().max(0).values
-    return grad * ranges
