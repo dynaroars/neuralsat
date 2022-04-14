@@ -41,7 +41,6 @@ def relu_transform(eq_lower, eq_upper,
     # evaluate output ranges
     output_eq_lower = eq_lower.clone()
     output_eq_upper = eq_upper.clone()
-    grad_mask = torch.zeros(input_lower.size(0))
 
     if input_bounds is not None:
         o_l_l, o_u_u = input_bounds
@@ -50,6 +49,8 @@ def relu_transform(eq_lower, eq_upper,
                                  input_lower, input_upper)
     o_l_u, o_u_l = _evaluate_inner_bounds(eq_lower, eq_upper,
                                           input_lower, input_upper)
+
+    grad_mask = torch.zeros(o_l_u.size(0))
 
     for i, (ll, lu, uu, ul) in enumerate(zip(o_l_l, o_l_u, o_u_u, o_u_l)):
         if uu <= 0:

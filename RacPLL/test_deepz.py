@@ -6,6 +6,7 @@ from abstract.deepz import deepz, network, deeppoly
 from abstract.reluval import reluval
 # from abstract.eran import eran
 import time
+from abstract.neurify import neurify
 
 from utils.read_nnet import NetworkDeepZono
 
@@ -21,10 +22,14 @@ def test():
 
     torch.manual_seed(1)
     net = network.CorinaNet()
-    # net = network.FC(input_size=5, hidden_sizes=[50, 50, 50, 50, 5])
 
     lower = torch.Tensor([-5, -4])
     upper = torch.Tensor([-1, -2])
+
+    net = network.FC(input_size=5, hidden_sizes=[50, 50, 50, 50, 50,  5])
+    lower = torch.Tensor([-5, -4, -1, -0.2, -0.3])
+    upper = torch.Tensor([-1, -2, 1, 0.5, 1.5])
+
 
     tic = time.time()
     (lbs, ubs), _ = deepz.forward(net, lower, upper)
@@ -34,20 +39,19 @@ def test():
     print()
 
     tic = time.time()
-    dpf = deeppoly.DeepPolyFake(net)
-    lbs, ubs = dpf(lower, upper)
-    print('DeepPolyFake', time.time() - tic)
+    lbs, ubs = neurify.forward(net, lower, upper)
+    print('Neurify', time.time() - tic)
     print('lbs:', lbs.data)
     print('ubs:', ubs.data)
     print()
 
 
 
-    dpf2 = deeppoly.build_verifier_network(net, lower.shape[0])
-    inp = deeppoly.DeepPoly(lower.shape[0], lower, upper)
-    out = dpf2(inp)
-    print(inp.lb.data)
-    print(inp.ub.data)
+    # dpf2 = deeppoly.build_verifier_network(net, lower.shape[0])
+    # inp = deeppoly.DeepPoly(lower.shape[0], lower, upper)
+    # out = dpf2(inp)
+    # print(inp.lb.data)
+    # print(inp.ub.data)
 
 
 

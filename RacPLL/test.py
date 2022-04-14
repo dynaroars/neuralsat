@@ -495,18 +495,24 @@ No adv!
 time: 105.576866 
 '''
 
-total_time = 0
-for idx, case in enumerate(text.split('\n\n\n')):
-    flag = not ('No adv!' in case)
+# total_time = 0
+# for idx, case in enumerate(text.split('\n\n\n')):
+#     flag = not ('No adv!' in case)
 
-    for line in case.split('\n'):
-        if line.startswith('running'):
-            name = line.split(' ')[-1]
+#     for line in case.split('\n'):
+#         if line.startswith('running'):
+#             name = line.split(' ')[-1]
 
-        if line.startswith('time'):
-            time = float(line.split(' ')[-2])
-            total_time += time
+#         if line.startswith('time'):
+#             time = float(line.split(' ')[-2])
+#             total_time += time
 
-    print(f'{idx+1} {name} {flag} {time}')
+#     print(f'{idx+1} {name} {flag} {time}')
 
-print(total_time)
+# print(total_time)
+
+
+def gcd(p, q):
+    return p if q == 0 else gcd(q, p % q)
+
+print(gcd(20, 6))

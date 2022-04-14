@@ -6,6 +6,7 @@ from utils.read_nnet import read_nnet
 from abstract.deepz import deepz
 
 
+    
 if __name__ == '__main__':
     # w, b, lb, ub, means, ranges = read_nnet('example/random.nnet', with_norm=True)
 
