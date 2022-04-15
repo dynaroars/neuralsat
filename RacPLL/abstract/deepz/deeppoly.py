@@ -2,28 +2,31 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
-
-
+from typing import Tuple
 
 class CorinaNet(nn.Module):
 
     def __init__(self):
         super().__init__()
 
-        fc1 = nn.Linear(2, 2, bias=False)
+        fc1 = nn.Linear(2, 2)
         fc1.weight = torch.nn.Parameter(torch.Tensor([[1, -1], [1, 1]]))
+        fc1.bias = torch.nn.Parameter(torch.Tensor([0, 0]))
 
-        fc2 = nn.Linear(2, 2, bias=False)
+        fc2 = nn.Linear(2, 2)
         fc2.weight = torch.nn.Parameter(torch.Tensor([[0.5, -0.2], [-0.5, 0.1]]))
+        fc2.bias = torch.nn.Parameter(torch.Tensor([0, 0]))
 
-        fc3 = nn.Linear(2, 2, bias=False)
+        fc3 = nn.Linear(2, 2)
         fc3.weight = torch.nn.Parameter(torch.Tensor([[1, -1], [-1, 1]]))
+        fc3.bias = torch.nn.Parameter(torch.Tensor([0, 0]))
 
         self.layers = nn.Sequential(fc1, nn.ReLU(), fc2, nn.ReLU(), fc3)
 
 
     def forward(self, x):
         return self.layers(x)
+
 
 class FC(nn.Module):
 
@@ -43,13 +46,53 @@ class FC(nn.Module):
         return self.layers(x)
 
 
+class DeepPoly:
 
-class LinearTransformer(nn.Module):
-    def __init__(self, layer):
-        super(LinearTransformer, self).__init__()
+    def __init__(self, net, back_sub_steps=0):
+        self.net = net
+        self.back_sub_steps = back_sub_steps
+        self.transformer = self._build_network_transformer()
+    
+    def _build_network_transformer(self):
+        last = DeepPolyInputTransformer()
+        layers = [last]
+        for layer in self.net.layers:
+            if isinstance(layer, torch.nn.Linear):
+                last = DeepPolyAffineTransformer(layer.weight, layer.bias, last=last, back_sub_steps=self.back_sub_steps)
+                layers += [last]
+            elif isinstance(layer, torch.nn.ReLU):
+                last = DeepPolyReLUTansformer(last=last, back_sub_steps=self.back_sub_steps)
+                layers += [last]
+            else:
+                raise NotImplementedError
+        return nn.Sequential(*layers)
+    
+    @torch.no_grad()
+    def __call__(self, lower, upper):
+        self.bounds = self.transformer((lower, upper))
+        return self.bounds[:, 0], self.bounds[:, 1]
+    
 
-        self.weights = layer.weight
-        self.bias = layer.bias
+class DeepPolyInputTransformer(nn.Module):
+    def __init__(self, last=None):
+        super(DeepPolyInputTransformer, self).__init__()
+        self.last = last
+
+    def forward(self, bounds):
+        self.bounds = torch.stack([bounds[0], bounds[1]], 1)
+        return self.bounds
+    
+    def __str__(self):
+        return 'Input'
+
+
+class DeepPolyAffineTransformer(nn.Module):
+    def __init__(self, weights, bias=None, last=None, back_sub_steps=0):
+        super(DeepPolyAffineTransformer, self).__init__()
+        self.weights = weights
+        self.bias = bias
+        self.last = last
+        self.back_sub_steps = back_sub_steps
         self.W_plus = torch.clamp(self.weights, min=0.)
         self.W_minus = torch.clamp(self.weights, max=0.)
 
@@ -59,11 +102,45 @@ class LinearTransformer(nn.Module):
         self.bounds = torch.stack([lower, upper], 1)
         if self.bias is not None:
             self.bounds += self.bias.reshape(-1, 1)
+        if self.back_sub_steps > 0:
+            self.back_sub(self.back_sub_steps)
         return self.bounds
     
-class ReLUTransformer(nn.Module):
-    def __init__(self):
-        super(ReLUTransformer, self).__init__()
+    def back_sub(self, max_steps):
+        new_bounds = self._back_sub(max_steps)
+        indl = new_bounds[:,0] > self.bounds[:,0]
+        indu = new_bounds[:,1] < self.bounds[:,1]
+        self.bounds[indl, 0] = new_bounds[indl,0]
+        self.bounds[indu, 1] = new_bounds[indu,1]
+        
+    def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
+        if params is None:
+            Ml, Mu, bl, bu = self.weights, self.weights, self.bias, self.bias
+        else:
+            Ml, Mu, bl, bu = params
+
+        if max_steps > 0 and self.last.last is not None:
+            Mlnew = torch.clamp(Ml, min=0) * self.last.beta + torch.clamp(Ml, max=0)* self.last.lmbda
+            Munew = torch.clamp(Mu, min=0)* self.last.lmbda + torch.clamp(Mu, max=0)* self.last.beta
+            blnew = bl + torch.matmul(torch.clamp(Ml, max=0), self.last.mu)
+            bunew = bu + torch.matmul(torch.clamp(Mu, min=0), self.last.mu) 
+            return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
+        else:
+            lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[:, 0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[:, 1]) + bl
+            upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[:, 1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[:, 0]) + bu
+            return torch.stack([lower, upper], 1)
+
+
+    def __str__(self):
+        return 'Affine ({})'.format(self.weights.shape[0])
+
+
+
+class DeepPolyReLUTansformer(nn.Module):
+    def __init__(self, last=None, back_sub_steps=0):
+        super(DeepPolyReLUTansformer, self).__init__()
+        self.last = last
+        self.back_sub_steps = back_sub_steps
     
     def forward(self, bounds):
         ind2 = bounds[:, 0]>=0 
@@ -83,177 +160,46 @@ class ReLUTransformer(nn.Module):
         self.mu[ind5] = torch.div(-bounds[ind5, 0]*bounds[ind5, 1], diff)
         self.bounds[ind2,:] = bounds[ind2,:]
         self.beta[ind2] = torch.ones_like(self.beta[ind2])
+
+        if self.back_sub_steps > 0:
+            self.back_sub(self.back_sub_steps)
         return self.bounds
-    
 
-class DeepPolyFake:
+    def __str__(self):
+        return 'Relu ({})'.format(self.last.weights.shape[0])
 
-    def __init__(self, net):
-        layers = []
-        for layer in net.layers:
-            if isinstance(layer, torch.nn.Linear):
-                layers.append(LinearTransformer(layer))
-            elif isinstance(layer, torch.nn.ReLU):
-                layers.append(ReLUTransformer())
-            else:
-                raise TypeError("Layer type unknown!")
-        self.layers = nn.Sequential(*layers)
-    
-    def __call__(self, lower, upper):
-        x = torch.stack([lower, upper]).transpose(0, 1)
-        x = self.layers(x)
-        return x[:, 0], x[:, 1]
+    def back_sub(self, max_steps):
+        new_bounds = self._back_sub(max_steps).reshape(self.bounds.shape)
+        indl = new_bounds[:,0] > self.bounds[:,0]
+        indu = new_bounds[:,1] < self.bounds[:,1]
+        self.bounds[indl, 0] = new_bounds[indl,0]
+        self.bounds[indu, 1] = new_bounds[indu,1]
 
-
-class DeepPoly:
-    def __init__(self, size, lb, ub):
-        iden = torch.diag(torch.ones(size))
-        self.slb = torch.cat([iden, torch.zeros(size).unsqueeze(1)], dim=1)
-        self.sub = self.slb
-        self.lb = lb
-        self.ub = ub
-        self.hist = []
-        self.layers = 0
-        self.is_relu = False
-
-    def save(self):
-        lb = torch.cat([self.lb, torch.ones(1)])
-        ub = torch.cat([self.ub, torch.ones(1)])
-        if not self.is_relu:
-            keep_bias = torch.zeros(1, self.slb.shape[1])
-            keep_bias[0, self.slb.shape[1] - 1] = 1
-            slb = torch.cat([self.slb, keep_bias], dim=0)
-            sub = torch.cat([self.sub, keep_bias], dim=0)
+    def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
+        if params is None:
+            Ml, Mu, bl, bu = torch.diag(self.beta), torch.diag(self.lmbda), torch.zeros_like(self.mu), self.mu
         else:
-            slb = self.slb
-            sub = self.sub
-        self.layers += 1
-        self.hist.append((slb, sub, lb, ub, self.is_relu))
-        return self
+            Ml, Mu, bl, bu = params
 
-    def resolve(self, cstr, layer, lower=True):
-        cstr_relu_pos = F.relu(cstr)
-        cstr_relu_neg = F.relu(-cstr)
-        dp = self.hist[layer]
-        is_relu = dp[-1]
-        if layer == 0:
-            lb, ub = dp[2], dp[3]
-        else:
-            lb, ub = dp[0], dp[1]
-        if not lower:  # switch lb and ub
-            lb, ub = ub, lb
-        if is_relu:
-            lb_diag, lb_bias = lb[0], lb[1]
-            ub_diag, ub_bias = ub[0], ub[1]
-            lb_bias = torch.cat([lb_bias, torch.ones(1)])
-            ub_bias = torch.cat([ub_bias, torch.ones(1)])
-            m1 = torch.cat([cstr_relu_pos[:, :-1] * lb_diag, torch.matmul(cstr_relu_pos, lb_bias).unsqueeze(1)], dim=1)
-            m2 = torch.cat([cstr_relu_neg[:, :-1] * ub_diag, torch.matmul(cstr_relu_neg, ub_bias).unsqueeze(1)], dim=1)
-            return m1 - m2
-        else:
-            return torch.matmul(cstr_relu_pos, lb) - torch.matmul(cstr_relu_neg, ub)
-
-class DPLinear(nn.Module):
-    def __init__(self, nested: nn.Linear):
-        super().__init__()
-        self.weight = nested.weight.detach()
-        if nested.bias is not None:
-            self.bias = nested.bias.detach()
-        else:
-            self.bias = torch.zeros(self.weight.shape[0])
-        self.in_features = nested.in_features
-        self.out_features = nested.out_features
-
-    def forward(self, x):
-        x.save()
-
-        # append bias as last column
-        init_slb = torch.cat([self.weight, self.bias.unsqueeze(1)], dim=1)
-
-        x.lb = init_slb
-        x.ub = init_slb
-        x.slb = init_slb
-        x.sub = init_slb
-        # loop layer backwards
-        for i in range(x.layers - 1, -1, -1):
-            x.lb = x.resolve(x.lb, i, lower=True)
-            x.ub = x.resolve(x.ub, i, lower=False)
-        x.is_relu = False
-        return x
-
-
-class DPReLU(nn.Module):
-    def __init__(self, in_features):
-        super(DPReLU, self).__init__()
-        self.in_features = in_features
-        self.out_features = in_features
-        # have lambdas as trainable parameter
-        self.lam = torch.nn.Parameter(torch.zeros(in_features))  # TODO: pick different lambdas here? train them?
-
-    def forward(self, x):
-        x.save()
-
-        lb, ub = x.lb, x.ub
-
-        # cases 1-3.2
-        mask_1, mask_2 = lb.ge(0), ub.le(0)
-        mask_3 = ~(mask_1 | mask_2)
-        # this should be the right area minimizing heuristic (starting from `ones` lambdas)
-        # self.lam.data = self.lam.where(ub.gt(-lb), torch.zeros_like(self.lam))
-        a = torch.where((ub - lb) == 0, torch.ones_like(ub), ub / (ub - lb + 1e-6))
-        
-        x.lb = lb * mask_1 + 1/(1+torch.exp(self.lam)) * lb * mask_3
-        x.ub = ub * mask_1 + ub * mask_3
-        curr_slb = 1 * mask_1 + 1/(1+torch.exp(self.lam)) * mask_3
-        curr_sub = 1 * mask_1 + a * mask_3
-        bias = - lb * a * mask_3
-
-        # only save slb and sub as vectors, which we know encodes a diag matrix
-        x.slb = torch.cat([curr_slb.unsqueeze(0), torch.zeros(len(lb)).unsqueeze(0)], dim=0)
-        x.sub = torch.cat([curr_sub.unsqueeze(0), bias.unsqueeze(0)], dim=0)
-        x.is_relu = True
-        return x
-
-
-def build_verifier_network(net, init_features):
-    # ordered_layers = [module for module in net.modules()
-                      # if type(module) not in [networks.FullyConnected, networks.Conv, nn.Sequential]]
-    verif_layers = []
-    for layer in net.layers:
-        in_features = verif_layers[-1].out_features if len(verif_layers) > 0 else init_features
-        if type(layer) == nn.Linear:
-            verif_layers.append(DPLinear(layer))
-        elif type(layer) == nn.ReLU:
-            verif_layers.append(DPReLU(in_features))
-        else:
-            print("Layer type not implemented: ", str(type(layer)))
-            exit(-1)
-    return nn.Sequential(*verif_layers)
-
-
-
-def test():
-    torch.manual_seed(0)
-    net = CorinaNet().eval()
-    net = FC(5, [2, 2, 5]).eval()
-
-    lower = torch.Tensor([-5, -4, 1, 2, 3])
-    upper = torch.Tensor([-1, -2, 4, 5, 6])
-
-    deeppoly = DeepPolyFake(net)
-    y = deeppoly(lower, upper)
-    print(y)
+        Mlnew = torch.matmul(Ml, self.last.weights)
+        Munew = torch.matmul(Mu, self.last.weights) 
+        blnew = bl + torch.matmul(Ml, self.last.bias)
+        bunew = bu + torch.matmul(Mu, self.last.bias)
+        return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
 
 
 if __name__ == '__main__':
-    net = CorinaNet().eval()
-    # net = FC(2, [3, 4, 5]).eval()
-    verifier = build_verifier_network(net, 2)
+    torch.manual_seed(1)
 
+    net = FC(4, [3, 4, 2]).eval()
+    lower = torch.Tensor([-0.4, -0.5, -0.4, 0.2])
+    upper = torch.Tensor([0.6, 0.7, 0.6, 0.4])
+
+    net = CorinaNet().eval()
     lower = torch.Tensor([-5, -4])
     upper = torch.Tensor([-1, -2])
 
-    x = DeepPoly(lower.shape[0], lower, upper)
-    y = verifier(x)
-    print(y.lb)
-    print(y.ub)
+    d = DeepPoly(net, back_sub_steps=10)
+    l, u = d(lower, upper)
+    print(l)
+    print(u)
