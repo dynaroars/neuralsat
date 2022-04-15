@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from abstract.deepz import deepz, network, deeppoly
 from abstract.reluval import reluval
-# from abstract.eran import eran
+from abstract.eran import eran
 import time
 from abstract.neurify import neurify
 
@@ -26,7 +26,7 @@ def test():
     # lower = torch.Tensor([-5, -4])
     # upper = torch.Tensor([-1, -2])
 
-    net = network.FC(input_size=5, hidden_sizes=[50, 100, 100, 100, 100,  5])
+    net = network.FC(input_size=5, hidden_sizes=[50, 200, 100, 200, 100,  5])
     lower = torch.Tensor([-5, -4, -1, -0.2, -0.3])
     upper = torch.Tensor([-1, -2, 1, 0.5, 1.5])
 
@@ -38,9 +38,9 @@ def test():
     print('ubs:', ubs)
     print()
 
-    d = deeppoly.DeepPoly(net, back_sub_steps=10)
+    d = deeppoly.DeepPoly(net, back_sub_steps=100)
     lbs, ubs = d(lower, upper)
-    print('DeepPoly', time.time() - tic)
+    print('DeepPoly (python)', time.time() - tic)
     print('lbs:', lbs)
     print('ubs:', ubs)
     print()
@@ -62,17 +62,15 @@ def test():
 
 
 
-    # x = torch.rand([1, net.input_size])
-    # x = x / x.abs().max()
-
-    # torch.onnx.export(net, x, 'example/test.onnx')
-
-    # cac = eran.ERAN('example/test.onnx', 'deeppoly')
-    # tic = time.time()
-    # lbs, ubs = cac(lower, upper)
-    # print('DeepPoly', time.time() - tic)
-    # print('lbs:', lbs)
-    # print('ubs:', ubs)
+    x = torch.rand([1, net.input_size])
+    x = x / x.abs().max()
+    torch.onnx.export(net, x, 'example/test.onnx')
+    cac = eran.ERAN('example/test.onnx', 'deeppoly')
+    tic = time.time()
+    lbs, ubs = cac(lower, upper)
+    print('DeepPoly (origin)', time.time() - tic)
+    print('lbs:', lbs)
+    print('ubs:', ubs)
 
 
 if __name__ == '__main__':

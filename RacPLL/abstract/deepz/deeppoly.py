@@ -70,7 +70,7 @@ class DeepPoly:
     @torch.no_grad()
     def __call__(self, lower, upper):
         self.bounds = self.transformer((lower, upper))
-        return self.bounds[:, 0], self.bounds[:, 1]
+        return self.bounds[0], self.bounds[1]
     
 
 class DeepPolyInputTransformer(nn.Module):
@@ -79,7 +79,7 @@ class DeepPolyInputTransformer(nn.Module):
         self.last = last
 
     def forward(self, bounds):
-        self.bounds = torch.stack([bounds[0], bounds[1]], 1)
+        self.bounds = torch.stack([bounds[0], bounds[1]], 0)
         return self.bounds
     
     def __str__(self):
@@ -97,21 +97,21 @@ class DeepPolyAffineTransformer(nn.Module):
         self.W_minus = torch.clamp(self.weights, max=0.)
 
     def forward(self, bounds):
-        upper = torch.matmul(self.W_plus, bounds[:,1]) + torch.matmul(self.W_minus, bounds[:,0])
-        lower = torch.matmul(self.W_plus, bounds[:,0]) + torch.matmul(self.W_minus, bounds[:,1])
-        self.bounds = torch.stack([lower, upper], 1)
+        upper = torch.matmul(self.W_plus, bounds[1]) + torch.matmul(self.W_minus, bounds[0])
+        lower = torch.matmul(self.W_plus, bounds[0]) + torch.matmul(self.W_minus, bounds[1])
+        self.bounds = torch.stack([lower, upper], 0)
         if self.bias is not None:
-            self.bounds += self.bias.reshape(-1, 1)
+            self.bounds += self.bias.reshape(1, -1)
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
         return self.bounds
     
     def back_sub(self, max_steps):
         new_bounds = self._back_sub(max_steps)
-        indl = new_bounds[:,0] > self.bounds[:,0]
-        indu = new_bounds[:,1] < self.bounds[:,1]
-        self.bounds[indl, 0] = new_bounds[indl,0]
-        self.bounds[indu, 1] = new_bounds[indu,1]
+        indl = new_bounds[0] > self.bounds[0]
+        indu = new_bounds[1] < self.bounds[1]
+        self.bounds[0, indl] = new_bounds[0, indl]
+        self.bounds[1, indu] = new_bounds[1, indu]
         
     def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
         if params is None:
@@ -120,15 +120,15 @@ class DeepPolyAffineTransformer(nn.Module):
             Ml, Mu, bl, bu = params
 
         if max_steps > 0 and self.last.last is not None:
-            Mlnew = torch.clamp(Ml, min=0) * self.last.beta + torch.clamp(Ml, max=0)* self.last.lmbda
-            Munew = torch.clamp(Mu, min=0)* self.last.lmbda + torch.clamp(Mu, max=0)* self.last.beta
+            Mlnew = torch.clamp(Ml, min=0) * self.last.beta + torch.clamp(Ml, max=0) * self.last.lmbda
+            Munew = torch.clamp(Mu, min=0) * self.last.lmbda + torch.clamp(Mu, max=0) * self.last.beta
             blnew = bl + torch.matmul(torch.clamp(Ml, max=0), self.last.mu)
             bunew = bu + torch.matmul(torch.clamp(Mu, min=0), self.last.mu) 
             return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
         else:
-            lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[:, 0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[:, 1]) + bl
-            upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[:, 1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[:, 0]) + bu
-            return torch.stack([lower, upper], 1)
+            lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[1]) + bl
+            upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[0]) + bu
+            return torch.stack([lower, upper], 0)
 
 
     def __str__(self):
@@ -143,22 +143,22 @@ class DeepPolyReLUTansformer(nn.Module):
         self.back_sub_steps = back_sub_steps
     
     def forward(self, bounds):
-        ind2 = bounds[:, 0]>=0 
-        ind3 = (bounds[:, 1]>0) * (bounds[:, 0]<0) 
-        ind4 = (bounds[:, 1] > -bounds[:, 0]) * ind3
+        ind2 = bounds[0]>=0 
+        ind3 = (bounds[1]>0) * (bounds[0]<0) 
+        ind4 = (bounds[1] > -bounds[0]) * ind3
         self.bounds = torch.zeros_like(bounds)
-        self.bounds[ind3,1] = bounds[ind3,1]
-        self.bounds[ind4,:] = bounds[ind4,:]
-        self.lmbda = torch.zeros_like(bounds[:, 1])
-        self.beta = torch.zeros_like(bounds[:, 1])
-        self.mu = torch.zeros_like(bounds[:, 1])
+        self.bounds[1, ind3] = bounds[1, ind3]
+        self.bounds[:, ind4] = bounds[:, ind4]
+        self.lmbda = torch.zeros_like(bounds[1])
+        self.beta = torch.zeros_like(bounds[1])
+        self.mu = torch.zeros_like(bounds[1])
         self.lmbda[ind2] = torch.ones_like(self.lmbda[ind2])
         ind5 = ind3+ind4 
-        diff = bounds[ind5, 1] - bounds[ind5, 0] 
-        self.lmbda[ind5] = torch.div(bounds[ind5, 1], diff)
+        diff = bounds[1, ind5] - bounds[0, ind5] 
+        self.lmbda[ind5] = torch.div(bounds[1, ind5], diff)
         self.beta[ind4] = torch.ones_like(self.beta[ind4])
-        self.mu[ind5] = torch.div(-bounds[ind5, 0]*bounds[ind5, 1], diff)
-        self.bounds[ind2,:] = bounds[ind2,:]
+        self.mu[ind5] = torch.div(-bounds[0, ind5] * bounds[1, ind5], diff)
+        self.bounds[:, ind2] = bounds[:, ind2]
         self.beta[ind2] = torch.ones_like(self.beta[ind2])
 
         if self.back_sub_steps > 0:
@@ -170,10 +170,10 @@ class DeepPolyReLUTansformer(nn.Module):
 
     def back_sub(self, max_steps):
         new_bounds = self._back_sub(max_steps).reshape(self.bounds.shape)
-        indl = new_bounds[:,0] > self.bounds[:,0]
-        indu = new_bounds[:,1] < self.bounds[:,1]
-        self.bounds[indl, 0] = new_bounds[indl,0]
-        self.bounds[indu, 1] = new_bounds[indu,1]
+        indl = new_bounds[0] > self.bounds[0]
+        indu = new_bounds[1] < self.bounds[1]
+        self.bounds[0, indl] = new_bounds[0, indl]
+        self.bounds[1, indu] = new_bounds[1, indu]
 
     def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
         if params is None:
@@ -194,6 +194,10 @@ if __name__ == '__main__':
     net = FC(4, [3, 4, 2]).eval()
     lower = torch.Tensor([-0.4, -0.5, -0.4, 0.2])
     upper = torch.Tensor([0.6, 0.7, 0.6, 0.4])
+    d = DeepPoly(net, back_sub_steps=10)
+    l, u = d(lower, upper)
+    print(l)
+    print(u)
 
     net = CorinaNet().eval()
     lower = torch.Tensor([-5, -4])
