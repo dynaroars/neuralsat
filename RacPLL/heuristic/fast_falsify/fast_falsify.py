@@ -115,15 +115,14 @@ class FastFalsify:
             for i in range(1, len(samples)):
                 s_out = samples[i][1]
                 new_large = s_out[self.target]
-                if new_large > large :
+                if new_large > large:
                     pos_samples.remove(samples[last_idx])
                     pos_samples.append(samples[i])
                     neg_samples.append(samples[last_idx])
                     last_idx = i
                     large = new_large
                 else:
-                    if new_large < large :
-                       neg_samples.append(samples[i])
+                    neg_samples.append(samples[i])
 
             if len(old_pos_samples) > 0:
                 cur_pos_samples1 = pos_samples[0][1]
@@ -148,8 +147,7 @@ class FastFalsify:
                     last_idx = i
                     small = new_small
                 else:
-                    if new_small < small:
-                       neg_samples.append(samples[i])
+                    neg_samples.append(samples[i])
 
             if len(old_pos_samples) > 0:
                 cur_pos_samples1 = pos_samples[0][1]
