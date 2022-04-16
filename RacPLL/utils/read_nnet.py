@@ -21,32 +21,7 @@ class ReLU:
     def __str__(self):
         return 'ReLU'
 
-# class Network:
-
-#     def __init__(self, nnet_path):
-#         self.layers = []
-
-#         weights, biases, lbs, ubs, means, ranges = read_nnet(nnet_path, with_norm=True)
-
-#         for i in range(len(weights)):
-#             w = weights[i].transpose()
-#             b = biases[i]
-#             self.layers.append(Linear(w, b))
-
-#         self.input_shape = (None, weights[0].shape[1])
-#         self.output_shape = (None, weights[-1].shape[0])
-
-#         self.input_lower_bounds = lbs
-#         self.input_upper_bounds = ubs
-#         self.input_means = means[:-1]
-#         self.input_ranges = ranges[:-1]
-
-#         self.output_mean = means[-1]
-#         self.output_range = ranges[-1]
-
-#         self.path = nnet_path
-
-class NetworkDeepZono:
+class Network:
 
     def __init__(self, nnet_path):
 

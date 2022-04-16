@@ -8,7 +8,7 @@ from abstract.eran import eran
 import time
 from abstract.neurify import neurify
 
-from utils.read_nnet import NetworkDeepZono
+from utils.read_nnet import Network
 
 
 def plot_z():

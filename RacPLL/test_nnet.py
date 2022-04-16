@@ -1,6 +1,6 @@
 import torch
 
-from utils.read_nnet import Network, NetworkDeepZono
+from utils.read_nnet import Network
 from dnn_solver.utils import InputParser
 from utils.read_nnet import read_nnet
 from abstract.deepz import deepz
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # print(layers_mapping)
 
 
-    dnn = NetworkDeepZono('benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.nnet')
+    dnn = Network('benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.nnet')
     for layer in dnn.layers:
         print(layer)
 

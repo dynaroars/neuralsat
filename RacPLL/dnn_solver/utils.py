@@ -12,7 +12,7 @@ import tensorflow as tf
 import sortedcontainers
 import numpy as np
 
-from utils.read_nnet import NetworkDeepZono, ReLU, Linear
+from utils.read_nnet import Network, Linear
 
 def model_pa4():
     model = Sequential()
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     # model = model_random(3, [7, 5, 6], 5)
     # model.save('../example/model.keras')
     # model = keras.models.load_model('../example/model.keras')
-    model = NetworkDeepZono('example/random.nnet')
+    model = Network('example/random.nnet')
     vars_mapping, layers_mapping = InputParser.parse(model)
 
     # pprint(dnn)
