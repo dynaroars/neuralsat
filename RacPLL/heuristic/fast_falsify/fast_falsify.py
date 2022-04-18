@@ -57,7 +57,7 @@ class FastFalsify:
         for spec in self.spec_list:
             input_ranges = torch.tensor(spec[0], dtype=torch.float32)
             output_props = spec[1]
-            random.seed(0)
+            # random.seed(0)
             
             stat, adv = self._sampling(input_ranges, output_props)
             if stat == 'violated':

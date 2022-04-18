@@ -4,8 +4,8 @@ from utils.read_nnet import Network
 
 
 if __name__ == '__main__':
-    nnet_name = 'benchmark/acasxu/nnet/ACASXU_run2a_1_7_batch_2000.nnet'
-    spec_name = 'benchmark/acasxu/spec/prop_3.vnnlib'
+    spec_name = 'benchmark/acasxu/spec/prop_10.vnnlib'
+    nnet_name = 'benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet'
 
     net = Network(nnet_name)
 
@@ -14,9 +14,10 @@ if __name__ == '__main__':
 
     ff = fast_falsify.FastFalsify(net, spec_list)
 
-    stat, adv = ff.eval()
+    stat, adv = ff.eval(timeout=60)
 
     print(stat)
     if stat == 'violated':
         print('input :', adv[0])
         print('output:', adv[1])
+        print('output:', adv[1].numpy().tolist())
