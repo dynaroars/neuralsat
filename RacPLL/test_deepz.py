@@ -19,13 +19,13 @@ def plot_z():
 
 def test():
 
-    torch.manual_seed(1)
+    # torch.manual_seed(1)
 
     net = network.CorinaNet()
     lower = torch.Tensor([-5, -4])
     upper = torch.Tensor([-1, -2])
 
-    net = network.FC(input_size=5, hidden_sizes=[50, 200, 200, 200, 500, 5])
+    net = network.FC(input_size=5, hidden_sizes=[50, 50, 50, 50, 50, 50, 5])
     lower = torch.Tensor([-5, -4, -1, -0.2, -0.3])
     upper = torch.Tensor([-1, -2, 1, 0.5, 1.5])
 
