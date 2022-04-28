@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import Tuple
 
-from utils.read_nnet import Network, Linear, ReLU, NetworkTorch
+from utils.read_nnet import NetworkTorch
 from dnn_solver.utils import InputParser
 
 
@@ -26,10 +26,10 @@ class AssignedDeepPoly:
         self.layers = [last]
         idx = 0
         for layer in self.net.layers:
-            if isinstance(layer, torch.nn.Linear) or isinstance(layer, Linear):
+            if isinstance(layer, torch.nn.Linear):
                 last = AssignedDeepPolyAffineTransformer(layer.weight, layer.bias, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
                 self.layers += [last]
-            elif isinstance(layer, torch.nn.ReLU) or isinstance(layer, ReLU):
+            elif isinstance(layer, torch.nn.ReLU):
                 last = AssignedDeepPolyReLUTansformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=(self.vars_mapping, self.layers_mapping))
                 idx += 1
                 self.layers += [last]
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
     print(assignment)
     print()
-    
+
     print('Without assignment')
     l, u = d(lower, upper, assignment=None)
     print(l)
