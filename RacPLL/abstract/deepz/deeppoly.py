@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 
 from typing import Tuple
+from utils.read_nnet import NetworkTorch
 
 class CorinaNet(nn.Module):
 
@@ -151,7 +152,7 @@ class DeepPolyReLUTansformer(nn.Module):
     def forward(self, bounds):
         ind2 = bounds[0]>=0 
         ind3 = (bounds[1]>0) * (bounds[0]<0) 
-        ind4 = (bounds[1] > -bounds[0]) * ind3
+        ind4 = (bounds[1] > -bounds[0]) * ind3 * False
         self.bounds = torch.zeros_like(bounds)
         self.bounds[1, ind3] = bounds[1, ind3]
         self.bounds[:, ind4] = bounds[:, ind4]
@@ -199,6 +200,7 @@ class DeepPolyReLUTansformer(nn.Module):
 if __name__ == '__main__':
     torch.manual_seed(1)
 
+
     # net = FC(4, [3, 4, 20, 3]).eval()
     # lower = torch.Tensor([-0.4, -0.5, -0.4, 0.2])
     # upper = torch.Tensor([0.6, 0.7, 0.6, 0.4])
@@ -208,9 +210,16 @@ if __name__ == '__main__':
     # print(l)
     # print(u)
 
-    net = CorinaNet().eval()
-    lower = torch.Tensor([2, 1])
-    upper = torch.Tensor([3, 4])
+    # net = CorinaNet().eval()
+    # lower = torch.Tensor([2, 1])
+    # upper = torch.Tensor([3, 4])
+
+
+    net = NetworkTorch('example/random.nnet')
+
+    # net = CorinaNet().eval()
+    lower = torch.Tensor([-2, 1])
+    upper = torch.Tensor([2, 3])
 
     d = DeepPoly(net, back_sub_steps=10)
     l, u = d(lower, upper)

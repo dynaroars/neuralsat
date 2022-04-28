@@ -18,7 +18,6 @@ class AssignedDeepPoly:
 
         self.vars_mapping, self.layers_mapping = InputParser.parse(net)
 
-        # self.transformer = self._build_network_transformer()
         self._build_network_transformer()
 
     def _build_network_transformer(self):
@@ -35,16 +34,12 @@ class AssignedDeepPoly:
                 self.layers += [last]
             else:
                 raise NotImplementedError
-        # return nn.Sequential(*layers)
     
     @torch.no_grad()
     def __call__(self, lower, upper, assignment=None):
         bounds = (lower, upper)
         for layer in self.layers:
-            # print(layer)
             bounds = layer(bounds, assignment)
-            # print('\t', bounds.numpy().tolist())
-        # self.bounds = self.transformer((lower, upper), assignment)
         self.bounds = bounds
         return self.bounds[0], self.bounds[1]
 
