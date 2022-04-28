@@ -118,9 +118,9 @@ def forward(net, lower, upper, return_grad_mask=False):
     grad_mask = {}
 
     for layer_id, layer in enumerate(net.layers):
-        if isinstance(layer, nn.Linear):
+        if isinstance(layer, nn.Linear) or isinstance(layer, Linear):
             eq_lower, eq_upper = linear_transform(layer, eq_lower, eq_upper)
-        elif isinstance(layer, nn.ReLU):
+        elif isinstance(layer, nn.ReLU) or isinstance(layer, ReLU):
             (eq_lower, eq_upper), grad_mask_l = relu_transform(eq_lower, eq_upper,
                                                                lower, upper,
                                                                input_bounds=(o_l_l, o_u_u))

@@ -89,14 +89,14 @@ class Model:
             self.weights = weights
         else:
             for l in range(1, self.num_layers):
-                self.weights[l] = np.random.normal(0, 1.0, size=(num_neurons[l], num_neurons[l-1]))
+                self.weights[l] = np.round(np.random.normal(0, 0.1, size=(num_neurons[l], num_neurons[l-1])), 1) * 10
 
         if bias is not None:
             bias_correctness(bias, num_neurons)
             self.bias = bias
         else:
             for l in range(1, self.num_layers):
-                self.bias[l] = np.random.normal(0, 1.0, size=(num_neurons[l]))
+                self.bias[l] = np.round(np.random.normal(0, 1.0, size=(num_neurons[l])), 1) * 10
 
     def save(self, filename, mean_input_val=-3.0, range_input_val=6.0):
         weights_list = []
@@ -117,6 +117,6 @@ class Model:
 
 if __name__ == '__main__':
     nnet_name = 'random.nnet'
-    num_neurons = [3, 7, 5, 6, 5]
+    num_neurons = [2, 4, 4, 2]
     model = Model(num_neurons)
     model.save(nnet_name)

@@ -26,7 +26,7 @@ class ERAN:
     def __call__(self, specLB, specUB, timeout_lp=1, timeout_milp=1, use_default_heuristic=True,
                 output_constraints=None, lexpr_weights= None, lexpr_cst=None, lexpr_dim=None, uexpr_weights=None,
                 uexpr_cst=None, uexpr_dim=None, expr_size=0, testing = False,label=-1, prop = -1,
-                spatial_constraints=None, K=3, s=-2, timeout_final_lp=100, timeout_final_milp=100, use_milp=False,
+                spatial_constraints=None, K=0, s=0, timeout_final_lp=100, timeout_final_milp=100, use_milp=False,
                 complete=False, terminate_on_failure=True, partial_milp=False, max_milp_neurons=30, approx_k=True):
         specLB = np.reshape(specLB, (-1,))
         specUB = np.reshape(specUB, (-1,))
@@ -49,6 +49,12 @@ class ERAN:
                                 partial_milp=partial_milp, max_milp_neurons=max_milp_neurons,
                                 approx_k=approx_k)
         element, nlb, nub = analyzer.get_abstract0()
+        for i in range(len(nlb)):
+            print('lower:', nlb[i])
+            print('upper:', nub[i])
+            print()
+        print('-------------')
+
         return torch.Tensor(nlb[-1]), torch.Tensor(nub[-1])
 
 

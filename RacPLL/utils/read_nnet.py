@@ -1,6 +1,7 @@
-import numpy as np 
-import torch
 import torch.nn.functional as F
+import torch.nn as nn
+import torch
+import numpy as np 
 
 class Linear:
     
@@ -62,6 +63,45 @@ class Network:
 
     def __call__(self, x):
         return self.forward(x)
+
+
+
+class NetworkTorch(nn.Module):
+
+    def __init__(self, nnet_path):
+        super().__init__()
+
+        layers = []
+        weights, biases, lbs, ubs, means, ranges = read_nnet(nnet_path, with_norm=True)
+
+        n_layers = len(weights)
+        for i in range(n_layers):
+            w = torch.Tensor(weights[i]).float()
+            b = torch.Tensor(biases[i]).float()
+
+            layer = nn.Linear(*w.shape)
+            layer.weight.data = w
+            layer.bias.data = b
+
+            layers.append(layer)
+            if i < n_layers - 1:
+                layers.append(nn.ReLU())
+        
+        self.input_lower_bounds = lbs
+        self.input_upper_bounds = ubs
+        self.input_means = means[:-1]
+        self.input_ranges = ranges[:-1]
+
+        self.output_mean = means[-1]
+        self.output_range = ranges[-1]
+
+        self.path = nnet_path
+
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
+
 
 def read_nnet(nnet_file, with_norm=False):
     '''
