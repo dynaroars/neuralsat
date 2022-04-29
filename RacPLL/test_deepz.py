@@ -22,16 +22,16 @@ def test():
     torch.manual_seed(1)
 
     # net = network.CorinaNet()
-    # lower = torch.Tensor([-5, -4])
-    # upper = torch.Tensor([-1, -2])
+    lower = torch.Tensor([-1, -2])
+    upper = torch.Tensor([1, 2])
 
     # net = network.FC(input_size=5, hidden_sizes=[5, 4, 3, 5])
-    lower = torch.Tensor([-5, -4, -3, -2, -1])
-    upper = torch.Tensor([1, -2, 1, 2, 3])
+    # lower = torch.Tensor([-5, -4, -3, -2, -1])
+    # upper = torch.Tensor([1, -2, 1, 2, 3])
 
     # net = Network('example/random.nnet')
-    nnet_name = 'benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet'
-    # nnet_name = 'example/random.nnet'
+    # nnet_name = 'benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet'
+    nnet_name = 'example/random.nnet'
     net = NetworkTorch(nnet_name)
 
     try:

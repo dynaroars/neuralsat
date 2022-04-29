@@ -104,10 +104,11 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         # print()
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        # print('lower after:', self.bounds[0].numpy().tolist())
-        # print('upper after:', self.bounds[1].numpy().tolist())
-        # print('--------end linear--------')
-        # print()
+        print('--------start linear--------')
+        print('lower:', self.bounds[0].numpy().tolist())
+        print('upper:', self.bounds[1].numpy().tolist())
+        print('--------end linear--------')
+        print()
         return self.bounds
     
     def back_sub(self, max_steps):
@@ -279,10 +280,11 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        # print('lower after:', self.bounds[0].numpy().tolist())
-        # print('upper after:', self.bounds[1].numpy().tolist())
-        # print('--------end relu--------')
-        # print()
+        print('--------start relu--------')
+        print('lower:', self.bounds[0].numpy().tolist())
+        print('upper:', self.bounds[1].numpy().tolist())
+        print('--------end relu--------')
+        print()
         return self.bounds
 
     def __str__(self):

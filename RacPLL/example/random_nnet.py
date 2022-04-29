@@ -53,11 +53,11 @@ def writeNNet(weights,biases,inputMins,inputMaxes,means,ranges,fileName):
         for w,b in zip(weights,biases):
             for i in range(w.shape[0]):
                 for j in range(w.shape[1]):
-                    f2.write("%.5e," % w[i][j])
+                    f2.write("%.5f," % w[i][j])
                 f2.write("\n")
                 
             for i in range(len(b)):
-                f2.write("%.5e,\n" % b[i])
+                f2.write("%.5f,\n" % b[i])
 
 def weights_correctness(weights, num_neurons):
     error_msg = "weights is inconsistent with num_neurons"
@@ -89,7 +89,7 @@ class Model:
             self.weights = weights
         else:
             for l in range(1, self.num_layers):
-                self.weights[l] = np.round(np.random.normal(0, 0.1, size=(num_neurons[l], num_neurons[l-1])), 1) * 10
+                self.weights[l] = np.round(np.random.normal(0, 1.0, size=(num_neurons[l], num_neurons[l-1])), 1) * 10
 
         if bias is not None:
             bias_correctness(bias, num_neurons)
@@ -117,6 +117,6 @@ class Model:
 
 if __name__ == '__main__':
     nnet_name = 'random.nnet'
-    num_neurons = [2, 4, 4, 2]
+    num_neurons = [2, 2, 2]
     model = Model(num_neurons)
     model.save(nnet_name)
