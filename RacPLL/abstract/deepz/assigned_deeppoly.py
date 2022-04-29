@@ -277,6 +277,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
             self.beta[inactive_ind] = torch.zeros_like(self.beta[inactive_ind])
             self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind])
 
+            self.bounds[:, inactive_ind] = torch.zeros_like(self.bounds[:, inactive_ind])
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
@@ -358,7 +359,7 @@ if __name__ == '__main__':
     d = AssignedDeepPoly(net, back_sub_steps=100)
 
     # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
-    assignment = {1: True, 2: None}
+    assignment = {1: False, 2: None}
     print(assignment)
     print()
 
