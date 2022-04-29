@@ -104,11 +104,11 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         # print()
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        print('--------start linear--------')
-        print('lower:', self.bounds[0].numpy().tolist())
-        print('upper:', self.bounds[1].numpy().tolist())
-        print('--------end linear--------')
-        print()
+        # print('--------start linear--------')
+        # print('lower:', self.bounds[0].numpy().tolist())
+        # print('upper:', self.bounds[1].numpy().tolist())
+        # print('--------end linear--------')
+        # print()
         return self.bounds
     
     def back_sub(self, max_steps):
@@ -256,7 +256,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
         # print()
 
         if assignment is not None:
-            la = np.array([assignment[i] for i in self.layers_mapping[self.idx]])
+            la = np.array([assignment.get(i, None) for i in self.layers_mapping[self.idx]])
 
             # print('\t- assignment:', self.layers_mapping[self.idx])
             # print('\t- layer assignment:', la)
@@ -270,7 +270,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
             inactive_ind = la==False
 
             self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind])
-            self.beta[active_ind] = torch.ones_like(self.beta[active_ind])
+            self.beta[active_ind] = torch.zeros_like(self.beta[active_ind])
             self.mu[active_ind] = torch.zeros_like(self.mu[active_ind])
 
             self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind])
@@ -280,11 +280,11 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        print('--------start relu--------')
-        print('lower:', self.bounds[0].numpy().tolist())
-        print('upper:', self.bounds[1].numpy().tolist())
-        print('--------end relu--------')
-        print()
+        # print('--------start relu--------')
+        # print('lower:', self.bounds[0].numpy().tolist())
+        # print('upper:', self.bounds[1].numpy().tolist())
+        # print('--------end relu--------')
+        # print()
         return self.bounds
 
     def __str__(self):
@@ -351,13 +351,14 @@ if __name__ == '__main__':
     net = NetworkTorch('example/random.nnet')
 
     # net = CorinaNet().eval()
-    lower = torch.Tensor([-2, 1])
-    upper = torch.Tensor([2, 3])
+    lower = torch.Tensor([-1, -2])
+    upper = torch.Tensor([1, 2])
     
 
     d = AssignedDeepPoly(net, back_sub_steps=100)
 
-    assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
+    # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
+    assignment = {1: False, 2: True, 3: None, 4: None}
     print(assignment)
     print()
 
