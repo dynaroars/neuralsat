@@ -87,6 +87,9 @@ class NetworkTorch(nn.Module):
             if i < n_layers - 1:
                 layers.append(nn.ReLU())
         
+        self.input_shape = (None, weights[0].shape[1])
+        self.output_shape = (None, weights[-1].shape[0])
+        
         self.input_lower_bounds = lbs
         self.input_upper_bounds = ubs
         self.input_means = means[:-1]
@@ -99,6 +102,7 @@ class NetworkTorch(nn.Module):
 
         self.layers = nn.Sequential(*layers)
 
+    @torch.no_grad()
     def forward(self, x):
         return self.layers(x)
 

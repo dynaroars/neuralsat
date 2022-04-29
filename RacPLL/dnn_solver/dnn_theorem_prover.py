@@ -1,5 +1,6 @@
 from pprint import pprint
 import gurobipy as grb
+import torch.nn as nn
 import numpy as np
 import torch
 import time
@@ -24,6 +25,8 @@ class DNNTheoremProver:
         self.dnn = dnn
         self.layers_mapping = layers_mapping
         self.spec = spec
+
+        print(self.layers_mapping)
 
         self.model = grb.Model()
         self.model.setParam('OutputFlag', False)
@@ -50,6 +53,7 @@ class DNNTheoremProver:
 
         # clean trash
         os.system('rm -rf gurobi/*')
+        os.makedirs('gurobi', exist_ok=True)
 
 
     @property
@@ -125,11 +129,11 @@ class DNNTheoremProver:
                     [self._get_equation(output[i]) for i in range(self.n_outputs)]
                 )
             else:
-                if type(layer) is Linear:
+                if isinstance(layer, nn.Linear):
                     output = layer.weight.mm(inputs)
                     output[:, -1] += layer.bias
 
-                elif type(layer) is ReLU:
+                elif isinstance(layer, nn.ReLU):
                     inputs = torch.zeros(output.shape)
                     for i, v in enumerate(variables):
                         status = assignment.get(v, None)

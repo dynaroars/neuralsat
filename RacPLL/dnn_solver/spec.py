@@ -6,8 +6,8 @@ import torch
 def get_acasxu_bounds(p):
     if p == 0:
         return { # debug
-            'lbs' : [-30, -30, -30],
-            'ubs' : [30, 30, 30],
+            'lbs' : [-1, -2],
+            'ubs' : [1, 2],
         }
 
     if p == 1:
