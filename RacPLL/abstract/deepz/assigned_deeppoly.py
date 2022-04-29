@@ -44,7 +44,7 @@ class AssignedDeepPoly:
         return self.bounds[0], self.bounds[1]
 
     def get_params(self):
-        return self.transformer[-1].params    
+        return self.layers[-1].params    
 
 class AssignedDeepPolyInputTransformer(nn.Module):
     def __init__(self, last=None):
@@ -104,11 +104,11 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         # print()
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        # print('--------start linear--------')
-        # print('lower:', self.bounds[0].numpy().tolist())
-        # print('upper:', self.bounds[1].numpy().tolist())
-        # print('--------end linear--------')
-        # print()
+        print('--------start linear--------')
+        print('lower:', self.bounds[0].numpy().tolist())
+        print('upper:', self.bounds[1].numpy().tolist())
+        print('--------end linear--------')
+        print()
         return self.bounds
     
     def back_sub(self, max_steps):
@@ -280,11 +280,11 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        # print('--------start relu--------')
-        # print('lower:', self.bounds[0].numpy().tolist())
-        # print('upper:', self.bounds[1].numpy().tolist())
-        # print('--------end relu--------')
-        # print()
+        print('--------start relu--------')
+        print('lower:', self.bounds[0].numpy().tolist())
+        print('upper:', self.bounds[1].numpy().tolist())
+        print('--------end relu--------')
+        print()
         return self.bounds
 
     def __str__(self):
@@ -358,7 +358,7 @@ if __name__ == '__main__':
     d = AssignedDeepPoly(net, back_sub_steps=100)
 
     # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
-    assignment = {1: False, 2: True, 3: None, 4: None}
+    assignment = {1: None, 2: True}
     print(assignment)
     print()
 
@@ -366,15 +366,21 @@ if __name__ == '__main__':
     l, u = d(lower, upper, assignment=None)
     print(l)
     print(u)
+    Ml, Mu, bl, bu = d.get_params()
+    print('Ml', Ml.numpy().tolist())
+    print('Mu', Mu.numpy().tolist())
+    print('bl', bl.numpy().tolist())
+    print('bu', bu.numpy().tolist())
     print()
 
     print('With assignment')
     l, u = d(lower, upper, assignment=assignment)
     print(l)
     print(u)
+    print(d.get_params())
 
-    # Ml, Mu, bl, bu = d.get_params()
-    # print('Ml', Ml)
-    # print('Mu', Mu)
-    # print('bl', bl)
-    # print('bu', bu)
+    Ml, Mu, bl, bu = d.get_params()
+    print('Ml', Ml.numpy().tolist())
+    print('Mu', Mu.numpy().tolist())
+    print('bl', bl.numpy().tolist())
+    print('bu', bu.numpy().tolist())
