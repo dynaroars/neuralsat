@@ -356,7 +356,7 @@ if __name__ == '__main__':
     upper = torch.Tensor([1, 2])
     
 
-    d = AssignedDeepPoly(net, back_sub_steps=100)
+    d = AssignedDeepPoly(net, back_sub_steps=0)
 
     # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
     assignment = {1: False, 2: None}
