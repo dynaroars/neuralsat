@@ -270,7 +270,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
             inactive_ind = la==False
 
             self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind])
-            self.beta[active_ind] = torch.zeros_like(self.beta[active_ind])
+            self.beta[active_ind] = torch.ones_like(self.beta[active_ind])
             self.mu[active_ind] = torch.zeros_like(self.mu[active_ind])
 
             self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind])
