@@ -358,7 +358,7 @@ if __name__ == '__main__':
     d = AssignedDeepPoly(net, back_sub_steps=100)
 
     # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
-    assignment = {1: None, 2: True}
+    assignment = {1: True, 2: None}
     print(assignment)
     print()
 
