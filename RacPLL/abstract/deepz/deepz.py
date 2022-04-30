@@ -1,11 +1,6 @@
 import torch.nn as nn
 import torch
-import itertools
-from joblib import Parallel, delayed
 import os
-
-from utils.read_nnet import ReLU, Linear
-import utils
 
 
 def relu_transform(center, error):
@@ -51,6 +46,8 @@ def linear_transform(layer, center, error):
     center = layer.weight.mm(center.unsqueeze(-1))
     center = center.squeeze()
     if layer.bias is not None:
+        if len(layer.bias) == 1:
+            center = center.unsqueeze(0)
         center += layer.bias
     error = error.mm(layer.weight.permute(1, 0))
     return center, error
@@ -67,7 +64,10 @@ def get_bound(center, error):
     error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
     ub = center + error_apt
     lb = center - error_apt
-    return lb.squeeze(), ub.squeeze()
+    lb, ub = lb.squeeze(), ub.squeeze()
+    if len(lb.squeeze().shape) == 0:
+        return lb.unsqueeze(0), ub.unsqueeze(0)
+    return lb, ub
 
 
 @torch.no_grad()
@@ -83,11 +83,11 @@ def forward(net, lower, upper):
     hidden_bounds = []
 
     for layer in net.layers:
-        if isinstance(layer, Linear) or isinstance(layer, nn.Linear):
+        if isinstance(layer, nn.Linear):
             center, error = linear_transform(layer, center, error)
-        elif isinstance(layer, ReLU) or isinstance(layer, nn.ReLU):
-            center, error = relu_transform(center, error)
+        elif isinstance(layer, nn.ReLU):
             hidden_bounds.append(get_bound(center, error))
+            center, error = relu_transform(center, error)
         else:
             raise NotImplementedError
 

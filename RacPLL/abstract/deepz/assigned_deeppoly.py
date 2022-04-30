@@ -38,10 +38,13 @@ class AssignedDeepPoly:
     @torch.no_grad()
     def __call__(self, lower, upper, assignment=None):
         bounds = (lower, upper)
+        hidden_bounds = []
         for layer in self.layers:
+            if isinstance(layer, AssignedDeepPolyReLUTansformer):
+                hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
             bounds = layer(bounds, assignment)
         self.bounds = bounds
-        return self.bounds[0], self.bounds[1]
+        return (self.bounds[0], self.bounds[1]), hidden_bounds
 
     def get_params(self):
         return self.layers[-1].params    
@@ -104,11 +107,11 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         # print()
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        print('--------start linear--------')
-        print('lower:', self.bounds[0].numpy().tolist())
-        print('upper:', self.bounds[1].numpy().tolist())
-        print('--------end linear--------')
-        print()
+        # print('--------start linear--------')
+        # print('lower:', self.bounds[0].numpy().tolist())
+        # print('upper:', self.bounds[1].numpy().tolist())
+        # print('--------end linear--------')
+        # print()
         return self.bounds
     
     def back_sub(self, max_steps):
@@ -281,11 +284,11 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
-        print('--------start relu--------')
-        print('lower:', self.bounds[0].numpy().tolist())
-        print('upper:', self.bounds[1].numpy().tolist())
-        print('--------end relu--------')
-        print()
+        # print('--------start relu--------')
+        # print('lower:', self.bounds[0].numpy().tolist())
+        # print('upper:', self.bounds[1].numpy().tolist())
+        # print('--------end relu--------')
+        # print()
         return self.bounds
 
     def __str__(self):

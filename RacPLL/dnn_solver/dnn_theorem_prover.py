@@ -9,8 +9,7 @@ import re
 import os
 
 from dnn_solver.utils import DNFConstraint
-from utils.read_nnet import ReLU, Linear
-from abstract.reluval import reluval
+# from abstract.reluval import reluval
 from abstract.deepz import deepz
 # from abstract.eran import eran
 import settings
@@ -232,18 +231,6 @@ class DNNTheoremProver:
                     if abt_status != status:
                         return False, None
                         raise
-
-
-            if settings.HEURISTIC_DEEPPOLY: 
-                lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
-                ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
-                
-                # eran deepzono
-                lower, upper = self.deeppoly(lbs, ubs)
-
-                self.restore_input_bounds()
-                if not self.spec.check_output_reachability(lower, upper): # conflict
-                    return False, None
 
             self.restore_input_bounds()
         # imply next hidden nodes

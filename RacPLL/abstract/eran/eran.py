@@ -49,11 +49,11 @@ class ERAN:
                                 partial_milp=partial_milp, max_milp_neurons=max_milp_neurons,
                                 approx_k=approx_k)
         element, nlb, nub = analyzer.get_abstract0()
-        for i in range(len(nlb)):
-            print('lower:', nlb[i])
-            print('upper:', nub[i])
-            print()
-        print('-------------')
+        # for i in range(len(nlb)):
+        #     print('lower:', nlb[i])
+        #     print('upper:', nub[i])
+        #     print()
+        # print('-------------')
 
         return torch.Tensor(nlb[-1]), torch.Tensor(nub[-1])
 

@@ -1,10 +1,6 @@
 import torch.nn as nn
 import torch
 
-from utils.read_nnet import ReLU, Linear
-import utils
-
-
 def _pos(x):
     return torch.clamp(x, 0, torch.inf)
 
@@ -100,9 +96,9 @@ def forward(net, lower, upper, return_grad_mask=False):
     grad_mask = {}
 
     for layer_id, layer in enumerate(net.layers):
-        if isinstance(layer, nn.Linear) or isinstance(layer, Linear):
+        if isinstance(layer, nn.Linear):
             eq_lower, eq_upper = linear_transform(layer, eq_lower, eq_upper)
-        elif isinstance(layer, nn.ReLU) or isinstance(layer, ReLU):
+        elif isinstance(layer, nn.ReLU):
             (eq_lower, eq_upper), grad_mask_l = relu_transform(eq_lower, eq_upper,
                                                                lower, upper,
                                                                input_bounds=(o_l_l, o_u_u))

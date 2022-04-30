@@ -6,7 +6,7 @@ import tensorflow as tf
 import sortedcontainers
 import numpy as np
 
-from utils.read_nnet import Network, Linear
+from utils.read_nnet import NetworkTorch
 
 class InputParser:
 
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # model = model_random(3, [7, 5, 6], 5)
     # model.save('../example/model.keras')
     # model = keras.models.load_model('../example/model.keras')
-    model = Network('example/random.nnet')
+    model = NetworkTorch('example/random.nnet')
     vars_mapping, layers_mapping = InputParser.parse(model)
 
     # pprint(dnn)

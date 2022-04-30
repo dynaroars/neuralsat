@@ -7,7 +7,7 @@ from abstract.reluval import reluval
 import time
 from abstract.neurify import neurify
 
-from utils.read_nnet import Network, NetworkTorch
+from utils.read_nnet import NetworkTorch
 
 
 def plot_z():
@@ -54,7 +54,6 @@ def test():
         # print('lbs:', lbs)
         # print('ubs:', ubs)
         # print()
-        
 
     except:
         print('[!] Cannot import ERAN\n')
@@ -76,10 +75,16 @@ def test():
 
 
     tic = time.time()
-    (lbs, ubs), _ = deepz.forward(net, lower, upper)
+    (lbs, ubs), hidden_bounds = deepz.forward(net, lower, upper)
     print('DeepZ', time.time() - tic)
     print('lbs:', lbs)
     print('ubs:', ubs)
+    print()
+    for idx, (l, u) in enumerate(hidden_bounds):
+        print(idx)
+        print('lower', l.numpy().tolist())
+        print('upper', u.numpy().tolist())
+
     print()
 
     # try:
@@ -96,11 +101,15 @@ def test():
     try:
         d = assigned_deeppoly.AssignedDeepPoly(net, back_sub_steps=100)
         tic = time.time()
-        lbs, ubs = d(lower, upper)
+        (lbs, ubs), hidden_bounds = d(lower, upper)
         print('AssignedDeepPoly (python)', time.time() - tic)
         print('lbs:', lbs)
         print('ubs:', ubs)
         print()
+        for idx, (l, u) in enumerate(hidden_bounds):
+            print(idx)
+            print('lower', l.numpy().tolist())
+            print('upper', u.numpy().tolist())
     except:
         raise
         print('[!] AssignedDeepPoly error')
