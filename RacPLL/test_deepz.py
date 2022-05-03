@@ -116,6 +116,16 @@ def test():
 
 
 
+def test_paper():
+    lower = torch.Tensor([-1, -2])
+    upper = torch.Tensor([1, 2])
+    nnet_name = 'example/paper.nnet'
+    net = NetworkTorch(nnet_name)
+
+    (lbs, ubs), _ = deepz.forward(net, lower, upper)
+    print('lbs:', lbs)
+    print('ubs:', ubs)
+
 
 if __name__ == '__main__':
-    test()
+    test_paper()
