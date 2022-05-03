@@ -162,9 +162,46 @@ class DNNTheoremProver:
             else:
                 self.constraints.append(self.model.addConstr(substitute_dict_torch[node] <= 0))
 
+        # debug
+        if settings.DEBUG:
+            self.model.write(f'gurobi/{self.count}.lp')
+
+
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
             return False, None
+
+        # output
+        if return_output:
+            if type(output_constraint) is DNFConstraint:
+                flag_sat = False
+                for cnf in output_constraint.constraints:
+                    ci = [self.model.addConstr(_) for _ in cnf]
+                    self._optimize()
+                    if self.model.status == grb.GRB.OPTIMAL:
+                        flag_sat = True
+                    self.model.remove(ci)
+                    if flag_sat:
+                        break
+                if flag_sat:
+                    self.solution = self.get_solution()
+                else:
+                    return False, None
+
+            else:
+                if type(output_constraint) is list:
+                    self.constraints += [self.model.addConstr(_) for _ in output_constraint]
+                else:
+                    self.constraints.append(self.model.addConstr(output_constraint))
+
+                self._optimize()
+                if self.model.status == grb.GRB.INFEASIBLE:
+                    return False, None
+
+                self.solution = self.get_solution()
+
+            return True, {}
+
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
 
@@ -263,38 +300,6 @@ class DNNTheoremProver:
                 if node != 2:
                     implications[node] = {'pos': value==1, 'neg': value==-1}
 
-        # debug
-        if settings.DEBUG:
-            self.model.write(f'gurobi/{self.count}.lp')
-
-        # output
-        if return_output:
-            if type(output_constraint) is DNFConstraint:
-                flag_sat = False
-                for cnf in output_constraint.constraints:
-                    ci = [self.model.addConstr(_) for _ in cnf]
-                    self._optimize()
-                    if self.model.status == grb.GRB.OPTIMAL:
-                        flag_sat = True
-                    self.model.remove(ci)
-                    if flag_sat:
-                        break
-                if flag_sat:
-                    self.solution = self.get_solution()
-                else:
-                    return False, None
-
-            else:
-                if type(output_constraint) is list:
-                    self.constraints += [self.model.addConstr(_) for _ in output_constraint]
-                else:
-                    self.constraints.append(self.model.addConstr(output_constraint))
-
-                self._optimize()
-                if self.model.status == grb.GRB.INFEASIBLE:
-                    return False, None
-
-                self.solution = self.get_solution()
 
         return True, implications
 

@@ -343,10 +343,10 @@ class CustomSATSolver(Solver):
             count_neg = self._unassigned_vsids_count.get(-variable, 0)
             if count_pos >= count_neg:
                 self._unassigned_vsids_count.pop(variable)
-                self._assign(None, variable)
+                self._assign(None, -variable)
             else:
                 self._unassigned_vsids_count.pop(-variable)
-                self._assign(None, -variable)
+                self._assign(None, variable)
             count += 1
             if settings.DEBUG:
                 print(f'- [{count}] Choose: variable=`{variable}`\n')

@@ -82,8 +82,13 @@ def forward(net, lower, upper):
 
     hidden_bounds = []
 
+    print('input')
     print('center', center.numpy().tolist())
     print('error', error.numpy().tolist())
+    l, u = get_bound(center, error)
+    print('l', l.numpy().tolist())
+    print('u', u.numpy().tolist())
+    print()
     
     for layer in net.layers:
         if isinstance(layer, nn.Linear):
@@ -93,6 +98,7 @@ def forward(net, lower, upper):
             center, error = relu_transform(center, error)
         else:
             raise NotImplementedError
+        
         print(layer)
         print('center', center.numpy().tolist())
         print('error', error.numpy().tolist())
