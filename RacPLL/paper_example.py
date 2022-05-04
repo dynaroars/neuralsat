@@ -5,6 +5,7 @@ import time
 
 if __name__ == '__main__':
     name = 'example/paper.nnet'
+    name = 'example/random.nnet'
 
     # model = random_nnet.Model([2, 2, 2, 1])
     # model.save(name)

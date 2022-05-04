@@ -10,7 +10,7 @@ import os
 
 from dnn_solver.utils import DNFConstraint
 # from abstract.reluval import reluval
-from abstract.deepz import deepz
+from abstract.deepz import deepz, assigned_deeppoly
 # from abstract.eran import eran
 import settings
 
@@ -25,7 +25,6 @@ class DNNTheoremProver:
         self.layers_mapping = layers_mapping
         self.spec = spec
 
-        print(self.layers_mapping)
 
         self.model = grb.Model()
         self.model.setParam('OutputFlag', False)
@@ -48,7 +47,8 @@ class DNNTheoremProver:
         self.constraints = []
 
         if settings.HEURISTIC_DEEPPOLY:
-            self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
+            # self.deeppoly = eran.ERAN(self.dnn.path[:-4] + 'onnx', 'deeppoly')
+            self.deeppoly = assigned_deeppoly.AssignedDeepPoly(dnn, back_sub_steps=100)
 
         # clean trash
         os.system('rm -rf gurobi/*')
@@ -112,7 +112,7 @@ class DNNTheoremProver:
         self.constraints = []
 
         imply_nodes = self._find_nodes(assignment)
-        return_output = True if imply_nodes is None else False
+        is_full_assignment = True if imply_nodes is None else False
 
         substitute_dict_torch = {}
 
@@ -150,7 +150,7 @@ class DNNTheoremProver:
                 else:
                     raise NotImplementedError
 
-                if flag_break and (not return_output):
+                if flag_break and (not is_full_assignment):
                     break
 
         for node in substitute_dict_torch:
@@ -169,10 +169,13 @@ class DNNTheoremProver:
 
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
-            return False, None
+            return False, None, is_full_assignment
+
+        if settings.DEBUG:
+            print('[+] Check assignment: `SAT`')
 
         # output
-        if return_output:
+        if is_full_assignment:
             if type(output_constraint) is DNFConstraint:
                 flag_sat = False
                 for cnf in output_constraint.constraints:
@@ -186,7 +189,7 @@ class DNNTheoremProver:
                 if flag_sat:
                     self.solution = self.get_solution()
                 else:
-                    return False, None
+                    return False, None, is_full_assignment
 
             else:
                 if type(output_constraint) is list:
@@ -196,11 +199,11 @@ class DNNTheoremProver:
 
                 self._optimize()
                 if self.model.status == grb.GRB.INFEASIBLE:
-                    return False, None
+                    return False, None, is_full_assignment
 
                 self.solution = self.get_solution()
 
-            return True, {}
+            return True, {}, is_full_assignment
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -226,50 +229,61 @@ class DNNTheoremProver:
                 
             if not self.update_input_bounds(lbs, ubs): # conflict
                 self.restore_input_bounds()
-                return False, None
+                return False, None, is_full_assignment
 
             # reset objective
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
 
-            if settings.HEURISTIC_DEEPZONO: 
-                lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
-                ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
-                
-                # eran deepzono
+            lbs = torch.Tensor([var.lb for var in self.gurobi_vars])
+            ubs = torch.Tensor([var.ub for var in self.gurobi_vars])
+
+            if settings.DEBUG:
+                print('[+] HEURISTIC input')
+                print('\t- lower:', lbs.data)
+                print('\t- upper:', ubs.data)
+
+            if settings.HEURISTIC_DEEPZONO: # eran deepzono
                 (lower, upper), hidden_bounds = deepz.forward(self.dnn, lbs, ubs)
 
-                # TODO: reluval
-                # lower2, upper2 = reluval.forward_nnet(self.dnn, lbs, ubs)
-
                 if settings.DEBUG:
-                    print('[+] HEURISTIC_DEEPZONO input')
-                    print('\t- lower:', lbs.data)
-                    print('\t- upper:', ubs.data)
-
-                    print('[+] HEURISTIC_DEEPZONO output')
+                    print('[+] HEURISTIC DEEPZONO output')
                     print('\t- lower:', lower)
                     print('\t- upper:', upper)
 
-                self.restore_input_bounds()
-                if not self.spec.check_output_reachability(lower, upper): # conflict
-                    return False, None
+            elif settings.HEURISTIC_DEEPPOLY:
+                if settings.HEURISTIC_DEEPPOLY_W_ASSIGNMENT:
+                    (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment=assignment)
 
-                signs = {}
-                for idx, (lb, ub) in enumerate(hidden_bounds):
-                    sign = 2 * torch.ones(len(lb), dtype=int) 
-                    sign[lb >= 0] = 1
-                    sign[ub == 0] = -1
-                    signs.update(dict(zip(self.layers_mapping[idx], sign.numpy())))
+                    if settings.DEBUG:
+                        print('[+] HEURISTIC DEEPPOLY output (w assignment)')
+                        print('\t- lower:', lower)
+                        print('\t- upper:', upper)
+                else:
+                    (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment=None)
 
-                for node, status in assignment.items():
-                    if signs[node] == 2:
-                        continue
-                    abt_status = signs[node] == 1
-                    if abt_status != status:
-                        return False, None
-                        raise
+                    if settings.DEBUG:
+                        print('[+] HEURISTIC DEEPPOLY output (w/o assignment)')
+                        print('\t- lower:', lower)
+                        print('\t- upper:', upper)
 
             self.restore_input_bounds()
+            if not self.spec.check_output_reachability(lower, upper): # conflict
+                return False, None, is_full_assignment
+
+            signs = {}
+            for idx, (lb, ub) in enumerate(hidden_bounds):
+                sign = 2 * torch.ones(len(lb), dtype=int) 
+                sign[lb >= 0] = 1
+                sign[ub <= 0] = -1
+                signs.update(dict(zip(self.layers_mapping[idx], sign.numpy())))
+
+            for node, status in assignment.items():
+                if signs[node] == 2:
+                    continue
+                abt_status = signs[node] == 1
+                if abt_status != status:
+                    return False, None, is_full_assignment
+
         # imply next hidden nodes
         implications = {}
         if imply_nodes:
@@ -293,7 +307,7 @@ class DNNTheoremProver:
                 else:
                     self.model.remove(ci)
 
-        if settings.TIGHTEN_BOUND and settings.HEURISTIC_DEEPZONO:
+        if settings.TIGHTEN_BOUND:
             for node, value in signs.items():
                 if node in implications or node in assignment:
                     continue
@@ -301,7 +315,7 @@ class DNNTheoremProver:
                     implications[node] = {'pos': value==1, 'neg': value==-1}
 
 
-        return True, implications
+        return True, implications, is_full_assignment
 
     def _optimize(self):
         self.model.update()
@@ -322,3 +336,5 @@ class DNNTheoremProver:
             var.lb = self.lbs_init[i]
             var.ub = self.ubs_init[i]
         self.model.update()
+
+

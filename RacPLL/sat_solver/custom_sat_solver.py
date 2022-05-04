@@ -49,6 +49,8 @@ class CustomSATSolver(Solver):
         for clause in self._formula:
             self._add_clause(clause)
 
+        self.start = True
+
     def _add_clause(self, clause):
         """
         Initialize all clause data structures for the given clause.
@@ -294,11 +296,14 @@ class CustomSATSolver(Solver):
         return None
 
     def propagate(self) -> bool:
-        if not self._constraint_propagation_to_exhaustion(self._tcp):
-            return False
+        if self.start:
+            self.start = False
+            if not self._constraint_propagation_to_exhaustion(self._tcp):
+                return False
+
         while self._last_assigned_literals:
             if (not self._constraint_propagation_to_exhaustion(self._bcp)) or \
-                    ((self._theory_solver is not None) and (not self._constraint_propagation_to_exhaustion(self._tcp))):
+                ((self._theory_solver is not None) and (not self._constraint_propagation_to_exhaustion(self._tcp))):
                 return False
         return True
 

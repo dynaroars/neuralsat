@@ -118,7 +118,7 @@ def test():
 
 def test_paper():
     lower = torch.Tensor([-1, -2])
-    upper = torch.Tensor([1, 2])
+    upper = torch.Tensor([-1, 0])
     nnet_name = 'example/paper.nnet'
     net = NetworkTorch(nnet_name)
 
@@ -128,4 +128,5 @@ def test_paper():
 
 
 if __name__ == '__main__':
-    test_paper()
+    test()
+    # test_paper()
