@@ -1,4 +1,6 @@
+from utils.read_vnnlib import read_vnnlib_simple
 from dnn_solver.utils import DNFConstraint
+
 import itertools
 import random
 import torch
@@ -95,10 +97,10 @@ class Specification:
             return output[0] >= 3.991125645861615
 
         if self.p == 2: # Unsafe if COC is maximal
-            return [output[0] >= output[1],
-                    output[0] >= output[2],
-                    output[0] >= output[3],
-                    output[0] >= output[4]]
+            return [output[1] <= output[0],
+                    output[2] <= output[0],
+                    output[3] <= output[0],
+                    output[4] <= output[0]]
 
         if self.p == 3 or self.p == 4: # Unsafe if COC is minimal
             return [output[0] <= output[1],
@@ -228,3 +230,35 @@ class Specification:
                         ubs[0] >= lbs[4]])
 
         raise NotImplementedError
+
+
+
+class SpecificationVNNLIB:
+
+    def __init__(self, spec):
+
+        self.bounds, self.mat = spec
+
+        # print(self.mat)
+
+    def get_input_property(self):
+        return {
+            'lbs': [b[0] for b in self.bounds],
+            'ubs': [b[1] for b in self.bounds]
+        }
+
+    def get_output_property(self, output):
+        dnf =  []
+        for lhs, rhs in self.mat:
+            cnf = []
+            print(lhs)
+            print(rhs)
+            print()
+            for l, r in zip(lhs, rhs):
+                print(l, r)
+            print()
+        pass
+
+
+    def check_output_reachability(self, lbs, ubs):
+        pass
