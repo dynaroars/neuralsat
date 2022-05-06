@@ -8,8 +8,6 @@ import copy
 import re
 import os
 
-# from dnn_solver.utils import DNFConstraint
-# from abstract.reluval import reluval
 from abstract.deepz import deepz, assigned_deeppoly
 # from abstract.eran import eran
 import settings
@@ -17,7 +15,7 @@ import settings
 
 class DNNTheoremProver:
 
-    epsilon = 1e-8
+    epsilon = 1e-6
     skip = 1e-3
 
     def __init__(self, dnn, layers_mapping, spec):
@@ -78,7 +76,7 @@ class DNNTheoremProver:
                 return False
 
         for i, var in enumerate(self.gurobi_vars):
-            if abs(lbs[i] - ubs[i]) < DNNTheoremProver.skip: # concretize
+            if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
                 var.lb = lbs[i]
                 var.ub = lbs[i]
                 continue
@@ -128,8 +126,6 @@ class DNNTheoremProver:
                 output_constraint = self.spec.get_output_property(
                     [self._get_equation(output[i]) for i in range(self.n_outputs)]
                 )
-                # print(output_constraint)
-                # exit()
             else:
                 if isinstance(layer, nn.Linear):
                     output = layer.weight.mm(inputs)
@@ -179,36 +175,20 @@ class DNNTheoremProver:
 
         # output
         if is_full_assignment:
-            # if type(output_constraint) is DNFConstraint:
             flag_sat = False
             for cnf in output_constraint:
                 ci = [self.model.addConstr(_) for _ in cnf]
                 self._optimize()
                 if self.model.status == grb.GRB.OPTIMAL:
-                    flag_sat = True
+                    if self.spec.check_solution(self.dnn(self.get_solution())):
+                        flag_sat = True
                 self.model.remove(ci)
                 if flag_sat:
                     break
             if flag_sat:
                 self.solution = self.get_solution()
-                if not self.spec.check_solution(self.dnn(self.solution)):
-                    return False, None, is_full_assignment
-                    
                 return True, {}, is_full_assignment
             return False, None, is_full_assignment
-
-            # else:
-            #     if type(output_constraint) is list:
-            #         self.constraints += [self.model.addConstr(_) for _ in output_constraint]
-            #     else:
-            #         self.constraints.append(self.model.addConstr(output_constraint))
-
-            #     self._optimize()
-            #     if self.model.status == grb.GRB.INFEASIBLE:
-            #         return False, None, is_full_assignment
-
-            #     self.solution = self.get_solution()
-
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds

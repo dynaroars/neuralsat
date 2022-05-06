@@ -257,7 +257,4 @@ def read_vnnlib_simple(vnnlib_filename, num_inputs, num_outputs, regression=Fals
 
         final_rv.append((box, spec_list))
 
-    # for i, (box, spec_list) in enumerate(final_rv):
-    #    print(f"-----\n{i+1}. {box}\nspec:{spec_list}")
-
     return final_rv
