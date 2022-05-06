@@ -8,7 +8,7 @@ import copy
 import re
 import os
 
-from dnn_solver.utils import DNFConstraint
+# from dnn_solver.utils import DNFConstraint
 # from abstract.reluval import reluval
 from abstract.deepz import deepz, assigned_deeppoly
 # from abstract.eran import eran
@@ -17,8 +17,8 @@ import settings
 
 class DNNTheoremProver:
 
-    epsilon = 1e-5
-    skip = 1e-4
+    epsilon = 1e-8
+    skip = 1e-3
 
     def __init__(self, dnn, layers_mapping, spec):
         self.dnn = dnn
@@ -30,9 +30,10 @@ class DNNTheoremProver:
         self.model.setParam('OutputFlag', False)
         self.model.setParam('Threads', 16)
 
-        # bounds = self.get_intial_input_bounds()
-        self.lbs_init = torch.Tensor(spec.lower)
-        self.ubs_init = torch.Tensor(spec.upper)
+        # input bounds
+        bounds_init = self.spec.get_input_property()
+        self.lbs_init = torch.Tensor(bounds_init['lbs'])
+        self.ubs_init = torch.Tensor(bounds_init['ubs'])
 
         self.gurobi_vars = [
             self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
@@ -127,6 +128,8 @@ class DNNTheoremProver:
                 output_constraint = self.spec.get_output_property(
                     [self._get_equation(output[i]) for i in range(self.n_outputs)]
                 )
+                # print(output_constraint)
+                # exit()
             else:
                 if isinstance(layer, nn.Linear):
                     output = layer.weight.mm(inputs)
@@ -176,34 +179,36 @@ class DNNTheoremProver:
 
         # output
         if is_full_assignment:
-            if type(output_constraint) is DNFConstraint:
-                flag_sat = False
-                for cnf in output_constraint.constraints:
-                    ci = [self.model.addConstr(_) for _ in cnf]
-                    self._optimize()
-                    if self.model.status == grb.GRB.OPTIMAL:
-                        flag_sat = True
-                    self.model.remove(ci)
-                    if flag_sat:
-                        break
-                if flag_sat:
-                    self.solution = self.get_solution()
-                else:
-                    return False, None, is_full_assignment
-
-            else:
-                if type(output_constraint) is list:
-                    self.constraints += [self.model.addConstr(_) for _ in output_constraint]
-                else:
-                    self.constraints.append(self.model.addConstr(output_constraint))
-
+            # if type(output_constraint) is DNFConstraint:
+            flag_sat = False
+            for cnf in output_constraint:
+                ci = [self.model.addConstr(_) for _ in cnf]
                 self._optimize()
-                if self.model.status == grb.GRB.INFEASIBLE:
-                    return False, None, is_full_assignment
-
+                if self.model.status == grb.GRB.OPTIMAL:
+                    flag_sat = True
+                self.model.remove(ci)
+                if flag_sat:
+                    break
+            if flag_sat:
                 self.solution = self.get_solution()
+                if not self.spec.check_solution(self.dnn(self.solution)):
+                    return False, None, is_full_assignment
+                    
+                return True, {}, is_full_assignment
+            return False, None, is_full_assignment
 
-            return True, {}, is_full_assignment
+            # else:
+            #     if type(output_constraint) is list:
+            #         self.constraints += [self.model.addConstr(_) for _ in output_constraint]
+            #     else:
+            #         self.constraints.append(self.model.addConstr(output_constraint))
+
+            #     self._optimize()
+            #     if self.model.status == grb.GRB.INFEASIBLE:
+            #         return False, None, is_full_assignment
+
+            #     self.solution = self.get_solution()
+
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds

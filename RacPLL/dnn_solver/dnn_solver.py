@@ -6,7 +6,6 @@ from dnn_solver.dnn_theorem_prover import DNNTheoremProver
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
 from dnn_solver.utils import InputParser
-from utils.read_nnet import NetworkTorch
 import settings
 
 class TheorySolver(Solver):
@@ -33,9 +32,9 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, model_path, spec):
+    def __init__(self, dnn, spec):
 
-        self.dnn = NetworkTorch(model_path)
+        self.dnn = dnn
         vars_mapping, layers_mapping = InputParser.parse(self.dnn)
 
         super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
