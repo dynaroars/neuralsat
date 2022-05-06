@@ -1,6 +1,6 @@
 import torch
 
-from utils.read_nnet import Network, NetworkTorch
+from utils.read_nnet import NetworkTorch
 from dnn_solver.utils import InputParser
 from abstract.deepz import deepz
 
@@ -8,10 +8,10 @@ from abstract.deepz import deepz
     
 if __name__ == '__main__':
 
-    dnn = Network('example/random.nnet')
+    dnn = NetworkTorch('example/random.nnet')
 
-    upper = torch.Tensor([-1, -2, -3, 1, 2])
-    lower = torch.Tensor([-5, -4, -10, 3, 4])
+    upper = torch.Tensor([-1, -2])
+    lower = torch.Tensor([-5, -4])
 
     (lbs, ubs), _ = deepz.forward(dnn, lower, upper)
 
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     print('lbs:', lbs)
     print('ubs:', ubs)
 
-    # dnn = Network('example/random.nnet')
+    # dnn = NetworkTorch('example/random.nnet')
 
     vars_mapping, layers_mapping = InputParser.parse(dnn)
 
