@@ -2,30 +2,36 @@ import random
 import torch
 import time
 
-class FastFalsify:
+class RandomizedFalsification:
 
-    def __init__(self, net, spec_list):
+    def __init__(self, net, spec):
 
         self.n_inputs = net.input_shape[1]
         self.n_outputs = net.output_shape[1]
         
-        self.spec_list = spec_list
+        self.bounds = spec.bounds
+        self.mat = spec.mat
+
         self.net = net
 
         self.n_runs = 10
-        self.n_samples = 20
+        self.n_samples = 10
 
         self._find_target_and_direction()
 
+        # print('target:', self.targets)
+        # print('direction:', self.directions)
+        # exit()
+
 
     def _find_target_and_direction(self):
-        target_dict = dict.fromkeys(range(self.n_outputs), 0)
-        obj_dict = dict.fromkeys(range(self.n_outputs), 0)
+        self.targets = []
+        self.directions = []
 
-        for spec in self.spec_list[0][1]:
-            arr = spec[0]
-            # print(arr)
-            # print()
+
+        for arr, _ in self.mat:
+            target_dict = dict.fromkeys(range(self.n_outputs), 0)
+            obj_dict = dict.fromkeys(range(self.n_outputs), 0)
             for k in range(len(arr)):
                 for kk in range(len(arr[k])):
                     if (arr[k][kk] != 0):
@@ -34,45 +40,46 @@ class FastFalsify:
                     if (arr[k][kk] < 0):
                         cntr = obj_dict[kk] + 1
                         obj_dict[kk] = cntr
-        self.target = max(target_dict, key=target_dict.get)
-        obj_type = max(obj_dict, key=obj_dict.get)
+            target = max(target_dict, key=target_dict.get)
+            obj_type = max(obj_dict, key=obj_dict.get)
+            if (target == obj_type):
+                direction = 'maximization'
+            else:
+                direction = 'minimization'
 
-        if (self.target == obj_type):
-            self.direction = 'maximization'
-        else:
-            self.direction = 'minimization'
+            self.targets.append(target)
+            self.directions.append(direction)
+            # self.targets = [target]
+            # self.directions = [direction]
+            # break
 
 
-    def eval(self, timeout=2):
+    def eval_constraints(self, input_ranges, constraints=None):
+        # input_ranges = torch.tensor(self.bounds, dtype=torch.float32)
+        # exit()
+        if input_ranges is None:
+            input_ranges = torch.tensor(self.bounds, dtype=torch.float32)
+        stat, adv = self._sampling(input_ranges, self.mat)
+        if stat == 'violated':
+            return stat, adv
+        return 'unknown', None
+
+
+    def eval(self, input_ranges=None, timeout=1):
         start = time.time()
         count = 0
-        tic = time.time()
+        print(input_ranges)
         while True:
             count += 1
             tic = time.time()
-            stat, adv = self._evaluate()
-            print(count, time.time() - tic)
+            stat, adv = self.eval_constraints(input_ranges)
+            # print(count, time.time() - tic)
             if stat == 'violated':
                 return stat, adv
 
             time_elapsed = time.time() - start
             if time_elapsed > timeout:
                 return 'timeout', None
-
-
-    def _evaluate(self):
-        for spec in self.spec_list:
-            input_ranges = torch.tensor(spec[0], dtype=torch.float32)
-            print(input_ranges)
-            output_props = spec[1]
-            # random.seed(0)
-            stat, adv = self._sampling(input_ranges, output_props)
-            if stat == 'violated':
-                return stat, adv
-        return 'unknown', None
-
-    def eval_single_spec_w_constraints(self, spec, constraints=None):
-        pass
 
 
     def _sampling(self, input_ranges, output_props):
@@ -82,7 +89,14 @@ class FastFalsify:
             stat, samples = self._make_samples(input_ranges, output_props)
             if stat == 'violated':
                 return stat, samples
-            pos_samples, neg_samples = self._segregate_samples(samples, old_pos_samples)
+
+            pos_samples, neg_samples = [], []
+            for target, direction in zip(self.targets, self.directions):
+                p, n = self._segregate_samples(samples, old_pos_samples, target=target, direction=direction)
+                pos_samples += p
+                neg_samples += n
+            # print(len(pos_samples + neg_samples))
+
             old_pos_samples = pos_samples
 
             flag = False
@@ -113,18 +127,18 @@ class FastFalsify:
                    input_ranges[dim][1] = temp
 
 
-    def _segregate_samples(self, samples, old_pos_samples):
+    def _segregate_samples(self, samples, old_pos_samples, target=None, direction=None):
         pos_samples = []
         neg_samples = []
 
-        if self.direction == 'maximization':
+        if direction == 'maximization':
             s_out = samples[0][1]
-            large = s_out[self.target]
+            large = s_out[target]
             last_idx = 0
             pos_samples.append(samples[0])
             for i in range(1, len(samples)):
                 s_out = samples[i][1]
-                new_large = s_out[self.target]
+                new_large = s_out[target]
                 if new_large > large:
                     pos_samples.remove(samples[last_idx])
                     pos_samples.append(samples[i])
@@ -137,19 +151,19 @@ class FastFalsify:
             if len(old_pos_samples) > 0:
                 cur_pos_samples1 = pos_samples[0][1]
                 old_pos_samples1 = old_pos_samples[0][1]
-                if old_pos_samples1[self.target] > cur_pos_samples1[self.target]:
+                if old_pos_samples1[target] > cur_pos_samples1[target]:
                     neg_samples.append(pos_samples[0])
                     pos_samples.remove(pos_samples[0])
                     pos_samples.append(old_pos_samples[0])
 
-        elif self.direction == 'minimization':
+        elif direction == 'minimization':
             s_out = samples[0][1]
-            small = s_out[self.target]
+            small = s_out[target]
             last_idx = 0
             pos_samples.append(samples[0])
             for i in range(1, len(samples)):
                 s_out = samples[i][1]
-                new_small = s_out[self.target]
+                new_small = s_out[target]
                 if new_small < small:
                     pos_samples.remove(samples[last_idx])
                     pos_samples.append(samples[i])
@@ -162,7 +176,7 @@ class FastFalsify:
             if len(old_pos_samples) > 0:
                 cur_pos_samples1 = pos_samples[0][1]
                 old_pos_samples1 = old_pos_samples[0][1]
-                if old_pos_samples1[self.target] < cur_pos_samples1[self.target]:
+                if old_pos_samples1[target] < cur_pos_samples1[target]:
                     neg_samples.append(pos_samples[0])
                     pos_samples.remove(pos_samples[0])
                     pos_samples.append(old_pos_samples[0])
