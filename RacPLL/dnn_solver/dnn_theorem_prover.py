@@ -112,6 +112,9 @@ class DNNTheoremProver:
         # debug
         self.count += 1
 
+        if self.solution is not None:
+            return True, {}, None
+
         # reset constraints
         self.model.remove(self.constraints)
         self.restore_input_bounds()
@@ -180,7 +183,7 @@ class DNNTheoremProver:
 
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
-            return False, None, None, None
+            return False, None, None
 
         if settings.DEBUG:
             print('[+] Check assignment: `SAT`')
@@ -208,8 +211,8 @@ class DNNTheoremProver:
 
             if flag_sat:
                 self.solution = self.get_solution()
-                return True, {}, None, is_full_assignment
-            return False, None, None, None
+                return True, {}, is_full_assignment
+            return False, None, None
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -234,7 +237,7 @@ class DNNTheoremProver:
                 lbs = None
                 
             if not self.update_input_bounds(lbs, ubs): # conflict
-                return False, None, None, None
+                return False, None, None
 
             # reset objective
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
@@ -273,7 +276,7 @@ class DNNTheoremProver:
 
 
             if not self.spec.check_output_reachability(lower, upper): # conflict
-                return False, None, None, None
+                return False, None, None
 
             if settings.HEURISTIC_DEEPPOLY:
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
@@ -296,7 +299,7 @@ class DNNTheoremProver:
                     if any(dnf_objval):
                         break
                 if not any(dnf_objval):
-                    return False, None, None, None
+                    return False, None, None
 
 
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
@@ -312,7 +315,7 @@ class DNNTheoremProver:
                     continue
                 abt_status = signs[node] == 1
                 if abt_status != status:
-                    return False, None, None, None
+                    return False, None, None
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             stat, adv = self.rf.eval_constraints(None)
@@ -321,9 +324,10 @@ class DNNTheoremProver:
                 # self.count_rf += 1
                 # print(self.count_rf)
                 # print(self.count_rf, adv, time.time()-self.tic_rf)
-                new_assignment = self.dnn.get_assignment(adv[0], self.layers_mapping)
+                self.solution = adv[0]
+                # new_assignment = self.dnn.get_assignment(adv[0], self.layers_mapping)
                 # print(new_assignment)
-                return True, {}, new_assignment, is_full_assignment
+                return True, {}, is_full_assignment
 
             new_ranges = torch.stack([lbs, ubs], dim=1)
             # print(new_ranges)
@@ -332,9 +336,10 @@ class DNNTheoremProver:
                 # self.count_rf += 1
                 # print(self.count_rf)
                 # print(self.count_rf, adv, time.time()-self.tic_rf)
-                new_assignment = self.dnn.get_assignment(adv[0], self.layers_mapping)
+                self.solution = adv[0]
+                # new_assignment = self.dnn.get_assignment(adv[0], self.layers_mapping)
                 # print(new_assignment)
-                return True, {}, new_assignment, is_full_assignment
+                return True, {}, is_full_assignment
 
         self.restore_input_bounds()
         # imply next hidden nodes
@@ -368,7 +373,7 @@ class DNNTheoremProver:
                     implications[node] = {'pos': value==1, 'neg': value==-1}
 
 
-        return True, implications, None, is_full_assignment
+        return True, implications, is_full_assignment
 
     def _optimize(self):
         self.model.update()

@@ -56,7 +56,7 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
-        theory_sat, implications, falsified_assignment, is_full_assignment = self.dnn_theorem_prover(assignment)
+        theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
 
         if not theory_sat:
             conflict_clause = set()
@@ -73,10 +73,9 @@ class DNNSolver(TheorySolver):
         if settings.DEBUG:
             print('    - Check T-SAT: `SAT`')
 
-        if falsified_assignment is not None:
-            new_assignments = [k if v else -k for k,v in falsified_assignment.items()]
-            self.remove_conflict_clauses()
-            return conflict_clause, new_assignments
+        # if falsified_assignment is not None:
+        #     new_assignments = [k if v else -k for k,v in falsified_assignment.items()]
+        #     return None, new_assignments
 
 
         if is_full_assignment:

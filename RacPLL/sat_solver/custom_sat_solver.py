@@ -110,11 +110,11 @@ class CustomSATSolver(Solver):
         """
         Unassigns the given variable.
         """
-        if variable in self._assignment:
-            del self._assignment[variable]
-            for cur_sign in [variable, -variable]:
-                self._unassigned_vsids_count[cur_sign] = self._assigned_vsids_count[cur_sign]
-                del self._assigned_vsids_count[cur_sign]
+        del self._assignment[variable]
+            
+        for cur_sign in [variable, -variable]:
+            self._unassigned_vsids_count[cur_sign] = self._assigned_vsids_count[cur_sign]
+            del self._assigned_vsids_count[cur_sign]
 
         self._all_vars.add(variable)
         self._layers_mapping[self._reversed_layers_mapping[variable]].add(variable)
