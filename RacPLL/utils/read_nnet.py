@@ -45,6 +45,19 @@ class NetworkTorch(nn.Module):
         return self.layers(x)
 
 
+    @torch.no_grad()
+    def get_assignment(self, x, layers_mapping):
+        idx = 0
+        implication = {}
+        for layer in self.layers:
+            x = layer(x)
+            if isinstance(layer, nn.ReLU):
+                s = torch.zeros_like(x, dtype=int) 
+                s[x > 0] = 1
+                implication.update(dict(zip(layers_mapping[idx], s.numpy().astype(dtype=bool))))
+                idx += 1
+        return implication
+
 def read_nnet(nnet_file, with_norm=False):
     '''
     Read a .nnet file and return list of weight matrices and bias vectors

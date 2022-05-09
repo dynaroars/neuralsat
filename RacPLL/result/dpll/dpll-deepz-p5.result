@@ -1,7 +1,5 @@
  ----------- Testing property 5 ----------- 
 1 1 benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.nnet False 655.6756110191345
-655.6838266849518
-
 1 2 benchmark/acasxu/nnet/ACASXU_run2a_1_2_batch_2000.nnet False 171.0664610862732
 2 3 benchmark/acasxu/nnet/ACASXU_run2a_1_3_batch_2000.nnet True 132.7935802936554
     - solution: tensor([-0.3243,  0.0392, -0.5000, -0.2278, -0.3012])

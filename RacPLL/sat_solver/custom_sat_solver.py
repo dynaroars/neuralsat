@@ -1,3 +1,7 @@
+'''
+    clone from: https://github.com/AvivYaish/SMTsolver/blob/master/smt_solver/sat_solver/sat_solver.py
+'''
+
 from collections import deque, Counter
 from pprint import pprint
 import sortedcontainers
@@ -18,7 +22,7 @@ class CustomSATSolver(Solver):
             self._formula = set()
 
         self._max_new_clauses = max_new_clauses
-        self._halving_period = halving_period  # The time period after which all VSIDS counters are halved
+        self._halving_period = halving_period
         self._theory_solver = theory_solver
 
         self._new_clauses = deque()
@@ -27,13 +31,13 @@ class CustomSATSolver(Solver):
         self._satisfaction_by_level = []
         self._literal_to_clause = {}
         self._satisfied_clauses = set()
-        self._last_assigned_literals = deque()      # a queue of the literals assigned in the last level
-        self._variable_to_watched_clause = {}        # A literal -> set(clause) dictionary.
+        self._last_assigned_literals = deque()
+        self._variable_to_watched_clause = {} 
 
         # VSIDS related fields
         self._unassigned_vsids_count = Counter()
         self._assigned_vsids_count = {}
-        self._step_counter = 0                      # Counts how many decisions have been made
+        self._step_counter = 0
 
         self._vars_mapping = vars_mapping
         self._layers_mapping = layers_mapping
@@ -85,8 +89,6 @@ class CustomSATSolver(Solver):
             "idx": len(self._assignment_by_level[-1])       # Defines an assignment order in the same level
         }
 
-        # print('assigned:', clause, literal, len(self._assignment_by_level) - 1, len(self._assignment_by_level[-1]), {k: v['value'] for k, v in self._assignment.items()})
-
         self._all_vars.discard(variable)
         self._layers_mapping[self._reversed_layers_mapping[variable]].discard(variable)
 
@@ -108,10 +110,11 @@ class CustomSATSolver(Solver):
         """
         Unassigns the given variable.
         """
-        del self._assignment[variable]
-        for cur_sign in [variable, -variable]:
-            self._unassigned_vsids_count[cur_sign] = self._assigned_vsids_count[cur_sign]
-            del self._assigned_vsids_count[cur_sign]
+        if variable in self._assignment:
+            del self._assignment[variable]
+            for cur_sign in [variable, -variable]:
+                self._unassigned_vsids_count[cur_sign] = self._assigned_vsids_count[cur_sign]
+                del self._assigned_vsids_count[cur_sign]
 
         self._all_vars.add(variable)
         self._layers_mapping[self._reversed_layers_mapping[variable]].add(variable)
@@ -265,6 +268,14 @@ class CustomSATSolver(Solver):
         self._new_clauses.append(conflict_clause)
         self._add_clause(conflict_clause)
 
+    def remove_conflict_clauses(self):
+        for clause_to_remove in self._new_clauses:
+            # print('remove:', clause_to_remove)
+            for literal in clause_to_remove:
+                self._literal_to_clause[literal].discard(clause_to_remove)
+                self._variable_to_watched_clause[abs(literal)].discard(clause_to_remove)
+
+
     def _constraint_propagation_to_exhaustion(self, propagation_func):
         """
         Performs constraint propagation using the given function
@@ -274,6 +285,7 @@ class CustomSATSolver(Solver):
         while conflict_clause is not None:
             conflict_clause, watch_literal, level_to_jump_to = self._conflict_resolution(conflict_clause)
             # print('watch_literal:', watch_literal, '\nlen:', len(list(conflict_clause)), '\nconflict_clause:', conflict_clause)
+            # print(len(list(conflict_clause)), conflict_clause)
             # print()
             if level_to_jump_to == -1:
                 # An assignment that satisfies the formula's unit clauses causes a conflict, so the formula is UNSAT
@@ -343,15 +355,18 @@ class CustomSATSolver(Solver):
         count = 0
         while variable in self._layers_mapping[self._reversed_layers_mapping[orig_variable]]:
             self.create_new_decision_level()
-
-            count_pos = self._unassigned_vsids_count.get(variable, 0)
-            count_neg = self._unassigned_vsids_count.get(-variable, 0)
-            if count_pos >= count_neg:
-                self._unassigned_vsids_count.pop(variable)
-                self._assign(None, variable)
+            if settings.RANDOM_DECISION:
+                self._assign(None, variable * random.choice([-1, 1]))
             else:
-                self._unassigned_vsids_count.pop(-variable)
-                self._assign(None, -variable)
+                count_pos = self._unassigned_vsids_count.get(variable, 0)
+                count_neg = self._unassigned_vsids_count.get(-variable, 0)
+                if count_pos <= count_neg:
+                    self._unassigned_vsids_count.pop(variable)
+                    self._assign(None, variable)
+                else:
+                    self._unassigned_vsids_count.pop(-variable)
+                    self._assign(None, -variable)
+
             count += 1
             if settings.DEBUG:
                 print(f'- [{count}] Choose: variable=`{variable}`\n')

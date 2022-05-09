@@ -50,7 +50,7 @@ class SpecificationVNNLIB:
 
             cnf = []
             for l, r in zip(lhs, rhs):
-                cnf.append(sum((l > 0) * lbs) <=  sum((l < 0) * ubs))
+                cnf.append(sum((l > 0) * lbs) -  sum((l < 0) * ubs) <= r)
             dnf.append(all(cnf))
         return any(dnf)
 
@@ -62,3 +62,12 @@ class SpecificationVNNLIB:
             if torch.all(vec <= rhs):
                 return True
         return False
+
+    def get_output_reachability_constraints(self, lbs_expr, ubs_expr):
+        dnf =  []
+        for lhs, rhs in self.mat:
+            cnf = []
+            for l, r in zip(lhs, rhs):
+                cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) - r)
+            dnf.append(cnf)
+        return dnf
