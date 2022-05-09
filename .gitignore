@@ -1,5 +1,7 @@
 RacPLL/gurobi
 RacPLL/test_*
+ref/
+archive/
 
 
 # Byte-compiled / optimized / DLL files
