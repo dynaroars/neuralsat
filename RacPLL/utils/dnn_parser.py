@@ -1,14 +1,12 @@
-import torch.nn.functional as F
-import torch.nn as nn
-import torch
 from pprint import pprint
-import tensorflow as tf
 import sortedcontainers
+import torch.nn as nn
 import numpy as np
+import torch
 
 from utils.read_nnet import NetworkTorch
 
-class InputParser:
+class DNNParser:
 
     def neuron_name(layer_id, neuron_id):
         return f'a{layer_id}_{neuron_id}'
@@ -23,7 +21,7 @@ class InputParser:
             if isinstance(layer, nn.Linear):
                 layers_mapping[lid] = sortedcontainers.SortedList()
                 for i in range(layer.weight.shape[1]): # #nodes in layer
-                    node = InputParser.neuron_name(lid, i)
+                    node = DNNParser.neuron_name(lid, i)
                     if node not in vars_mapping:
                         vars_mapping[node] = idx
                         layers_mapping[lid].add(idx)
@@ -40,7 +38,7 @@ if __name__ == '__main__':
     # model.save('../example/model.keras')
     # model = keras.models.load_model('../example/model.keras')
     model = NetworkTorch('example/random.nnet')
-    vars_mapping, layers_mapping = InputParser.parse(model)
+    vars_mapping, layers_mapping = DNNParser.parse(model)
 
     # pprint(dnn)
     # print()

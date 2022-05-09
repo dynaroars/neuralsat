@@ -8,17 +8,16 @@ import copy
 import re
 import os
 
-from heuristic.randomized_falsification import randomized_falsification # import RandomizedFalsification
-from abstract.deepz import deepz, assigned_deeppoly
+from heuristic.randomized_falsification import randomized_falsification
+from abstract.eran import deepz, assigned_deeppoly
 # from abstract.eran import eran
-# from heuristic.fast_falsify import FastFalsify
 import settings
 
 
 class DNNTheoremProver:
 
     epsilon = 1e-6
-    skip = 1e-5
+    skip = 1e-3
 
     def __init__(self, dnn, layers_mapping, spec):
         self.dnn = dnn
@@ -78,7 +77,7 @@ class DNNTheoremProver:
         flag = lbs > ubs
 
         if np.any(flag):
-            if not np.all(lbs[flag] - ubs[flag] < DNNTheoremProver.skip):
+            if not np.all(lbs[flag] - ubs[flag] < DNNTheoremProver.epsilon):
                 # self.model.write(f'gurobi/debug_{self.count}.lp')
                 return False
 
@@ -297,34 +296,7 @@ class DNNTheoremProver:
                     if any(dnf_objval):
                         break
                 if not any(dnf_objval):
-                    # print('============================ cac')
                     return False, None, None, None
-
-            # if not self.spec.check_output_reachability(lower, upper): # conflict
-
-            #     Ml, Mu, bl, bu  = self.deeppoly.get_params()
-            #     lbs_expr = [sum(wl.numpy() * self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
-            #     ubs_expr = [sum(wu.numpy() * self.gurobi_vars) + cu for (wu, cu) in zip(Mu, bu)]
-            #     dnf_objectives = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
-            #     dnf_objval = []
-            #     for cnf_objectives in dnf_objectives:
-            #         cnf_objval = []
-            #         for co in cnf_objectives:
-            #             self.model.setObjective(co, grb.GRB.MINIMIZE)
-            #             self._optimize()
-            #             self.model.setObjective(0, grb.GRB.MAXIMIZE)
-            #             cnf_objval.append(self.model.objval <= 0)
-            #             if self.model.objval > 0:
-            #                 break
-            #         dnf_objval.append(all(cnf_objval))
-            #         if any(dnf_objval):
-            #             break
-            #     if not any(dnf_objval):
-            #         return False, None, is_full_assignment
-
-            #     print('============================ cac')
-            #     return False, None, is_full_assignment
-
 
 
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
@@ -343,10 +315,7 @@ class DNNTheoremProver:
                     return False, None, None, None
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
-            new_ranges = torch.stack([lbs, ubs], dim=1)
-            # print(new_ranges)
             stat, adv = self.rf.eval_constraints(None)
-            # stat, adv = self.rf.eval_constraints(new_ranges)
             # stat, adv = self.rf.eval(new_ranges, timeout=2)
             if stat == 'violated':
                 # self.count_rf += 1
@@ -356,6 +325,16 @@ class DNNTheoremProver:
                 # print(new_assignment)
                 return True, {}, new_assignment, is_full_assignment
 
+            new_ranges = torch.stack([lbs, ubs], dim=1)
+            # print(new_ranges)
+            stat, adv = self.rf.eval_constraints(new_ranges)
+            if stat == 'violated':
+                # self.count_rf += 1
+                # print(self.count_rf)
+                # print(self.count_rf, adv, time.time()-self.tic_rf)
+                new_assignment = self.dnn.get_assignment(adv[0], self.layers_mapping)
+                # print(new_assignment)
+                return True, {}, new_assignment, is_full_assignment
 
         self.restore_input_bounds()
         # imply next hidden nodes

@@ -2,7 +2,7 @@ import torch
 
 from utils.read_nnet import NetworkTorch
 from dnn_solver.utils import InputParser
-from abstract.deepz import deepz
+from abstract.eran import deepz
 
 
     

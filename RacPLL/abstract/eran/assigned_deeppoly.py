@@ -7,7 +7,7 @@ import numpy as np
 from typing import Tuple
 
 from utils.read_nnet import NetworkTorch
-from dnn_solver.utils import InputParser
+from utils.dnn_parser import DNNParser
 
 
 class AssignedDeepPoly:
@@ -16,7 +16,7 @@ class AssignedDeepPoly:
         self.net = net
         self.back_sub_steps = back_sub_steps
 
-        self.vars_mapping, self.layers_mapping = InputParser.parse(net)
+        self.vars_mapping, self.layers_mapping = DNNParser.parse(net)
 
         self._build_network_transformer()
 

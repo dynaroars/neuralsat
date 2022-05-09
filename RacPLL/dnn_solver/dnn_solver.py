@@ -5,7 +5,7 @@ import copy
 from dnn_solver.dnn_theorem_prover import DNNTheoremProver
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
-from dnn_solver.utils import InputParser
+from utils.dnn_parser import DNNParser
 import settings
 
 class TheorySolver(Solver):
@@ -38,7 +38,7 @@ class DNNSolver(TheorySolver):
     def __init__(self, dnn, spec):
 
         self.dnn = dnn
-        vars_mapping, layers_mapping = InputParser.parse(self.dnn)
+        vars_mapping, layers_mapping = DNNParser.parse(self.dnn)
 
         super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
         self.dnn_theorem_prover = DNNTheoremProver(self.dnn, copy.deepcopy(layers_mapping), spec=spec)
