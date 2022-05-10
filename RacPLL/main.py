@@ -29,5 +29,7 @@ if __name__ == '__main__':
     if status:
         solution = solver.get_solution()
         output = solver.dnn(solution)
-        print('\t- solution:', solution)
+        print('\t- lower:', spec.get_input_property()['lbs'])
+        print('\t- upper:', spec.get_input_property()['ubs'])
+        print('\t- solution:', solution.numpy().tolist())
         print('\t- output:', output.numpy().tolist())

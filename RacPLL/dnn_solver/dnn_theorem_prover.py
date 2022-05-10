@@ -83,8 +83,8 @@ class DNNTheoremProver:
 
         for i, var in enumerate(self.gurobi_vars):
             if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
-                var.lb = lbs[i]
-                var.ub = lbs[i]
+                # var.lb = lbs[i]
+                # var.ub = lbs[i]
                 continue
             if (abs(var.lb - lbs[i]) > DNNTheoremProver.skip):
                 var.lb = lbs[i]
@@ -282,24 +282,59 @@ class DNNTheoremProver:
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
                 lbs_expr = [sum(wl.numpy() * self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
                 ubs_expr = [sum(wu.numpy() * self.gurobi_vars) + cu for (wu, cu) in zip(Mu, bu)]
-                dnf_objectives = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
-                dnf_objval = []
-                for cnf_objectives in dnf_objectives:
-                    cnf_objval = []
-                    for co in cnf_objectives:
-                        self.model.setObjective(co, grb.GRB.MINIMIZE)
-                        self._optimize()
-                        self.model.setObjective(0, grb.GRB.MAXIMIZE)
-                        if self.model.status != grb.GRB.OPTIMAL:
-                            continue
-                        cnf_objval.append(self.model.objval <= 0)
-                        if self.model.objval > 0:
-                            break
-                    dnf_objval.append(all(cnf_objval))
-                    if any(dnf_objval):
+                dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
+                flag_sat = False
+                for cnf, adv_obj in dnf_contrs:
+                    ci = [self.model.addConstr(_) for _ in cnf]
+                    self.model.setObjective(adv_obj, grb.GRB.MINIMIZE)
+                    self._optimize()
+                    self.model.setObjective(0, grb.GRB.MAXIMIZE)
+                    self.model.remove(ci)
+                    if self.model.status == grb.GRB.OPTIMAL:
+                        tmp_input = torch.Tensor([var.X for var in self.gurobi_vars])
+                        # print(self.model.objval, tmp_input)
+                        if self.spec.check_solution(self.dnn(tmp_input)):
+                            self.solution = tmp_input
+                            print('ngon')
+                            return True, {}, None
+
+                        flag_sat = True
                         break
-                if not any(dnf_objval):
+
+                if not flag_sat:
                     return False, None, None
+
+            # if settings.HEURISTIC_DEEPPOLY:
+            #     Ml, Mu, bl, bu  = self.deeppoly.get_params()
+            #     lbs_expr = [sum(wl.numpy() * self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
+            #     ubs_expr = [sum(wu.numpy() * self.gurobi_vars) + cu for (wu, cu) in zip(Mu, bu)]
+            #     dnf_objectives = self.spec.get_output_reachability_objectives(lbs_expr, ubs_expr)
+            #     dnf_objval = []
+            #     for cnf_objectives in dnf_objectives:
+            #         cnf_objval = []
+            #         for co in cnf_objectives:
+            #             self.model.setObjective(co, grb.GRB.MINIMIZE)
+            #             self._optimize()
+            #             self.model.setObjective(0, grb.GRB.MAXIMIZE)
+
+            #             if self.model.status != grb.GRB.OPTIMAL:
+            #                 continue
+
+            #             cnf_objval.append(self.model.objval <= 0)
+            #             if self.model.objval > 0:
+            #                 break
+                    
+            #             # tmp_input = torch.Tensor([var.X for var in self.gurobi_vars])
+            #             # # print(tmp_input)
+            #             # if self.spec.check_solution(self.dnn(tmp_input)):
+            #             #     self.solution = tmp_input
+            #             #     return True, {}, None
+
+            #         dnf_objval.append(all(cnf_objval))
+            #         if any(dnf_objval):
+            #             break
+            #     if not any(dnf_objval):
+            #         return False, None, None
 
 
             self.model.setObjective(0, grb.GRB.MAXIMIZE)

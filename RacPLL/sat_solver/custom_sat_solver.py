@@ -360,7 +360,7 @@ class CustomSATSolver(Solver):
             else:
                 count_pos = self._unassigned_vsids_count.get(variable, 0)
                 count_neg = self._unassigned_vsids_count.get(-variable, 0)
-                if count_pos <= count_neg:
+                if count_pos >= count_neg:
                     self._unassigned_vsids_count.pop(variable)
                     self._assign(None, variable)
                 else:

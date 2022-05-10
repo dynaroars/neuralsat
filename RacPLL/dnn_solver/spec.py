@@ -50,7 +50,7 @@ class SpecificationVNNLIB:
 
             cnf = []
             for l, r in zip(lhs, rhs):
-                cnf.append(sum((l > 0) * lbs) -  sum((l < 0) * ubs) <= r)
+                cnf.append(sum((l > 0) * lbs) - sum((l < 0) * ubs) <= r)
             dnf.append(all(cnf))
         return any(dnf)
 
@@ -67,7 +67,21 @@ class SpecificationVNNLIB:
         dnf =  []
         for lhs, rhs in self.mat:
             cnf = []
+            obj = []
+            for l, r in zip(lhs, rhs):
+                cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) <= r)
+                obj.append(sum((l > 0) * ubs_expr) - sum((l < 0) * lbs_expr) - r)
+            dnf.append((cnf, sum(obj)))
+        return dnf
+
+
+    def get_output_reachability_objectives(self, lbs_expr, ubs_expr):
+        dnf =  []
+        for lhs, rhs in self.mat:
+            cnf = []
+            obj = []
             for l, r in zip(lhs, rhs):
                 cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) - r)
-            dnf.append(cnf)
+                obj.append(sum((l > 0) * ubs_expr) - sum((l < 0) * lbs_expr) - r)
+            dnf.append((cnf, sum(obj)))
         return dnf

@@ -54,14 +54,16 @@ class RandomizedFalsification:
             # break
 
 
-    def eval_constraints(self, input_ranges, constraints=None):
-        # input_ranges = torch.tensor(self.bounds, dtype=torch.float32)
-        # exit()
+    def eval_constraints(self, input_ranges=None, constraints=None):
         if input_ranges is None:
             input_ranges = torch.tensor(self.bounds, dtype=torch.float32)
-        stat, adv = self._sampling(input_ranges, self.mat)
-        if stat == 'violated':
-            return stat, adv
+        input_ranges_clone = input_ranges.clone()
+
+        for target, direction in zip(self.targets, self.directions):
+            stat, adv = self._sampling(input_ranges, self.mat, target, direction)
+            if stat == 'violated':
+                return stat, adv
+            input_ranges = input_ranges_clone
         return 'unknown', None
 
 
@@ -82,7 +84,7 @@ class RandomizedFalsification:
                 return 'timeout', None
 
 
-    def _sampling(self, input_ranges, output_props):
+    def _sampling(self, input_ranges, output_props, target, direction):
         old_pos_samples = []
 
         for _ in range(self.n_runs):
@@ -90,11 +92,11 @@ class RandomizedFalsification:
             if stat == 'violated':
                 return stat, samples
 
-            pos_samples, neg_samples = [], []
-            for target, direction in zip(self.targets, self.directions):
-                p, n = self._segregate_samples(samples, old_pos_samples, target=target, direction=direction)
-                pos_samples += p
-                neg_samples += n
+            # pos_samples, neg_samples = [], []
+            # for target, direction in zip(self.targets, self.directions):
+            pos_samples, neg_samples = self._segregate_samples(samples, old_pos_samples, target, direction)
+                # pos_samples += p
+                # neg_samples += n
             # print(len(pos_samples + neg_samples))
 
             old_pos_samples = pos_samples
@@ -127,7 +129,7 @@ class RandomizedFalsification:
                    input_ranges[dim][1] = temp
 
 
-    def _segregate_samples(self, samples, old_pos_samples, target=None, direction=None):
+    def _segregate_samples(self, samples, old_pos_samples, target, direction):
         pos_samples = []
         neg_samples = []
 
