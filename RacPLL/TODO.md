@@ -55,3 +55,10 @@ paper DPLL4DNN:
 
 
 
+list 3 direction lon dinh lam ve Network verification/test/inference
+    + problem
+    + direction to solve
+    + challenge
+
+- verification:
+    + what wants to try

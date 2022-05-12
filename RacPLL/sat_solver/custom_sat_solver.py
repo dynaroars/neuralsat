@@ -300,7 +300,10 @@ class CustomSATSolver(Solver):
         """
         Theory constraint propagation.
         """
-        conflict_clause, new_assignments = self._theory_solver.propagate()
+        conflict_clause, new_assignments, new_ccs = self._theory_solver.propagate()
+        if new_ccs is not None and len(new_ccs) > 0:
+            return new_ccs[0]
+
         if conflict_clause is not None:
             return conflict_clause
         for literal in new_assignments:

@@ -59,6 +59,14 @@ class DNNTheoremProver:
             self.count_rf = 0
             self.tic_rf = time.time()
 
+        self.model_scc = grb.Model()
+        self.model_scc.setParam('OutputFlag', False)
+        self.model_scc.setParam('Threads', 16)
+        self.gurobi_vars_scc = [
+            self.model_scc.addVar(name=f'x{i}_scc', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
+            for i in range(self.n_inputs)
+        ]
+        self.model_scc.update()
 
     @property
     def n_outputs(self):
@@ -183,7 +191,8 @@ class DNNTheoremProver:
 
         self._optimize()
         if self.model.status == grb.GRB.INFEASIBLE:
-            return False, None, None
+            ccs = self.shorten_conflict_clause(assignment)
+            return False, ccs, None
 
         if settings.DEBUG:
             print('[+] Check assignment: `SAT`')
@@ -212,7 +221,8 @@ class DNNTheoremProver:
             if flag_sat:
                 self.solution = self.get_solution()
                 return True, {}, is_full_assignment
-            return False, None, None
+            ccs = self.shorten_conflict_clause(assignment)
+            return False, ccs, None
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -237,7 +247,8 @@ class DNNTheoremProver:
                 lbs = None
                 
             if not self.update_input_bounds(lbs, ubs): # conflict
-                return False, None, None
+                ccs = self.shorten_conflict_clause(assignment)
+                return False, ccs, None
 
             # reset objective
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
@@ -276,7 +287,8 @@ class DNNTheoremProver:
 
 
             if not self.spec.check_output_reachability(lower, upper): # conflict
-                return False, None, None
+                ccs = self.shorten_conflict_clause(assignment)
+                return False, ccs, None
 
             if settings.HEURISTIC_DEEPPOLY:
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
@@ -302,39 +314,8 @@ class DNNTheoremProver:
                         break
 
                 if not flag_sat:
-                    return False, None, None
-
-            # if settings.HEURISTIC_DEEPPOLY:
-            #     Ml, Mu, bl, bu  = self.deeppoly.get_params()
-            #     lbs_expr = [sum(wl.numpy() * self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
-            #     ubs_expr = [sum(wu.numpy() * self.gurobi_vars) + cu for (wu, cu) in zip(Mu, bu)]
-            #     dnf_objectives = self.spec.get_output_reachability_objectives(lbs_expr, ubs_expr)
-            #     dnf_objval = []
-            #     for cnf_objectives in dnf_objectives:
-            #         cnf_objval = []
-            #         for co in cnf_objectives:
-            #             self.model.setObjective(co, grb.GRB.MINIMIZE)
-            #             self._optimize()
-            #             self.model.setObjective(0, grb.GRB.MAXIMIZE)
-
-            #             if self.model.status != grb.GRB.OPTIMAL:
-            #                 continue
-
-            #             cnf_objval.append(self.model.objval <= 0)
-            #             if self.model.objval > 0:
-            #                 break
-                    
-            #             # tmp_input = torch.Tensor([var.X for var in self.gurobi_vars])
-            #             # # print(tmp_input)
-            #             # if self.spec.check_solution(self.dnn(tmp_input)):
-            #             #     self.solution = tmp_input
-            #             #     return True, {}, None
-
-            #         dnf_objval.append(all(cnf_objval))
-            #         if any(dnf_objval):
-            #             break
-            #     if not any(dnf_objval):
-            #         return False, None, None
+                    ccs = self.shorten_conflict_clause(assignment)
+                    return False, ccs, None
 
 
             self.model.setObjective(0, grb.GRB.MAXIMIZE)
@@ -350,7 +331,8 @@ class DNNTheoremProver:
                     continue
                 abt_status = signs[node] == 1
                 if abt_status != status:
-                    return False, None, None
+                    ccs = self.shorten_conflict_clause(assignment)
+                    return False, ccs, None
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             stat, adv = self.rf.eval_constraints(None)
@@ -415,6 +397,11 @@ class DNNTheoremProver:
         self.model.reset()
         self.model.optimize()
 
+    def _optimize_scc(self):
+        self.model_scc.update()
+        self.model_scc.reset()
+        self.model_scc.optimize()
+
 
     def get_solution(self):
         if self.model.status == grb.GRB.LOADED:
@@ -431,3 +418,60 @@ class DNNTheoremProver:
         self.model.update()
 
 
+
+    def shorten_conflict_clause(self, assignment):
+        return None
+        # print('cac', self.layers_mapping)
+        _, _, params = self.deeppoly(self.lbs_init, self.ubs_init, assignment=None, return_params=True)
+
+        conflict_clauses = []
+        # print(assignment)
+        exprs = {}
+        for idx, p in enumerate(params[:-1]):
+            Ml, Mu, bl, bu = p
+            lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
+            ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
+            lu_expr = [(l, u) for l, u in zip(lbs_expr, ubs_expr)]
+            exprs.update(dict(zip(self.layers_mapping[idx], lu_expr)))
+
+        constraints_scc = []
+        constraints_scc_mapping = {}
+        for node, status in assignment.items():
+            if status is None:
+                continue
+            if status:
+                ci = self.model_scc.addConstr(exprs[node][0] >= 1e-6)
+            else:
+                ci = self.model_scc.addConstr(exprs[node][1] <= 0)
+            constraints_scc.append(ci)
+            constraints_scc_mapping[ci] = (node, status)
+
+
+        Ml, Mu, bl, bu  = self.deeppoly.get_params()
+        lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
+        ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
+        dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
+
+        self.model_scc.setObjective(0, grb.GRB.MAXIMIZE)
+        for cnf, _ in dnf_contrs:
+            conflict_clause = set()
+            ci = [self.model_scc.addConstr(_) for _ in cnf]
+            self._optimize_scc()
+            print('cac', self.model_scc.status == grb.GRB.OPTIMAL)
+            if self.model_scc.status == grb.GRB.INFEASIBLE:
+                # print('cac')
+                # print(len(self.model_scc.getConstrs()), len(assignment))
+                self.model_scc.computeIIS()
+                # print(len([c for c in self.model_scc.getConstrs() if c.IISConstr]))
+                print('input:', [(constraints_scc_mapping[c], exprs[constraints_scc_mapping[c][0]][int(constraints_scc_mapping[c][1])]) for c in constraints_scc if c.IISConstr])
+                for variable, status in [constraints_scc_mapping[c] for c in constraints_scc if c.IISConstr]:
+                    conflict_clause.add(-variable if status else variable)
+                if len(conflict_clause) > 0 and conflict_clause not in conflict_clauses:
+                    conflict_clauses.append(conflict_clause)
+            self.model_scc.remove(ci)
+
+        self.model_scc.remove(constraints_scc)
+
+        # print('cac', conflict_clauses)
+        return None
+        return conflict_clauses

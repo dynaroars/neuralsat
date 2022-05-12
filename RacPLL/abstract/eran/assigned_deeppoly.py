@@ -36,14 +36,19 @@ class AssignedDeepPoly:
                 raise NotImplementedError
     
     @torch.no_grad()
-    def __call__(self, lower, upper, assignment=None):
+    def __call__(self, lower, upper, assignment=None, return_params=False):
         bounds = (lower, upper)
         hidden_bounds = []
+        hidden_params = []
         for layer in self.layers:
             if isinstance(layer, AssignedDeepPolyReLUTansformer):
                 hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
-            bounds = layer(bounds, assignment)
+            bounds, params = layer(bounds, assignment)
+            if isinstance(layer, AssignedDeepPolyAffineTransformer):
+                hidden_params.append(params)
         self.bounds = bounds
+        if return_params:
+            return (self.bounds[0], self.bounds[1]), hidden_bounds, hidden_params
         return (self.bounds[0], self.bounds[1]), hidden_bounds
 
     def get_params(self):
@@ -56,7 +61,7 @@ class AssignedDeepPolyInputTransformer(nn.Module):
 
     def forward(self, bounds, assignment):
         self.bounds = torch.stack([bounds[0], bounds[1]], 0)
-        return self.bounds
+        return self.bounds, None
     
     def __str__(self):
         return 'Input'
@@ -112,7 +117,7 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         # print('upper:', self.bounds[1].numpy().tolist())
         # print('--------end linear--------')
         # print()
-        return self.bounds
+        return self.bounds, self.params
     
     def back_sub(self, max_steps):
         new_bounds, new_params = self._back_sub(max_steps)
@@ -128,9 +133,9 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
     def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
         # print('back_sub linear')
         if params is None:
-            Ml, Mu, bl, bu = self.weight, self.weight, self.bias, self.bias
-        else:
-            Ml, Mu, bl, bu = params
+            params = self.weight.data, self.weight.data, self.bias.data, self.bias.data
+
+        Ml, Mu, bl, bu = params
 
         if max_steps > 0 and self.last.last is not None:
             # print('- beta:', self.last.beta.numpy().tolist())
@@ -289,7 +294,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
         # print('upper:', self.bounds[1].numpy().tolist())
         # print('--------end relu--------')
         # print()
-        return self.bounds
+        return self.bounds, self.params
 
     def __str__(self):
         return f'Relu {self.idx}'
@@ -309,9 +314,9 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
     def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
         # print('back_sub relu')
         if params is None:
-            Ml, Mu, bl, bu = torch.diag(self.beta), torch.diag(self.lmbda), torch.zeros_like(self.mu), self.mu
-        else:
-            Ml, Mu, bl, bu = params
+            params = torch.diag(self.beta), torch.diag(self.lmbda), torch.zeros_like(self.mu), self.mu
+
+        Ml, Mu, bl, bu = params
 
 
         # print('- Ml:', Ml.numpy().tolist())
@@ -352,7 +357,7 @@ if __name__ == '__main__':
     # l, u = d(lower, upper)
     # print(l)
     # print(u)
-    net = NetworkTorch('example/random.nnet')
+    net = NetworkTorch('example/paper.nnet')
 
     # net = CorinaNet().eval()
     lower = torch.Tensor([-1, -2])
@@ -363,13 +368,15 @@ if __name__ == '__main__':
 
     # assignment = {v: random.choice([True, False, None]) for k, v in d.vars_mapping.items()}
     assignment = {1: False, 2: None}
-    print(assignment)
-    print()
+    # print(assignment)
+    # print()
 
     print('Without assignment')
-    l, u = d(lower, upper, assignment=None)
+    (l, u), _, ps = d(lower, upper, assignment=None, return_params=True)
     print(l)
     print(u)
+    for p in ps:
+        print(p)
     # Ml, Mu, bl, bu = d.get_params()
     # print('Ml', Ml.numpy().tolist())
     # print('Mu', Mu.numpy().tolist())
