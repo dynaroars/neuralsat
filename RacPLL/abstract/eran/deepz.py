@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import os
 
+import settings
 
 def relu_transform(center, error):
     # bounds
@@ -15,12 +16,12 @@ def relu_transform(center, error):
     # new error
     n_error, d = error.shape
     n_new_error = case_idx[0].shape[0]
-    new_error = torch.zeros((n_error + n_new_error, d))
+    new_error = torch.zeros((n_error + n_new_error, d), dtype=settings.DTYPE)
     new_error[:n_error] = error
     new_error[:, ub[0] <= 0] = 0
 
     # new center
-    new_center = torch.zeros(center.size())
+    new_center = torch.zeros(center.size(), dtype=settings.DTYPE)
     new_center[lb[0] >= 0] = center[lb[0] >= 0]
 
     # process 
@@ -77,7 +78,7 @@ def forward(net, lower, upper):
 
     h = lower.shape[0]
 
-    error = torch.diag(torch.ones(h) * error.flatten())
+    error = torch.diag(torch.ones(h) * error.flatten()).to(settings.DTYPE)
     error = error.reshape((h, h))
 
     hidden_bounds = []

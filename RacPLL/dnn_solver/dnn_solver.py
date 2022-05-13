@@ -1,5 +1,6 @@
 from pprint import pprint
 import numpy as np
+import time
 import copy
 
 from dnn_solver.dnn_theorem_prover import DNNTheoremProver
@@ -56,8 +57,9 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
+        # tic = time.time()
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
-
+        # print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
             new_ccs = implications
             conflict_clause = set()

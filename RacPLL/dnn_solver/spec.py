@@ -1,10 +1,11 @@
 from utils.read_vnnlib import read_vnnlib_simple
 
+import gurobipy as grb
 import itertools
 import random
 import torch
 
-
+import settings
 
 def split_bounds(bounds, steps=3):
     lower = bounds['lbs']
@@ -45,8 +46,8 @@ class SpecificationVNNLIB:
     def check_output_reachability(self, lbs, ubs):
         dnf =  []
         for lhs, rhs in self.mat:
-            lhs = torch.tensor(lhs, dtype=torch.float32)
-            rhs = torch.tensor(rhs, dtype=torch.float32)
+            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
+            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
 
             cnf = []
             for l, r in zip(lhs, rhs):
@@ -56,8 +57,8 @@ class SpecificationVNNLIB:
 
     def check_solution(self, output):
         for lhs, rhs in self.mat:
-            lhs = torch.tensor(lhs, dtype=torch.float32)
-            rhs = torch.tensor(rhs, dtype=torch.float32)
+            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
+            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
             vec = lhs @ output
             if torch.all(vec <= rhs):
                 return True
@@ -69,19 +70,19 @@ class SpecificationVNNLIB:
             cnf = []
             obj = []
             for l, r in zip(lhs, rhs):
-                cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) <= r)
-                obj.append(sum((l > 0) * ubs_expr) - sum((l < 0) * lbs_expr) - r)
-            dnf.append((cnf, sum(obj)))
+                cnf.append(grb.quicksum((l > 0) * lbs_expr) - grb.quicksum((l < 0) * ubs_expr) <= r)
+                obj.append(grb.quicksum((l > 0) * ubs_expr) - grb.quicksum((l < 0) * lbs_expr) - r)
+            dnf.append((cnf, grb.quicksum(obj)))
         return dnf
 
 
-    def get_output_reachability_objectives(self, lbs_expr, ubs_expr):
-        dnf =  []
-        for lhs, rhs in self.mat:
-            cnf = []
-            obj = []
-            for l, r in zip(lhs, rhs):
-                cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) - r)
-                obj.append(sum((l > 0) * ubs_expr) - sum((l < 0) * lbs_expr) - r)
-            dnf.append((cnf, sum(obj)))
-        return dnf
+    # def get_output_reachability_objectives(self, lbs_expr, ubs_expr):
+    #     dnf =  []
+    #     for lhs, rhs in self.mat:
+    #         cnf = []
+    #         obj = []
+    #         for l, r in zip(lhs, rhs):
+    #             cnf.append(sum((l > 0) * lbs_expr) - sum((l < 0) * ubs_expr) - r)
+    #             obj.append(sum((l > 0) * ubs_expr) - sum((l < 0) * lbs_expr) - r)
+    #         dnf.append((cnf, sum(obj)))
+    #     return dnf

@@ -2,6 +2,8 @@ import random
 import torch
 import time
 
+import settings
+
 class RandomizedFalsification:
 
     def __init__(self, net, spec):
@@ -49,14 +51,12 @@ class RandomizedFalsification:
 
             self.targets.append(target)
             self.directions.append(direction)
-            # self.targets = [target]
-            # self.directions = [direction]
-            # break
+
 
 
     def eval_constraints(self, input_ranges=None, constraints=None):
         if input_ranges is None:
-            input_ranges = torch.tensor(self.bounds, dtype=torch.float32)
+            input_ranges = torch.tensor(self.bounds, dtype=settings.DTYPE)
         input_ranges_clone = input_ranges.clone()
 
         for target, direction in zip(self.targets, self.directions):
@@ -120,11 +120,11 @@ class RandomizedFalsification:
             pos_val = pos_samples[0][0][dim]
             neg_val = neg_samples[i][0][dim]
             if pos_val > neg_val:
-                temp = torch.round(random.uniform(neg_val, pos_val), decimals=6)
+                temp = torch.round(random.uniform(neg_val, pos_val), decimals=6).to(settings.DTYPE)
                 if temp <= input_ranges[dim][1] and temp >= input_ranges[dim][0]:
                     input_ranges[dim][0] = temp
             else:
-                temp = torch.round(random.uniform(pos_val, neg_val), decimals=6)
+                temp = torch.round(random.uniform(pos_val, neg_val), decimals=6).to(settings.DTYPE)
                 if temp <= input_ranges[dim][1] and temp >= input_ranges[dim][0]:
                    input_ranges[dim][1] = temp
 
@@ -194,7 +194,7 @@ class RandomizedFalsification:
         for _ in range(self.n_samples):
             s_in = torch.Tensor([
                 torch.round(random.uniform(input_ranges[i][0], input_ranges[i][1]), decimals=6)
-                for i in range(self.n_inputs)])
+                for i in range(self.n_inputs)]).to(settings.DTYPE)
             s_out = self.net(s_in)
             stat = self._check_property(output_props, s_out)
             if stat == 'violated':
@@ -205,8 +205,8 @@ class RandomizedFalsification:
 
     def _check_property(self, output_props, output):
         for prop_mat, prop_rhs in output_props:
-            prop_mat = torch.tensor(prop_mat, dtype=torch.float32)
-            prop_rhs = torch.tensor(prop_rhs, dtype=torch.float32)
+            prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE)
+            prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE)
             vec = prop_mat @ output
             if torch.all(vec <= prop_rhs):
                 return 'violated'

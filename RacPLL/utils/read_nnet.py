@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 import numpy as np 
 
+import settings
 
 class NetworkTorch(nn.Module):
 
@@ -14,8 +15,8 @@ class NetworkTorch(nn.Module):
 
         n_layers = len(weights)
         for i in range(n_layers):
-            w = torch.Tensor(weights[i]).float()
-            b = torch.Tensor(biases[i]).float()
+            w = torch.Tensor(weights[i]).to(settings.DTYPE)
+            b = torch.Tensor(biases[i]).to(settings.DTYPE)
 
             layer = nn.Linear(*w.shape)
             layer.weight.data = w
