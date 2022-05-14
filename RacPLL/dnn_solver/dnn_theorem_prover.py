@@ -20,7 +20,7 @@ import settings
 def _solve_worker(assignment, mat_dict, nodes, shared_queue, kwargs):
     if len(nodes) == 0:
         return None
-        
+
     n_vars, lbs, ubs = kwargs
     with contextlib.redirect_stdout(open(os.devnull, 'w')):
 
@@ -225,7 +225,7 @@ class DNNTheoremProver:
                     break
 
 
-        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPICATION:
+        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
             backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.n_inputs, self.lbs_init, self.ubs_init)
             wloads = MP.get_workloads(imply_nodes, n_cpus=settings.N_THREADS)
@@ -418,7 +418,7 @@ class DNNTheoremProver:
                 implications[node] = {'pos': value==1, 'neg': value==-1}
 
 
-        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPICATION:
+        if settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
             for w in self.workers:
                 w.join()
 

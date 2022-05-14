@@ -61,7 +61,7 @@ class DNNSolver(TheorySolver):
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
         print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
-            if settings.PARALLEL_IMPICATION:
+            if settings.PARALLEL_IMPLICATION:
                 for w in self.dnn_theorem_prover.workers:
                     w.terminate()
 
