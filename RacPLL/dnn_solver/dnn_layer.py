@@ -16,7 +16,7 @@ class DNNLayer:
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
-                layers.append(DNNLinear(layer.weight, layer.bias))
+                layers.append(DNNLinear(layer))
             elif isinstance(layer, nn.ReLU):
                 layers.append(DNNReLU(self.layers_mapping[idx]))
                 idx += 1
@@ -39,9 +39,9 @@ class DNNLayer:
 
 class DNNLinear:
 
-    def __init__(self, weight, bias):
-        self.weight = weight
-        self.bias = bias
+    def __init__(self, layer):
+        self.weight = layer.weight
+        self.bias = layer.bias
 
 
     def __call__(self, x, assignment):
@@ -67,3 +67,9 @@ class DNNReLU:
             backsub_dict[v] = x[i]
         return output, flag_break, backsub_dict
 
+
+
+class DNNConv:
+
+    def __init__(self, layer):
+        pass
