@@ -11,73 +11,11 @@ import re
 import os
 
 from heuristic.randomized_falsification import randomized_falsification
+from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepz, assigned_deeppoly
-from utils.terminatable_thread import *
+from dnn_solver.dnn_layer import DNNLayer
 from utils.misc import MP
 import settings
-
-
-def _solve_worker(assignment, mat_dict, nodes, shared_queue, kwargs):
-    if len(nodes) == 0:
-        return None
-
-    n_vars, lbs, ubs = kwargs
-    with contextlib.redirect_stdout(open(os.devnull, 'w')):
-
-        with grb.Env() as env, grb.Model(env=env) as model:
-            model.setParam('OutputFlag', False)
-
-            variables = [
-                model.addVar(name=f'x{i}', lb=lbs[i], ub=ubs[i]) for i in range(n_vars)
-            ]
-            model.update()
-
-            for node in mat_dict:
-                status = assignment.get(node, None)
-                # print(node, status)
-                if status is None:
-                    continue
-                mat = mat_dict[node]
-                eqx = grb.LinExpr(mat[:-1], variables) + mat[-1]
-                # print(eqx)
-                if status:
-                    model.addLConstr(eqx >= 1e-6)
-                else:
-                    model.addLConstr(eqx <= 0)
-                #     ci = self.model.addLConstr(mat_dict[node] <= 0)
-
-            results = []
-            for node in nodes:
-                res = {}
-                mat = mat_dict[node]
-                # print(node, mat, variables)
-                obj = grb.LinExpr(mat[:-1], variables) + mat[-1]
-
-                model.setObjective(obj, grb.GRB.MINIMIZE)
-                model.update()
-                model.reset()
-                model.optimize()
-
-                if model.status == grb.GRB.OPTIMAL:
-                    res['pos'] = True if model.objval > 0 else False
-
-                model.setObjective(obj, grb.GRB.MAXIMIZE)
-                model.update()
-                model.reset()
-                model.optimize()
-
-                if model.status == grb.GRB.OPTIMAL:
-                    res['neg'] = True if model.objval <= 0 else False
-
-                results.append((node, res))
-
-            shared_queue.put(results)
-
-
-    # except ThreadTerminatedError:
-    #     # time.sleep(0.01)
-    #     print(f'{name} terminated')
-    #     return None
 
 
 class DNNTheoremProver:
@@ -121,6 +59,8 @@ class DNNTheoremProver:
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             self.rf = randomized_falsification.RandomizedFalsification(dnn, spec)
 
+        self.transformer = DNNLayer(dnn, layers_mapping)
+        self.default_input = torch.hstack([torch.eye(self.n_inputs), torch.zeros(self.n_inputs, 1)]).to(settings.DTYPE)
 
     @property
     def n_outputs(self):
@@ -131,7 +71,7 @@ class DNNTheoremProver:
         return self.dnn.input_shape[1]
 
 
-    def update_input_bounds(self, lbs, ubs):
+    def _update_input_bounds(self, lbs, ubs):
         if lbs is None or ubs is None:
             return True
         lbs = np.array(lbs)
@@ -155,7 +95,7 @@ class DNNTheoremProver:
         self.model.update()
         return True
 
-    def _find_nodes(self, assignment):
+    def _find_unassigned_nodes(self, assignment):
         assigned_nodes = list(assignment.keys()) 
         for k, v in self.layers_mapping.items():
             intersection_nodes = set(assigned_nodes).intersection(v)
@@ -168,6 +108,7 @@ class DNNTheoremProver:
     def _get_equation(self, coeffs):
         return grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
 
+    @torch.no_grad()
     def __call__(self, assignment):
 
         # debug
@@ -178,74 +119,32 @@ class DNNTheoremProver:
 
         # reset constraints
         self.model.remove(self.constraints)
-        self.restore_input_bounds()
+        self._restore_input_bounds()
         self.constraints = []
 
-        imply_nodes = self._find_nodes(assignment)
-        is_full_assignment = True if imply_nodes is None else False
+        unassigned_nodes = self._find_unassigned_nodes(assignment)
+        is_full_assignment = True if unassigned_nodes is None else False
 
+        # forward
+        output_mat, backsub_dict = self.transformer(self.default_input, assignment)
 
-        inputs = torch.hstack([torch.eye(self.n_inputs), torch.zeros(self.n_inputs, 1)]).to(settings.DTYPE)
-
-        layer_id = 0
-        variables = self.layers_mapping.get(layer_id, None)
-        flag_break = False
-        backsub_dict = {}
-        for layer in self.dnn.layers:
-            if variables is None: # output layer
-                output = layer.weight.mm(inputs)
-                output[:, -1] += layer.bias
-                output_constraint = self.spec.get_output_property(
-                    [self._get_equation(output[i]) for i in range(self.n_outputs)]
-                )
-            else:
-                if isinstance(layer, nn.Linear):
-                    output = layer.weight.mm(inputs)
-                    output[:, -1] += layer.bias
-
-                elif isinstance(layer, nn.ReLU):
-                    inputs = torch.zeros(output.shape, dtype=settings.DTYPE)
-                    for i, v in enumerate(variables):
-                        status = assignment.get(v, None)
-                        if status is None: # unassigned node
-                            flag_break = True
-                        elif status:
-                            inputs[i] = output[i]
-                        else:
-                            # inputs[i] = zero_torch
-                            pass
-                        backsub_dict[v] = output[i]
-
-                    layer_id += 1
-                    variables = self.layers_mapping.get(layer_id, None)
-                else:
-                    raise NotImplementedError
-
-                if flag_break and (not is_full_assignment):
-                    break
-
-
+        # parallel implication
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
             backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.n_inputs, self.lbs_init, self.ubs_init)
-            wloads = MP.get_workloads(imply_nodes, n_cpus=settings.N_THREADS)
-
+            wloads = MP.get_workloads(unassigned_nodes, n_cpus=settings.N_THREADS)
             Q = multiprocessing.Queue()
-
-            self.workers = [
-                multiprocessing.Process(target=_solve_worker, 
-                                        args=(assignment, backsub_dict_np, wl, Q, kwargs),
-                                        name=f'Thread {i}',
-                                        daemon=True) 
-                for i, wl in enumerate(wloads)
-            ]
-
+            self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
+                                                    args=(assignment, backsub_dict_np, wl, Q, kwargs),
+                                                    name=f'Thread {i}',
+                                                    daemon=True) for i, wl in enumerate(wloads)]
             for w in self.workers:
                 w.start()
 
-
+        # convert to gurobi LinExpr
         backsub_dict = {k: self._get_equation(v) for k, v in backsub_dict.items()}
 
+        # add constraints
         for node in backsub_dict:
             status = assignment.get(node, None)
             if status is None:
@@ -260,6 +159,7 @@ class DNNTheoremProver:
         if settings.DEBUG:
             self.model.write(f'gurobi/{self.count}.lp')
 
+        # check satisfiability
         if not is_full_assignment:
             self._optimize()
             if self.model.status == grb.GRB.INFEASIBLE:
@@ -268,6 +168,9 @@ class DNNTheoremProver:
 
         else: # output
             flag_sat = False
+            output_constraint = self.spec.get_output_property(
+                [self._get_equation(output_mat[i]) for i in range(self.n_outputs)]
+            )
             for cnf in output_constraint:
                 ci = [self.model.addLConstr(_) for _ in cnf]
                 self._optimize()
@@ -288,6 +191,7 @@ class DNNTheoremProver:
             print('[+] Check assignment: `SAT`')
 
 
+        # reachable heuristic
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
 
             if settings.DEBUG:
@@ -309,7 +213,7 @@ class DNNTheoremProver:
             else:
                 lbs = None
                 
-            if not self.update_input_bounds(lbs, ubs): # conflict
+            if not self._update_input_bounds(lbs, ubs): # conflict
                 ccs = self.shorten_conflict_clause(assignment)
                 return False, ccs, None
 
@@ -363,10 +267,9 @@ class DNNTheoremProver:
                     self.model.remove(ci)
                     if self.model.status == grb.GRB.OPTIMAL:
                         tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE)
-                        # print(self.model.objval, tmp_input)
                         if self.check_solution(tmp_input):
                             self.solution = tmp_input
-                            print('ngon')
+                            # print('ngon')
                             return True, {}, None
 
                         flag_sat = True
@@ -376,6 +279,8 @@ class DNNTheoremProver:
                     ccs = self.shorten_conflict_clause(assignment)
                     return False, ccs, None
 
+
+        # implication heuristic
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             stat, adv = self.rf.eval_constraints(None)
             if stat == 'violated':
@@ -388,9 +293,8 @@ class DNNTheoremProver:
                 self.solution = adv[0]
                 return True, {}, is_full_assignment
 
-        self.restore_input_bounds()
+        self._restore_input_bounds()
 
-        # imply next hidden nodes
         implications = {}
 
         if settings.HEURISTIC_DEEPPOLY_IMPLICATION:
@@ -426,7 +330,7 @@ class DNNTheoremProver:
                 res = Q.get()
                 implications.update(res)
         else:
-            for node in imply_nodes:
+            for node in unassigned_nodes:
                 if node in implications and (implications[node]['pos'] or implications[node]['neg']):
                     continue
 
@@ -473,7 +377,7 @@ class DNNTheoremProver:
         return False
 
 
-    def restore_input_bounds(self):
+    def _restore_input_bounds(self):
         for i, var in enumerate(self.gurobi_vars):
             var.lb = self.lbs_init[i]
             var.ub = self.ubs_init[i]

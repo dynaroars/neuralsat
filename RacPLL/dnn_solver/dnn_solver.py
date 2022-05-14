@@ -57,9 +57,9 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
-        tic = time.time()
+        # tic = time.time()
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
-        print('dnn_theorem_prover:', time.time() - tic)
+        # print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
             if settings.PARALLEL_IMPLICATION:
                 for w in self.dnn_theorem_prover.workers:
@@ -79,10 +79,6 @@ class DNNSolver(TheorySolver):
 
         if settings.DEBUG:
             print('    - Check T-SAT: `SAT`')
-
-        # if falsified_assignment is not None:
-        #     new_assignments = [k if v else -k for k,v in falsified_assignment.items()]
-        #     return None, new_assignments
 
 
         if is_full_assignment:
