@@ -21,23 +21,19 @@ def implication_gurobi_worker(assignment, mat_dict, nodes, shared_queue, kwargs)
 
             for node in mat_dict:
                 status = assignment.get(node, None)
-                # print(node, status)
                 if status is None:
                     continue
                 mat = mat_dict[node]
                 eqx = grb.LinExpr(mat[:-1], variables) + mat[-1]
-                # print(eqx)
                 if status:
                     model.addLConstr(eqx >= 1e-6)
                 else:
                     model.addLConstr(eqx <= 0)
-                #     ci = self.model.addLConstr(mat_dict[node] <= 0)
 
             results = []
             for node in nodes:
                 res = {'pos': False, 'neg': False}
                 mat = mat_dict[node]
-                # print(node, mat, variables)
                 obj = grb.LinExpr(mat[:-1], variables) + mat[-1]
 
                 model.setObjective(obj, grb.GRB.MINIMIZE)
