@@ -57,10 +57,14 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
-        # tic = time.time()
+        tic = time.time()
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
-        # print('dnn_theorem_prover:', time.time() - tic)
+        print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
+            if settings.PARALLEL_IMPICATION:
+                for w in self.dnn_theorem_prover.workers:
+                    w.terminate()
+
             new_ccs = implications
             conflict_clause = set()
             if settings.DEBUG:

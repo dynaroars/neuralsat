@@ -1,7 +1,9 @@
 from pprint import pprint
 import gurobipy as grb
+import multiprocessing
 import torch.nn as nn
 import numpy as np
+import contextlib
 import torch
 import time
 import copy
@@ -10,7 +12,72 @@ import os
 
 from heuristic.randomized_falsification import randomized_falsification
 from abstract.eran import deepz, assigned_deeppoly
+from utils.terminatable_thread import *
+from utils.misc import MP
 import settings
+
+
+def _solve_worker(assignment, mat_dict, nodes, shared_queue, kwargs):
+    if len(nodes) == 0:
+        return None
+        
+    n_vars, lbs, ubs = kwargs
+    with contextlib.redirect_stdout(open(os.devnull, 'w')):
+
+        with grb.Env() as env, grb.Model(env=env) as model:
+            model.setParam('OutputFlag', False)
+
+            variables = [
+                model.addVar(name=f'x{i}', lb=lbs[i], ub=ubs[i]) for i in range(n_vars)
+            ]
+            model.update()
+
+            for node in mat_dict:
+                status = assignment.get(node, None)
+                # print(node, status)
+                if status is None:
+                    continue
+                mat = mat_dict[node]
+                eqx = grb.LinExpr(mat[:-1], variables) + mat[-1]
+                # print(eqx)
+                if status:
+                    model.addLConstr(eqx >= 1e-6)
+                else:
+                    model.addLConstr(eqx <= 0)
+                #     ci = self.model.addLConstr(mat_dict[node] <= 0)
+
+            results = []
+            for node in nodes:
+                res = {}
+                mat = mat_dict[node]
+                # print(node, mat, variables)
+                obj = grb.LinExpr(mat[:-1], variables) + mat[-1]
+
+                model.setObjective(obj, grb.GRB.MINIMIZE)
+                model.update()
+                model.reset()
+                model.optimize()
+
+                if model.status == grb.GRB.OPTIMAL:
+                    res['pos'] = True if model.objval > 0 else False
+
+                model.setObjective(obj, grb.GRB.MAXIMIZE)
+                model.update()
+                model.reset()
+                model.optimize()
+
+                if model.status == grb.GRB.OPTIMAL:
+                    res['neg'] = True if model.objval <= 0 else False
+
+                results.append((node, res))
+
+            shared_queue.put(results)
+
+
+    # except ThreadTerminatedError:
+    #     # time.sleep(0.01)
+    #     print(f'{name} terminated')
+    #     return None
 
 
 class DNNTheoremProver:
@@ -24,9 +91,10 @@ class DNNTheoremProver:
         self.spec = spec
 
 
-        self.model = grb.Model()
-        self.model.setParam('OutputFlag', False)
-        self.model.setParam('Threads', 16)
+        with contextlib.redirect_stdout(open(os.devnull, 'w')):
+            self.model = grb.Model()
+            self.model.setParam('OutputFlag', False)
+            self.model.setParam('Threads', 16)
 
         # input bounds
         bounds_init = self.spec.get_input_property()
@@ -116,13 +184,13 @@ class DNNTheoremProver:
         imply_nodes = self._find_nodes(assignment)
         is_full_assignment = True if imply_nodes is None else False
 
-        substitute_dict_torch = {}
 
         inputs = torch.hstack([torch.eye(self.n_inputs), torch.zeros(self.n_inputs, 1)]).to(settings.DTYPE)
 
         layer_id = 0
         variables = self.layers_mapping.get(layer_id, None)
         flag_break = False
+        backsub_dict = {}
         for layer in self.dnn.layers:
             if variables is None: # output layer
                 output = layer.weight.mm(inputs)
@@ -146,7 +214,7 @@ class DNNTheoremProver:
                         else:
                             # inputs[i] = zero_torch
                             pass
-                        substitute_dict_torch[v] = self._get_equation(output[i])
+                        backsub_dict[v] = output[i]
 
                     layer_id += 1
                     variables = self.layers_mapping.get(layer_id, None)
@@ -157,31 +225,48 @@ class DNNTheoremProver:
                     break
 
 
-        for node in substitute_dict_torch:
+        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPICATION:
+            backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
+            kwargs = (self.n_inputs, self.lbs_init, self.ubs_init)
+            wloads = MP.get_workloads(imply_nodes, n_cpus=settings.N_THREADS)
+
+            Q = multiprocessing.Queue()
+
+            self.workers = [
+                multiprocessing.Process(target=_solve_worker, 
+                                        args=(assignment, backsub_dict_np, wl, Q, kwargs),
+                                        name=f'Thread {i}',
+                                        daemon=True) 
+                for i, wl in enumerate(wloads)
+            ]
+
+            for w in self.workers:
+                w.start()
+
+
+        backsub_dict = {k: self._get_equation(v) for k, v in backsub_dict.items()}
+
+        for node in backsub_dict:
             status = assignment.get(node, None)
             if status is None:
                 continue
             if status:
-                ci = self.model.addLConstr(substitute_dict_torch[node] >= DNNTheoremProver.epsilon)
+                ci = self.model.addLConstr(backsub_dict[node] >= DNNTheoremProver.epsilon)
             else:
-                ci = self.model.addLConstr(substitute_dict_torch[node] <= 0)
+                ci = self.model.addLConstr(backsub_dict[node] <= 0)
             self.constraints.append(ci)
 
         # debug
         if settings.DEBUG:
             self.model.write(f'gurobi/{self.count}.lp')
 
+        if not is_full_assignment:
+            self._optimize()
+            if self.model.status == grb.GRB.INFEASIBLE:
+                ccs = self.shorten_conflict_clause(assignment)
+                return False, ccs, None
 
-        self._optimize()
-        if self.model.status == grb.GRB.INFEASIBLE:
-            ccs = self.shorten_conflict_clause(assignment)
-            return False, ccs, None
-
-        if settings.DEBUG:
-            print('[+] Check assignment: `SAT`')
-
-        # output
-        if is_full_assignment:
+        else: # output
             flag_sat = False
             for cnf in output_constraint:
                 ci = [self.model.addLConstr(_) for _ in cnf]
@@ -198,6 +283,9 @@ class DNNTheoremProver:
             ccs = self.shorten_conflict_clause(assignment)
             return False, ccs, None
 
+
+        if settings.DEBUG:
+            print('[+] Check assignment: `SAT`')
 
 
         if settings.TIGHTEN_BOUND: # compute new input lower/upper bounds
@@ -288,7 +376,6 @@ class DNNTheoremProver:
                     ccs = self.shorten_conflict_clause(assignment)
                     return False, ccs, None
 
-
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             stat, adv = self.rf.eval_constraints(None)
             if stat == 'violated':
@@ -302,8 +389,8 @@ class DNNTheoremProver:
                 return True, {}, is_full_assignment
 
         self.restore_input_bounds()
-        # imply next hidden nodes
 
+        # imply next hidden nodes
         implications = {}
 
         if settings.HEURISTIC_DEEPPOLY_IMPLICATION:
@@ -331,14 +418,21 @@ class DNNTheoremProver:
                 implications[node] = {'pos': value==1, 'neg': value==-1}
 
 
-        if settings.HEURISTIC_GUROBI_IMPLICATION and imply_nodes is not None:
+        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPICATION:
+            for w in self.workers:
+                w.join()
+
+            for w in self.workers:
+                res = Q.get()
+                implications.update(res)
+        else:
             for node in imply_nodes:
                 if node in implications and (implications[node]['pos'] or implications[node]['neg']):
                     continue
 
                 implications[node] = {'pos': False, 'neg': False}
                 # neg
-                ci = self.model.addLConstr(substitute_dict_torch[node] >= DNNTheoremProver.epsilon)
+                ci = self.model.addLConstr(backsub_dict[node] >= DNNTheoremProver.epsilon)
                 self._optimize()
                 if self.model.status == grb.GRB.INFEASIBLE:
                     implications[node]['neg'] = True
@@ -347,7 +441,7 @@ class DNNTheoremProver:
                 self.model.remove(ci)
 
                 # pos
-                ci = self.model.addLConstr(substitute_dict_torch[node] <= 0)
+                ci = self.model.addLConstr(backsub_dict[node] <= 0)
                 self._optimize()
                 if self.model.status == grb.GRB.INFEASIBLE:
                     implications[node]['pos'] = True
