@@ -69,7 +69,18 @@ class DNNReLU:
 
 
 
-class DNNConv:
+class DNNConv2d:
 
     def __init__(self, layer):
-        pass
+        self.weight = layer.weight # OUT x IN x K1 x K2
+        self.bias = layer.bias
+        self.in_channels = layer.in_channels
+        self.out_channels = layer.out_channels
+        self.kernel_size = layer.kernel_size
+        self.stride = layer.stride
+        self.padding = layer.padding
+        self.groups = layer.groups
+
+    def __call__(self, x, assignment):
+        # conv2d
+        return x, False, {}

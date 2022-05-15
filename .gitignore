@@ -2,6 +2,7 @@ RacPLL/gurobi
 RacPLL/test_*
 ref/
 archive/
+vnncomp2021/
 
 
 # Byte-compiled / optimized / DLL files
