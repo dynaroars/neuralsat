@@ -102,8 +102,8 @@ def test():
 
     # sequential
     nnet = NetworkTorch(nnet_path)
-    fps_tracker = FPSTracker()
-    for _ in (pbar := trange(100)):
+    fps_tracker = FPSTracker(sigma=20)
+    for _ in (pbar := trange(1000)):
         with fps_tracker:
             deepz_result = deepz_forward(nnet, lbs, ubs)
             reluval_result = reluval_forward(nnet, lbs, ubs)
@@ -122,8 +122,8 @@ def test():
                                             name='reluval',
                                             daemon=True)
 
-    fps_tracker = FPSTracker()
-    for _ in (pbar := trange(100)):
+    fps_tracker = FPSTracker(sigma=20)
+    for _ in (pbar := trange(1000)):
         with fps_tracker:
             # start forward together
             deepz_process.forward(lbs, ubs)
