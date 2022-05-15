@@ -241,8 +241,12 @@ def test():
     fps_tracker = FPSTracker()
     for _ in (pbar := trange(100)):
         with fps_tracker:
-            deepz_result = deepz_process.forward(lbs, ubs).result()
-            reluval_result = reluval_process.forward(lbs, ubs).result()
+            # start forward together
+            deepz_future = deepz_process.forward(lbs, ubs)
+            reluval_future = reluval_process.forward(lbs, ubs)
+            # fetch results
+            deepz_result = deepz_future.result()
+            reluval_result = reluval_future.result()
         pbar.set_description(f'[Parallel] fps={fps_tracker.fps}')
     print('deepz:', deepz_result)
     print('reluval:', reluval_result)
