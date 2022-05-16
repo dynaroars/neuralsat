@@ -23,8 +23,7 @@ class ONNXParser:
     def __init__(self, filename):
         self.model = onnx.load(filename)
         self.torch_model = None
-        self.transpose_needed = False
-        self.transpose_needed_tested = False
+        self.transpose_needed = True
 
         self.pytorch_model = self.to_pytorch()
         self.model_str = self.model.SerializeToString()
@@ -39,10 +38,13 @@ class ONNXParser:
     def to_pytorch(self):
         nodes = self.model.graph.node
 
+        for i, node in enumerate(nodes):
+            print(i, '------->\n', node.op_type)
+
         self.input_nodes = 1
         for dim in self.model.graph.input[0].type.tensor_type.shape.dim:
             self.input_nodes *= dim.dim_value
-            
+
         self.output_nodes = 1
         for dim in self.model.graph.output[0].type.tensor_type.shape.dim:
             self.output_nodes *= dim.dim_value
@@ -55,40 +57,30 @@ class ONNXParser:
 
         curr_input_idx = nodes[0].input[0]
         layers = []
-        node_counts = self.input_nodes
 
         i = 0
         while i < len(nodes):
-            layer, curr_input_idx, i, node_counts = self._process_node(curr_input_idx, nodes, i, node_counts)
+            layer, curr_input_idx, i = self._process_node(curr_input_idx, nodes, i)
             if layer is not None:
                 layers.append(layer)
+                print(i, layer)
+        # exit()
         return NetworkTorchFromONNX(layers)
 
     def _get_weights(self, node):
         return [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name in node.input]
 
 
-    def _process_node(self, curr_input_idx, nodes, i, input_nodes):
+    def _process_node(self, curr_input_idx, nodes, i):
         node = nodes[i]
-
-        if curr_input_idx not in node.input and not self._expect_unexpected_input:
-            print('cac')
 
         self._expect_unexpected_input = False
         curr_input_idx = node.output[0]
 
-        if node.op_type in ["Sub", "Div"]:
-            return None, curr_input_idx, i + 1, input_nodes
-
-        elif node.op_type == "MatMul":
+        if node.op_type == "MatMul":
 
             [weights] = self._get_weights(node)
-            if not self.transpose_needed_tested:
-                if weights.shape[0] == input_nodes:
-                    self.transpose_needed = False
-                else:
-                    self.transpose_needed = True
-                self.transpose_needed_tested = True
+
             if self.transpose_needed:
                 weights = weights.T
 
@@ -100,34 +92,40 @@ class ONNXParser:
                 bias = np.zeros(weights.shape[1])
                 next_i = i + 1
                 curr_input_idx = node.output[0]
-
+            # print(weights.shape)
             layer = nn.Linear(weights.shape[0], weights.shape[1])
             layer.weight.data = torch.Tensor(weights.T.copy())
             layer.bias.data = torch.Tensor(bias.copy())
-            return layer, curr_input_idx, next_i, weights.shape[1]
+            return layer, curr_input_idx, next_i
 
         elif node.op_type == "Relu":
-            return nn.ReLU(), curr_input_idx, i + 1, input_nodes
+            return nn.ReLU(), curr_input_idx, i + 1
 
-        elif node.op_type in ["Flatten", "Shape", "Constant", "Gather", "Unsqueeze", "Concat", "Reshape"]:
-            return None, curr_input_idx, i + 1, input_nodes
+        elif node.op_type == "Flatten":
+            layer = nn.Flatten()
+            return layer, curr_input_idx, i + 1
 
         elif node.op_type == "Gemm":
-            return self._gemm_to_torch(node), curr_input_idx, i + 1, None
+            return self._gemm_to_torch(node), curr_input_idx, i + 1
 
         elif node.op_type == "Conv":
-            return self.conv_to_torch(node), curr_input_idx, i + 1, None
+            return self._conv_to_torch(node), curr_input_idx, i + 1
+
+        else:
+            print('Discard:', node.op_type)
+            return None, curr_input_idx, i + 1
+
 
 
     def _gemm_to_torch(self, node) -> nn.Linear:
         [weights] = [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name == node.input[1]]
         [bias] = [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name == node.input[2]]
 
-        affine = nn.Linear(weights.shape[0], weights.shape[1])
-        affine.weight.data = torch.Tensor(weights.copy())
-        affine.bias.data = torch.Tensor(bias.copy())
+        layer = nn.Linear(weights.shape[1], weights.shape[0])
+        layer.weight.data = torch.Tensor(weights.copy())
+        layer.bias.data = torch.Tensor(bias.copy())
 
-        return affine
+        return layer
 
     def _conv_to_torch(self, node) -> nn.Linear:
         [weights] = [onnx.numpy_helper.to_array(t).astype(float) for t in self.model.graph.initializer if t.name == node.input[1]]
