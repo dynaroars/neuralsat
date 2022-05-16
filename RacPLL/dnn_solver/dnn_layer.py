@@ -1,3 +1,4 @@
+import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
@@ -74,6 +75,7 @@ class DNNConv2d:
     def __init__(self, layer):
         self.weight = layer.weight # OUT x IN x K1 x K2
         self.bias = layer.bias
+
         self.in_channels = layer.in_channels
         self.out_channels = layer.out_channels
         self.kernel_size = layer.kernel_size
@@ -81,6 +83,18 @@ class DNNConv2d:
         self.padding = layer.padding
         self.groups = layer.groups
 
+        self.run_conv2d = True
+
     def __call__(self, x, assignment):
-        # conv2d
+
+        if self.run_conv2d:
+            x = x.permute(3, 0, 1, 2)
+            x = F.conv2d(x, self.weight, bias=None, stride=self.stride)
+            x = x.permute(1, 2, 3, 0)
+        else:
+            x = x.unsqueeze(0)
+            x = F.conv3d(x, self.weight.unsqueeze(-1), bias=None, stride=(*self.stride, 1))
+            x = x.squeeze(0)
+
+        x[..., -1] += self.bias[:, None, None]
         return x, False, {}
