@@ -5,7 +5,7 @@ import numpy as np
 
 import settings
 
-class NetworkTorch(nn.Module):
+class NetworkNNET(nn.Module):
 
     def __init__(self, nnet_path):
         super().__init__()
@@ -26,8 +26,8 @@ class NetworkTorch(nn.Module):
             if i < n_layers - 1:
                 layers.append(nn.ReLU())
         
-        self.input_shape = (None, weights[0].shape[1])
-        self.output_shape = (None, weights[-1].shape[0])
+        self.n_input = weights[0].shape[1]
+        self.n_output = weights[-1].shape[0]
         
         self.input_lower_bounds = lbs
         self.input_upper_bounds = ubs
@@ -41,13 +41,16 @@ class NetworkTorch(nn.Module):
 
         self.layers = nn.Sequential(*layers)
 
+        # update after loading model
+        self.layers_mapping = None
+
     @torch.no_grad()
     def forward(self, x):
         return self.layers(x)
 
 
     @torch.no_grad()
-    def get_assignment(self, x, layers_mapping):
+    def get_assignment(self, x):
         idx = 0
         implication = {}
         for layer in self.layers:
@@ -55,7 +58,7 @@ class NetworkTorch(nn.Module):
             if isinstance(layer, nn.ReLU):
                 s = torch.zeros_like(x, dtype=int) 
                 s[x > 0] = 1
-                implication.update(dict(zip(layers_mapping[idx], s.numpy().astype(dtype=bool))))
+                implication.update(dict(zip(self.layers_mapping[idx], s.numpy().astype(dtype=bool))))
                 idx += 1
         return implication
 

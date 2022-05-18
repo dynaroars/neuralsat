@@ -4,18 +4,17 @@ import time
 from dnn_solver.dnn_solver import DNNSolver
 from dnn_solver.spec import SpecificationVNNLIB
 from utils.read_vnnlib import read_vnnlib_simple
-from utils.read_nnet import NetworkTorch
+from utils.dnn_parser import DNNParser
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net', type=str, required=True, help='NNET file path.')
+    parser.add_argument('--net', type=str, required=True, help='NNET/ONNX file path.')
     parser.add_argument('--spec', type=str, required=True, help='VNNLIB file path.')
-
     args = parser.parse_args()
 
-    net = NetworkTorch(args.net)
-    spec_list = read_vnnlib_simple(args.spec, net.input_shape[1], net.output_shape[1])
+    net = DNNParser.parse(args.net)
+    spec_list = read_vnnlib_simple(args.spec, net.n_input, net.n_output)
 
     tic = time.time()
     for i, s in enumerate(spec_list):

@@ -14,7 +14,7 @@ from sat_solver.sat_solver import Solver
 
 class CustomSATSolver(Solver):
 
-    def __init__(self, formula=None, vars_mapping=None, layers_mapping=None, first_var=None, max_new_clauses=float('inf'), 
+    def __init__(self, formula=None, variables=None, layers_mapping=None, first_var=None, max_new_clauses=float('inf'), 
         halving_period=10000, theory_solver=None):
     
         super().__init__()
@@ -39,13 +39,10 @@ class CustomSATSolver(Solver):
         self._assigned_vsids_count = {}
         self._step_counter = 0
 
-        self._vars_mapping = vars_mapping
         self._layers_mapping = layers_mapping
         self._reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
 
-        self._all_vars = sortedcontainers.SortedList()
-        for v in vars_mapping:
-            self._all_vars.add(vars_mapping[v])
+        self._all_vars = sortedcontainers.SortedList(variables)
 
         for var in self._all_vars:
             self._formula.add(frozenset({var, -var}))

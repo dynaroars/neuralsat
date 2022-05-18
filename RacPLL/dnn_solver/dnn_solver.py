@@ -11,12 +11,12 @@ import settings
 
 class TheorySolver(Solver):
 
-    def __init__(self, formula, vars_mapping, layers_mapping, first_var=None, 
+    def __init__(self, formula, variables, layers_mapping, first_var=None, 
         max_new_clauses=float('inf'), halving_period=10000):
         super().__init__()
 
         self._solver = CustomSATSolver(formula,
-                                       vars_mapping,
+                                       variables,
                                        layers_mapping,
                                        max_new_clauses=max_new_clauses,
                                        halving_period=halving_period,
@@ -39,10 +39,11 @@ class DNNSolver(TheorySolver):
     def __init__(self, dnn, spec):
 
         self.dnn = dnn
-        vars_mapping, layers_mapping = DNNParser.parse(self.dnn)
+        layers_mapping = dnn.layers_mapping
+        variables = [v for d in layers_mapping.values() for v in d]
 
-        super().__init__(formula=None, vars_mapping=vars_mapping, layers_mapping=layers_mapping)
-        self.dnn_theorem_prover = DNNTheoremProver(self.dnn, copy.deepcopy(layers_mapping), spec=spec)
+        super().__init__(formula=None, variables=variables, layers_mapping=copy.deepcopy(layers_mapping))
+        self.dnn_theorem_prover = DNNTheoremProver(self.dnn, spec=spec)
 
     def propagate(self):
         if settings.DEBUG:

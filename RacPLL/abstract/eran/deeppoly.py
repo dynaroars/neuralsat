@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch
 
 from typing import Tuple
-from utils.read_nnet import NetworkTorch
+from utils.read_nnet import NetworkNNET
 
 class CorinaNet(nn.Module):
 
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     # upper = torch.Tensor([3, 4])
 
 
-    net = NetworkTorch('example/random.nnet')
+    net = NetworkNNET('example/random.nnet')
 
     # net = CorinaNet().eval()
     lower = torch.Tensor([-2, 1])

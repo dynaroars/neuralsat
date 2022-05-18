@@ -14,6 +14,7 @@ from heuristic.randomized_falsification import randomized_falsification
 from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepz, assigned_deeppoly
 from dnn_solver.dnn_layer import DNNLayer
+from utils.read_nnet import NetworkNNET
 from utils.misc import MP
 import settings
 
@@ -23,9 +24,9 @@ class DNNTheoremProver:
     epsilon = 1e-5
     skip = 1e-3
 
-    def __init__(self, dnn, layers_mapping, spec):
+    def __init__(self, dnn, spec):
         self.dnn = dnn
-        self.layers_mapping = layers_mapping
+        self.layers_mapping = dnn.layers_mapping
         self.spec = spec
 
 
@@ -59,16 +60,15 @@ class DNNTheoremProver:
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             self.rf = randomized_falsification.RandomizedFalsification(dnn, spec)
 
-        self.transformer = DNNLayer(dnn, layers_mapping)
-        self.default_input = torch.hstack([torch.eye(self.n_inputs), torch.zeros(self.n_inputs, 1)]).to(settings.DTYPE)
+        self.transformer = DNNLayer(dnn)
 
     @property
     def n_outputs(self):
-        return self.dnn.output_shape[1]
+        return self.dnn.n_output
 
     @property
     def n_inputs(self):
-        return self.dnn.input_shape[1]
+        return self.dnn.n_input
 
 
     def _update_input_bounds(self, lbs, ubs):
@@ -126,7 +126,7 @@ class DNNTheoremProver:
         is_full_assignment = True if unassigned_nodes is None else False
 
         # forward
-        output_mat, backsub_dict = self.transformer(self.default_input, assignment)
+        output_mat, backsub_dict = self.transformer(assignment)
 
         # parallel implication
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
@@ -140,6 +140,11 @@ class DNNTheoremProver:
                                                     daemon=True) for i, wl in enumerate(wloads)]
             for w in self.workers:
                 w.start()
+
+        print(self.layers_mapping)
+        for k, v in backsub_dict.items():
+            print(k, v.detach().numpy())
+        print()
 
         # convert to gurobi LinExpr
         backsub_dict = {k: self._get_equation(v) for k, v in backsub_dict.items()}
@@ -297,7 +302,7 @@ class DNNTheoremProver:
 
         implications = {}
 
-        if settings.HEURISTIC_DEEPPOLY_IMPLICATION:
+        if not settings.HEURISTIC_DEEPZONO and settings.HEURISTIC_DEEPPOLY_IMPLICATION:
             _, hidden_bounds = self.deeppoly(self.lbs_init, self.ubs_init, assignment=assignment)
 
             signs = {}

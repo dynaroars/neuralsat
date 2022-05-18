@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import Tuple
 
-from utils.read_nnet import NetworkTorch
+from utils.read_nnet import NetworkNNET
 from utils.dnn_parser import DNNParser
 
 
@@ -357,7 +357,7 @@ if __name__ == '__main__':
     # l, u = d(lower, upper)
     # print(l)
     # print(u)
-    net = NetworkTorch('example/paper.nnet')
+    net = NetworkNNET('example/paper.nnet')
 
     # net = CorinaNet().eval()
     lower = torch.Tensor([-1, -2])
