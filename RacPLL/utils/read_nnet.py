@@ -43,6 +43,7 @@ class NetworkNNET(nn.Module):
 
         # update after loading model
         self.layers_mapping = None
+        self.input_shape = (1, self.n_input)
 
     @torch.no_grad()
     def forward(self, x):

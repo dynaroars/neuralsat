@@ -7,7 +7,6 @@ import numpy as np
 from typing import Tuple
 
 from utils.read_nnet import NetworkNNET
-from utils.dnn_parser import DNNParser
 
 
 class AssignedDeepPoly:
@@ -15,8 +14,6 @@ class AssignedDeepPoly:
     def __init__(self, net, back_sub_steps=0):
         self.net = net
         self.back_sub_steps = back_sub_steps
-
-        self.vars_mapping, self.layers_mapping = DNNParser.parse(net)
 
         self._build_network_transformer()
 
@@ -29,7 +26,7 @@ class AssignedDeepPoly:
                 last = AssignedDeepPolyAffineTransformer(layer.weight, layer.bias, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
                 self.layers += [last]
             elif isinstance(layer, torch.nn.ReLU):
-                last = AssignedDeepPolyReLUTansformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=(self.vars_mapping, self.layers_mapping))
+                last = AssignedDeepPolyReLUTansformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping)
                 idx += 1
                 self.layers += [last]
             else:
@@ -231,7 +228,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
         self.back_sub_steps = back_sub_steps
         self.idx = idx
 
-        self.vars_mapping, self.layers_mapping = kwargs
+        self.layers_mapping = kwargs
     
     def forward(self, bounds, assignment):
         # print('\n\n--------start relu--------')

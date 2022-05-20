@@ -45,8 +45,9 @@ class DNNLayer:
         if self.linear_input: #linear
             return torch.hstack([torch.eye(self.net.n_input), torch.zeros(self.net.n_input, 1)]).to(settings.DTYPE)
         else: # conv2d
-            _, C, H, W = self.net.input_shape
-            # assert N == 1, f'batch size {N} > 1'
+            N, C, H, W = self.net.input_shape
+            assert C*H*W == self.net.n_input
+            assert N == 1, f'batch size {N} > 1'
             default_input = F.one_hot(torch.arange(0, C*H*W)).view(C, H, W, C*H*W)
             return torch.concat([default_input, torch.zeros(C, H, W, 1)], dim=-1).to(settings.DTYPE)
 

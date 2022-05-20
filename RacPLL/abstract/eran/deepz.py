@@ -5,6 +5,12 @@ import os
 import settings
 
 def relu_transform(center, error):
+
+    center_orig_shape = center.shape
+    error_orig_shape = error.shape
+
+    center, error = flatten_transform(center, error)
+
     # bounds
     error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
     ub = center + error_apt
@@ -40,28 +46,45 @@ def relu_transform(center, error):
     for e in range(n_new_error):
         new_error[n_error + e, case_idx[1][e]] = mu[e]
 
+    new_center = new_center.view(center_orig_shape)
+    new_error = new_error.view((new_error.shape[0],) + error_orig_shape[1:])
+
     return new_center, new_error
 
 
 def linear_transform(layer, center, error):
-    center = layer.weight.mm(center.unsqueeze(-1))
+    center = layer.weight @ center.squeeze()
     center = center.squeeze()
     if layer.bias is not None:
         if len(layer.bias) == 1:
             center = center.unsqueeze(0)
         center += layer.bias
-    error = error.mm(layer.weight.permute(1, 0))
+    error = error @ layer.weight.permute(1, 0)
+    return center, error
+
+
+def conv_transform(layer, center, error):
+    center = torch.nn.functional.conv2d(center, 
+                                        layer.weight.to(settings.DTYPE), 
+                                        layer.bias.to(settings.DTYPE), 
+                                        stride=layer.stride,
+                                        padding=layer.padding)
+    error = torch.nn.functional.conv2d(error, 
+                                       layer.weight.to(settings.DTYPE), 
+                                       stride=layer.stride,
+                                       padding=layer.padding)
     return center, error
 
 
 def flatten_transform(center, error):
-    center = center.view(1, -1)
+    center = center.flatten()
     error = error.view(error.shape[0], -1)
     return center, error
 
 
 
 def get_bound(center, error):
+    center, error = flatten_transform(center, error)
     error_apt = torch.sum(error.abs(), dim=0, keepdim=True)
     ub = center + error_apt
     lb = center - error_apt
@@ -73,58 +96,34 @@ def get_bound(center, error):
 
 @torch.no_grad()
 def forward(net, lower, upper):
-    center = (upper + lower) / 2
-    error = (upper - lower) / 2
 
-    h = lower.shape[0]
+    lbs = lower.view(net.input_shape)
+    ubs = upper.view(net.input_shape)
 
-    error = torch.diag(torch.ones(h) * error.flatten()).to(settings.DTYPE)
-    error = error.reshape((h, h))
+    center = (ubs + lbs) / 2
+    error = (ubs - lbs) / 2
+
+    error = torch.diag(torch.ones(net.n_input) * error.flatten())
+    error = error.view((net.n_input, ) + net.input_shape[1:])
+
+    center = center.to(settings.DTYPE)
+    error = error.to(settings.DTYPE)
 
     hidden_bounds = []
 
-    # print('------------------------------------------')
-    # print('input')
-    # print('center', center.numpy().tolist())
-    # print('error', error.numpy().tolist())
-    # l, u = get_bound(center, error)
-    # print('l', l.numpy().tolist())
-    # print('u', u.numpy().tolist())
-    # print()
-    
     for layer in net.layers:
         if isinstance(layer, nn.Linear):
             center, error = linear_transform(layer, center, error)
         elif isinstance(layer, nn.ReLU):
             hidden_bounds.append(get_bound(center, error))
             center, error = relu_transform(center, error)
+        elif isinstance(layer, nn.Conv2d):
+            center, error = conv_transform(layer, center, error)
+        elif isinstance(layer, nn.Flatten):
+            center, error = flatten_transform(center, error)
         else:
             raise NotImplementedError
         
-    #     print(layer)
-    #     print('center', center.numpy().tolist())
-    #     print('error', error.numpy().tolist())
-    #     l, u = get_bound(center, error)
-    #     print('l', l.numpy().tolist())
-    #     print('u', u.numpy().tolist())
-    #     print()
-
-    # print('------------------------------------------')
     return get_bound(center, error), hidden_bounds
 
-
-
-
-# @torch.no_grad()
-# def forward2(net, lower, upper, steps=2):
-#     bounds = [(l, u) for l, u in zip(lower, upper)]
-#     bounds = [torch.linspace(b[0], b[1], steps=steps) for b in bounds]
-#     bounds = [[torch.Tensor([b[i], b[i+1]]) for i in range(b.shape[0] - 1)] for b in bounds]
-#     bounds = itertools.product(*bounds)
-#     splits = [(torch.Tensor([_[0] for _ in b]), torch.Tensor([_[1] for _ in b])) for b in bounds]
-
-#     bounds = Parallel(n_jobs=os.cpu_count())(delayed(forward)(net, l, u) for l,u in splits)
-#     lbs = torch.stack([b[0] for b in bounds]).squeeze()
-#     ubs = torch.stack([b[1] for b in bounds]).squeeze()
-#     return lbs.min(0).values, ubs.max(0).values
 

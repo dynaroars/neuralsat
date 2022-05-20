@@ -24,9 +24,9 @@ class DNNTheoremProver:
     epsilon = 1e-5
     skip = 1e-3
 
-    def __init__(self, dnn, spec):
-        self.dnn = dnn
-        self.layers_mapping = dnn.layers_mapping
+    def __init__(self, net, spec):
+        self.net = net
+        self.layers_mapping = net.layers_mapping
         self.spec = spec
 
 
@@ -51,24 +51,24 @@ class DNNTheoremProver:
         self.constraints = []
 
         if settings.HEURISTIC_DEEPPOLY:
-            self.deeppoly = assigned_deeppoly.AssignedDeepPoly(dnn, back_sub_steps=100)
+            self.deeppoly = assigned_deeppoly.AssignedDeepPoly(net, back_sub_steps=100)
 
         # clean trash
         os.system('rm -rf gurobi/*')
         os.makedirs('gurobi', exist_ok=True)
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
-            self.rf = randomized_falsification.RandomizedFalsification(dnn, spec)
+            self.rf = randomized_falsification.RandomizedFalsification(net, spec)
 
-        self.transformer = DNNLayer(dnn)
+        self.transformer = DNNLayer(net)
 
     @property
     def n_outputs(self):
-        return self.dnn.n_output
+        return self.net.n_output
 
     @property
     def n_inputs(self):
-        return self.dnn.n_input
+        return self.net.n_input
 
 
     def _update_input_bounds(self, lbs, ubs):
@@ -141,10 +141,10 @@ class DNNTheoremProver:
             for w in self.workers:
                 w.start()
 
-        print(self.layers_mapping)
-        for k, v in backsub_dict.items():
-            print(k, v.detach().numpy())
-        print()
+        # print(self.layers_mapping)
+        # for k, v in backsub_dict.items():
+        #     print(k, v.detach().numpy())
+        # print()
 
         # convert to gurobi LinExpr
         backsub_dict = {k: self._get_equation(v) for k, v in backsub_dict.items()}
@@ -231,7 +231,7 @@ class DNNTheoremProver:
                 print('\t- upper:', ubs.data)
 
             if settings.HEURISTIC_DEEPZONO: # eran deepzono
-                (lower, upper), _ = deepz.forward(self.dnn, lbs, ubs)
+                (lower, upper), _ = deepz.forward(self.net, lbs, ubs)
 
                 if settings.DEBUG:
                     print('[+] HEURISTIC DEEPZONO output')
@@ -370,14 +370,14 @@ class DNNTheoremProver:
         if self.model.status == grb.GRB.LOADED:
             self._optimize()
         if self.model.status == grb.GRB.OPTIMAL:
-            return torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE)
+            return torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE).view(self.net.input_shape)
         return None
 
 
     def check_solution(self, solution):
-        if any(solution < self.lbs_init) or any(solution > self.ubs_init):
+        if torch.any(solution < self.lbs_init.view(self.net.input_shape)) or torch.any(solution > self.ubs_init.view(self.net.input_shape)):
             return False
-        if self.spec.check_solution(self.dnn(solution)):
+        if self.spec.check_solution(self.net(solution)):
             return True
         return False
 

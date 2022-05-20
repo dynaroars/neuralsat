@@ -59,7 +59,7 @@ class SpecificationVNNLIB:
         for lhs, rhs in self.mat:
             lhs = torch.tensor(lhs, dtype=settings.DTYPE)
             rhs = torch.tensor(rhs, dtype=settings.DTYPE)
-            vec = lhs @ output
+            vec = lhs @ output.squeeze()
             if torch.all(vec <= rhs):
                 return True
         return False
