@@ -5,8 +5,6 @@ import torch
 import random
 import numpy as np
 
-from typing import Tuple
-
 from utils.read_nnet import NetworkNNET
 
 
@@ -103,7 +101,7 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         self.bounds[1, indu] = new_bounds[1, indu]
         self.params = new_params
         
-    def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
+    def _back_sub(self, max_steps, params=None):
         if params is None:
             params = self.weight.data, self.weight.data, self.bias.data, self.bias.data
 
@@ -187,7 +185,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
         self.bounds[1, indu] = new_bounds[1, indu]
         self.params = new_params
 
-    def _back_sub(self, max_steps, params : Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] = None):
+    def _back_sub(self, max_steps, params=None):
         if self.last_conv_flag:
 
             if params is None:
