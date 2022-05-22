@@ -217,7 +217,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
             else:
                 lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[1]) + bl
                 upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[0]) + bu
-                return torch.stack([lower, upper], 1), params
+                return torch.stack([lower, upper], 0), params
 
 
 class AssignedDeepPolyFlattenTransformer(nn.Module):
