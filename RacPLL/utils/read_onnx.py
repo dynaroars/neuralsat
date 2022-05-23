@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import onnx
 
-
+import settings
 
 def make_model_with_graph(model, graph, check_model=True):
     'copy a model with a new graph'
@@ -260,8 +260,8 @@ class ONNXParser:
                 curr_input_idx = node.output[0]
             # print(weights.shape)
             layer = nn.Linear(weights.shape[1], weights.shape[0])
-            layer.weight.data = torch.Tensor(weights.copy())
-            layer.bias.data = torch.Tensor(bias.copy())
+            layer.weight.data = torch.Tensor(weights.copy()).to(settings.DTYPE)
+            layer.bias.data = torch.Tensor(bias.copy()).to(settings.DTYPE)
             return layer, curr_input_idx, next_i
 
         elif node.op_type == "Relu":
@@ -288,8 +288,8 @@ class ONNXParser:
         [bias] = [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name == node.input[2]]
 
         layer = nn.Linear(weights.shape[1], weights.shape[0])
-        layer.weight.data = torch.Tensor(weights.copy())
-        layer.bias.data = torch.Tensor(bias.copy())
+        layer.weight.data = torch.Tensor(weights.copy()).to(settings.DTYPE)
+        layer.bias.data = torch.Tensor(bias.copy()).to(settings.DTYPE)
 
         return layer
 
@@ -319,8 +319,8 @@ class ONNXParser:
                          padding=pads[0:2],
                          groups=groups,
                          dilation=dilations)
-        conv.weight.data = torch.Tensor(weights.copy())
-        conv.bias.data = torch.Tensor(bias.copy())
+        conv.weight.data = torch.Tensor(weights.copy()).to(settings.DTYPE)
+        conv.bias.data = torch.Tensor(bias.copy()).to(settings.DTYPE)
 
         return conv
 

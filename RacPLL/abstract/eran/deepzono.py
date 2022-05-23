@@ -72,8 +72,8 @@ class LinearTransformer(nn.Module):
 
     def __init__(self, layer):
         super(LinearTransformer, self).__init__()
-        self.weight = layer.weight
-        self.bias = layer.bias
+        self.weight = layer.weight.to(settings.DTYPE)
+        self.bias = layer.bias.to(settings.DTYPE)
 
     def forward(self, center, error):
         center = self.weight @ center.squeeze()
@@ -153,19 +153,19 @@ class Conv2dTransformer(nn.Module):
 
     def __init__(self, layer):
         super(Conv2dTransformer, self).__init__()
-        self.weight = layer.weight
-        self.bias = layer.bias
+        self.weight = layer.weight.to(settings.DTYPE)
+        self.bias = layer.bias.to(settings.DTYPE)
         self.stride = layer.stride
         self.padding = layer.padding
 
     def forward(self, center, error):
         center = torch.nn.functional.conv2d(center, 
-                                            self.weight.to(settings.DTYPE), 
-                                            self.bias.to(settings.DTYPE), 
+                                            self.weight, 
+                                            self.bias, 
                                             stride=self.stride,
                                             padding=self.padding)
         error = torch.nn.functional.conv2d(error, 
-                                           self.weight.to(settings.DTYPE), 
+                                           self.weight, 
                                            stride=self.stride,
                                            padding=self.padding)
         return center, error

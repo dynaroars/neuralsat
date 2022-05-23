@@ -67,8 +67,8 @@ class SymbolicNetwork:
 class SymbolicLinear:
 
     def __init__(self, layer):
-        self.weight = layer.weight
-        self.bias = layer.bias
+        self.weight = layer.weight.to(settings.DTYPE)
+        self.bias = layer.bias.to(settings.DTYPE)
 
 
     def __call__(self, x, assignment):
@@ -101,8 +101,8 @@ class SymbolicReLU:
 class SymbolicConv2d:
 
     def __init__(self, layer):
-        self.weight = layer.weight # OUT x IN x K1 x K2
-        self.bias = layer.bias
+        self.weight = layer.weight.to(settings.DTYPE) # OUT x IN x K1 x K2
+        self.bias = layer.bias.to(settings.DTYPE)
 
         self.in_channels = layer.in_channels
         self.out_channels = layer.out_channels
