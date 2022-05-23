@@ -45,13 +45,15 @@ class AssignedDeepPoly:
         for layer in self.layers:
             if isinstance(layer, AssignedDeepPolyReLUTansformer):
                 hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
+
             bounds, params = layer(bounds, assignment)
+
+            # if isinstance(layer, AssignedDeepPolyAffineTransformer) or isinstance(layer, AssignedDeepPolyConvTransformer):
             if params is not None:
                 hidden_params.append(params)
-        self.bounds = bounds
         if return_params:
-            return (self.bounds[0], self.bounds[1]), hidden_bounds, hidden_params
-        return (self.bounds[0], self.bounds[1]), hidden_bounds
+            return (bounds[0], bounds[1]), hidden_bounds, hidden_params
+        return (bounds[0], bounds[1]), hidden_bounds
 
     def get_params(self):
         return self.layers[-1].params    
@@ -228,9 +230,9 @@ class AssignedDeepPolyFlattenTransformer(nn.Module):
         return b, None
     
     def _back_sub(self, max_steps, params=None):
-        bounds, _ = self.last._back_sub(max_steps, params=params)
+        bounds, params = self.last._back_sub(max_steps, params=params)
         bounds = torch.stack([bounds[:len(bounds)//2], bounds[len(bounds)//2:]], 0)
-        return bounds, None
+        return bounds, params
     
     @property
     def beta(self):

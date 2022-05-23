@@ -271,7 +271,7 @@ class DNNTheoremProver:
                     self._optimize()
                     self.model.remove(ci)
                     if self.model.status == grb.GRB.OPTIMAL:
-                        tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE)
+                        tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE).view(self.net.input_shape)
                         if self.check_solution(tmp_input):
                             self.solution = tmp_input
                             # print('ngon')
