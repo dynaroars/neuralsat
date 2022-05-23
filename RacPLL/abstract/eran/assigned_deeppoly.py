@@ -110,12 +110,12 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
         if max_steps > 0 and self.last.last is not None:
             Mlnew = torch.clamp(Ml, min=0) * self.last.beta + torch.clamp(Ml, max=0) * self.last.lmbda
             Munew = torch.clamp(Mu, min=0) * self.last.lmbda + torch.clamp(Mu, max=0) * self.last.beta
-            blnew = bl + torch.matmul(torch.clamp(Ml, max=0), self.last.mu)
-            bunew = bu + torch.matmul(torch.clamp(Mu, min=0), self.last.mu)
+            blnew = bl + torch.clamp(Ml, max=0) @ self.last.mu
+            bunew = bu + torch.clamp(Mu, min=0) @ self.last.mu
             return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
         else:
-            lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[1]) + bl
-            upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[0]) + bu
+            lower = torch.clamp(Ml, min=0) @ self.last.bounds[0] + torch.clamp(Ml, max=0) @ self.last.bounds[1] + bl
+            upper = torch.clamp(Mu, min=0) @ self.last.bounds[1] + torch.clamp(Mu, max=0) @ self.last.bounds[0] + bu
             return torch.stack([lower, upper], 0), params
 
     def __str__(self):
@@ -155,7 +155,7 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
         self.bounds[:, ind2] = bounds[:, ind2]
         self.beta[ind2] = torch.ones_like(self.beta[ind2])
         if assignment is not None:
-            la = np.array([assignment.get(i, None) for i in self.layers_mapping[self.idx]])
+            la = torch.Tensor([assignment.get(i, 2) for i in self.layers_mapping[self.idx]]).view(self.lmbda.shape)
             active_ind = la==True
             inactive_ind = la==False
 
@@ -187,15 +187,14 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
 
     def _back_sub(self, max_steps, params=None):
         if self.last_conv_flag:
-
             if params is None:
                 params = torch.diag(self.beta.flatten()), torch.diag(self.lmbda.flatten()), torch.zeros_like(self.mu).flatten(), self.mu.flatten()
             Ml, Mu, bl, bu = params
             if max_steps > 0 and self.last.last is not None:
-                Mlnew = torch.matmul(Ml, self.last.weights_backsub)
-                Munew = torch.matmul(Mu, self.last.weights_backsub)
-                blnew = bl + torch.matmul(Ml, self.last.bias_backsub).flatten()
-                bunew = bu + torch.matmul(Mu, self.last.bias_backsub).flatten()
+                Mlnew = Ml @ self.last.weights_backsub
+                Munew = Mu @ self.last.weights_backsub
+                blnew = bl + (Ml @ self.last.bias_backsub).flatten()
+                bunew = bu + (Mu @ self.last.bias_backsub).flatten()
                 return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
             else:
                 lower = (torch.clamp(Ml, min=0) @ self.last.bounds[0].flatten() + torch.clamp(Ml, max=0) @ self.last.bounds[1].flatten()) + bl
@@ -207,14 +206,14 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
             Ml, Mu, bl, bu = params
 
             if max_steps > 0 and self.last.last is not None:
-                Mlnew = torch.matmul(Ml, self.last.weight)
-                Munew = torch.matmul(Mu, self.last.weight) 
-                blnew = bl + torch.matmul(Ml, self.last.bias)
-                bunew = bu + torch.matmul(Mu, self.last.bias)
+                Mlnew = Ml @ self.last.weight
+                Munew = Mu @ self.last.weight 
+                blnew = bl + Ml @ self.last.bias
+                bunew = bu + Mu @ self.last.bias
                 return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
             else:
-                lower = torch.matmul(torch.clamp(Ml, min=0), self.last.bounds[0]) + torch.matmul(torch.clamp(Ml, max=0), self.last.bounds[1]) + bl
-                upper = torch.matmul(torch.clamp(Mu, min=0), self.last.bounds[1]) + torch.matmul(torch.clamp(Mu, max=0), self.last.bounds[0]) + bu
+                lower = torch.clamp(Ml, min=0) @ self.last.bounds[0] + torch.clamp(Ml, max=0) @ self.last.bounds[1] + bl
+                upper = torch.clamp(Mu, min=0) @ self.last.bounds[1] + torch.clamp(Mu, max=0) @ self.last.bounds[0] + bu
                 return torch.stack([lower, upper], 0), params
 
 
@@ -231,7 +230,7 @@ class AssignedDeepPolyFlattenTransformer(nn.Module):
     def _back_sub(self, max_steps, params=None):
         bounds, _ = self.last._back_sub(max_steps, params=params)
         bounds = torch.stack([bounds[:len(bounds)//2], bounds[len(bounds)//2:]], 0)
-        return bounds, params
+        return bounds, None
     
     @property
     def beta(self):
@@ -302,7 +301,6 @@ class AssignedDeepPolyConvTransformer(nn.Module):
         reshape_conv = ReshapeConv(H, W, self.in_channels, self.conv)
         ## hacky but works: find toeplitz by jacobian
         j = jacobian(reshape_conv, inputs)
-        j.requires_grad = False
         return j
 
     def forward(self, bounds, assignment):
@@ -336,8 +334,8 @@ class AssignedDeepPolyConvTransformer(nn.Module):
         if max_steps > 0 and self.last.last is not None:
             Mlnew = torch.clamp(Ml, min=0) * self.last.beta.flatten() + torch.clamp(Ml, max=0)* self.last.lmbda.flatten()
             Munew = torch.clamp(Mu, min=0) * self.last.lmbda.flatten() + torch.clamp(Mu, max=0)* self.last.beta.flatten()
-            blnew = bl + torch.matmul(torch.clamp(Ml, max=0), self.last.mu.flatten())
-            bunew = bu + torch.matmul(torch.clamp(Mu, min=0), self.last.mu.flatten()) 
+            blnew = bl + torch.clamp(Ml, max=0) @ self.last.mu.flatten()
+            bunew = bu + torch.clamp(Mu, min=0) @ self.last.mu.flatten()
             return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
         else:
             lower = (torch.clamp(Ml, min=0) @ self.last.bounds[0].flatten() + torch.clamp(Ml, max=0) @ self.last.bounds[1].flatten()).flatten() + bl
