@@ -8,9 +8,6 @@ class RandomizedFalsification:
 
     def __init__(self, net, spec):
 
-        self.n_inputs = net.input_shape[1]
-        self.n_outputs = net.output_shape[1]
-        
         self.bounds = spec.bounds
         self.mat = spec.mat
 
@@ -32,8 +29,8 @@ class RandomizedFalsification:
 
 
         for arr, _ in self.mat:
-            target_dict = dict.fromkeys(range(self.n_outputs), 0)
-            obj_dict = dict.fromkeys(range(self.n_outputs), 0)
+            target_dict = dict.fromkeys(range(self.net.n_output), 0)
+            obj_dict = dict.fromkeys(range(self.net.n_output), 0)
             for k in range(len(arr)):
                 for kk in range(len(arr[k])):
                     if (arr[k][kk] != 0):
@@ -70,7 +67,6 @@ class RandomizedFalsification:
     def eval(self, input_ranges=None, timeout=1):
         start = time.time()
         count = 0
-        print(input_ranges)
         while True:
             count += 1
             tic = time.time()
@@ -102,7 +98,7 @@ class RandomizedFalsification:
             old_pos_samples = pos_samples
 
             flag = False
-            for i in range(self.n_inputs):
+            for i in range(self.net.n_input):
                 if input_ranges[i][1] - input_ranges[i][0] > 1e-6:
                    flag = True
                    break
@@ -116,7 +112,7 @@ class RandomizedFalsification:
 
     def _learning(self, pos_samples, neg_samples, input_ranges):
         for i in range(len(neg_samples)):
-            dim = random.randint(0, int(self.n_inputs) - 1)
+            dim = random.randint(0, int(self.net.n_input) - 1)
             pos_val = pos_samples[0][0][dim]
             neg_val = neg_samples[i][0][dim]
             if pos_val > neg_val:
@@ -194,20 +190,20 @@ class RandomizedFalsification:
         for _ in range(self.n_samples):
             s_in = torch.Tensor([
                 torch.round(random.uniform(input_ranges[i][0], input_ranges[i][1]), decimals=6)
-                for i in range(self.n_inputs)]).to(settings.DTYPE)
+                for i in range(self.net.n_input)]).to(settings.DTYPE)
+            s_in = s_in.view(self.net.input_shape)
             s_out = self.net(s_in)
             stat = self._check_property(output_props, s_out)
             if stat == 'violated':
                 return stat, (s_in, s_out)
-            samples.append((s_in, s_out))
-
+            samples.append((s_in.view(-1), s_out.view(-1)))
         return stat, samples
 
     def _check_property(self, output_props, output):
         for prop_mat, prop_rhs in output_props:
             prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE)
             prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE)
-            vec = prop_mat @ output
+            vec = prop_mat @ output.squeeze(0)
             if torch.all(vec <= prop_rhs):
                 return 'violated'
         return 'unknown'

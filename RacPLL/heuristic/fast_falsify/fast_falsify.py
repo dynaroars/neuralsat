@@ -6,9 +6,6 @@ class FastFalsify:
 
     def __init__(self, net, spec_list):
 
-        self.n_inputs = net.input_shape[1]
-        self.n_outputs = net.output_shape[1]
-        
         self.spec_list = spec_list
         self.net = net
 
@@ -19,8 +16,8 @@ class FastFalsify:
 
 
     def _find_target_and_direction(self):
-        target_dict = dict.fromkeys(range(self.n_outputs), 0)
-        obj_dict = dict.fromkeys(range(self.n_outputs), 0)
+        target_dict = dict.fromkeys(range(self.net.n_output), 0)
+        obj_dict = dict.fromkeys(range(self.net.n_output), 0)
 
         for spec in self.spec_list[0][1]:
             arr = spec[0]
@@ -86,7 +83,7 @@ class FastFalsify:
             old_pos_samples = pos_samples
 
             flag = False
-            for i in range(self.n_inputs):
+            for i in range(self.net.n_input):
                 if input_ranges[i][1] - input_ranges[i][0] > 1e-6:
                    flag = True
                    break
@@ -100,7 +97,7 @@ class FastFalsify:
 
     def _learning(self, pos_samples, neg_samples, input_ranges):
         for i in range(len(neg_samples)):
-            dim = random.randint(0, int(self.n_inputs) - 1)
+            dim = random.randint(0, int(self.net.n_input) - 1)
             pos_val = pos_samples[0][0][dim]
             neg_val = neg_samples[i][0][dim]
             if pos_val > neg_val:
@@ -178,7 +175,7 @@ class FastFalsify:
         for _ in range(self.n_samples):
             s_in = torch.Tensor([
                 torch.round(random.uniform(input_ranges[i][0], input_ranges[i][1]), decimals=6)
-                for i in range(self.n_inputs)])
+                for i in range(self.net.n_input)])
             s_out = self.net(s_in)
             stat = self._check_property(output_props, s_out)
             if stat == 'violated':
