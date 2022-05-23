@@ -13,7 +13,7 @@ import os
 from heuristic.randomized_falsification import randomized_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
 from dnn_solver.worker import implication_gurobi_worker
-from abstract.eran import deepz, assigned_deeppoly
+from abstract.eran import deepzono, deeppoly
 from utils.read_nnet import NetworkNNET
 from utils.misc import MP
 import settings
@@ -50,8 +50,12 @@ class DNNTheoremProver:
         self.solution = None
         self.constraints = []
 
+        if settings.HEURISTIC_DEEPZONO:
+            self.deepzono = deepzono.DeepZono(net)
+
+
         if settings.HEURISTIC_DEEPPOLY:
-            self.deeppoly = assigned_deeppoly.AssignedDeepPoly(net, back_sub_steps=100)
+            self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=100)
 
         # clean trash
         os.system('rm -rf gurobi/*')
@@ -231,7 +235,7 @@ class DNNTheoremProver:
                 print('\t- upper:', ubs.data)
 
             if settings.HEURISTIC_DEEPZONO: # eran deepzono
-                (lower, upper), _ = deepz.forward(self.net, lbs, ubs)
+                (lower, upper), _ = self.deepzono(lbs, ubs)
 
                 if settings.DEBUG:
                     print('[+] HEURISTIC DEEPZONO output')
