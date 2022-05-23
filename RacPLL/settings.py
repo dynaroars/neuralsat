@@ -3,6 +3,7 @@ import torch
 DEBUG = False
 
 DTYPE = torch.float32
+SEED = None
 
 N_DECISIONS = 1
 RANDOM_DECISION = False

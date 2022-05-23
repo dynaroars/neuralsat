@@ -14,19 +14,20 @@ class RandomizedFalsification:
         self.net = net
 
         self.n_runs = 10
-        self.n_samples = 10
+        self.n_samples = 5
 
         self._find_target_and_direction()
 
         # print('target:', self.targets)
         # print('direction:', self.directions)
-        # exit()
+
+        if settings.SEED is not None:
+            random.seed(settings.SEED)
 
 
     def _find_target_and_direction(self):
         self.targets = []
         self.directions = []
-
 
         for arr, _ in self.mat:
             target_dict = dict.fromkeys(range(self.net.n_output), 0)
@@ -48,7 +49,6 @@ class RandomizedFalsification:
 
             self.targets.append(target)
             self.directions.append(direction)
-
 
 
     def eval_constraints(self, input_ranges=None, constraints=None):
@@ -88,13 +88,7 @@ class RandomizedFalsification:
             if stat == 'violated':
                 return stat, samples
 
-            # pos_samples, neg_samples = [], []
-            # for target, direction in zip(self.targets, self.directions):
-            pos_samples, neg_samples = self._segregate_samples(samples, old_pos_samples, target, direction)
-                # pos_samples += p
-                # neg_samples += n
-            # print(len(pos_samples + neg_samples))
-
+            pos_samples, neg_samples = self._split_samples(samples, old_pos_samples, target, direction)
             old_pos_samples = pos_samples
 
             flag = False
@@ -105,82 +99,47 @@ class RandomizedFalsification:
             if not flag:
                 return 'unknown', None
 
-            self._learning(pos_samples, neg_samples, input_ranges)
+            input_ranges = self._learning(pos_samples, neg_samples, input_ranges)
 
         return 'unknown', None
 
 
     def _learning(self, pos_samples, neg_samples, input_ranges):
+        new_input_ranges = input_ranges.clone()
         for i in range(len(neg_samples)):
             dim = random.randint(0, int(self.net.n_input) - 1)
             pos_val = pos_samples[0][0][dim]
             neg_val = neg_samples[i][0][dim]
             if pos_val > neg_val:
                 temp = torch.round(random.uniform(neg_val, pos_val), decimals=6).to(settings.DTYPE)
-                if temp <= input_ranges[dim][1] and temp >= input_ranges[dim][0]:
-                    input_ranges[dim][0] = temp
+                if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
+                    new_input_ranges[dim][0] = temp
             else:
                 temp = torch.round(random.uniform(pos_val, neg_val), decimals=6).to(settings.DTYPE)
-                if temp <= input_ranges[dim][1] and temp >= input_ranges[dim][0]:
-                   input_ranges[dim][1] = temp
+                if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
+                   new_input_ranges[dim][1] = temp
+        return new_input_ranges
 
 
-    def _segregate_samples(self, samples, old_pos_samples, target, direction):
-        pos_samples = []
-        neg_samples = []
-
-        if direction == 'maximization':
-            s_out = samples[0][1]
-            large = s_out[target]
-            last_idx = 0
-            pos_samples.append(samples[0])
-            for i in range(1, len(samples)):
-                s_out = samples[i][1]
-                new_large = s_out[target]
-                if new_large > large:
-                    pos_samples.remove(samples[last_idx])
-                    pos_samples.append(samples[i])
-                    neg_samples.append(samples[last_idx])
-                    last_idx = i
-                    large = new_large
-                else:
-                    neg_samples.append(samples[i])
-
-            if len(old_pos_samples) > 0:
-                cur_pos_samples1 = pos_samples[0][1]
-                old_pos_samples1 = old_pos_samples[0][1]
-                if old_pos_samples1[target] > cur_pos_samples1[target]:
-                    neg_samples.append(pos_samples[0])
-                    pos_samples.remove(pos_samples[0])
-                    pos_samples.append(old_pos_samples[0])
-
-        elif direction == 'minimization':
-            s_out = samples[0][1]
-            small = s_out[target]
-            last_idx = 0
-            pos_samples.append(samples[0])
-            for i in range(1, len(samples)):
-                s_out = samples[i][1]
-                new_small = s_out[target]
-                if new_small < small:
-                    pos_samples.remove(samples[last_idx])
-                    pos_samples.append(samples[i])
-                    neg_samples.append(samples[last_idx])
-                    last_idx = i
-                    small = new_small
-                else:
-                    neg_samples.append(samples[i])
-
-            if len(old_pos_samples) > 0:
-                cur_pos_samples1 = pos_samples[0][1]
-                old_pos_samples1 = old_pos_samples[0][1]
-                if old_pos_samples1[target] < cur_pos_samples1[target]:
-                    neg_samples.append(pos_samples[0])
-                    pos_samples.remove(pos_samples[0])
-                    pos_samples.append(old_pos_samples[0])
-
+    def _split_samples(self, samples, old_pos_samples, target, direction):
+        if direction == 'minimization':
+            sorted_samples = sorted(samples, key=lambda tup: tup[1][target])
         else:
-            raise NotImplementedError
+            sorted_samples = sorted(samples, key=lambda tup: tup[1][target], reverse=True)
+
+        pos_samples = [sorted_samples[0]]
+        neg_samples = sorted_samples[1:]
+
+        if len(old_pos_samples) > 0:
+            cur_pos_samples1 = pos_samples[0][1]
+            old_pos_samples1 = old_pos_samples[0][1]
+            if (direction == 'maximization' and old_pos_samples1[target] > cur_pos_samples1[target]) \
+                or (direction == 'minimization' and old_pos_samples1[target] < cur_pos_samples1[target]):
+                neg_samples.append(pos_samples[0])
+                pos_samples.remove(pos_samples[0])
+                pos_samples.append(old_pos_samples[0])
+
+        random.shuffle(neg_samples)
 
         return pos_samples, neg_samples
 

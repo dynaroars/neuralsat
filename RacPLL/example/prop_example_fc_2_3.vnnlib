@@ -4,7 +4,5 @@
 (assert (<= X_1 0.5))
 (assert (>= X_1 -0.5))
 
-(assert (or
-    (and (<= Y_0 Y_2))
-    (and (<= Y_1 Y_2))
-))
+(assert (>= Y_1 Y_0))
+(assert (>= Y_2 Y_0))
