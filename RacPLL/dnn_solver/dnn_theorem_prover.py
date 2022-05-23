@@ -11,9 +11,9 @@ import re
 import os
 
 from heuristic.randomized_falsification import randomized_falsification
+from dnn_solver.symbolic_network import SymbolicNetwork
 from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepz, assigned_deeppoly
-from dnn_solver.dnn_layer import DNNLayer
 from utils.read_nnet import NetworkNNET
 from utils.misc import MP
 import settings
@@ -60,7 +60,7 @@ class DNNTheoremProver:
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
             self.rf = randomized_falsification.RandomizedFalsification(net, spec)
 
-        self.transformer = DNNLayer(net)
+        self.transformer = SymbolicNetwork(net)
 
     @property
     def n_outputs(self):

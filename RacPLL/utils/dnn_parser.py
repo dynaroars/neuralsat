@@ -54,20 +54,3 @@ class DNNParser:
 
         pytorch_model.layers_mapping = layers_mapping
         return pytorch_model
-
-if __name__ == '__main__':
-
-
-    # model = model_random(3, [7, 5, 6], 5)
-    # model.save('../example/model.keras')
-    # model = keras.models.load_model('../example/model.keras')
-    model = NetworkNNET('example/random.nnet')
-    vars_mapping, layers_mapping = DNNParser.parse(model)
-
-    # pprint(dnn)
-    # print()
-    pprint(vars_mapping)
-
-    reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
-    pprint(layers_mapping)
-    # pprint(reversed_layers_mapping)

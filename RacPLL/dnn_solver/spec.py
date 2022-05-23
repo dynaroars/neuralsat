@@ -1,5 +1,3 @@
-from utils.read_vnnlib import read_vnnlib_simple
-
 import gurobipy as grb
 import itertools
 import random

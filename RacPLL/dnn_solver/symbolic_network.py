@@ -6,7 +6,7 @@ import math
 import settings
 
 
-class DNNLayer:
+class SymbolicNetwork:
 
     def __init__(self, net):
         self.net = net
@@ -18,21 +18,20 @@ class DNNLayer:
     def _build_layers(self):
         layers = []
         idx = 0
-        last = None
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
                 if self.linear_input is None:
                     self.linear_input = True
-                l = DNNLinear(layer, last)
+                l = SymbolicLinear(layer)
             elif isinstance(layer, nn.ReLU):
-                l = DNNReLU(self.layers_mapping[idx], last)
+                l = SymbolicReLU(self.layers_mapping[idx])
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
                 if self.linear_input is None:
                     self.linear_input = False
-                l = DNNConv2d(layer, last)
+                l = SymbolicConv2d(layer)
             elif isinstance(layer, nn.Flatten):
-                l = DNNFlatten(last)
+                l = SymbolicFlatten()
             else:
                 print(layer)
                 raise NotImplementedError
@@ -65,12 +64,11 @@ class DNNLayer:
 
 
 
-class DNNLinear:
+class SymbolicLinear:
 
-    def __init__(self, layer, last):
+    def __init__(self, layer):
         self.weight = layer.weight
         self.bias = layer.bias
-        self.last = last
 
 
     def __call__(self, x, assignment):
@@ -79,12 +77,11 @@ class DNNLinear:
         return x, False, {}
 
 
-class DNNReLU:
+class SymbolicReLU:
 
-    def __init__(self, variables, last):
+    def __init__(self, variables):
         self.variables = variables
         self.set_variables = set(variables)
-        self.last = last
 
 
     def __call__(self, x, assignment):
@@ -101,9 +98,9 @@ class DNNReLU:
 
 
 
-class DNNConv2d:
+class SymbolicConv2d:
 
-    def __init__(self, layer, last):
+    def __init__(self, layer):
         self.weight = layer.weight # OUT x IN x K1 x K2
         self.bias = layer.bias
 
@@ -114,40 +111,33 @@ class DNNConv2d:
         self.padding = layer.padding
         self.groups = layer.groups
 
-        self.run_conv2d = True
-        self.last = last
+        self.run_conv2d = False
 
     def __call__(self, x, assignment):
-        C, H, W, _ = x.shape
-        out = [] 
-        for cin in range(C):
-            o = self._forward_symbolic_one_in_channel(x[cin], self.weight[:, cin], run_conv2d=self.run_conv2d)
-            out.append(o)
-
-        out = torch.stack(out).sum(dim=0)
-        out[..., -1] += self.bias[:, None, None]
-        return out, False, {}
+        return self.forward_symbolic_all_channels(x, assignment)
 
 
-    def _forward_symbolic_one_in_channel(self, x, weight, run_conv2d=True):
-        x = x.unsqueeze(0)
-        weight = weight.unsqueeze(1)
-
-        if run_conv2d:
+    def forward_symbolic_all_channels(self, x, assignment):
+        if self.run_conv2d:
             x = x.permute(3, 0, 1, 2)
-            x = F.conv2d(x, weight, bias=None, stride=self.stride)
+            x = F.conv2d(x, self.weight, bias=None, stride=self.stride)
             x = x.permute(1, 2, 3, 0)
         else:
-            x = F.conv3d(x.unsqueeze(0), weight.unsqueeze(-1), bias=None, stride=(*self.stride, 1))
-            x = x.squeeze(0)
-        return x
+            x = F.conv3d(x.unsqueeze(0), 
+                         self.weight.unsqueeze(-1), 
+                         bias=None, 
+                         stride=(*self.stride, 1)).squeeze(0)
+        
+        x[..., -1] += self.bias[:, None, None]
+        return x, False, {}
 
 
 
-class DNNFlatten:
 
-    def __init__(self, last):
-        self.last = last
+class SymbolicFlatten:
+
+    def __init__(self):
+        pass
 
     def __call__(self, x, assignment):
         x = x.view(-1, x.shape[-1])

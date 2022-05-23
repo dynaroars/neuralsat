@@ -1,11 +1,6 @@
 from torch.autograd.functional import jacobian
-import torch.nn.functional as F
 import torch.nn as nn
 import torch
-import random
-import numpy as np
-
-from utils.read_nnet import NetworkNNET
 
 
 class AssignedDeepPoly:
@@ -17,22 +12,22 @@ class AssignedDeepPoly:
         self._build_network_transformer()
 
     def _build_network_transformer(self):
-        last = AssignedDeepPolyInputTransformer(self.net.input_shape)
+        last = InputTransformer(self.net.input_shape)
         self.layers = [last]
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
-                last = AssignedDeepPolyAffineTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
+                last = LinearTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
                 self.layers += [last]
             elif isinstance(layer, nn.ReLU):
-                last = AssignedDeepPolyReLUTansformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping)
+                last = ReLUTansformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping)
                 idx += 1
                 self.layers += [last]
             elif isinstance(layer, nn.Conv2d):
-                last = AssignedDeepPolyConvTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
+                last = Conv2dTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
                 self.layers += [last]
             elif isinstance(layer, nn.Flatten):
-                last = AssignedDeepPolyFlattenTransformer(last=last, idx=idx)
+                last = FlattenTransformer(last=last, idx=idx)
                 self.layers += [last]
             else:
                 raise NotImplementedError
@@ -43,12 +38,12 @@ class AssignedDeepPoly:
         hidden_bounds = []
         hidden_params = []
         for layer in self.layers:
-            if isinstance(layer, AssignedDeepPolyReLUTansformer):
+            if isinstance(layer, ReLUTansformer):
                 hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
 
             bounds, params = layer(bounds, assignment)
 
-            # if isinstance(layer, AssignedDeepPolyAffineTransformer) or isinstance(layer, AssignedDeepPolyConvTransformer):
+            # if isinstance(layer, LinearTransformer) or isinstance(layer, Conv2dTransformer):
             if params is not None:
                 hidden_params.append(params)
         if return_params:
@@ -59,9 +54,9 @@ class AssignedDeepPoly:
         return self.layers[-1].params    
 
 
-class AssignedDeepPolyInputTransformer(nn.Module):
+class InputTransformer(nn.Module):
     def __init__(self, input_shape, last=None):
-        super(AssignedDeepPolyInputTransformer, self).__init__()
+        super(InputTransformer, self).__init__()
         self.last = last
         self.input_shape = input_shape
 
@@ -73,10 +68,10 @@ class AssignedDeepPolyInputTransformer(nn.Module):
         return 'Input'
 
 
-class AssignedDeepPolyAffineTransformer(nn.Module):
+class LinearTransformer(nn.Module):
 
     def __init__(self, layer, last=None, back_sub_steps=0, idx=None):
-        super(AssignedDeepPolyAffineTransformer, self).__init__()
+        super(LinearTransformer, self).__init__()
 
         self.weight = layer.weight
         self.bias = layer.bias
@@ -125,13 +120,13 @@ class AssignedDeepPolyAffineTransformer(nn.Module):
 
 
 
-class AssignedDeepPolyReLUTansformer(nn.Module):
+class ReLUTansformer(nn.Module):
 
     def __init__(self, last=None, back_sub_steps=0, idx=None, kwargs=None):
-        super(AssignedDeepPolyReLUTansformer, self).__init__()
+        super(ReLUTansformer, self).__init__()
         self.last = last
         self.back_sub_steps = back_sub_steps
-        self.last_conv_flag = isinstance(self.last, AssignedDeepPolyConvTransformer)
+        self.last_conv_flag = isinstance(self.last, Conv2dTransformer)
 
         self.idx = idx
 
@@ -219,9 +214,9 @@ class AssignedDeepPolyReLUTansformer(nn.Module):
                 return torch.stack([lower, upper], 0), params
 
 
-class AssignedDeepPolyFlattenTransformer(nn.Module):
+class FlattenTransformer(nn.Module):
     def __init__(self, last=None, idx=None):
-        super(AssignedDeepPolyFlattenTransformer, self).__init__()
+        super(FlattenTransformer, self).__init__()
         self.last = last
         self.idx = idx
 
@@ -263,10 +258,10 @@ class ReshapeConv(torch.nn.Module):
         out = self.layer(x.view(1, self.in_channels, self.in_dim_1, self.in_dim_2))
         return torch.flatten(out)
 
-class AssignedDeepPolyConvTransformer(nn.Module):
+class Conv2dTransformer(nn.Module):
 
     def __init__(self, layer, last=None, back_sub_steps=0, idx=None):
-        super(AssignedDeepPolyConvTransformer, self).__init__()
+        super(Conv2dTransformer, self).__init__()
 
         self.in_channels = layer.in_channels
         self.out_channels = layer.out_channels
