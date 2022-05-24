@@ -13,8 +13,10 @@ class RandomizedFalsification:
 
         self.net = net
 
-        self.n_runs = 10
-        self.n_samples = 5
+        self.n_runs = 5
+        self.n_samples = 10
+
+        self.n_pos_samples = int(0.3 * self.n_samples)
 
         self._find_target_and_direction()
 
@@ -88,7 +90,12 @@ class RandomizedFalsification:
             if stat == 'violated':
                 return stat, samples
 
-            pos_samples, neg_samples = self._split_samples(samples, old_pos_samples, target, direction)
+            pos_samples, neg_samples = self._split_samples(samples, target, direction)
+
+            if len(old_pos_samples) > 0:
+                pos_samples, neg_samples_2 = self._split_samples(pos_samples + old_pos_samples, target, direction)
+                neg_samples = neg_samples_2 + neg_samples
+
             old_pos_samples = pos_samples
 
             flag = False
@@ -106,10 +113,13 @@ class RandomizedFalsification:
 
     def _learning(self, pos_samples, neg_samples, input_ranges):
         new_input_ranges = input_ranges.clone()
-        for i in range(len(neg_samples)):
+
+        for neg_sample in neg_samples:
+            pos_sample = random.choice(pos_samples)
             dim = random.randint(0, int(self.net.n_input) - 1)
-            pos_val = pos_samples[0][0][dim]
-            neg_val = neg_samples[i][0][dim]
+
+            pos_val = pos_sample[0][dim]
+            neg_val = neg_sample[0][dim]
             if pos_val > neg_val:
                 temp = torch.round(random.uniform(neg_val, pos_val), decimals=6).to(settings.DTYPE)
                 if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
@@ -117,29 +127,21 @@ class RandomizedFalsification:
             else:
                 temp = torch.round(random.uniform(pos_val, neg_val), decimals=6).to(settings.DTYPE)
                 if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
-                   new_input_ranges[dim][1] = temp
+                    new_input_ranges[dim][1] = temp
         return new_input_ranges
 
 
-    def _split_samples(self, samples, old_pos_samples, target, direction):
+    def _split_samples(self, samples, target, direction):
         if direction == 'minimization':
             sorted_samples = sorted(samples, key=lambda tup: tup[1][target])
         else:
             sorted_samples = sorted(samples, key=lambda tup: tup[1][target], reverse=True)
 
-        pos_samples = [sorted_samples[0]]
-        neg_samples = sorted_samples[1:]
+        pos_samples = sorted_samples[:self.n_pos_samples]
+        neg_samples = sorted_samples[self.n_pos_samples:]
 
-        if len(old_pos_samples) > 0:
-            cur_pos_samples1 = pos_samples[0][1]
-            old_pos_samples1 = old_pos_samples[0][1]
-            if (direction == 'maximization' and old_pos_samples1[target] > cur_pos_samples1[target]) \
-                or (direction == 'minimization' and old_pos_samples1[target] < cur_pos_samples1[target]):
-                neg_samples.append(pos_samples[0])
-                pos_samples.remove(pos_samples[0])
-                pos_samples.append(old_pos_samples[0])
-
-        random.shuffle(neg_samples)
+        # random.shuffle(pos_samples)
+        # random.shuffle(neg_samples)
 
         return pos_samples, neg_samples
 
@@ -157,6 +159,7 @@ class RandomizedFalsification:
                 return stat, (s_in, s_out)
             samples.append((s_in.view(-1), s_out.view(-1)))
         return stat, samples
+        
 
     def _check_property(self, output_props, output):
         for prop_mat, prop_rhs in output_props:
