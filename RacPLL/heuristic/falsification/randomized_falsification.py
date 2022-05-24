@@ -13,10 +13,10 @@ class RandomizedFalsification:
 
         self.net = net
 
-        self.n_runs = 5
-        self.n_samples = 10
+        self.n_runs = 50
+        self.n_samples = 100
 
-        self.n_pos_samples = int(0.3 * self.n_samples)
+        self.n_pos_samples = 10
 
         self._find_target_and_direction()
 
@@ -113,11 +113,13 @@ class RandomizedFalsification:
 
     def _learning(self, pos_samples, neg_samples, input_ranges):
         new_input_ranges = input_ranges.clone()
+        random.shuffle(neg_samples)
 
         for neg_sample in neg_samples:
             pos_sample = random.choice(pos_samples)
             dim = random.randint(0, int(self.net.n_input) - 1)
 
+            # for dim in range(self.net.n_input):
             pos_val = pos_sample[0][dim]
             neg_val = neg_sample[0][dim]
             if pos_val > neg_val:
@@ -139,9 +141,6 @@ class RandomizedFalsification:
 
         pos_samples = sorted_samples[:self.n_pos_samples]
         neg_samples = sorted_samples[self.n_pos_samples:]
-
-        # random.shuffle(pos_samples)
-        # random.shuffle(neg_samples)
 
         return pos_samples, neg_samples
 
