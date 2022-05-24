@@ -10,7 +10,7 @@ import copy
 import re
 import os
 
-from heuristic.randomized_falsification import randomized_falsification
+from heuristic.falsification import randomized_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
 from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepzono, deeppoly

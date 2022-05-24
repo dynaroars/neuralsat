@@ -18,8 +18,8 @@ class RandomizedFalsification:
 
         self._find_target_and_direction()
 
-        # print('target:', self.targets)
-        # print('direction:', self.directions)
+        print('target:', self.targets)
+        print('direction:', self.directions)
 
         if settings.SEED is not None:
             random.seed(settings.SEED)

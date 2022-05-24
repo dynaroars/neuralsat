@@ -11,7 +11,6 @@ class SymbolicNetwork:
     def __init__(self, net):
         self.net = net
         self.layers_mapping = net.layers_mapping
-        self.linear_input = None
 
         self.layers = self._build_layers()
 
@@ -20,15 +19,11 @@ class SymbolicNetwork:
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
-                if self.linear_input is None:
-                    self.linear_input = True
                 l = SymbolicLinear(layer)
             elif isinstance(layer, nn.ReLU):
                 l = SymbolicReLU(self.layers_mapping[idx])
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
-                if self.linear_input is None:
-                    self.linear_input = False
                 l = SymbolicConv2d(layer)
             elif isinstance(layer, nn.Flatten):
                 l = SymbolicFlatten()
@@ -41,14 +36,8 @@ class SymbolicNetwork:
 
     @property
     def symbolic_input(self):
-        if self.linear_input: #linear
-            return torch.hstack([torch.eye(self.net.n_input), torch.zeros(self.net.n_input, 1)]).to(settings.DTYPE)
-        else: # conv2d
-            N, C, H, W = self.net.input_shape
-            assert C*H*W == self.net.n_input
-            assert N == 1, f'batch size {N} > 1'
-            default_input = F.one_hot(torch.arange(0, C*H*W)).view(C, H, W, C*H*W)
-            return torch.concat([default_input, torch.zeros(C, H, W, 1)], dim=-1).to(settings.DTYPE)
+        default_input = F.one_hot(torch.arange(0, self.net.n_input)).view(*self.net.input_shape[1:], self.net.n_input)
+        return torch.concat([default_input, torch.zeros(*self.net.input_shape[1:], 1)], dim=-1).to(settings.DTYPE)
 
 
     @torch.no_grad()
@@ -111,13 +100,14 @@ class SymbolicConv2d:
         self.padding = layer.padding
         self.groups = layer.groups
 
-        self.run_conv2d = False
+        self.run_conv2d = True
+
 
     def __call__(self, x, assignment):
-        return self.forward_symbolic_all_channels(x, assignment)
+        if self.padding[0] != 0 or self.padding[1] != 0:
+            p3d = (0, 0, self.padding[1], self.padding[1], self.padding[0], self.padding[0])
+            x = F.pad(x, p3d, 'constant', 0)
 
-
-    def forward_symbolic_all_channels(self, x, assignment):
         if self.run_conv2d:
             x = x.permute(3, 0, 1, 2)
             x = F.conv2d(x, self.weight, bias=None, stride=self.stride)
