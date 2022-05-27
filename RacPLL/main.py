@@ -11,6 +11,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--net', type=str, required=True, help='NNET/ONNX file path.')
     parser.add_argument('--spec', type=str, required=True, help='VNNLIB file path.')
+    parser.add_argument('--solution', action='store_true', help='Get counter-example.')
     args = parser.parse_args()
 
     net = DNNParser.parse(args.net)
@@ -25,7 +26,7 @@ if __name__ == '__main__':
             break
 
     print(args.net, args.spec, status, time.time() - tic)
-    if status:
+    if status and args.solution:
         solution = solver.get_solution()
         output = solver.dnn(solution)
         print('\t- lower:', spec.get_input_property()['lbs'])

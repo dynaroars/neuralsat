@@ -1,0 +1,1 @@
+benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.nnet benchmark/acasxu/spec/prop_7.vnnlib True 262.01143074035645

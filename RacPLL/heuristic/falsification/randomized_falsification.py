@@ -13,15 +13,15 @@ class RandomizedFalsification:
 
         self.net = net
 
-        self.n_runs = 50
-        self.n_samples = 100
+        self.n_runs = 2
+        self.n_samples = 5
 
-        self.n_pos_samples = 10
+        self.n_pos_samples = 2
 
         self._find_target_and_direction()
 
-        print('target:', self.targets)
-        print('direction:', self.directions)
+        # print('target:', self.targets)
+        # print('direction:', self.directions)
 
         if settings.SEED is not None:
             random.seed(settings.SEED)

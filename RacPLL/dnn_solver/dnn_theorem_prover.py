@@ -291,16 +291,19 @@ class DNNTheoremProver:
 
         # implication heuristic
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
-            stat, adv = self.rf.eval_constraints(None)
-            if stat == 'violated':
-                self.solution = adv[0]
-                return True, {}, is_full_assignment
+            # tic = time.time()
+            # stat, adv = self.rf.eval_constraints(None)
+            # if stat == 'violated':
+            #     self.solution = adv[0]
+            #     return True, {}, is_full_assignment
 
             new_ranges = torch.stack([lbs, ubs], dim=1).to(settings.DTYPE)
             stat, adv = self.rf.eval_constraints(new_ranges)
             if stat == 'violated':
                 self.solution = adv[0]
                 return True, {}, is_full_assignment
+
+            # print(time.time() - tic)
 
         self._restore_input_bounds()
 
