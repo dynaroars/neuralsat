@@ -6,7 +6,7 @@ import settings
 
 class RandomizedFalsification:
 
-    def __init__(self, net, spec):
+    def __init__(self, net, spec, seed=None):
 
         self.bounds = spec.bounds
         self.mat = spec.mat
@@ -14,7 +14,7 @@ class RandomizedFalsification:
         self.net = net
 
         self.n_runs = 2
-        self.n_samples = 5
+        self.n_samples = 7
 
         self.n_pos_samples = 2
 
@@ -23,8 +23,8 @@ class RandomizedFalsification:
         # print('target:', self.targets)
         # print('direction:', self.directions)
 
-        if settings.SEED is not None:
-            random.seed(settings.SEED)
+        if seed is not None:
+            random.seed(seed)
 
 
     def _find_target_and_direction(self):
@@ -147,24 +147,19 @@ class RandomizedFalsification:
 
     def _make_samples(self, input_ranges, output_props):
         samples = []
-        for _ in range(self.n_samples):
-            s_in = torch.Tensor([
-                torch.round(random.uniform(input_ranges[i][0], input_ranges[i][1]), decimals=6)
-                for i in range(self.net.n_input)]).to(settings.DTYPE)
-            s_in = s_in.view(self.net.input_shape)
-            s_out = self.net(s_in)
-            stat = self._check_property(output_props, s_out)
-            if stat == 'violated':
-                return stat, (s_in, s_out)
-            samples.append((s_in.view(-1), s_out.view(-1)))
-        return stat, samples
-        
 
-    def _check_property(self, output_props, output):
+        s_in = torch.stack(
+            [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)])
+                for _ in range(self.n_samples)])
+        s_out = self.net(s_in)
+
         for prop_mat, prop_rhs in output_props:
             prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE)
             prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE)
-            vec = prop_mat @ output.squeeze(0)
-            if torch.all(vec <= prop_rhs):
-                return 'violated'
-        return 'unknown'
+            vec = prop_mat @ s_out.transpose(0, 1)
+            for i in range(self.n_samples):
+                sample = s_in[i].view(-1), s_out[i].view(-1)
+                if torch.all(vec[:, i] <= prop_rhs):
+                    return 'violated', sample
+                samples.append(sample)
+        return 'unknown', samples
