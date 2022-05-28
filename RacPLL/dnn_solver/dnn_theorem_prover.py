@@ -62,7 +62,7 @@ class DNNTheoremProver:
         os.makedirs('gurobi', exist_ok=True)
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
-            self.rf = randomized_falsification.RandomizedFalsification(net, spec)
+            self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
 
         self.transformer = SymbolicNetwork(net)
 

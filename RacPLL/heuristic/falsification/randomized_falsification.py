@@ -14,15 +14,15 @@ class RandomizedFalsification:
         self.net = net
 
         self.n_runs = 2
-        self.n_samples = 7
+        self.n_samples = 10
 
-        self.n_pos_samples = 2
+        self.n_pos_samples = 3
 
         self._find_target_and_direction()
 
-        # print('target:', self.targets)
-        # print('direction:', self.directions)
-
+        # for item in self.target_direction_dict:
+        #     print(item, self.target_direction_dict[item])
+            
         if seed is not None:
             random.seed(seed)
 
@@ -30,6 +30,8 @@ class RandomizedFalsification:
     def _find_target_and_direction(self):
         self.targets = []
         self.directions = []
+        self.target_direction_dict = {}
+        count = 0
 
         for arr, _ in self.mat:
             target_dict = dict.fromkeys(range(self.net.n_output), 0)
@@ -37,20 +39,26 @@ class RandomizedFalsification:
             for k in range(len(arr)):
                 for kk in range(len(arr[k])):
                     if (arr[k][kk] != 0):
-                        cntr = target_dict[kk] + 1
-                        target_dict[kk] = cntr
+                        target_dict[kk] += 1
                     if (arr[k][kk] < 0):
-                        cntr = obj_dict[kk] + 1
-                        obj_dict[kk] = cntr
+                        obj_dict[kk] += 1
+
             target = max(target_dict, key=target_dict.get)
             obj_type = max(obj_dict, key=obj_dict.get)
+
             if (target == obj_type):
-                direction = 'maximization'
+                direction = 'maximize'
             else:
-                direction = 'minimization'
+                direction = 'minimize'
+
+            self.target_direction_dict[count] = [(target, direction)]
+            for t in target_dict:
+                if t != target:
+                    self.target_direction_dict[count].append((t, 'minimize' if direction=='maximize' else 'maximize'))
 
             self.targets.append(target)
             self.directions.append(direction)
+            count += 1
 
 
     def eval_constraints(self, input_ranges=None, constraints=None):
@@ -58,7 +66,9 @@ class RandomizedFalsification:
             input_ranges = torch.tensor(self.bounds, dtype=settings.DTYPE)
         input_ranges_clone = input_ranges.clone()
 
-        for target, direction in zip(self.targets, self.directions):
+        # for target, direction in zip(self.targets, self.directions):
+        for _, target_direction_list in self.target_direction_dict.items():
+            target, direction = target_direction_list[0]
             stat, adv = self._sampling(input_ranges, self.mat, target, direction)
             if stat == 'violated':
                 return stat, adv
@@ -134,7 +144,7 @@ class RandomizedFalsification:
 
 
     def _split_samples(self, samples, target, direction):
-        if direction == 'minimization':
+        if direction == 'minimize':
             sorted_samples = sorted(samples, key=lambda tup: tup[1][target])
         else:
             sorted_samples = sorted(samples, key=lambda tup: tup[1][target], reverse=True)
@@ -146,13 +156,12 @@ class RandomizedFalsification:
 
 
     def _make_samples(self, input_ranges, output_props):
-        samples = []
-
         s_in = torch.stack(
             [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)])
                 for _ in range(self.n_samples)])
         s_out = self.net(s_in)
 
+        samples = []
         for prop_mat, prop_rhs in output_props:
             prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE)
             prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE)
