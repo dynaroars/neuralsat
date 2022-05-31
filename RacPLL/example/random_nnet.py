@@ -119,6 +119,7 @@ if __name__ == '__main__':
     nnet_name = 'random.nnet'
     num_neurons = [784, 1024, 1024, 1024, 1024, 10]
     num_neurons = [784, 256, 256, 10]
-    num_neurons = [18, 5, 4, 2]
+    num_neurons = [2, 2, 2, 2, 2]
+    num_neurons = [2, 5, 4, 2]
     model = Model(num_neurons)
     model.save(nnet_name)

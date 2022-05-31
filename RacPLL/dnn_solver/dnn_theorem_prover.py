@@ -58,7 +58,7 @@ class DNNTheoremProver:
             self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=100)
 
         # clean trash
-        os.system('rm -rf gurobi/*')
+        # os.system('rm -rf gurobi/*')
         os.makedirs('gurobi', exist_ok=True)
 
         if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
@@ -165,8 +165,8 @@ class DNNTheoremProver:
             self.constraints.append(ci)
 
         # debug
-        if settings.DEBUG:
-            self.model.write(f'gurobi/{self.count}.lp')
+        # if settings.DEBUG:
+        #     self.model.write(f'gurobi/{self.count}.lp')
 
         # check satisfiability
         if not is_full_assignment:

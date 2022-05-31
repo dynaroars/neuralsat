@@ -18,7 +18,7 @@ class NetworkNNET(nn.Module):
             w = torch.Tensor(weights[i]).to(settings.DTYPE)
             b = torch.Tensor(biases[i]).to(settings.DTYPE)
 
-            layer = nn.Linear(*w.shape)
+            layer = nn.Linear(w.shape[1], w.shape[0])
             layer.weight.data = w
             layer.bias.data = b
 
