@@ -14,6 +14,7 @@ from heuristic.falsification import randomized_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
 from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepzono, deeppoly
+from lp_solver.lp_solver import LPSolver
 from utils.read_nnet import NetworkNNET
 from utils.misc import MP
 import settings
@@ -65,6 +66,9 @@ class DNNTheoremProver:
             self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
 
         self.transformer = SymbolicNetwork(net)
+
+        self.cs = LPSolver(net, spec)
+
 
     @property
     def n_outputs(self):
@@ -398,58 +402,60 @@ class DNNTheoremProver:
 
 
     def shorten_conflict_clause(self, assignment):
+        cc = self.cs.shorten_conflict_clause(assignment)
+        print('===================================', cc)
         return None
-        # print('cac', self.layers_mapping)
-        _, _, params = self.deeppoly(self.lbs_init, self.ubs_init, assignment=None, return_params=True)
+        # # print('cac', self.layers_mapping)
+        # _, _, params = self.deeppoly(self.lbs_init, self.ubs_init, assignment=None, return_params=True)
 
-        conflict_clauses = []
-        # print(assignment)
-        exprs = {}
-        for idx, p in enumerate(params[:-1]):
-            Ml, Mu, bl, bu = p
-            lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
-            ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
-            lu_expr = [(l, u) for l, u in zip(lbs_expr, ubs_expr)]
-            exprs.update(dict(zip(self.layers_mapping[idx], lu_expr)))
+        # conflict_clauses = []
+        # # print(assignment)
+        # exprs = {}
+        # for idx, p in enumerate(params[:-1]):
+        #     Ml, Mu, bl, bu = p
+        #     lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
+        #     ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
+        #     lu_expr = [(l, u) for l, u in zip(lbs_expr, ubs_expr)]
+        #     exprs.update(dict(zip(self.layers_mapping[idx], lu_expr)))
 
-        constraints_scc = []
-        constraints_scc_mapping = {}
-        for node, status in assignment.items():
-            if status is None:
-                continue
-            if status:
-                ci = self.model_scc.addLConstr(exprs[node][0] >= 1e-6)
-            else:
-                ci = self.model_scc.addLConstr(exprs[node][1] <= 0)
-            constraints_scc.append(ci)
-            constraints_scc_mapping[ci] = (node, status)
+        # constraints_scc = []
+        # constraints_scc_mapping = {}
+        # for node, status in assignment.items():
+        #     if status is None:
+        #         continue
+        #     if status:
+        #         ci = self.model_scc.addLConstr(exprs[node][0] >= 1e-6)
+        #     else:
+        #         ci = self.model_scc.addLConstr(exprs[node][1] <= 0)
+        #     constraints_scc.append(ci)
+        #     constraints_scc_mapping[ci] = (node, status)
 
 
-        Ml, Mu, bl, bu  = self.deeppoly.get_params()
-        lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
-        ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
-        dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
+        # Ml, Mu, bl, bu  = self.deeppoly.get_params()
+        # lbs_expr = [sum(wl.numpy() * self.gurobi_vars_scc) + cl for (wl, cl) in zip(Ml, bl)]
+        # ubs_expr = [sum(wu.numpy() * self.gurobi_vars_scc) + cu for (wu, cu) in zip(Mu, bu)]
+        # dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
 
-        self.model_scc.setObjective(0, grb.GRB.MAXIMIZE)
-        for cnf, _ in dnf_contrs:
-            conflict_clause = set()
-            ci = [self.model_scc.addLConstr(_) for _ in cnf]
-            self._optimize_scc()
-            print('cac', self.model_scc.status == grb.GRB.OPTIMAL)
-            if self.model_scc.status == grb.GRB.INFEASIBLE:
-                # print('cac')
-                # print(len(self.model_scc.getConstrs()), len(assignment))
-                self.model_scc.computeIIS()
-                # print(len([c for c in self.model_scc.getConstrs() if c.IISConstr]))
-                print('input:', [(constraints_scc_mapping[c], exprs[constraints_scc_mapping[c][0]][int(constraints_scc_mapping[c][1])]) for c in constraints_scc if c.IISConstr])
-                for variable, status in [constraints_scc_mapping[c] for c in constraints_scc if c.IISConstr]:
-                    conflict_clause.add(-variable if status else variable)
-                if len(conflict_clause) > 0 and conflict_clause not in conflict_clauses:
-                    conflict_clauses.append(conflict_clause)
-            self.model_scc.remove(ci)
+        # self.model_scc.setObjective(0, grb.GRB.MAXIMIZE)
+        # for cnf, _ in dnf_contrs:
+        #     conflict_clause = set()
+        #     ci = [self.model_scc.addLConstr(_) for _ in cnf]
+        #     self._optimize_scc()
+        #     print('cac', self.model_scc.status == grb.GRB.OPTIMAL)
+        #     if self.model_scc.status == grb.GRB.INFEASIBLE:
+        #         # print('cac')
+        #         # print(len(self.model_scc.getConstrs()), len(assignment))
+        #         self.model_scc.computeIIS()
+        #         # print(len([c for c in self.model_scc.getConstrs() if c.IISConstr]))
+        #         print('input:', [(constraints_scc_mapping[c], exprs[constraints_scc_mapping[c][0]][int(constraints_scc_mapping[c][1])]) for c in constraints_scc if c.IISConstr])
+        #         for variable, status in [constraints_scc_mapping[c] for c in constraints_scc if c.IISConstr]:
+        #             conflict_clause.add(-variable if status else variable)
+        #         if len(conflict_clause) > 0 and conflict_clause not in conflict_clauses:
+        #             conflict_clauses.append(conflict_clause)
+        #     self.model_scc.remove(ci)
 
-        self.model_scc.remove(constraints_scc)
+        # self.model_scc.remove(constraints_scc)
 
-        # print('cac', conflict_clauses)
-        return None
-        return conflict_clauses
+        # # print('cac', conflict_clauses)
+        # return None
+        # return conflict_clauses

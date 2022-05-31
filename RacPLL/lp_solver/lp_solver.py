@@ -22,8 +22,9 @@ class LPSolver:
         # gurobi optimizer
         with contextlib.redirect_stdout(open(os.devnull, 'w')):
             self.model = grb.Model('clause_shortener')
-            self.model.setParam('OutputFlag', False)
-            self.model.setParam('Threads', 16)
+            # self.model.setParam('OutputFlag', False)
+            # self.model.setParam('Threads', 16)
+            self.model.setParam('IISMethod', 0)
 
         self.input_vars = [self.model.addVar(name=f'x{i}', lb=self.lbs[i], ub=self.ubs[i]) for i in range(self.net.n_input)]
         self.mapping_assignment = {}
@@ -77,25 +78,36 @@ class LPSolver:
         self.model.optimize()
 
 
-    def apply(self, assignment):
+    def shorten_conflict_clause(self, assignment):
+        print('shorten_conflict_clause:', len(self.model.getConstrs()), 'constraints')
+        print(len(assignment))
+        conflict_clause = set()
+
         cc = []
         for node, status in assignment.items():
             if status:
                 cc.append(self.model.addLConstr(self.mapping_assignment[node] >= 1e-6, name=f'c_{node}'))
             else:
                 cc.append(self.model.addLConstr(self.mapping_assignment[node] <= 0, name=f'c_{node}'))
+        self.model.update()
 
         flag_break = False
         for cnf in self.output_constraints:
             ci = [self.model.addLConstr(_) for _ in cnf]
+            print('Solving:', len(self.model.getConstrs()), 'constraints')
             self.optimize()
+            print('Done', self.model.status == grb.GRB.INFEASIBLE)
 
             if self.model.status == grb.GRB.INFEASIBLE:
+                print('Start computeIIS', self.model.Params.IISMethod)
                 self.model.computeIIS()
+                print('Done computeIIS')
                 # for c in self.model.getConstrs():
-                for node in assignment:
+                for node, value in assignment.items():
                     c = self.model.getConstrByName(f'c_{node}')
-                    print(c.ConstrName, c.IISConstr)
+                    if c.IISConstr:
+                        conflict_clause.add(-node if value else node)
+
                 flag_break = True
                 
             self.model.remove(ci)
@@ -103,19 +115,7 @@ class LPSolver:
                 break
 
         self.model.remove(cc)
+        print(conflict_clause)
+        exit()
 
-
-        # print([x.X for x in self.input_vars])
-        # print('INFEASIBLE', self.model.status == grb.GRB.INFEASIBLE)
-        # print('OPTIMAL', self.model.status == grb.GRB.OPTIMAL)
-        # if self.model.status == grb.GRB.INFEASIBLE:
-        #     self.model.computeIIS()
-        #     for c in self.model.getConstrs():
-        #         print(c.ConstrName, c.IISConstr)
-            # for node in assignment:
-            #     c = self.model.getConstrByName(f'c_{node}')
-            #     print(c.ConstrName, c.IISConstr)
-
-        # elif self.model.status == grb.GRB.OPTIMAL:
-        #     for c in self.model.getVars():
-        #         print(c.VarName, c.X)
+        return frozenset(conflict_clause)
