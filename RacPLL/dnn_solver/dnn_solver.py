@@ -66,7 +66,10 @@ class DNNSolver(TheorySolver):
                 for w in self.dnn_theorem_prover.workers:
                     w.terminate()
 
-            new_ccs = implications
+            conflict_clause  = set(implications)
+            if len(conflict_clause):
+                return conflict_clause, new_assignments
+            # new_ccs = implications
             conflict_clause = set()
             if settings.DEBUG:
                 print('    - Check T-SAT: `UNSAT`')
@@ -76,14 +79,14 @@ class DNNSolver(TheorySolver):
             if settings.DEBUG:
                 print(f'    - Conflict clause: `{list(conflict_clause)}`')
                 print()
-            return conflict_clause, new_assignments, new_ccs
+            return conflict_clause, new_assignments
 
         if settings.DEBUG:
             print('    - Check T-SAT: `SAT`')
 
 
         if is_full_assignment:
-            return conflict_clause, new_assignments, None
+            return conflict_clause, new_assignments
 
         # deduce next layers
         if settings.DEBUG:
@@ -105,7 +108,7 @@ class DNNSolver(TheorySolver):
         if settings.DEBUG:
             print(f'\n- New assignment: `{new_assignments}`')
             print()
-        return conflict_clause, new_assignments, None
+        return conflict_clause, new_assignments
 
 
     def get_assignment(self) -> dict:

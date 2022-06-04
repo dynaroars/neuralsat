@@ -101,6 +101,7 @@ class CustomSATSolver(Solver):
             self._assigned_vsids_count[cur_sign] = self._unassigned_vsids_count[cur_sign]
             del self._unassigned_vsids_count[cur_sign]
 
+        # print({k: v['value'] for k, v in self._assignment.items()})
 
 
     def _unassign(self, variable: int):
@@ -155,6 +156,7 @@ class CustomSATSolver(Solver):
 
         if (prev_max_level == -1) and (max_level != -1):
             prev_max_level = max_level - 1
+        # print('- [Find]:', last_literal, prev_max_level, max_level, max_level_count)
         return last_literal, prev_max_level, max_level, max_level_count
 
     def _conflict_resolution(self, conflict_clause):
@@ -176,6 +178,7 @@ class CustomSATSolver(Solver):
                     # The literal to reassign should be the decision literal of the same level
                     # print('    - last_literal before:', last_literal)
                     last_literal = self._assignment_by_level[max_level][0]
+                    # print(self._assignment_by_level[max_level], conflict_clause)
                     # print('    - last_literal after:', last_literal)
                     if self._assignment[last_literal]["value"]:
                         last_literal = -last_literal
@@ -193,7 +196,6 @@ class CustomSATSolver(Solver):
             # print()
             conflict_clause.remove(last_literal)
             conflict_clause.remove(-last_literal)
-            # print('len(conflict_clause) =', len(list(conflict_clause)))
             removed_vars.append(abs(last_literal))
 
     def _bcp(self):
@@ -278,6 +280,7 @@ class CustomSATSolver(Solver):
         Performs constraint propagation using the given function
         until exhaustion, returns False iff formula is UNSAT.
         """
+        # print('- [BCP + TCP]', propagation_func)
         conflict_clause = propagation_func()
         while conflict_clause is not None:
             conflict_clause, watch_literal, level_to_jump_to = self._conflict_resolution(conflict_clause)
@@ -290,6 +293,9 @@ class CustomSATSolver(Solver):
             self.backtrack(level_to_jump_to)
             self._add_conflict_clause(conflict_clause)
             self._assign(conflict_clause, watch_literal)
+            # print(f'- [Conflict] {abs(watch_literal)}={watch_literal}, dl={level_to_jump_to}')
+            # print(f'\t- [cc] {conflict_clause}')
+
             conflict_clause = propagation_func()
         return True
 
@@ -297,14 +303,12 @@ class CustomSATSolver(Solver):
         """
         Theory constraint propagation.
         """
-        conflict_clause, new_assignments, new_ccs = self._theory_solver.propagate()
-        if new_ccs is not None and len(new_ccs) > 0:
-            return new_ccs[0]
-
+        conflict_clause, new_assignments = self._theory_solver.propagate()
         if conflict_clause is not None:
             return conflict_clause
         for literal in new_assignments:
             self._assign(None, literal)
+            # print(f'- [Imply] {abs(literal)}={literal}')
         return None
 
     def propagate(self) -> bool:
@@ -363,9 +367,11 @@ class CustomSATSolver(Solver):
                 if count_pos >= count_neg:
                     self._unassigned_vsids_count.pop(variable)
                     self._assign(None, variable)
+                    # print(f'- [Decide] `{variable}`=True\n')
                 else:
                     self._unassigned_vsids_count.pop(-variable)
                     self._assign(None, -variable)
+                    # print(f'- [Decide] `{variable}`=False\n')
 
             count += 1
             if settings.DEBUG:

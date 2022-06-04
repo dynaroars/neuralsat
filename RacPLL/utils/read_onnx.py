@@ -180,6 +180,17 @@ class PyTorchModelWrapper(nn.Module):
                 idx += 1
         return implication
 
+    @torch.no_grad()
+    def get_concrete(self, x):
+        idx = 0
+        implication = {}
+        for layer in self.layers:
+            if isinstance(layer, nn.ReLU):
+                implication.update(dict(zip(self.layers_mapping[idx], x)))
+                idx += 1
+            x = layer(x)
+        return implication
+
 class ONNXParser:
 
     def __init__(self, filename):
