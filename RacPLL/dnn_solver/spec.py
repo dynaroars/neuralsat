@@ -5,20 +5,6 @@ import torch
 
 import settings
 
-def split_bounds(bounds, steps=3):
-    lower = bounds['lbs']
-    upper = bounds['ubs']
-
-    bs = [(l, u) for l, u in zip(lower, upper)]
-    bs = [torch.linspace(b[0], b[1], steps=steps) for b in bs]
-    bs = [[torch.Tensor([b[i], b[i+1]]) for i in range(b.shape[0] - 1)] for b in bs]
-    bs = itertools.product(*bs)
-    splits = [{'lbs': torch.Tensor([_[0] for _ in b]),
-               'ubs': torch.Tensor([_[1] for _ in b])} for b in bs]
-    random.shuffle(splits)
-    return splits
-
-
 class SpecificationVNNLIB:
 
     def __init__(self, spec):
@@ -41,17 +27,36 @@ class SpecificationVNNLIB:
         return dnf
 
 
+    def register(self, lbs, ubs):
+        self.cac =  []
+        for lhs, rhs in self.mat:
+            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
+            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
+            tmp = []
+            for l, r in zip(lhs, rhs):
+                tmp.append(sum((l > 0) * lbs) - sum((l < 0) * ubs))
+
+            self.cac.append(rhs - torch.tensor(tmp))
+
     def check_output_reachability(self, lbs, ubs):
         dnf =  []
-        for lhs, rhs in self.mat:
+        # p = 0.0
+        for idx, (lhs, rhs) in enumerate(self.mat):
             lhs = torch.tensor(lhs, dtype=settings.DTYPE)
             rhs = torch.tensor(rhs, dtype=settings.DTYPE)
 
             cnf = []
+            # vals = []
             for l, r in zip(lhs, rhs):
-                cnf.append(sum((l > 0) * lbs) - sum((l < 0) * ubs) <= r)
+                val = sum((l > 0) * lbs) - sum((l < 0) * ubs)
+                # vals.append(r - val)
+                cnf.append(val <= r)
             dnf.append(all(cnf))
-        return any(dnf)
+
+            # vals = torch.tensor(vals)
+            # p += torch.mean(vals / self.cac[idx])
+
+        return any(dnf), True
 
     def check_solution(self, output):
         for lhs, rhs in self.mat:

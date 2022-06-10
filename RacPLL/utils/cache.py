@@ -1,3 +1,4 @@
+import torch
 
 class BacksubInstance:
 
@@ -10,7 +11,7 @@ class BacksubInstance:
         }
         self.max_num_hidden = sum([len(layers_mapping[_]) for _ in layers_mapping])
 
-    def get_cache(self, new_assignment):
+    def get_score(self, new_assignment):
         cached_nodes = []
         cached_nodes += self.layers_mapping[0]
         for idx in range(len(self.layers_mapping) - 1):
@@ -60,7 +61,7 @@ class BacksubCacher:
             return None
         list_caches = []
         for idx, instance in enumerate(self.caches):
-            c = instance.get_cache(assignment)
+            c = instance.get_score(assignment)
             list_caches.append((idx, c, len(c)))
             if len(c) == instance.max_num_hidden:
                 break
@@ -72,6 +73,99 @@ class BacksubCacher:
 
     def __len__(self):
         return len(self.caches)
+
+
+
+class AbstractionInstance:
+
+    def __init__(self, init_ranges, input_ranges, is_reachable):
+
+        self.is_reachable = is_reachable
+
+        lbs_init, ubs_init = init_ranges
+        lbs, ubs = input_ranges
+        self.feature = torch.concat([lbs, ubs, lbs+ubs, ubs-lbs, lbs-lbs_init, ubs_init-ubs])
+        # self.feature = torch.concat([lbs, ubs, lbs-lbs_init, ubs_init-ubs])
+        # self.feature = torch.concat([lbs+ubs, ubs-lbs, lbs-lbs_init, ubs_init-ubs])
+
+    def get_score(self, new_feature):
+        return None
+
+
+class AbstractionCacher:
+
+    def __init__(self, init_ranges, max_caches=100):
+        self.caches = []
+        self.max_caches = max_caches
+        self.init_ranges = init_ranges
+        
+        self.lbs_init, self.ubs_init = init_ranges
+
+        self.scorer = torch.nn.PairwiseDistance(p=2)
+
+        self.topk = 20
+
+    def put(self, input_ranges, is_reachable):
+        instance = AbstractionInstance(self.init_ranges, input_ranges, is_reachable)
+        if self.full():
+            self.get()
+        self.caches.append(instance)
+
+
+    def get(self):
+        if self.empty():
+            return None
+        return self.caches.pop(0)
+
+
+    def full(self):
+        return len(self.caches) == self.max_caches
+
+
+    def empty(self):
+        return len(self.caches) == 0
+
+
+    def get_cache(self, new_input_ranges):
+        if self.empty():
+            return True
+
+        if len(self) < self.topk:
+            return True
+
+        labels = torch.tensor([i.is_reachable for i in self.caches])
+        print(labels.sum(), len(labels))
+        if labels.sum() == len(labels):
+            return True
+
+        lbs, ubs = new_input_ranges
+        # feature = torch.concat([lbs+ubs, ubs-lbs, lbs-self.lbs_init, self.ubs_init-ubs])
+        # feature = torch.concat([lbs, ubs, lbs+ubs, ubs-lbs, lbs-self.lbs_init, self.ubs_init-ubs])
+        feature = torch.concat([lbs, ubs, lbs-self.lbs_init, self.ubs_init-ubs])
+        cache_features = torch.stack([i.feature for i in self.caches])
+
+        scores = self.scorer(feature, cache_features)
+
+        vs, ids = torch.topk(scores, self.topk, largest=False)
+        print(labels[ids].sum())
+        return labels[ids].sum() <= self.topk * 0.95
+
+    def get_score(self, new_input_ranges):
+        if self.empty():
+            return 1
+
+        lbs, ubs = new_input_ranges
+        feature = torch.concat([lbs, ubs, lbs+ubs, ubs-lbs, lbs-self.lbs_init, self.ubs_init-ubs])
+        cache_features = torch.stack([i.feature for i in self.caches])
+        scores = self.scorer(feature, cache_features)
+        return scores.mean()
+
+
+    def __len__(self):
+        return len(self.caches)
+
+
+
 
 if __name__ == '__main__':
     layers_mapping = {0 : [1, 2, 3], 1: [4, 5], 2: [6, 7, 8]}

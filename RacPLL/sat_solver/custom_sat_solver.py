@@ -7,14 +7,16 @@ from pprint import pprint
 import sortedcontainers
 import settings
 import random
+import copy
 
 from sat_solver.sat_solver import Solver
+from utils.timer import Timers
 
 
 
 class CustomSATSolver(Solver):
 
-    def __init__(self, formula=None, variables=None, layers_mapping=None, first_var=None, max_new_clauses=float('inf'), 
+    def __init__(self, formula=None, variables=None, layers_mapping=None, decider=None, max_new_clauses=float('inf'), 
         halving_period=10000, theory_solver=None):
     
         super().__init__()
@@ -39,7 +41,7 @@ class CustomSATSolver(Solver):
         self._assigned_vsids_count = {}
         self._step_counter = 0
 
-        self._layers_mapping = layers_mapping
+        self._layers_mapping = copy.deepcopy(layers_mapping)
         self._reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
 
         self._all_vars = sortedcontainers.SortedList(variables)
@@ -51,6 +53,11 @@ class CustomSATSolver(Solver):
             self._add_clause(clause)
 
         self.start = True
+
+        self.decider = decider
+
+        # if settings.SEED is not None:
+        #     random.seed(settings.SEED)
 
     def _add_clause(self, clause):
         """
@@ -348,45 +355,70 @@ class CustomSATSolver(Solver):
             for literal in self._assigned_vsids_count:
                 self._assigned_vsids_count[literal] /= 2
 
+    # def _decide(self):
+    #     """
+    #     Decides which literal to assign next, using the VSIDS decision heuristic.
+    #     """
+    #     # print('--------------_decide--------------')
+
+    #     variable = self._all_vars[0]
+    #     orig_variable = variable
+
+    #     if settings.RANDOM_DECISION:
+    #         variable = random.choice(self._layers_mapping[self._reversed_layers_mapping[orig_variable]])
+
+
+    #     count = 0
+    #     while variable in self._layers_mapping[self._reversed_layers_mapping[orig_variable]]:
+    #         self.create_new_decision_level()
+    #         if settings.RANDOM_DECISION:
+    #             sign = random.choice([-1, 1])
+    #             self._assign(None, sign * variable)
+    #             print(f'toi chon: variable={variable}, value={sign==1}')
+    #             print()
+    #         else:
+    #             count_pos = self._unassigned_vsids_count.get(variable, 0)
+    #             count_neg = self._unassigned_vsids_count.get(-variable, 0)
+    #             if count_pos >= count_neg:
+    #                 self._unassigned_vsids_count.pop(variable)
+    #                 self._assign(None, variable)
+    #                 # print(f'- [Decide] `{variable}`=True\n')
+    #             else:
+    #                 self._unassigned_vsids_count.pop(-variable)
+    #                 self._assign(None, -variable)
+    #                 # print(f'- [Decide] `{variable}`=False\n')
+
+    #         count += 1
+    #         if settings.DEBUG:
+    #             print(f'- [{count}] Choose: variable=`{variable}`\n')
+    #         if count == settings.N_DECISIONS:
+    #             break
+    #         if not self._all_vars:
+    #             break
+                
+    #         if settings.RANDOM_DECISION:
+    #             variable = random.choice(self._layers_mapping[self._reversed_layers_mapping[orig_variable]])
+    #         else:
+    #             variable = self._all_vars[0]
+
+    #     # print()
+    #     # print()
+    #     # print()
+
+    #     # literal, count = self._unassigned_vsids_count.most_common(1).pop()
+
     def _decide(self):
-        """
-        Decides which literal to assign next, using the VSIDS decision heuristic.
-        """
-        # print('--------------_decide--------------')
+        Timers.tic('Heuristic Decision Get')
 
-        variable = self._all_vars[0]
-        orig_variable = variable
-        count = 0
-        while variable in self._layers_mapping[self._reversed_layers_mapping[orig_variable]]:
-            self.create_new_decision_level()
-            if settings.RANDOM_DECISION:
-                self._assign(None, variable * random.choice([-1, 1]))
-            else:
-                count_pos = self._unassigned_vsids_count.get(variable, 0)
-                count_neg = self._unassigned_vsids_count.get(-variable, 0)
-                if count_pos >= count_neg:
-                    self._unassigned_vsids_count.pop(variable)
-                    self._assign(None, variable)
-                    # print(f'- [Decide] `{variable}`=True\n')
-                else:
-                    self._unassigned_vsids_count.pop(-variable)
-                    self._assign(None, -variable)
-                    # print(f'- [Decide] `{variable}`=False\n')
+        unassigned_variables = self._layers_mapping[self._reversed_layers_mapping[self._all_vars[0]]]
+        variable, value = self.decider.get(unassigned_variables)
+        self.create_new_decision_level()
+        self._assign(None, variable if value else -variable)
+        if settings.DEBUG:
+            print(f'- Choose: variable=`{variable}`, value={value}\n')
 
-            count += 1
-            if settings.DEBUG:
-                print(f'- [{count}] Choose: variable=`{variable}`\n')
-            if count == settings.N_DECISIONS:
-                break
-            if not self._all_vars:
-                break
-            variable = self._all_vars[0]
+        Timers.toc('Heuristic Decision Get')
 
-        # print()
-        # print()
-        # print()
-
-        # literal, count = self._unassigned_vsids_count.most_common(1).pop()
 
     def create_new_decision_level(self):
         self._assignment_by_level.append(list())

@@ -34,7 +34,7 @@ if __name__ == '__main__':
     print(args.net, args.spec, status, time.time() - tic)
     if status and args.solution:
         solution = solver.get_solution()
-        output = solver.dnn(solution)
+        output = solver.net(solution)
         print('\t- lower:', spec.get_input_property()['lbs'])
         print('\t- upper:', spec.get_input_property()['ubs'])
         print('\t- solution:', solution.numpy().tolist())

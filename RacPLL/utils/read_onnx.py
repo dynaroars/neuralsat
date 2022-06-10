@@ -186,7 +186,7 @@ class PyTorchModelWrapper(nn.Module):
         implication = {}
         for layer in self.layers:
             if isinstance(layer, nn.ReLU):
-                implication.update(dict(zip(self.layers_mapping[idx], x)))
+                implication.update(dict(zip(self.layers_mapping[idx], x.view(-1))))
                 idx += 1
             x = layer(x)
         return implication
@@ -205,6 +205,8 @@ class ONNXParser:
 
         self.input_name = self.inputs[0].name
         self.input_shape = tuple(d.dim_value for d in self.inputs[0].type.tensor_type.shape.dim)
+        if len(self.input_shape) == 1:
+            self.input_shape = (1, self.input_shape[0])
 
         self.pytorch_model = self.to_pytorch()
 

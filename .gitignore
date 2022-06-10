@@ -3,7 +3,7 @@ RacPLL/test_*
 ref/
 archive/
 vnncomp2021/
-
+baselines/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

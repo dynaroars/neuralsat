@@ -61,7 +61,7 @@ class DeepZono:
         hidden_bounds = []
 
         for layer in self.layers:
-            if isinstance(layer, nn.ReLU):
+            if isinstance(layer, ReLUTransformer):
                 hidden_bounds.append(get_bound(center, error))
             center, error = layer(center, error)
 

@@ -7,19 +7,19 @@ from dnn_solver.dnn_theorem_prover import DNNTheoremProver
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
 from utils.dnn_parser import DNNParser
+from heuristic.decision import decider
+from utils.timer import Timers
 import settings
 
 class TheorySolver(Solver):
 
-    def __init__(self, formula, variables, layers_mapping, first_var=None, 
-        max_new_clauses=float('inf'), halving_period=10000):
+    def __init__(self, variables, layers_mapping, decider=None):
         super().__init__()
 
-        self._solver = CustomSATSolver(formula,
-                                       variables,
-                                       layers_mapping,
-                                       max_new_clauses=max_new_clauses,
-                                       halving_period=halving_period,
+        self._solver = CustomSATSolver(formula=None,
+                                       variables=variables,
+                                       layers_mapping=layers_mapping,
+                                       decider=decider,
                                        theory_solver=self)
 
     def get_assignment(self) -> dict:
@@ -36,14 +36,19 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, dnn, spec):
+    def __init__(self, net, spec):
 
-        self.dnn = dnn
-        layers_mapping = dnn.layers_mapping
+        self.net = net
+
+        layers_mapping = net.layers_mapping
         variables = [v for d in layers_mapping.values() for v in d]
 
-        super().__init__(formula=None, variables=variables, layers_mapping=copy.deepcopy(layers_mapping))
-        self.dnn_theorem_prover = DNNTheoremProver(self.dnn, spec=spec)
+        self.decider = decider.Decider(net)
+        self.dnn_theorem_prover = DNNTheoremProver(net, spec=spec, decider=self.decider)
+
+        super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
+        
+
 
     def propagate(self):
         if settings.DEBUG:
@@ -59,7 +64,10 @@ class DNNSolver(TheorySolver):
 
         # theory checking
         # tic = time.time()
+        Timers.tic('Theorem deduction')
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
+        Timers.toc('Theorem deduction')
+        
         # print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
             if settings.PARALLEL_IMPLICATION:
