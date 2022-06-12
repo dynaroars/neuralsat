@@ -74,6 +74,18 @@ class NetworkNNET(nn.Module):
             x = layer(x)
         return implication
 
+    @torch.no_grad()
+    def forward_from_layer(self, x, lid):
+        relu_idx = 0
+        for layer in self.layers:
+            if isinstance(layer, nn.ReLU):
+                relu_idx += 1
+            if relu_idx <= lid:
+                continue
+            x = layer(x)
+        return x
+
+
 def read_nnet(nnet_file, with_norm=False):
     '''
     Read a .nnet file and return list of weight matrices and bias vectors

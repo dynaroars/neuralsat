@@ -81,8 +81,7 @@ class DNNTheoremProver:
         #     self.deepzono = deepzono.DeepZono(net)
 
 
-        if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
-            self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
+        self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
 
         self.transformer = SymbolicNetwork(net)
 
@@ -103,6 +102,9 @@ class DNNTheoremProver:
         # clean trash
         # os.system('rm -rf gurobi/*')
         os.makedirs('gurobi', exist_ok=True)
+
+        # test
+        self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
     @property
     def n_outputs(self):
@@ -352,7 +354,7 @@ class DNNTheoremProver:
 
             Timers.tic('Heuristic Decision Update')
             if self.decider is not None and settings.DECISION != 'RANDOM':
-                self.decider.update(hidden_bounds=hidden_bounds)
+                self.decider.update(output_bounds=(lower, upper), hidden_bounds=hidden_bounds)
             Timers.toc('Heuristic Decision Update')
 
 

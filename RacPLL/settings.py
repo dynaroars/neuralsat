@@ -1,12 +1,16 @@
+import random
 import torch
 
 DEBUG = False
 
 DTYPE = torch.float64
-SEED = 1337
+
+DECISION = 'MIN_BOUND' # 'RANDOM/MAX_BOUND/MIN_BOUND/KW/GRAD'
+
+SEED = random.randint(0, 1000) if DECISION == 'RANDOM' else None
+print('SEED:', SEED)
 
 # N_DECISIONS = 1
-DECISION = 'KW' # 'RANDOM/MAX_BOUND/MIN_BOUND/KW'
 
 TIGHTEN_BOUND = True
 # HEURISTIC_DEEPZONO = False

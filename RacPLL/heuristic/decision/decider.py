@@ -1,5 +1,6 @@
 import torch.nn.functional as F
 import torch.nn as nn
+import numpy as np
 import torch
 import random
 
@@ -24,26 +25,57 @@ class Decider:
         self.layers_mapping = net.layers_mapping
         self.reversed_layers_mapping = {n: k for k, v in self.layers_mapping.items() for n in v}
         self.bounds_mapping = {}
+        self.target_direction_list = None
 
         if settings.SEED is not None:
             random.seed(settings.SEED)
 
-    def update(self, hidden_bounds=None):
+    def update(self, output_bounds=None, hidden_bounds=None):
         if hidden_bounds is not None:
             for idx, (lb, ub) in enumerate(hidden_bounds):
                 b = [(l, u) for l, u in zip(lb, ub)]
                 self.bounds_mapping.update(dict(zip(self.layers_mapping[idx], b)))
+
+        if output_bounds is not None:
+            self.output_lower, self.output_upper = output_bounds
         
 
     def get_score(self, node):
         l, u = self.bounds_mapping[node]
-        score = u - l 
+        # score = (u - l)
+        score = torch.min(u, -l)
+        # print(score, u, l)
+        # exit()
         return score
 
     def get_impact(self, node):
         l, u = self.bounds_mapping[node]
         impact = - u * l / (u - l)
         return impact * u.abs()
+
+    def estimate_grads_from_layer(self, lower, upper, layer_id, steps=3):
+        inputs = [(((steps - i) * lower + i * upper) / steps) for i in range(steps + 1)]
+        diffs = torch.zeros(len(lower), dtype=settings.DTYPE)
+
+        for sample in range(steps + 1):
+            pred = self.net.forward_from_layer(inputs[sample], layer_id)
+            for index in range(len(lower)):
+                if sample < steps:
+                    l_input = [m if i != index else u for i, m, u in zip(range(len(lower)), inputs[sample], inputs[sample+1])]
+                    l_input = torch.tensor(l_input, dtype=settings.DTYPE)
+                    l_i_pred = self.net.forward_from_layer(l_input, layer_id)
+                else:
+                    l_i_pred = pred
+                if sample > 0:
+                    u_input = [m if i != index else l for i, m, l in zip(range(len(lower)), inputs[sample], inputs[sample-1])]
+                    u_input = torch.tensor(u_input, dtype=settings.DTYPE)
+                    u_i_pred = self.net.forward_from_layer(u_input, layer_id)
+                else:
+                    u_i_pred = pred
+                diff = sum([abs(li - m) + abs(ui - m) for li, m, ui in zip(l_i_pred, pred, u_i_pred)])
+                diffs[index] += diff
+        return diffs / steps
+
 
 
     def get(self, unassigned_nodes):
@@ -67,8 +99,15 @@ class Decider:
         
         if settings.DECISION == 'KW':
             relu_idx = len(self.layers_mapping) - 1
-            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE)
-            
+
+            for idx, direction in self.target_direction_list:
+                if direction == 'maximize':
+                    val = self.output_upper[idx]
+                else:
+                    val = self.output_lower[idx]
+
+            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE) * val
+
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
 
             mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
@@ -134,6 +173,24 @@ class Decider:
 
             l, u = self.bounds_mapping[node]
             return node, u.abs() >= l.abs()
+
+        if settings.DECISION == 'GRAD':
+            decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
+            mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
+            bounds = torch.tensor([self.bounds_mapping[n] for n in self.layers_mapping[decision_layer]], dtype=settings.DTYPE)
+            lower = bounds[:, 0]
+            upper = bounds[:, 1]
+            # print('decision_layer', decision_layer, self.layers_mapping[decision_layer])
+            # print(torch.tensor([1, 2, 3]).shape)
+            # print(upper)
+            grads = self.estimate_grads_from_layer(lower, upper, decision_layer, steps=3)
+            smears = np.multiply(torch.abs(grads), [u - l for u, l in zip(upper, lower)]) + 1e-5
+            smears = smears * mask
+            node = self.layers_mapping[decision_layer][smears.argmax()]
+            assert node in unassigned_nodes
+            l, u = self.bounds_mapping[node]
+            return node, u.abs() >= l.abs()
+
 
 
 
