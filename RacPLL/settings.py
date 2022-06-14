@@ -25,3 +25,5 @@ HEURISTIC_GUROBI_IMPLICATION = True
 
 PARALLEL_IMPLICATION = False
 N_THREADS = 16
+
+SUPPORTED_BENCHMARKS = ['acasxu', 'cifar2020', 'mnistfc', 'oval21', 'nn4sys', 'eran', 'marabou-cifar10']

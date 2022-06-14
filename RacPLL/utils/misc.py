@@ -1,6 +1,13 @@
 from collections import defaultdict, OrderedDict
 import multiprocessing
 
+import os
+
+def recursive_walk(rootdir):
+    for r, dirs, files in os.walk(rootdir):
+        for f in files:
+            yield os.path.join(r, f)
+            
 class MP:
 
     @staticmethod

@@ -7,6 +7,7 @@ import math
 
 from utils.read_nnet import NetworkNNET
 from utils.read_onnx import ONNXParser
+import settings
 
 class DNNParser:
 
@@ -40,6 +41,14 @@ class DNNParser:
 
         model = ONNXParser(filename)
         pytorch_model = model.pytorch_model
+
+        # test to make transpose weights:
+        x = torch.randn(pytorch_model.input_shape, dtype=settings.DTYPE)
+        try:
+            pytorch_model(x)
+        except RuntimeError:
+            model = ONNXParser(filename, transpose_weight=True)
+            pytorch_model = model.pytorch_model
 
         relus = model.extract_ordered_relu_shapes()
         shapes = [0] + [math.prod(s) for s in relus]

@@ -9,7 +9,6 @@ python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_2_8_batch_2000.nnet --s
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_2_9_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_1_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_2_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
-# python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_3_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_4_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_5_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_6_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
@@ -17,7 +16,6 @@ python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_7_batch_2000.nnet --s
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_8_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_3_9_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_1_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
-# python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_2_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_3_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_4_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_5_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
@@ -27,7 +25,6 @@ python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_8_batch_2000.nnet --s
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_4_9_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_1_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_2_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
-# python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_3_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_4_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_5_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
 python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_5_6_batch_2000.nnet --spec benchmark/acasxu/spec/prop_2.vnnlib
