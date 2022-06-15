@@ -1,5 +1,6 @@
 import torch.nn.functional as F
 import torch.nn as nn
+import onnx2pytorch
 import torch
 import math
 
@@ -27,8 +28,12 @@ class SymbolicNetwork:
                 l = SymbolicConv2d(layer)
             elif isinstance(layer, nn.Flatten):
                 l = SymbolicFlatten()
+            elif isinstance(layer, onnx2pytorch.operations.Reshape):
+                l = SymbolicReshape(layer)
+            elif isinstance(layer, onnx2pytorch.operations.Transpose):
+                l = SymbolicTranspose(layer)
             else:
-                print(layer)
+                print(layer, type(layer))
                 raise NotImplementedError
             layers.append(l)
         return layers
@@ -131,4 +136,37 @@ class SymbolicFlatten:
 
     def __call__(self, x, assignment):
         x = x.view(-1, x.shape[-1])
+        return x, False, {}
+
+
+
+class SymbolicTranspose:
+
+    def __init__(self, layer):
+        # discard batch_size dimension
+        self.dims = tuple([d-1 for d in layer.dims[1:]] + [len(layer.dims)-1])
+
+    def __call__(self, x, assignment):
+        if not self.dims:
+            dims = tuple(reversed(range(x.dim())))
+            raise
+        else:
+            dims = self.dims
+        x = x.permute(dims)
+        return x, False, {}
+
+
+
+class SymbolicReshape:
+
+    def __init__(self, layer):
+        self.shape = layer.shape
+
+    def __call__(self, x, assignment):
+        shape = [s if s != 0 else x.size(i) for i, s in enumerate(self.shape)]
+        if len(shape)==2 and shape[0]==-1:
+            shape = (shape[1], -1)
+        else:
+            raise NotImplementedError
+        x = x.reshape(shape)
         return x, False, {}
