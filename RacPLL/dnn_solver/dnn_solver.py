@@ -70,7 +70,7 @@ class DNNSolver(TheorySolver):
         
         # print('dnn_theorem_prover:', time.time() - tic)
         if not theory_sat:
-            if settings.PARALLEL_IMPLICATION:
+            if hasattr(self.dnn_theorem_prover, 'workers'):
                 for w in self.dnn_theorem_prover.workers:
                     w.terminate()
 

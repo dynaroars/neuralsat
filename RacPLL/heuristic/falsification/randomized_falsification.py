@@ -13,16 +13,20 @@ class RandomizedFalsification:
 
         self.net = net
 
-        self.n_runs = 2
-        self.n_samples = 10
+        self.n_runs = 3
+        self.n_samples = 50
 
-        self.n_pos_samples = 3
+        self.n_pos_samples = 5
 
         self._find_target_and_direction()
 
         # for item in self.target_direction_dict:
         #     print(item, self.target_direction_dict[item])
-            
+        # print(self.targets)
+        # print(self.directions)
+        for t, d in zip(self.targets, self.directions):
+            print(t, d)
+
         if seed is not None:
             random.seed(seed)
 
@@ -30,8 +34,8 @@ class RandomizedFalsification:
     def _find_target_and_direction(self):
         self.targets = []
         self.directions = []
-        self.target_direction_dict = {}
-        count = 0
+        # self.target_direction_dict = {}
+        # count = 0
 
         for arr, _ in self.mat:
             target_dict = dict.fromkeys(range(self.net.n_output), 0)
@@ -51,14 +55,27 @@ class RandomizedFalsification:
             else:
                 direction = 'minimize'
 
-            self.target_direction_dict[count] = [(target, direction)]
-            for t in target_dict:
-                if t != target:
-                    self.target_direction_dict[count].append((t, 'minimize' if direction=='maximize' else 'maximize'))
+            # self.target_direction_dict[count] = [(target, direction)]
+            # for t in target_dict:
+            #     if t != target:
+            #         self.target_direction_dict[count].append((t, 'minimize' if direction=='maximize' else 'maximize'))
+            if target not in self.targets:
+                self.targets.append(target)
+                self.directions.append(direction)
 
-            self.targets.append(target)
-            self.directions.append(direction)
-            count += 1
+            target = sorted(target_dict.items(), key=lambda item: item[1])[-1][0]
+            if target not in self.targets:
+                obj_type = sorted(obj_dict.items(), key=lambda item: item[1])[-1][0]
+                if (target == obj_type):
+                    direction = 'maximize'
+                else:
+                    direction = 'minimize'
+                self.targets.append(target)
+                self.directions.append(direction)
+
+
+
+            # count += 1
 
 
     def eval_constraints(self, input_ranges=None, constraints=None):
@@ -66,9 +83,12 @@ class RandomizedFalsification:
             input_ranges = torch.tensor(self.bounds, dtype=settings.DTYPE)
         input_ranges_clone = input_ranges.clone()
 
-        # for target, direction in zip(self.targets, self.directions):
-        for _, target_direction_list in self.target_direction_dict.items():
-            target, direction = target_direction_list[0]
+        for target, direction in zip(self.targets, self.directions):
+        # for _, target_direction_list in self.target_direction_dict.items():
+            # target, direction = target_direction_list[0]
+            # if target != 5:
+            #     continue
+            print(target, direction)
             stat, adv = self._sampling(input_ranges, self.mat, target, direction)
             if stat == 'violated':
                 return stat, adv
@@ -110,7 +130,7 @@ class RandomizedFalsification:
 
             flag = False
             for i in range(self.net.n_input):
-                if input_ranges[i][1] - input_ranges[i][0] > 1e-6:
+                if input_ranges[i][1] - input_ranges[i][0] > 1e-8:
                    flag = True
                    break
             if not flag:
@@ -125,19 +145,18 @@ class RandomizedFalsification:
         new_input_ranges = input_ranges.clone()
         random.shuffle(neg_samples)
 
+        pos_sample = random.choice(pos_samples)
+        dim = random.randint(0, int(self.net.n_input) - 1)
         for neg_sample in neg_samples:
-            pos_sample = random.choice(pos_samples)
-            dim = random.randint(0, int(self.net.n_input) - 1)
-
             # for dim in range(self.net.n_input):
             pos_val = pos_sample[0][dim]
             neg_val = neg_sample[0][dim]
             if pos_val > neg_val:
-                temp = torch.round(random.uniform(neg_val, pos_val), decimals=6).to(settings.DTYPE)
+                temp = random.uniform(neg_val, pos_val)
                 if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
                     new_input_ranges[dim][0] = temp
             else:
-                temp = torch.round(random.uniform(pos_val, neg_val), decimals=6).to(settings.DTYPE)
+                temp = random.uniform(pos_val, neg_val)
                 if temp <= new_input_ranges[dim][1] and temp >= new_input_ranges[dim][0]:
                     new_input_ranges[dim][1] = temp
         return new_input_ranges
@@ -157,7 +176,7 @@ class RandomizedFalsification:
 
     def _make_samples(self, input_ranges, output_props):
         s_in = torch.stack(
-            [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)])
+            [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)]).view(self.net.input_shape[1:])
                 for _ in range(self.n_samples)])
         s_out = self.net(s_in)
 

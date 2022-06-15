@@ -33,7 +33,8 @@ class Decider:
     def update(self, output_bounds=None, hidden_bounds=None):
         if hidden_bounds is not None:
             for idx, (lb, ub) in enumerate(hidden_bounds):
-                b = [(l, u) for l, u in zip(lb, ub)]
+                b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
+                assert len(b) == len(self.layers_mapping[idx])
                 self.bounds_mapping.update(dict(zip(self.layers_mapping[idx], b)))
 
         if output_bounds is not None:

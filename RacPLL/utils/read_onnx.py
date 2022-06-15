@@ -219,6 +219,7 @@ class PyTorchModelWrapper(nn.Module):
 
     @torch.no_grad()
     def get_concrete(self, x):
+        x = x.view(self.input_shape)
         idx = 0
         implication = {}
         for layer in self.layers:

@@ -4,6 +4,7 @@ import multiprocessing
 import torch.nn as nn
 import numpy as np
 import contextlib
+import random
 import torch
 import time
 import copy
@@ -86,9 +87,18 @@ class DNNTheoremProver:
         self.transformer = SymbolicNetwork(net)
 
         if settings.HEURISTIC_DEEPPOLY:
-            self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=1000)
+            self.flag_use_backsub = True
+            for layer in net.layers:
+                if isinstance(layer, nn.Conv2d):
+                    self.flag_use_backsub = False
+                    break
+            if self.flag_use_backsub:
+                self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=1000)
+            else:
+                self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=0)
 
-            self.cs = LPSolver(net, spec, self.deeppoly)
+
+            # self.cs = LPSolver(net, spec, self.deeppoly)
 
             # (l, u), _ = self.deeppoly(self.lbs_init, self.ubs_init)
             # self.spec.register(l, u)
@@ -229,8 +239,9 @@ class DNNTheoremProver:
         output_mat, backsub_dict = self.transformer(assignment)
         Timers.toc('backsub_dict')
 
+        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 100
         # parallel implication
-        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
+        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
             backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.n_inputs, self.lbs_init, self.ubs_init)
             wloads = MP.get_workloads(unassigned_nodes, n_cpus=settings.N_THREADS)
@@ -376,7 +387,7 @@ class DNNTheoremProver:
                 cc = self._shorten_conflict_clause(assignment, False)
                 return False, cc, None
 
-            if settings.HEURISTIC_DEEPPOLY and should_run_again:
+            if settings.HEURISTIC_DEEPPOLY and should_run_again and self.flag_use_backsub:
                 Timers.tic('Deeppoly optimization reachability')
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
                 lbs_expr = [grb.LinExpr(wl.numpy(), self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
@@ -406,6 +417,17 @@ class DNNTheoremProver:
                     cc = self._shorten_conflict_clause(assignment, False)
                     return False, cc, None
                 Timers.toc('Deeppoly optimization reachability')
+
+            if not self.flag_use_backsub:
+                tmp_input = torch.tensor(
+                    [random.uniform(lbs[i], ubs[i]) for i in range(self.net.n_input)], 
+                    dtype=settings.DTYPE).view(self.net.input_shape)
+
+                if self.check_solution(tmp_input):
+                    self.solution = tmp_input
+                    return True, {}, None
+                self.concrete = self.net.get_concrete(tmp_input)
+
 
 
         # implication heuristic
@@ -457,34 +479,35 @@ class DNNTheoremProver:
         #         implications[node] = {'pos': value==1, 'neg': value==-1}
 
 
-        if settings.HEURISTIC_GUROBI_IMPLICATION and settings.PARALLEL_IMPLICATION:
-            for w in self.workers:
-                w.join()
+        if settings.HEURISTIC_GUROBI_IMPLICATION:
+            if flag_parallel_implication:
+                for w in self.workers:
+                    w.join()
 
-            for w in self.workers:
-                res = Q.get()
-                implications.update(res)
+                for w in self.workers:
+                    res = Q.get()
+                    implications.update(res)
 
-        elif settings.HEURISTIC_GUROBI_IMPLICATION:
-            for node in unassigned_nodes:
-                if node in implications and (implications[node]['pos'] or implications[node]['neg']):
-                    continue
+            else:
+                for node in unassigned_nodes:
+                    if node in implications and (implications[node]['pos'] or implications[node]['neg']):
+                        continue
 
-                implications[node] = {'pos': False, 'neg': False}
-                # neg
-                if self.concrete[node] <= 0:
-                    ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon)
-                    self._optimize()
-                    if self.model.status == grb.GRB.INFEASIBLE:
-                        implications[node]['neg'] = True
-                else:
-                # pos
-                    ci = self.model.addLConstr(backsub_dict_expr[node] <= 0)
-                    self._optimize()
-                    if self.model.status == grb.GRB.INFEASIBLE:
-                        implications[node]['pos'] = True
-                
-                self.model.remove(ci)
+                    implications[node] = {'pos': False, 'neg': False}
+                    # neg
+                    if self.concrete[node] <= 0:
+                        ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon)
+                        self._optimize()
+                        if self.model.status == grb.GRB.INFEASIBLE:
+                            implications[node]['neg'] = True
+                    else:
+                    # pos
+                        ci = self.model.addLConstr(backsub_dict_expr[node] <= 0)
+                        self._optimize()
+                        if self.model.status == grb.GRB.INFEASIBLE:
+                            implications[node]['pos'] = True
+                    
+                    self.model.remove(ci)
 
         Timers.toc('Implications')
 
