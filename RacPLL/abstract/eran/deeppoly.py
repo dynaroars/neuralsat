@@ -47,7 +47,7 @@ class DeepPoly:
 
             bounds, params = layer(bounds, assignment)
             # print('\t', bounds.shape, math.prod([*bounds.shape]))
-            assert torch.all(bounds[0] <= bounds[1])
+            assert torch.all(bounds[0] <= bounds[1]), layer
 
             if params is not None:
                 hidden_params.append(params)

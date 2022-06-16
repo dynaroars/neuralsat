@@ -1,7 +1,7 @@
 import random
 import torch
 
-DEBUG = True
+DEBUG = False
 
 DTYPE = torch.float64
 

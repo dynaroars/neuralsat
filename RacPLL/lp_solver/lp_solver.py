@@ -101,6 +101,7 @@ class LPSolver:
             new_layer_gurobi_vars = []
             if isinstance(layer, nn.Linear):
                 if layer == self.net.layers[-1]:
+                    # vs = [self.model.addVar(lb=-1e8, ub=1e8, name=f'y[{i}]') for i in range(self.net.n_output)]
                     vs = [self.model.addVar(lb=self.lower_out_init[i], ub=self.upper_out_init[i], name=f'y[{i}]') for i in range(self.net.n_output)]
                     variables = [None] * len(vs)
                 else:
@@ -122,6 +123,7 @@ class LPSolver:
                     print('cac', gurobi_vars[-1][0])
                     pass
                 else:
+                    assert len(variables) == len(gurobi_vars[-1])
                     for node, pre_var in zip(variables, gurobi_vars[-1]):
                         lb, ub = self.mapping_bounds[node]
                         if lb >= 0:
@@ -157,6 +159,7 @@ class LPSolver:
                     # last layer is conv
                     raise
                 else:
+                    # last layer is input
                     continue
             else:
                 print(layer)
@@ -172,6 +175,7 @@ class LPSolver:
         self.output_constraints = self.spec.get_output_property(out_vars)
         # print(out_vars)
         # print(self.output_constraints)
+        self.gurobi_vars = gurobi_vars
 
 
     def optimize(self):
@@ -181,14 +185,14 @@ class LPSolver:
         self.model.optimize()
 
     def check_sat(self, assignment):
-        self.optimize()
-        print('Solving:', len(self.model.getConstrs()), 'constraints', GRB_STATUS_CODE[self.model.status])
+        # self.optimize()
+        # print('Solving:', len(self.model.getConstrs()), 'constraints', GRB_STATUS_CODE[self.model.status])
         # exit()
         cc = []
         for node, status in assignment.items():
             # print(node, self.mapping_assignment[node])
             assert status is not None
-            fv = self.model.getVarByName(f'n[{node}]')
+            # fv = self.model.getVarByName(f'n[{node}]')
             if status:
                 cc.append(self.model.addLConstr(self.mapping_assignment[node] >= 1e-8, name=f'c_b_{node}'))
                 # cc.append(self.model.addLConstr(fv == self.mapping_assignment[node], name=f'c_f_{node}'))
@@ -208,10 +212,60 @@ class LPSolver:
                 break
 
             self.model.remove(ci)
+
+        # tighten bounds:
+        self.model.setObjective(grb.quicksum(self.gurobi_vars[0]), grb.GRB.MAXIMIZE)
+        self.optimize()
+        if self.model.status == grb.GRB.OPTIMAL:
+            ubs = [var.X for var in self.gurobi_vars[0]]
+        else:
+            ubs = [var.ub for var in self.gurobi_vars[0]]
+
+        self.model.setObjective(grb.quicksum(self.gurobi_vars[0]), grb.GRB.MINIMIZE)
+        self.optimize()
+        if self.model.status == grb.GRB.OPTIMAL:
+            lbs = [var.X for var in self.gurobi_vars[0]]
+        else:
+            lbs = [var.lb for var in self.gurobi_vars[0]]
+
         self.model.remove(cc)
+        return flag_sat, (lbs, ubs)
 
-        return flag_sat
 
+    def get_implication(self, assignment, unassigned_nodes, concrete):
+        cc = []
+        for node, status in assignment.items():
+            # print(node, self.mapping_assignment[node])
+            assert status is not None
+            # fv = self.model.getVarByName(f'n[{node}]')
+            if status:
+                cc.append(self.model.addLConstr(self.mapping_assignment[node] >= 1e-8, name=f'c_b_{node}'))
+                # cc.append(self.model.addLConstr(fv == self.mapping_assignment[node], name=f'c_f_{node}'))
+            else:
+                cc.append(self.model.addLConstr(self.mapping_assignment[node] <= 0, name=f'c_b_{node}'))
+                # cc.append(self.model.addLConstr(fv == 0, name=f'c_f_{node}'))
+        self.model.update()
+
+        implications = {}
+        for node in unassigned_nodes:
+            implications[node] = {'pos': False, 'neg': False}
+            # neg
+            if concrete[node] <= 0:
+                ci = self.model.addLConstr(self.mapping_assignment[node] >= 1e-8)
+                self.optimize()
+                if self.model.status == grb.GRB.INFEASIBLE:
+                    implications[node]['neg'] = True
+            else:
+            # pos
+                ci = self.model.addLConstr(self.mapping_assignment[node] <= 0)
+                self.optimize()
+                if self.model.status == grb.GRB.INFEASIBLE:
+                    implications[node]['pos'] = True
+            
+            self.model.remove(ci)
+
+        self.model.remove(cc)
+        return implications
 
     # def shorten_conflict_clause(self, assignment):
     #     # print('shorten_conflict_clause:', len(self.model.getConstrs()), 'constraints')

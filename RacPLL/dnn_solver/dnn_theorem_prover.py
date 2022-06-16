@@ -23,29 +23,6 @@ from utils.timer import Timers
 from utils.misc import MP
 import settings
 
-def print_bounds(layers_mapping, hidden_bounds, assignment, implications):
-    mapping_bounds = {}
-    reversed_layers_mapping = {i: k for k, v in layers_mapping.items() for i in v}
-
-    for idx, (lb, ub) in enumerate(hidden_bounds):
-        b = [(l, u) for l, u in zip(lb, ub)]
-        mapping_bounds.update(dict(zip(layers_mapping[idx], b)))
-    for k, v in mapping_bounds.items():
-        if k in assignment:
-            continue
-
-        if k in implications and (implications[k]['pos'] or implications[k]['neg']):
-            continue
-
-        lidx = reversed_layers_mapping[k]
-        break
-
-    for k, v in mapping_bounds.items():
-        if k in layers_mapping[lidx]:
-            print(k, v[0].numpy(), v[1].numpy())
-
-
-    return mapping_bounds
 
 class DNNTheoremProver:
 
@@ -70,7 +47,7 @@ class DNNTheoremProver:
 
         self.gurobi_vars = [
             self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
-            for i in range(self.n_inputs)
+            for i in range(self.net.n_input)
         ]
 
         self.count = 0 # debug
@@ -116,25 +93,10 @@ class DNNTheoremProver:
         # test
         self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
-    @property
-    def n_outputs(self):
-        return self.net.n_output
-
-    @property
-    def n_inputs(self):
-        return self.net.n_input
-
 
     def _update_input_bounds(self, lbs, ubs):
-        if lbs is None or ubs is None:
-            return True
-        lbs = np.array(lbs)
-        ubs = np.array(ubs)
-        flag = lbs > ubs
-
-        if np.any(flag):
-            if not np.all(lbs[flag] - ubs[flag] < DNNTheoremProver.epsilon):
-                return False
+        if torch.any(lbs > ubs):
+            return False
 
         for i, var in enumerate(self.gurobi_vars):
             if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
@@ -148,46 +110,6 @@ class DNNTheoremProver:
 
         self.model.update()
         return True
-
-    def _update_new_input_bounds(self, l, u , i):
-        if (l == self.lbs_init[i]) and (u < self.ubs_init[i]):
-            # print('\tnew lower', i, self.lbs_init[i], '--->', u)
-            self.lbs_init[i] = u
-            self.gurobi_vars[i].lb = u
-        elif (u == self.ubs_init[i]) and (l > self.lbs_init[i]):
-            # print('\tnew upper', i, self.ubs_init[i], '--->', l)
-            self.ubs_init[i] = l
-            self.gurobi_vars[i].ub = l
-
-        self.model.update()
-
-    def _single_range_check(self, lbs, ubs, assignment):
-        return
-        for i in range(self.net.n_input):
-            tmp_lbs = self.lbs_init.clone()
-            tmp_ubs = self.ubs_init.clone()
-            modified = False
-
-            if (lbs[i] > self.lbs_init[i]):
-                tmp_lbs[i] = lbs[i]
-                modified = True
-            elif (ubs[i] < self.ubs_init[i]):
-                modified = True
-                tmp_ubs[i] = ubs[i]
-
-            if modified:
-                # print('check ', i)
-                # print('origin lower', self.lbs_init)
-                # print('modify lower', tmp_lbs)
-
-                # print('origin upper', self.ubs_init)
-                # print('modify upper', tmp_ubs)
-
-                (l, u), hidden_bounds = self._compute_output_abstraction(tmp_lbs, tmp_ubs, assignment)
-                if not self.spec.check_output_reachability(l, u): # conflict
-                    self._update_new_input_bounds(tmp_lbs[i], tmp_ubs[i], i)
-                    # return
-
 
 
     def _find_unassigned_nodes(self, assignment):
@@ -211,19 +133,8 @@ class DNNTheoremProver:
 
         if self.solution is not None:
             return True, {}, None
-
-        # check overapprox sat
-        # print('start')
-        # cc = self._shorten_conflict_clause(assignment)
-        # print('start:', cc)
-        # if len(cc):
-        #     return False, cc, None
-
-
         # reset constraints
-
         Timers.tic('Reset solver')
-
         self.model.remove(self.constraints)
         self._restore_input_bounds()
         self.constraints = []
@@ -243,7 +154,7 @@ class DNNTheoremProver:
         # parallel implication
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
             backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
-            kwargs = (self.n_inputs, self.lbs_init, self.ubs_init)
+            kwargs = (self.net.n_input, self.lbs_init, self.ubs_init)
             wloads = MP.get_workloads(unassigned_nodes, n_cpus=settings.N_THREADS)
             Q = multiprocessing.Queue()
             self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
@@ -294,7 +205,7 @@ class DNNTheoremProver:
             flag_sat = False
             Timers.tic('Check output property')
             output_constraint = self.spec.get_output_property(
-                [self._get_equation(output_mat[i]) for i in range(self.n_outputs)]
+                [self._get_equation(output_mat[i]) for i in range(self.net.n_output)]
             )
             for cnf in output_constraint:
                 ci = [self.model.addLConstr(_) for _ in cnf]
@@ -326,7 +237,7 @@ class DNNTheoremProver:
             if self.model.status == grb.GRB.OPTIMAL:
                 ubs = [var.X for var in self.gurobi_vars]
             else:
-                ubs = None
+                ubs = [var.ub for var in self.gurobi_vars]
 
             # lower
             self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MINIMIZE)
@@ -334,9 +245,12 @@ class DNNTheoremProver:
             if self.model.status == grb.GRB.OPTIMAL:
                 lbs = [var.X for var in self.gurobi_vars]
             else:
-                lbs = None
+                lbs = [var.lb for var in self.gurobi_vars]
 
             Timers.toc('Tighten bounds')
+
+            lbs = torch.tensor(lbs, dtype=settings.DTYPE)
+            ubs = torch.tensor(ubs, dtype=settings.DTYPE)
 
             Timers.tic('Update bounds')
             stat = self._update_input_bounds(lbs, ubs)
@@ -347,8 +261,6 @@ class DNNTheoremProver:
                 cc = self._shorten_conflict_clause(assignment, False)
                 return False, cc, None
 
-            lbs = torch.tensor([var.lb for var in self.gurobi_vars], dtype=settings.DTYPE)
-            ubs = torch.tensor([var.ub for var in self.gurobi_vars], dtype=settings.DTYPE)
 
             # Timers.tic('Cache abstraction')
             # score = self.abstraction_cacher.get_score((lbs, ubs))
@@ -452,32 +364,8 @@ class DNNTheoremProver:
 
         self._restore_input_bounds()
 
-        implications = {}
         Timers.tic('Implications')
-
-        # if settings.HEURISTIC_DEEPPOLY_IMPLICATION:
-        #     _, hidden_bounds = self._compute_output_abstraction(self.lbs_init, self.ubs_init)
-        #     signs = {}
-        #     for idx, (lb, ub) in enumerate(hidden_bounds):
-        #         sign = 2 * torch.ones(len(lb), dtype=int) 
-        #         sign[lb >= 0] = 1
-        #         sign[ub <= 0] = -1
-        #         signs.update(dict(zip(self.layers_mapping[idx], sign.numpy())))
-
-
-        #     # for node, status in assignment.items():
-        #     #     if signs[node] == 2:
-        #     #         continue
-        #     #     abt_status = signs[node] == 1
-        #     #     if abt_status != status:
-        #     #         # print('doan ngu')
-        #     #         cc = self._shorten_conflict_clause(assignment)
-        #     #         # print('doan ngu:', cc)
-        #     #         return False, cc, None
-                    
-        #     for node, value in signs.items():
-        #         implications[node] = {'pos': value==1, 'neg': value==-1}
-
+        implications = {}
 
         if settings.HEURISTIC_GUROBI_IMPLICATION:
             if flag_parallel_implication:
@@ -490,9 +378,6 @@ class DNNTheoremProver:
 
             else:
                 for node in unassigned_nodes:
-                    if node in implications and (implications[node]['pos'] or implications[node]['neg']):
-                        continue
-
                     implications[node] = {'pos': False, 'neg': False}
                     # neg
                     if self.concrete[node] <= 0:
@@ -510,22 +395,6 @@ class DNNTheoremProver:
                     self.model.remove(ci)
 
         Timers.toc('Implications')
-
-        # if self.decider is not None:
-            # flag_implied = False
-            # for k, v in implications.items():
-            #     if v['pos'] or v['neg']:
-            #         print('-----------', k, v['pos'], v['neg'])
-            #         flag_implied = True
-            #         break
-
-            # if not flag_implied:
-            #     # print()
-            #     # print('-------------------------------------------------------------')
-            #     # print_bounds(self.layers_mapping, hidden_bounds, assignment, implications)
-            #     # print('-------------------------------------------------------------')
-            #     # print()
-            # self.decider.update(unassigned_nodes, hidden_bounds)
 
         return True, implications, is_full_assignment
 
