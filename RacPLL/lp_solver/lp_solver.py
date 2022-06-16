@@ -47,11 +47,11 @@ class LPSolver:
             assert len(b) == len(self.net.layers_mapping[idx])
             self.mapping_bounds.update(dict(zip(self.net.layers_mapping[idx], b)))
 
-        # for k, v in self.mapping_bounds.items():
-        #     print(k, v)
-
 
         self._initialize()
+
+        # for k, v in self.mapping_assignment.items():
+        #     print(k, v)
 
 
     def _initialize(self, model_type='lp'):
@@ -102,13 +102,17 @@ class LPSolver:
             if isinstance(layer, nn.Linear):
                 if layer == self.net.layers[-1]:
                     vs = [self.model.addVar(lb=self.lower_out_init[i], ub=self.upper_out_init[i], name=f'y[{i}]') for i in range(self.net.n_output)]
+                    variables = [None] * len(vs)
                 else:
                     variables = self.net.layers_mapping[relu_idx]
                     vs = [self.model.addVar(lb=self.mapping_bounds[i][0], ub=self.mapping_bounds[i][1], name=f'a[{i}]') for i in variables]
 
                 exprs = [grb.LinExpr(layer.weight[i], gurobi_vars[-1]) + layer.bias[i] for i in range(len(vs))]
-                for v, expr in zip(vs, exprs):
+                self.model.update()
+                for v, node, expr in zip(vs, variables, exprs):
                     self.model.addLConstr(v == expr)
+                    if node is not None:
+                        self.mapping_assignment[node] = expr
 
                 new_layer_gurobi_vars = vs
 
@@ -148,19 +152,26 @@ class LPSolver:
                         new_layer_gurobi_vars.append(v)
                 relu_idx += 1
 
+            elif isinstance(layer, nn.Flatten):
+                if isinstance(gurobi_vars[-1][0], list):
+                    # last layer is conv
+                    raise
+                else:
+                    continue
             else:
                 print(layer)
                 raise NotImplementedError
 
             gurobi_vars.append(new_layer_gurobi_vars)
             self.model.update()
-            self.model.write('gurobi/example.lp')
+            # self.model.write('gurobi/example.lp')
 
 
+        self.model.update()
         out_vars = gurobi_vars[-1]
-        print(out_vars)
         self.output_constraints = self.spec.get_output_property(out_vars)
-        print(self.output_constraints)
+        # print(out_vars)
+        # print(self.output_constraints)
 
 
     def optimize(self):
@@ -168,6 +179,38 @@ class LPSolver:
         # self.model.write(f'gurobi/clause_shortener.lp')
         self.model.reset()
         self.model.optimize()
+
+    def check_sat(self, assignment):
+        self.optimize()
+        print('Solving:', len(self.model.getConstrs()), 'constraints', GRB_STATUS_CODE[self.model.status])
+        # exit()
+        cc = []
+        for node, status in assignment.items():
+            # print(node, self.mapping_assignment[node])
+            assert status is not None
+            fv = self.model.getVarByName(f'n[{node}]')
+            if status:
+                cc.append(self.model.addLConstr(self.mapping_assignment[node] >= 1e-8, name=f'c_b_{node}'))
+                # cc.append(self.model.addLConstr(fv == self.mapping_assignment[node], name=f'c_f_{node}'))
+            else:
+                cc.append(self.model.addLConstr(self.mapping_assignment[node] <= 0, name=f'c_b_{node}'))
+                # cc.append(self.model.addLConstr(fv == 0, name=f'c_f_{node}'))
+        self.model.update()
+
+        flag_sat = False
+        for cnf in self.output_constraints:
+            ci = [self.model.addLConstr(_) for _ in cnf]
+            self.optimize()
+            print('Solving:', len(self.model.getConstrs()), 'constraints', GRB_STATUS_CODE[self.model.status])
+            if self.model.status == grb.GRB.OPTIMAL:
+                flag_sat = True
+                self.model.remove(ci)
+                break
+
+            self.model.remove(ci)
+        self.model.remove(cc)
+
+        return flag_sat
 
 
     # def shorten_conflict_clause(self, assignment):
