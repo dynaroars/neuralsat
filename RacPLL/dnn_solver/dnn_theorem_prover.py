@@ -203,6 +203,9 @@ class DNNTheoremProver:
         # caching assignment
         self.last_assignment = assignment
 
+        # upper objective
+        self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MAXIMIZE)
+
         # check satisfiability
         if not is_full_assignment:
             self._optimize()
@@ -242,10 +245,7 @@ class DNNTheoremProver:
         if settings.TIGHTEN_BOUND:# and (self.count % settings.HEURISTIC_DEEPPOLY_INTERVAL == 0): 
             # compute new input lower/upper bounds
             Timers.tic('Tighten bounds')
-
             # upper
-            self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MAXIMIZE)
-            self._optimize()
             if self.model.status == grb.GRB.OPTIMAL:
                 ubs = [var.X for var in self.gurobi_vars]
             else:
