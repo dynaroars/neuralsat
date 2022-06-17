@@ -204,6 +204,11 @@ class PyTorchModelWrapper(nn.Module):
         return self.layers(x)
 
 
+    def forward_grad(self, x):
+        return self.layers(x)
+
+
+
     @torch.no_grad()
     def get_assignment(self, x):
         idx = 0
