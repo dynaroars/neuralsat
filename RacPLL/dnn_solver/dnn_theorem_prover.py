@@ -166,7 +166,7 @@ class DNNTheoremProver:
         flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
         # parallel implication
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
-            backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
+            backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.net.n_input, self.lbs_init, self.ubs_init)
             wloads = MP.get_workloads(unassigned_nodes, n_cpus=16)
             Q = multiprocessing.Queue()
