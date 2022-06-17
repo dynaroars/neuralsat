@@ -365,7 +365,7 @@ class DNNTheoremProver:
 
 
         # implication heuristic
-        if settings.HEURISTIC_RANDOMIZED_FALSIFICATION:
+        if settings.HEURISTIC_RANDOMIZED_FALSIFICATION and 'acasxu' in self.net.dataset:
             # tic = time.time()
             # stat, adv = self.rf.eval_constraints(None)
             # if stat == 'violated':
