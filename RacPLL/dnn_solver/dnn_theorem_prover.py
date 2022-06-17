@@ -325,8 +325,8 @@ class DNNTheoremProver:
             if settings.HEURISTIC_DEEPPOLY and should_run_again and self.flag_use_backsub:
                 Timers.tic('Deeppoly optimization reachability')
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
-                lbs_expr = [grb.LinExpr(wl.numpy(), self.gurobi_vars) + cl for (wl, cl) in zip(Ml, bl)]
-                ubs_expr = [grb.LinExpr(wu.numpy(), self.gurobi_vars) + cu for (wu, cu) in zip(Mu, bu)]
+                lbs_expr = [grb.LinExpr(wl, self.gurobi_vars) + cl for (wl, cl) in zip(Ml.detach().cpu().numpy(), bl.detach().cpu().numpy())]
+                ubs_expr = [grb.LinExpr(wu, self.gurobi_vars) + cu for (wu, cu) in zip(Mu.detach().cpu().numpy(), bu.detach().cpu().numpy())]
                 dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
                 flag_sat = False
                 for cnf, adv_obj in dnf_contrs:
