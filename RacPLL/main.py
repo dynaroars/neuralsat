@@ -1,4 +1,5 @@
 import argparse
+import torch
 import time
 
 from dnn_solver.dnn_solver import DNNSolver
@@ -14,9 +15,13 @@ if __name__ == '__main__':
     parser.add_argument('--spec', type=str, required=True, help='VNNLIB file path.')
     parser.add_argument('--solution', action='store_true', help='Get counter-example.')
     parser.add_argument('--timer', action='store_true', help='Timer report.')
+    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'], help='Device.')
+    parser.add_argument('--dataset', default='unknown', help='Dataset.')
     args = parser.parse_args()
 
-    net = DNNParser.parse(args.net)
+    device = torch.device(args.device)
+
+    net = DNNParser.parse(args.net, args.dataset, args.device)
     spec_list = read_vnnlib_simple(args.spec, net.n_input, net.n_output)
 
     if args.timer:
@@ -37,8 +42,8 @@ if __name__ == '__main__':
         output = solver.net(solution)
         print('\t- lower:', spec.get_input_property()['lbs'])
         print('\t- upper:', spec.get_input_property()['ubs'])
-        print('\t- solution:', solution.numpy().tolist())
-        print('\t- output:', output.numpy().tolist())
+        print('\t- solution:', solution.detach().numpy().tolist())
+        print('\t- output:', output.detach().numpy().tolist())
 
     if args.timer:
         Timers.toc('dnn_solver')

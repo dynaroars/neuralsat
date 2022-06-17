@@ -12,6 +12,7 @@ class SymbolicNetwork:
     def __init__(self, net):
         self.net = net
         self.layers_mapping = net.layers_mapping
+        self.device = net.device
 
         self.layers = self._build_layers()
 
@@ -20,18 +21,18 @@ class SymbolicNetwork:
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
-                l = SymbolicLinear(layer)
+                l = SymbolicLinear(layer, self.device)
             elif isinstance(layer, nn.ReLU):
-                l = SymbolicReLU(self.layers_mapping[idx])
+                l = SymbolicReLU(self.layers_mapping[idx], self.device)
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
-                l = SymbolicConv2d(layer)
+                l = SymbolicConv2d(layer, self.device)
             elif isinstance(layer, nn.Flatten):
-                l = SymbolicFlatten()
+                l = SymbolicFlatten(self.device)
             elif isinstance(layer, onnx2pytorch.operations.Reshape):
-                l = SymbolicReshape(layer)
+                l = SymbolicReshape(layer, self.device)
             elif isinstance(layer, onnx2pytorch.operations.Transpose):
-                l = SymbolicTranspose(layer)
+                l = SymbolicTranspose(layer, self.device)
             else:
                 print(layer, type(layer))
                 raise NotImplementedError
@@ -42,7 +43,7 @@ class SymbolicNetwork:
     @property
     def symbolic_input(self):
         default_input = F.one_hot(torch.arange(0, self.net.n_input)).view(*self.net.input_shape[1:], self.net.n_input)
-        return torch.concat([default_input, torch.zeros(*self.net.input_shape[1:], 1)], dim=-1).to(settings.DTYPE)
+        return torch.concat([default_input, torch.zeros(*self.net.input_shape[1:], 1)], dim=-1).to(settings.DTYPE).to(self.device)
 
 
     @torch.no_grad()
@@ -60,9 +61,9 @@ class SymbolicNetwork:
 
 class SymbolicLinear:
 
-    def __init__(self, layer):
-        self.weight = layer.weight.to(settings.DTYPE)
-        self.bias = layer.bias.to(settings.DTYPE)
+    def __init__(self, layer, device):
+        self.weight = layer.weight.to(settings.DTYPE).to(device)
+        self.bias = layer.bias.to(settings.DTYPE).to(device)
 
 
     def __call__(self, x, assignment):
@@ -73,17 +74,18 @@ class SymbolicLinear:
 
 class SymbolicReLU:
 
-    def __init__(self, variables):
+    def __init__(self, variables, device):
         self.variables = variables
         self.set_variables = set(variables)
+        self.device = device
 
 
     def __call__(self, x, assignment):
-        output = torch.zeros_like(x, dtype=settings.DTYPE)
+        output = torch.zeros_like(x, dtype=settings.DTYPE, device=self.device)
         assert math.prod(output.shape[:-1]) == len(self.variables), f'layers_mapping sai me roi: {x.shape}'
 
         flag_break = not self.set_variables.issubset(set(assignment.keys()))
-        mask = torch.tensor([assignment.get(v, False) for v in self.variables]).view(x.shape[:-1])
+        mask = torch.tensor([assignment.get(v, False) for v in self.variables], device=self.device).view(x.shape[:-1])
         tmp_x = x.view(-1, x.shape[-1])
         backsub_dict = {v: tmp_x[i] for i, v in enumerate(self.variables)}
         output[mask] = x[mask]
@@ -94,9 +96,9 @@ class SymbolicReLU:
 
 class SymbolicConv2d:
 
-    def __init__(self, layer):
-        self.weight = layer.weight.to(settings.DTYPE) # OUT x IN x K1 x K2
-        self.bias = layer.bias.to(settings.DTYPE)
+    def __init__(self, layer, device):
+        self.weight = layer.weight.to(settings.DTYPE).to(device) # OUT x IN x K1 x K2
+        self.bias = layer.bias.to(settings.DTYPE).to(device)
 
         self.in_channels = layer.in_channels
         self.out_channels = layer.out_channels
@@ -131,7 +133,7 @@ class SymbolicConv2d:
 
 class SymbolicFlatten:
 
-    def __init__(self):
+    def __init__(self, device):
         pass
 
     def __call__(self, x, assignment):
@@ -142,7 +144,7 @@ class SymbolicFlatten:
 
 class SymbolicTranspose:
 
-    def __init__(self, layer):
+    def __init__(self, layer, device):
         # discard batch_size dimension
         self.dims = tuple([d-1 for d in layer.dims[1:]] + [len(layer.dims)-1])
 
@@ -159,7 +161,7 @@ class SymbolicTranspose:
 
 class SymbolicReshape:
 
-    def __init__(self, layer):
+    def __init__(self, layer, device):
         self.shape = layer.shape
 
     def __call__(self, x, assignment):

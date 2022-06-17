@@ -10,9 +10,10 @@ class GradientFalsification:
 
         self.net = net
         self.spec = spec
+        self.device = net.device
 
-        self.upper = torch.tensor([b[1] for b in self.spec.bounds], dtype=settings.DTYPE).view(self.net.input_shape)
-        self.lower = torch.tensor([b[0] for b in self.spec.bounds], dtype=settings.DTYPE).view(self.net.input_shape)
+        self.upper = torch.tensor([b[1] for b in self.spec.bounds], dtype=settings.DTYPE, device=self.device).view(self.net.input_shape)
+        self.lower = torch.tensor([b[0] for b in self.spec.bounds], dtype=settings.DTYPE, device=self.device).view(self.net.input_shape)
 
         self.x = (self.upper + self.lower) / 2
 
@@ -66,7 +67,7 @@ class GradientFalsification:
             alpha = self.max_eps/4.0
             best_deltas, last_deltas = self.attack_pgd(
                 X=x, 
-                y=torch.tensor([self.target_label]), 
+                y=torch.tensor([self.target_label], device=self.device), 
                 alpha=alpha,
                 attack_iters=self.attack_iters, 
                 num_restarts=self.num_restarts, 
@@ -106,8 +107,8 @@ class GradientFalsification:
         initialization='uniform'):
 
 
-        best_loss = torch.empty(X.size(0), dtype=settings.DTYPE).fill_(float("-inf"))
-        best_delta = torch.zeros_like(X, dtype=settings.DTYPE)
+        best_loss = torch.empty(X.size(0), dtype=settings.DTYPE, device=self.device).fill_(float("-inf"))
+        best_delta = torch.zeros_like(X, dtype=settings.DTYPE, device=self.device)
 
         input_shape = X.size()
         if multi_targeted:
@@ -116,7 +117,7 @@ class GradientFalsification:
             # Add two extra dimensions for targets. Shape is (batch, restarts, target, ...).
             X = X.unsqueeze(1).unsqueeze(1).expand(-1, *extra_dim, *(-1,) * (X.ndim - 1))
             # Generate target label list for each example.
-            E = torch.eye(num_classes, dtype=settings.DTYPE)
+            E = torch.eye(num_classes, dtype=settings.DTYPE, device=self.device)
             c = E.unsqueeze(0) - E[y].unsqueeze(1)
             # remove specifications to self.
             I = ~(y.unsqueeze(1) == torch.arange(num_classes).unsqueeze(0))
@@ -134,7 +135,7 @@ class GradientFalsification:
                 upper_limit = upper_limit.unsqueeze(1).unsqueeze(1)
         else:
             # An attack target for targeted attack, in dimension (batch, ).
-            target = torch.tensor(target, dtype=settings.DTYPE).view(-1,1)
+            target = torch.tensor(target, dtype=settings.DTYPE, device=self.device).view(-1,1)
             target_index = target.view(-1,1,1).expand(-1, num_restarts, 1)
             # Add an extra dimension for num_restarts. Shape is (batch, num_restarts, ...).
             X = X.unsqueeze(1).expand(-1, num_restarts, *(-1,) * (X.ndim - 1))
@@ -160,7 +161,7 @@ class GradientFalsification:
                 break
             
             if initialization == 'uniform':
-                delta = (torch.empty_like(X).uniform_() * (sample_upper_limit - sample_lower_limit) + sample_lower_limit).requires_grad_()
+                delta = (torch.empty_like(X, device=self.device).uniform_() * (sample_upper_limit - sample_lower_limit) + sample_lower_limit).requires_grad_()
             else:
                 raise ValueError(f"Unknown initialization method {initialization}")
 

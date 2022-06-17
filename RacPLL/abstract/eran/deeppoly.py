@@ -10,26 +10,28 @@ class DeepPoly:
         self.net = net
         self.back_sub_steps = back_sub_steps
 
+        self.device = net.device
+
         self._build_network_transformer()
 
     def _build_network_transformer(self):
-        last = InputTransformer(self.net.input_shape)
+        last = InputTransformer(self.net.input_shape).to(self.device)
         self.layers = [last]
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
-                last = LinearTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
+                last = LinearTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx).to(self.device)
             elif isinstance(layer, nn.ReLU):
-                last = ReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping)
+                last = ReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping).to(self.device)
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
-                last = Conv2dTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx)
+                last = Conv2dTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx).to(self.device)
             elif isinstance(layer, nn.Flatten):
-                last = FlattenTransformer(last=last, idx=idx)
+                last = FlattenTransformer(last=last, idx=idx).to(self.device)
             elif isinstance(layer, onnx2pytorch.operations.Reshape):
-                last = ReshapeTransformer(layer.shape, last=last, idx=idx, back_sub_steps=self.back_sub_steps)
+                last = ReshapeTransformer(layer.shape, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
             elif isinstance(layer, onnx2pytorch.operations.Transpose):
-                last = TransposeTransformer(layer.dims, last=last, idx=idx, back_sub_steps=self.back_sub_steps)
+                last = TransposeTransformer(layer.dims, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
             else:
                 print(layer)
                 raise NotImplementedError
@@ -235,38 +237,39 @@ class ReLUTransformer(nn.Module):
         self.params = None
     
     def forward(self, bounds, assignment):
+        device = bounds.device
         ind2 = bounds[0] >= 0 
         ind3 = (bounds[1] > 0) * (bounds[0] < 0) 
         # ind4 = (bounds[1] > -bounds[0]) * ind3
 
-        self.bounds = torch.zeros_like(bounds)
+        self.bounds = torch.zeros_like(bounds, device=device)
         self.bounds[1, ind3] = bounds[1, ind3]
         # self.bounds[:, ind4] = bounds[:, ind4]
-        self.lmbda = torch.zeros_like(bounds[1])
-        self.beta = torch.zeros_like(bounds[1])
-        self.mu = torch.zeros_like(bounds[1])
-        self.lmbda[ind2] = torch.ones_like(self.lmbda[ind2])
+        self.lmbda = torch.zeros_like(bounds[1], device=device)
+        self.beta = torch.zeros_like(bounds[1], device=device)
+        self.mu = torch.zeros_like(bounds[1], device=device)
+        self.lmbda[ind2] = torch.ones_like(self.lmbda[ind2], device=device)
 
         diff = bounds[1, ind3] - bounds[0, ind3] 
         self.lmbda[ind3] = torch.div(bounds[1, ind3], diff)
         # self.beta[ind4] = torch.ones_like(self.beta[ind4])
         self.mu[ind3] = torch.div(-bounds[0, ind3] * bounds[1, ind3], diff)
         self.bounds[:, ind2] = bounds[:, ind2]
-        self.beta[ind2] = torch.ones_like(self.beta[ind2])
+        self.beta[ind2] = torch.ones_like(self.beta[ind2], device=device)
         if assignment is not None:
             la = torch.Tensor([assignment.get(i, 2) for i in self.layers_mapping[self.idx]]).view(self.lmbda.shape)
             active_ind = la==True
             inactive_ind = la==False
 
-            self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind])
-            self.beta[active_ind] = torch.ones_like(self.beta[active_ind])
-            self.mu[active_ind] = torch.zeros_like(self.mu[active_ind])
+            self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind], device=device)
+            self.beta[active_ind] = torch.ones_like(self.beta[active_ind], device=device)
+            self.mu[active_ind] = torch.zeros_like(self.mu[active_ind], device=device)
 
-            self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind])
-            self.beta[inactive_ind] = torch.zeros_like(self.beta[inactive_ind])
-            self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind])
+            self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind], device=device)
+            self.beta[inactive_ind] = torch.zeros_like(self.beta[inactive_ind], device=device)
+            self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind], device=device)
 
-            self.bounds[:, inactive_ind] = torch.zeros_like(self.bounds[:, inactive_ind])
+            self.bounds[:, inactive_ind] = torch.zeros_like(self.bounds[:, inactive_ind], device=device)
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
@@ -301,7 +304,8 @@ class ReLUTransformer(nn.Module):
                 return torch.cat([lower, upper], 0), params
         else:
             if params is None:
-                params = torch.diag(self.beta), torch.diag(self.lmbda), torch.zeros_like(self.mu), self.mu
+                device = self.beta.device
+                params = torch.diag(self.beta), torch.diag(self.lmbda), torch.zeros_like(self.mu, device=device), self.mu
             Ml, Mu, bl, bu = params
 
             if max_steps > 0 and self.last.last is not None:
@@ -390,17 +394,19 @@ class Conv2dTransformer(nn.Module):
         self.weight = layer.weight
         self.bias = layer.bias
 
+        self.device = layer.bias.device
+
         self.W_plus = torch.clamp(self.weight, min=0)
-        self.conv_plus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding)
+        self.conv_plus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
         self.conv_plus.weight.data = self.W_plus
         self.conv_plus.bias.data = self.bias/2.
 
         self.W_minus = torch.clamp(self.weight, max=0)
-        self.conv_minus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding)
+        self.conv_minus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
         self.conv_minus.weight.data = self.W_minus
         self.conv_minus.bias.data = self.bias/2.
         
-        self.conv = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding)
+        self.conv = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
         self.conv.weight.data = self.weight
         self.conv.bias = None
 
@@ -413,9 +419,9 @@ class Conv2dTransformer(nn.Module):
         self.params = None
     
     def toeplitz_convmatrix2d(self):
-        inputs = torch.ones_like(self.last.bounds[1].flatten())
+        inputs = torch.ones_like(self.last.bounds[1].flatten(), device=self.device)
         _, C, H, W = self.last.bounds.shape
-        reshape_conv = ReshapeConv(H, W, self.in_channels, self.conv)
+        reshape_conv = ReshapeConv(H, W, self.in_channels, self.conv).to(self.device)
         ## hacky but works: find toeplitz by jacobian
         j = jacobian(reshape_conv, inputs)
         return j

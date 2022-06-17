@@ -12,6 +12,7 @@ class RandomizedFalsification:
         self.mat = spec.mat
 
         self.net = net
+        self.device = net.device
 
         self.n_runs = 3
         self.n_samples = 50
@@ -24,11 +25,13 @@ class RandomizedFalsification:
         #     print(item, self.target_direction_dict[item])
         # print(self.targets)
         # print(self.directions)
-        for t, d in zip(self.targets, self.directions):
-            print(t, d)
+        
+        # for t, d in zip(self.targets, self.directions):
+        #     print(t, d)
 
         if seed is not None:
             random.seed(seed)
+
 
 
     def _find_target_and_direction(self):
@@ -80,7 +83,7 @@ class RandomizedFalsification:
 
     def eval_constraints(self, input_ranges=None, constraints=None):
         if input_ranges is None:
-            input_ranges = torch.tensor(self.bounds, dtype=settings.DTYPE)
+            input_ranges = torch.tensor(self.bounds, dtype=settings.DTYPE, device=self.device)
         input_ranges_clone = input_ranges.clone()
 
         for target, direction in zip(self.targets, self.directions):
@@ -88,7 +91,7 @@ class RandomizedFalsification:
             # target, direction = target_direction_list[0]
             # if target != 5:
             #     continue
-            print(target, direction)
+            # print(target, direction)
             stat, adv = self._sampling(input_ranges, self.mat, target, direction)
             if stat == 'violated':
                 return stat, adv
@@ -176,14 +179,14 @@ class RandomizedFalsification:
 
     def _make_samples(self, input_ranges, output_props):
         s_in = torch.stack(
-            [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)]).view(self.net.input_shape[1:])
+            [torch.tensor([random.uniform(input_ranges[i][0], input_ranges[i][1]) for i in range(self.net.n_input)], device=self.device).view(self.net.input_shape[1:])
                 for _ in range(self.n_samples)])
         s_out = self.net(s_in)
 
         samples = []
         for prop_mat, prop_rhs in output_props:
-            prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE)
-            prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE)
+            prop_mat = torch.tensor(prop_mat, dtype=settings.DTYPE, device=self.device)
+            prop_rhs = torch.tensor(prop_rhs, dtype=settings.DTYPE, device=self.device)
             vec = prop_mat @ s_out.transpose(0, 1)
             for i in range(self.n_samples):
                 sample = s_in[i].view(-1), s_out[i].view(-1)

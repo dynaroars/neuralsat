@@ -26,6 +26,7 @@ class Decider:
         self.reversed_layers_mapping = {n: k for k, v in self.layers_mapping.items() for n in v}
         self.bounds_mapping = {}
         self.target_direction_list = None
+        self.device = net.device
 
         if settings.SEED is not None:
             random.seed(settings.SEED)
@@ -56,20 +57,20 @@ class Decider:
 
     def estimate_grads_from_layer(self, lower, upper, layer_id, steps=3):
         inputs = [(((steps - i) * lower + i * upper) / steps) for i in range(steps + 1)]
-        diffs = torch.zeros(len(lower), dtype=settings.DTYPE)
+        diffs = torch.zeros(len(lower), dtype=settings.DTYPE, device=self.device)
 
         for sample in range(steps + 1):
             pred = self.net.forward_from_layer(inputs[sample], layer_id)
             for index in range(len(lower)):
                 if sample < steps:
                     l_input = [m if i != index else u for i, m, u in zip(range(len(lower)), inputs[sample], inputs[sample+1])]
-                    l_input = torch.tensor(l_input, dtype=settings.DTYPE)
+                    l_input = torch.tensor(l_input, dtype=settings.DTYPE, device=self.device)
                     l_i_pred = self.net.forward_from_layer(l_input, layer_id)
                 else:
                     l_i_pred = pred
                 if sample > 0:
                     u_input = [m if i != index else l for i, m, l in zip(range(len(lower)), inputs[sample], inputs[sample-1])]
-                    u_input = torch.tensor(u_input, dtype=settings.DTYPE)
+                    u_input = torch.tensor(u_input, dtype=settings.DTYPE, device=self.device)
                     u_i_pred = self.net.forward_from_layer(u_input, layer_id)
                 else:
                     u_i_pred = pred
@@ -107,7 +108,7 @@ class Decider:
                 else:
                     val = self.output_lower[idx]
 
-            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE) * val
+            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE, device=self.device) * val
 
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
 
@@ -128,8 +129,8 @@ class Decider:
                 if isinstance(layer, nn.ReLU):
                     # print(relu_idx)
                     nodes = self.layers_mapping[relu_idx]
-                    lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE)
-                    ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE)
+                    lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE, device=self.device)
+                    ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE, device=self.device)
                     ratio_temp_0, ratio_temp_1 = compute_ratio(lb, ub)
                     # print('ratio_temp_0:', ratio_temp_0)
                     # print('ratio_temp_1:', ratio_temp_1)
@@ -153,6 +154,8 @@ class Decider:
                     # print(bias_candidate.shape)
 
                     score_candidate = bias_candidate + intercept_candidate
+                    print(score_candidate.shape)
+                    print(mask.shape)
                     score.insert(0, abs(score_candidate).view(-1) * mask)
 
                     if relu_idx == decision_layer:
@@ -178,7 +181,7 @@ class Decider:
         if settings.DECISION == 'GRAD':
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
             mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
-            bounds = torch.tensor([self.bounds_mapping[n] for n in self.layers_mapping[decision_layer]], dtype=settings.DTYPE)
+            bounds = torch.tensor([self.bounds_mapping[n] for n in self.layers_mapping[decision_layer]], dtype=settings.DTYPE, device=self.device)
             lower = bounds[:, 0]
             upper = bounds[:, 1]
             # print('decision_layer', decision_layer, self.layers_mapping[decision_layer])

@@ -11,14 +11,17 @@ import settings
 
 class DNNParser:
 
-    def parse(filename):
+    def parse(filename, dataset, device):
         if filename.lower().endswith('.nnet'):
-            return DNNParser.parse_nnet(filename)
-        if filename.lower().endswith('.onnx'):
-            return DNNParser.parse_onnx(filename)
-
-        print(f'Error extention: {filename}')
-        raise NotImplementedError
+            net = DNNParser.parse_nnet(filename)
+        elif filename.lower().endswith('.onnx'):
+            net = DNNParser.parse_onnx(filename)
+        else:
+            print(f'Error extention: {filename}')
+            raise NotImplementedError
+        net.device = device
+        net.dataset = dataset
+        return net.to(device)
 
     def parse_nnet(filename):
         model = NetworkNNET(filename)

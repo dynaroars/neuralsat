@@ -12,6 +12,7 @@ import re
 import os
 
 from heuristic.falsification import randomized_falsification
+from heuristic.falsification import gradient_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
 from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepzono, deeppoly
@@ -92,7 +93,19 @@ class DNNTheoremProver:
         # test
         self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
-        self.last_assignment = {}
+        self.last_assignment = {}        
+
+        # pgd attack 
+        if 'mnist' in net.dataset or 'cifar' in net.dataset:
+            self.gf = gradient_falsification.GradientFalsification(net, spec)
+            stat, adv = self.gf.evaluate()
+            if stat:
+                assert spec.check_solution(net(adv))
+                assert (adv >= gf.lower).all()
+                assert (adv <= gf.upper).all()
+                # print(adv.shape)
+                self.solution = adv
+
 
 
     def _update_input_bounds(self, lbs, ubs):
