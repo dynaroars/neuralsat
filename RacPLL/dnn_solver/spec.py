@@ -27,23 +27,23 @@ class SpecificationVNNLIB:
         return dnf
 
 
-    def register(self, lbs, ubs):
-        self.cac =  []
-        for lhs, rhs in self.mat:
-            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
-            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
-            tmp = []
-            for l, r in zip(lhs, rhs):
-                tmp.append(sum((l > 0) * lbs) - sum((l < 0) * ubs))
+    # def register(self, lbs, ubs):
+    #     self.cac =  []
+    #     for lhs, rhs in self.mat:
+    #         lhs = torch.tensor(lhs, dtype=settings.DTYPE)
+    #         rhs = torch.tensor(rhs, dtype=settings.DTYPE)
+    #         tmp = []
+    #         for l, r in zip(lhs, rhs):
+    #             tmp.append(sum((l > 0) * lbs) - sum((l < 0) * ubs))
 
-            self.cac.append(rhs - torch.tensor(tmp))
+    #         self.cac.append(rhs - torch.tensor(tmp))
 
     def check_output_reachability(self, lbs, ubs):
         dnf =  []
         # p = 0.0
         for idx, (lhs, rhs) in enumerate(self.mat):
-            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
-            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
+            lhs = torch.tensor(lhs, dtype=settings.DTYPE, device=lbs.device)
+            rhs = torch.tensor(rhs, dtype=settings.DTYPE, device=lbs.device)
 
             cnf = []
             # vals = []
@@ -60,8 +60,8 @@ class SpecificationVNNLIB:
 
     def check_solution(self, output):
         for lhs, rhs in self.mat:
-            lhs = torch.tensor(lhs, dtype=settings.DTYPE)
-            rhs = torch.tensor(rhs, dtype=settings.DTYPE)
+            lhs = torch.tensor(lhs, dtype=settings.DTYPE, device=output.device)
+            rhs = torch.tensor(rhs, dtype=settings.DTYPE, device=output.device)
             vec = lhs @ output.squeeze(0)
             if torch.all(vec <= rhs):
                 return True
