@@ -13,6 +13,8 @@ def implication_gurobi_worker(assignment, mat_dict, nodes, shared_queue, kwargs)
 
         with grb.Env() as env, grb.Model(env=env) as model:
             model.setParam('OutputFlag', False)
+            model.setParam('Threads', 1)
+
 
             variables = [
                 model.addVar(name=f'x{i}', lb=lbs[i], ub=ubs[i]) for i in range(n_vars)

@@ -5,7 +5,7 @@ DEBUG = False
 
 DTYPE = torch.float64
 
-DECISION = 'RANDOM' # 'RANDOM/MAX_BOUND/MIN_BOUND/KW/GRAD'
+DECISION = 'MIN_BOUND' # 'RANDOM/MAX_BOUND/MIN_BOUND/KW/GRAD'
 
 SEED = random.randint(0, 10000) if DECISION == 'RANDOM' else None
 print('SEED:', SEED)
@@ -26,4 +26,4 @@ HEURISTIC_GUROBI_IMPLICATION = True
 PARALLEL_IMPLICATION = True
 N_THREADS = 16
 
-BENCHMARKS = ['acasxu', 'cifar2020', 'mnistfc', 'oval21', 'nn4sys', 'eran', 'marabou-cifar10']
+BENCHMARKS = ['acasxu', 'cifar2020', 'mnistfc']#, 'oval21', 'nn4sys', 'eran', 'marabou-cifar10']

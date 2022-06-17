@@ -150,12 +150,12 @@ class DNNTheoremProver:
         output_mat, backsub_dict = self.transformer(assignment)
         Timers.toc('backsub_dict')
 
-        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 100
+        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
         # parallel implication
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
             backsub_dict_np = {k: v.detach().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.net.n_input, self.lbs_init, self.ubs_init)
-            wloads = MP.get_workloads(unassigned_nodes, n_cpus=settings.N_THREADS)
+            wloads = MP.get_workloads(unassigned_nodes, n_cpus=16)
             Q = multiprocessing.Queue()
             self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
                                                     args=(assignment, backsub_dict_np, wl, Q, kwargs),
