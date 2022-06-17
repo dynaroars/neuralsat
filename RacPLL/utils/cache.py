@@ -171,18 +171,26 @@ if __name__ == '__main__':
     layers_mapping = {0 : [1, 2, 3], 1: [4, 5], 2: [6, 7, 8]}
     bc = BacksubCacher(layers_mapping, max_caches=3)
 
-    assignment = {1: False, 2: False}
-    bc.put(assignment, {})
-
-    assignment = {1: False, 2: False, 3: True, 4: True, 5: True, 6: True, 7: True, 8: True}
-    bc.put(assignment, {})
-
-
-    # assignment = {1: False, 2: False, 3: False, 4: True, 5: False, 6: True, 7: True, 8: True}
+    assignment1 = {1: False, 2: False, 3: True, 4: True, 5: False, 6: False, 7: True, 8: True}
     # bc.put(assignment, {})
 
 
-    new_assignment = {1: False,  2: False, 3: True, 4:True, 5:True}
-    c = bc.get_cache(new_assignment)
-    print(c)
+    assignment2 = {1: False, 2: False, 3: True, 4: True, 5: False,  7: True, 8: True}
 
+
+    cache_nodes = []
+    for idx, variables in layers_mapping.items():
+        a1 = {n: assignment1.get(n, None) for n in variables}
+        a2 = {n: assignment2.get(n, None) for n in variables}
+        if a1 == a2:
+            tmp = [n for n in a1 if a1[n] is not None]
+            cache_nodes += tmp
+            if len(tmp) < len(a1):
+                break
+        else:
+            for n in variables:
+                if n in a1 and n in a2 and a1[n]==a2[n]:
+                    cache_nodes.append(n)
+            break
+
+    print(cache_nodes)

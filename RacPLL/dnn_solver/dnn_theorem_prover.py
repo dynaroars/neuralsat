@@ -53,7 +53,6 @@ class DNNTheoremProver:
         self.count = 0 # debug
 
         self.solution = None
-        self.constraints = []
 
         # if settings.HEURISTIC_DEEPZONO:
         #     self.deepzono = deepzono.DeepZono(net)
@@ -93,6 +92,8 @@ class DNNTheoremProver:
         # test
         self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
+        self.last_assignment = {}
+
 
     def _update_input_bounds(self, lbs, ubs):
         if torch.any(lbs > ubs):
@@ -130,14 +131,13 @@ class DNNTheoremProver:
 
         # debug
         self.count += 1
+        cc = frozenset()
 
         if self.solution is not None:
             return True, {}, None
         # reset constraints
         Timers.tic('Reset solver')
-        self.model.remove(self.constraints)
         self._restore_input_bounds()
-        self.constraints = []
         Timers.toc('Reset solver')
 
         Timers.tic('Find node')
@@ -175,26 +175,39 @@ class DNNTheoremProver:
         self.backsub_cacher.put(assignment, backsub_dict_expr)
         Timers.toc('Get Linear Equation')
 
+        Timers.tic('Find caching assignment')
+
+        cache_nodes = self.get_cache_assignment(assignment)
+        remove_nodes = [n for n in self.last_assignment if n not in cache_nodes]
+        new_nodes = [n for n in assignment if n not in cache_nodes]
+
+        assert len(cache_nodes) + len(remove_nodes) == len(self.last_assignment)
+        
+        if len(remove_nodes):
+            self.model.remove([self.model.getConstrByName(f'cstr[{node}]') for node in remove_nodes])
+
+        Timers.toc('Find caching assignment')
+
         # add constraints
         Timers.tic('Add constraints')
-        for node in backsub_dict_expr:
-            status = assignment.get(node, None)
-            if status is None:
-                continue
-            if status:
-                ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon)
-            else:
-                ci = self.model.addLConstr(backsub_dict_expr[node] <= 0)
-            self.constraints.append(ci)
-
+        if len(new_nodes):
+            for node in new_nodes:
+                status = assignment.get(node, None)
+                assert status is not None
+                if status:
+                    ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon, name=f'cstr[{node}]')
+                else:
+                    ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
         Timers.toc('Add constraints')
+
+        # caching assignment
+        self.last_assignment = assignment
 
         # check satisfiability
         if not is_full_assignment:
             self._optimize()
             if self.model.status == grb.GRB.INFEASIBLE:
                 # print('call from partial assignment')
-                cc = self._shorten_conflict_clause(assignment, True)
                 return False, cc, None
 
             if settings.DEBUG:
@@ -221,7 +234,6 @@ class DNNTheoremProver:
                 self.solution = self.get_solution()
                 return True, {}, is_full_assignment
             # print('call from full assignment')
-            cc = self._shorten_conflict_clause(assignment, True)
             return False, cc, None
 
 
@@ -258,7 +270,6 @@ class DNNTheoremProver:
                 
             if not stat: # conflict
                 # print('call from update bounds')
-                cc = self._shorten_conflict_clause(assignment, False)
                 return False, cc, None
 
 
@@ -296,7 +307,6 @@ class DNNTheoremProver:
                 # Timers.toc('_single_range_check')
 
                 # print('call from reachability heuristic')
-                cc = self._shorten_conflict_clause(assignment, False)
                 return False, cc, None
 
             if settings.HEURISTIC_DEEPPOLY and should_run_again and self.flag_use_backsub:
@@ -326,7 +336,6 @@ class DNNTheoremProver:
                 if not flag_sat:
                     # print('call from optimized reachability heuristic')
                     Timers.toc('Deeppoly optimization reachability')
-                    cc = self._shorten_conflict_clause(assignment, False)
                     return False, cc, None
                 Timers.toc('Deeppoly optimization reachability')
 
@@ -453,3 +462,23 @@ class DNNTheoremProver:
         # print()
         # exit()
         return cc
+
+    def get_cache_assignment(self, assignment):
+        cache_nodes = []
+        if len(self.last_assignment) == 0 or len(assignment) == 0:
+            return cache_nodes
+
+        for idx, variables in self.layers_mapping.items():
+            a1 = {n: self.last_assignment.get(n, None) for n in variables}
+            a2 = {n: assignment.get(n, None) for n in variables}
+            if a1 == a2:
+                tmp = [n for n in a1 if a1[n] is not None]
+                cache_nodes += tmp
+                if len(tmp) < len(a1):
+                    break
+            else:
+                for n in variables:
+                    if n in assignment and n in self.last_assignment and assignment[n]==self.last_assignment[n]:
+                        cache_nodes.append(n)
+                break
+        return cache_nodes
