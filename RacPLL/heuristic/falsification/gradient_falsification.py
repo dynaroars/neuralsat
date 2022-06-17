@@ -120,7 +120,7 @@ class GradientFalsification:
             E = torch.eye(num_classes, dtype=settings.DTYPE, device=self.device)
             c = E.unsqueeze(0) - E[y].unsqueeze(1)
             # remove specifications to self.
-            I = ~(y.unsqueeze(1) == torch.arange(num_classes).unsqueeze(0))
+            I = ~(y.unsqueeze(1) == torch.arange(num_classes, device=self.device).unsqueeze(0))
             # c has shape (batch, num_classes - 1, num_classes).
             c = c[I].view(input_shape[0], num_classes - 1, num_classes)
             # c has shape (batch, restarts, num_classes - 1, num_classes).
