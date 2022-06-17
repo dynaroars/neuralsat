@@ -43,8 +43,8 @@ class DNNTheoremProver:
 
         # input bounds
         bounds_init = self.spec.get_input_property()
-        self.lbs_init = torch.tensor(bounds_init['lbs'], dtype=settings.DTYPE)
-        self.ubs_init = torch.tensor(bounds_init['ubs'], dtype=settings.DTYPE)
+        self.lbs_init = torch.tensor(bounds_init['lbs'], dtype=settings.DTYPE, device=net.device)
+        self.ubs_init = torch.tensor(bounds_init['ubs'], dtype=settings.DTYPE, device=net.device)
 
         self.gurobi_vars = [
             self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
@@ -274,8 +274,8 @@ class DNNTheoremProver:
 
             Timers.toc('Tighten bounds')
 
-            lbs = torch.tensor(lbs, dtype=settings.DTYPE)
-            ubs = torch.tensor(ubs, dtype=settings.DTYPE)
+            lbs = torch.tensor(lbs, dtype=settings.DTYPE, device=self.net.device)
+            ubs = torch.tensor(ubs, dtype=settings.DTYPE, device=self.net.device)
 
             Timers.tic('Update bounds')
             stat = self._update_input_bounds(lbs, ubs)
@@ -335,7 +335,7 @@ class DNNTheoremProver:
                     self._optimize()
                     self.model.remove(ci)
                     if self.model.status == grb.GRB.OPTIMAL:
-                        tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE).view(self.net.input_shape)
+                        tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
                         if self.check_solution(tmp_input):
                             self.solution = tmp_input
                             Timers.toc('Deeppoly optimization reachability')
@@ -355,7 +355,7 @@ class DNNTheoremProver:
             if not self.flag_use_backsub:
                 tmp_input = torch.tensor(
                     [random.uniform(lbs[i], ubs[i]) for i in range(self.net.n_input)], 
-                    dtype=settings.DTYPE).view(self.net.input_shape)
+                    dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
 
                 if self.check_solution(tmp_input):
                     self.solution = tmp_input
@@ -430,7 +430,7 @@ class DNNTheoremProver:
         if self.model.status == grb.GRB.LOADED:
             self._optimize()
         if self.model.status == grb.GRB.OPTIMAL:
-            return torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE).view(self.net.input_shape)
+            return torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
         return None
 
 
