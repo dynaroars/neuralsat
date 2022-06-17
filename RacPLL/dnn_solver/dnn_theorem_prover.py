@@ -168,7 +168,7 @@ class DNNTheoremProver:
         if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
             backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.net.n_input, self.lbs_init.detach().cpu().numpy(), self.ubs_init.detach().cpu().numpy())
-            wloads = MP.get_workloads(unassigned_nodes, n_cpus=16)
+            wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count())
             Q = multiprocessing.Queue()
             self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
                                                     args=(assignment, backsub_dict_np, wl, Q, kwargs),
