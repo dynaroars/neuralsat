@@ -105,7 +105,6 @@ class DNNTheoremProver:
                 assert spec.check_solution(net(adv))
                 assert (adv >= self.gf.lower).all()
                 assert (adv <= self.gf.upper).all()
-                # print(adv.shape)
                 self.solution = adv
 
         self.update_input_bounds_last_iter = False

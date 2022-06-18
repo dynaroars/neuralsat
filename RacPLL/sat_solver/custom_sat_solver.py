@@ -56,8 +56,10 @@ class CustomSATSolver(Solver):
 
         self.decider = decider
 
-        # if settings.SEED is not None:
-        #     random.seed(settings.SEED)
+        self._early_stop = False
+
+    def set_early_stop(self, status):
+        self._early_stop = status
 
     def _add_clause(self, clause):
         """
@@ -274,13 +276,6 @@ class CustomSATSolver(Solver):
         self._new_clauses.append(conflict_clause)
         self._add_clause(conflict_clause)
 
-    def remove_conflict_clauses(self):
-        for clause_to_remove in self._new_clauses:
-            # print('remove:', clause_to_remove)
-            for literal in clause_to_remove:
-                self._literal_to_clause[literal].discard(clause_to_remove)
-                self._variable_to_watched_clause[abs(literal)].discard(clause_to_remove)
-
 
     def _constraint_propagation_to_exhaustion(self, propagation_func):
         """
@@ -443,6 +438,6 @@ class CustomSATSolver(Solver):
             self._increment_step()
             if not self.propagate():
                 return False
-            if self._is_sat():
+            if self._is_sat() or self._early_stop:
                 return True
             self._decide()

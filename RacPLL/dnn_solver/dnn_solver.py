@@ -29,10 +29,8 @@ class TheorySolver(Solver):
     def solve(self) -> bool:
         return self._solver.solve()
 
-    def remove_conflict_clauses(self):
-        self._solver.remove_conflict_clauses()
-
-
+    def set_early_stop(self, status):
+        self._solver.set_early_stop(status)
 
 
 class DNNSolver(TheorySolver):
@@ -65,7 +63,7 @@ class DNNSolver(TheorySolver):
 
         # theory checking
         tic = time.time()
-        
+
         # Timers.reset()
         Timers.tic('Theorem deduction')
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
@@ -73,6 +71,9 @@ class DNNSolver(TheorySolver):
         
         print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
 
+        if self.get_solution() is not None:
+            self.set_early_stop(True)
+            return conflict_clause, new_assignments
         # Timers.print_stats()
         # print()
         # print()
