@@ -82,7 +82,7 @@ class DNNTheoremProver:
 
         self.concrete = self.net.get_concrete((self.lbs_init + self.ubs_init) / 2.0)
 
-        self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
+        self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=50)
         # self.abstraction_cacher = AbstractionCacher((self.lbs_init, self.ubs_init), max_caches=100)
 
 
@@ -94,9 +94,11 @@ class DNNTheoremProver:
         self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
         self.last_assignment = {}        
+        self.implication_interval = 1
 
         # pgd attack 
         if 'mnist' in net.dataset or 'cifar' in net.dataset:
+            self.implication_interval = 5
             self.gf = gradient_falsification.GradientFalsification(net, spec)
             stat, adv = self.gf.evaluate()
             if stat:
@@ -106,24 +108,33 @@ class DNNTheoremProver:
                 # print(adv.shape)
                 self.solution = adv
 
-
+        self.update_input_bounds_last_iter = False
 
     def _update_input_bounds(self, lbs, ubs):
         if torch.any(lbs > ubs):
             return False
-
         for i, var in enumerate(self.gurobi_vars):
-            if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
-                # var.lb = lbs[i]
-                # var.ub = lbs[i]
-                continue
-            if (abs(var.lb - lbs[i]) > DNNTheoremProver.skip):
-                var.lb = lbs[i]
-            if (abs(var.ub - ubs[i]) > DNNTheoremProver.skip):
-                var.ub = ubs[i]
+            # if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
+            var.lb = lbs[i]
+            var.ub = ubs[i]
 
+            # if (abs(var.lb - lbs[i]) > DNNTheoremProver.skip):
+            #     var.lb = lbs[i]
+            # if (abs(var.ub - ubs[i]) > DNNTheoremProver.skip):
+            #     var.ub = ubs[i]
         self.model.update()
+        self.update_input_bounds_last_iter = True
         return True
+
+
+    def _restore_input_bounds(self):
+        if self.update_input_bounds_last_iter:
+            for i, var in enumerate(self.gurobi_vars):
+                var.lb = self.lbs_init[i]
+                var.ub = self.ubs_init[i]
+            self.model.update()
+            self.update_input_bounds_last_iter = False
+
 
 
     def _find_unassigned_nodes(self, assignment):
@@ -165,10 +176,10 @@ class DNNTheoremProver:
 
         flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
         # parallel implication
-        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication:
+        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication and self.count % self.implication_interval == 0:
             backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
             kwargs = (self.net.n_input, self.lbs_init.detach().cpu().numpy(), self.ubs_init.detach().cpu().numpy())
-            wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count())
+            wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count()//2)
             Q = multiprocessing.Queue()
             self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
                                                     args=(assignment, backsub_dict_np, wl, Q, kwargs),
@@ -220,8 +231,10 @@ class DNNTheoremProver:
         self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MAXIMIZE)
 
         # check satisfiability
+        Timers.tic('Check output property')
         if not is_full_assignment:
             self._optimize()
+            Timers.toc('Check output property')
             if self.model.status == grb.GRB.INFEASIBLE:
                 # print('call from partial assignment')
                 return False, cc, None
@@ -232,7 +245,6 @@ class DNNTheoremProver:
 
         else: # output
             flag_sat = False
-            Timers.tic('Check output property')
             output_constraint = self.spec.get_output_property(
                 [self._get_equation(output_mat[i]) for i in range(self.net.n_output)]
             )
@@ -253,26 +265,28 @@ class DNNTheoremProver:
             return False, cc, None
 
 
+        # compute new input lower/upper bounds
+        Timers.tic('Tighten bounds')
+        # upper
+        should_update_input = False
+        if self.model.status == grb.GRB.OPTIMAL:
+            ubs = [var.X for var in self.gurobi_vars]
+            should_update_input = True
+        else:
+            ubs = self.ubs_init
 
-        # reachable heuristic:
-        if settings.TIGHTEN_BOUND:# and (self.count % settings.HEURISTIC_DEEPPOLY_INTERVAL == 0): 
-            # compute new input lower/upper bounds
-            Timers.tic('Tighten bounds')
-            # upper
-            if self.model.status == grb.GRB.OPTIMAL:
-                ubs = [var.X for var in self.gurobi_vars]
-            else:
-                ubs = [var.ub for var in self.gurobi_vars]
+        # lower
+        self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MINIMIZE)
+        self._optimize()
+        if self.model.status == grb.GRB.OPTIMAL:
+            lbs = [var.X for var in self.gurobi_vars]
+            should_update_input = True
+        else:
+            lbs = self.lbs_init
 
-            # lower
-            self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MINIMIZE)
-            self._optimize()
-            if self.model.status == grb.GRB.OPTIMAL:
-                lbs = [var.X for var in self.gurobi_vars]
-            else:
-                lbs = [var.lb for var in self.gurobi_vars]
+        Timers.toc('Tighten bounds')
 
-            Timers.toc('Tighten bounds')
+        if should_update_input:
 
             lbs = torch.tensor(lbs, dtype=settings.DTYPE, device=self.net.device)
             ubs = torch.tensor(ubs, dtype=settings.DTYPE, device=self.net.device)
@@ -294,6 +308,7 @@ class DNNTheoremProver:
             # print('should_run_abstraction:', should_run_abstraction)
 
             # if should_run_abstraction:
+            # reachable heuristic:
             Timers.tic('Compute output abstraction')
             (lower, upper), hidden_bounds = self._compute_output_abstraction(lbs, ubs, assignment)
             Timers.toc('Compute output abstraction')
@@ -325,15 +340,23 @@ class DNNTheoremProver:
             if settings.HEURISTIC_DEEPPOLY and should_run_again and self.flag_use_backsub:
                 Timers.tic('Deeppoly optimization reachability')
                 Ml, Mu, bl, bu  = self.deeppoly.get_params()
+                Timers.tic('Gen constraints')
                 lbs_expr = [grb.LinExpr(wl, self.gurobi_vars) + cl for (wl, cl) in zip(Ml.detach().cpu().numpy(), bl.detach().cpu().numpy())]
                 ubs_expr = [grb.LinExpr(wu, self.gurobi_vars) + cu for (wu, cu) in zip(Mu.detach().cpu().numpy(), bu.detach().cpu().numpy())]
+                Timers.toc('Gen constraints')
+
+                Timers.tic('Get output constraints')
                 dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
+                Timers.toc('Get output constraints')
+
                 flag_sat = False
                 for cnf, adv_obj in dnf_contrs:
+                    Timers.tic('Add constraints + Solve')
                     ci = [self.model.addLConstr(_) for _ in cnf]
                     self.model.setObjective(adv_obj, grb.GRB.MINIMIZE)
                     self._optimize()
                     self.model.remove(ci)
+                    Timers.toc('Add constraints + Solve')
                     if self.model.status == grb.GRB.OPTIMAL:
                         tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
                         if self.check_solution(tmp_input):
@@ -384,12 +407,11 @@ class DNNTheoremProver:
 
             # print(time.time() - tic)
 
-        self._restore_input_bounds()
 
         Timers.tic('Implications')
         implications = {}
 
-        if settings.HEURISTIC_GUROBI_IMPLICATION:
+        if settings.HEURISTIC_GUROBI_IMPLICATION and self.count % self.implication_interval == 0:
             if flag_parallel_implication:
                 for w in self.workers:
                     w.join()
@@ -399,6 +421,7 @@ class DNNTheoremProver:
                     implications.update(res)
 
             else:
+                self._restore_input_bounds()
                 for node in unassigned_nodes:
                     implications[node] = {'pos': False, 'neg': False}
                     # neg
@@ -440,13 +463,6 @@ class DNNTheoremProver:
         if self.spec.check_solution(self.net(solution)):
             return True
         return False
-
-
-    def _restore_input_bounds(self):
-        for i, var in enumerate(self.gurobi_vars):
-            var.lb = self.lbs_init[i]
-            var.ub = self.ubs_init[i]
-        self.model.update()
 
     def _compute_output_abstraction(self, lbs, ubs, assignment=None):
 

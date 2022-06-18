@@ -65,11 +65,17 @@ class DNNSolver(TheorySolver):
 
         # theory checking
         tic = time.time()
+        Timers.reset()
         Timers.tic('Theorem deduction')
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
         Timers.toc('Theorem deduction')
         
-        print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', time.time() - tic)
+        print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
+        Timers.print_stats()
+        print()
+        print()
+
+
         if not theory_sat:
             if hasattr(self.dnn_theorem_prover, 'workers'):
                 for w in self.dnn_theorem_prover.workers:

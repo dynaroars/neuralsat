@@ -64,7 +64,8 @@ class BacksubCacher:
             c = instance.get_score(assignment)
             list_caches.append((idx, c, len(c)))
             if len(c) == instance.max_num_hidden:
-                break
+                backsub_dict = {n: instance.backsub_dict[n] for n in c}
+                return backsub_dict
 
         list_caches = sorted(list_caches, key=lambda tup: tup[2], reverse=True)
         idx, cached_nodes, _ = list_caches[0]
