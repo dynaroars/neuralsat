@@ -103,8 +103,8 @@ class DNNTheoremProver:
             stat, adv = self.gf.evaluate()
             if stat:
                 assert spec.check_solution(net(adv))
-                assert (adv >= gf.lower).all()
-                assert (adv <= gf.upper).all()
+                assert (adv >= self.gf.lower).all()
+                assert (adv <= self.gf.upper).all()
                 # print(adv.shape)
                 self.solution = adv
 
