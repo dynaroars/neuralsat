@@ -14,7 +14,7 @@ class RandomizedFalsification:
         self.net = net
         self.device = net.device
 
-        self.n_runs = 3
+        self.n_runs = 10
         self.n_samples = 50
 
         self.n_pos_samples = 5
@@ -91,7 +91,7 @@ class RandomizedFalsification:
             # target, direction = target_direction_list[0]
             # if target != 5:
             #     continue
-            # print(target, direction)
+            print(target, direction)
             stat, adv = self._sampling(input_ranges, self.mat, target, direction)
             if stat == 'violated':
                 return stat, adv

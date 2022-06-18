@@ -102,20 +102,18 @@ class Decider:
         if settings.DECISION == 'KW':
             relu_idx = len(self.layers_mapping) - 1
 
-            for idx, direction in self.target_direction_list:
-                if direction == 'maximize':
-                    val = self.output_upper[idx]
-                else:
-                    val = self.output_lower[idx]
+            # for idx, direction in self.target_direction_list:
+            #     if direction == 'maximize':
+            #         val = self.output_upper[idx]
+            #     else:
+            #         val = self.output_lower[idx]
 
-            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE, device=self.device) * val
+            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE, device=self.device)
 
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
 
-            # mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
-            # print(mask)
-            # print(unassigned_nodes)
-            # print('decision_layer', decision_layer)
+            mask_c = torch.tensor([True if i in unassigned_nodes else False for i in self.layers_mapping[decision_layer]])
+            # print(mask_c)
             
             intercept_tb = []
             score = []
@@ -129,10 +127,10 @@ class Decider:
                 if isinstance(layer, nn.ReLU):
                     # print(relu_idx)
                     nodes = self.layers_mapping[relu_idx]
-                    if relu_idx == decision_layer:
-                        mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in nodes])
-                    else:
-                        mask = torch.tensor([0 if (self.bounds_mapping[n][0] > 0 or self.bounds_mapping[n][0] < 0) else 1 for n in nodes])
+                    # if relu_idx == decision_layer:
+                    #     mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in nodes])
+                    # else:
+                    #     mask = torch.tensor([0 if (self.bounds_mapping[n][0] > 0 or self.bounds_mapping[n][0] < 0) else 1 for n in nodes])
 
                     lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE, device=self.device)
                     ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE, device=self.device)
@@ -161,24 +159,18 @@ class Decider:
                     score_candidate = bias_candidate + intercept_candidate
                     # print(score_candidate.shape)
                     # print(mask.shape)
-                    score.insert(0, abs(score_candidate).view(-1) * mask)
+                    score.insert(0, abs(score_candidate).view(-1))
 
                     if relu_idx == decision_layer:
                         break
 
                     relu_idx -= 1
 
-            max_info = torch.max(score[0], 0) 
-            decision_index = max_info[1].item()
-            # print(score[0][decision_index])
-            # print(decision_layer, decision_index)
-            node = self.layers_mapping[decision_layer][decision_index]
-            # print(node)
-            if node not in unassigned_nodes:
-                node = random.choice(unassigned_nodes)
-                print('random', node)
-                # print('score', score)
+            info = torch.max(score[0][mask_c], 0) 
+            decision_index = info[1].item()
 
+            # node = self.layers_mapping[decision_layer][decision_index]
+            node = unassigned_nodes[decision_index]
 
             l, u = self.bounds_mapping[node]
             return node, u.abs() >= l.abs()
