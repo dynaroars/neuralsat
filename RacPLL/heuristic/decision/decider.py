@@ -112,7 +112,7 @@ class Decider:
 
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
 
-            mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
+            # mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
             # print(mask)
             # print(unassigned_nodes)
             # print('decision_layer', decision_layer)
@@ -129,6 +129,11 @@ class Decider:
                 if isinstance(layer, nn.ReLU):
                     # print(relu_idx)
                     nodes = self.layers_mapping[relu_idx]
+                    if relu_idx == decision_layer:
+                        mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in nodes])
+                    else:
+                        mask = torch.tensor([0 if (self.bounds_mapping[n][0] > 0 or self.bounds_mapping[n][0] < 0) else 1 for n in nodes])
+
                     lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE, device=self.device)
                     ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE, device=self.device)
                     ratio_temp_0, ratio_temp_1 = compute_ratio(lb, ub)
@@ -154,8 +159,8 @@ class Decider:
                     # print(bias_candidate.shape)
 
                     score_candidate = bias_candidate + intercept_candidate
-                    print(score_candidate.shape)
-                    print(mask.shape)
+                    # print(score_candidate.shape)
+                    # print(mask.shape)
                     score.insert(0, abs(score_candidate).view(-1) * mask)
 
                     if relu_idx == decision_layer:
@@ -171,7 +176,7 @@ class Decider:
             # print(node)
             if node not in unassigned_nodes:
                 node = random.choice(unassigned_nodes)
-                # print('random', node)
+                print('random', node)
                 # print('score', score)
 
 
