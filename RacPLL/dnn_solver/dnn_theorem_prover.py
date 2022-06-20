@@ -191,7 +191,7 @@ class DNNTheoremProver:
         Timers.toc('Find caching assignment')
 
         flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
-        flag_parallel_implication = True
+        # flag_parallel_implication = True
 
         if not self.flag_use_mvar:
             Timers.tic('get cache backsub_dict')
