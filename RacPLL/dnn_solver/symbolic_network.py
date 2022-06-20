@@ -5,6 +5,7 @@ import torch
 import math
 
 import settings
+import utils
 
 
 class SymbolicNetwork:
@@ -33,6 +34,10 @@ class SymbolicNetwork:
                 l = SymbolicReshape(layer, self.device)
             elif isinstance(layer, onnx2pytorch.operations.Transpose):
                 l = SymbolicTranspose(layer, self.device)
+            elif isinstance(layer, utils.read_onnx.Sub):
+                l = SymbolicSub(layer, self.device)
+            elif isinstance(layer, utils.read_onnx.Div):
+                l = SymbolicDiv(layer, self.device)
             else:
                 print(layer, type(layer))
                 raise NotImplementedError
@@ -172,3 +177,27 @@ class SymbolicReshape:
             raise NotImplementedError
         x = x.reshape(shape)
         return x, False, {}
+
+
+
+
+class SymbolicSub:
+
+    def __init__(self, layer, device):
+        self.constant = layer.constant[0].unsqueeze(-1)
+
+    def __call__(self, x, assignment):
+        x = x - self.constant
+        return x, False, {}
+
+
+
+class SymbolicDiv:
+
+    def __init__(self, layer, device):
+        self.constant = layer.constant[0].unsqueeze(-1)
+
+    def __call__(self, x, assignment):
+        x = torch.div(x, self.constant)
+        return x, False, {}
+

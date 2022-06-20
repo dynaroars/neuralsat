@@ -95,19 +95,27 @@ class DNNTheoremProver:
 
         self.last_assignment = {}        
         self.implication_interval = 1
+        self.flag_use_mvar = False
 
         # pgd attack 
         if 'mnist' in net.dataset or 'cifar' in net.dataset:
-            self.implication_interval = 5
+            self.implication_interval = 10
+            self.flag_use_mvar = True
+
+            Timers.tic('PGD attack')
             self.gf = gradient_falsification.GradientFalsification(net, spec)
             stat, adv = self.gf.evaluate()
+            print('PGD attack:', stat)
             if stat:
                 assert spec.check_solution(net(adv))
                 assert (adv >= self.gf.lower).all()
                 assert (adv <= self.gf.upper).all()
                 self.solution = adv
+            Timers.toc('PGD attack')
 
         self.update_input_bounds_last_iter = False
+
+        self.mvars = grb.MVar(self.gurobi_vars)
 
     def _update_input_bounds(self, lbs, ubs):
         if torch.any(lbs > ubs):
@@ -147,7 +155,10 @@ class DNNTheoremProver:
         return return_nodes
 
     def _get_equation(self, coeffs):
-        return grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
+        # tic = time.time()
+        expr = grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
+        # print(len(coeffs), time.time() - tic)
+        return expr
 
     @torch.no_grad()
     def __call__(self, assignment):
@@ -173,55 +184,113 @@ class DNNTheoremProver:
         output_mat, backsub_dict = self.transformer(assignment)
         Timers.toc('backsub_dict')
 
-        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
-        # parallel implication
-        if not is_full_assignment and settings.HEURISTIC_GUROBI_IMPLICATION and flag_parallel_implication and self.count % self.implication_interval == 0:
-            backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
-            kwargs = (self.net.n_input, self.lbs_init.detach().cpu().numpy(), self.ubs_init.detach().cpu().numpy())
-            wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count()//2)
-            Q = multiprocessing.Queue()
-            self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
-                                                    args=(assignment, backsub_dict_np, wl, Q, kwargs),
-                                                    name=f'Thread {i}',
-                                                    daemon=True) for i, wl in enumerate(wloads)]
-            for w in self.workers:
-                w.start()
-
-        # convert to gurobi LinExpr
-        Timers.tic('Get Linear Equation')
-        backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
-        if backsub_dict_expr is not None:
-            backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
-        else:
-            backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
-
-        self.backsub_cacher.put(assignment, backsub_dict_expr)
-        Timers.toc('Get Linear Equation')
-
         Timers.tic('Find caching assignment')
-
         cache_nodes = self.get_cache_assignment(assignment)
         remove_nodes = [n for n in self.last_assignment if n not in cache_nodes]
         new_nodes = [n for n in assignment if n not in cache_nodes]
-
-        assert len(cache_nodes) + len(remove_nodes) == len(self.last_assignment)
-        
-        if len(remove_nodes):
-            self.model.remove([self.model.getConstrByName(f'cstr[{node}]') for node in remove_nodes])
-
         Timers.toc('Find caching assignment')
 
-        # add constraints
-        Timers.tic('Add constraints')
-        if len(new_nodes):
-            for node in new_nodes:
-                status = assignment.get(node, None)
-                assert status is not None
-                if status:
-                    ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon, name=f'cstr[{node}]')
-                else:
-                    ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
-        Timers.toc('Add constraints')
+        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
+        flag_parallel_implication = True
+
+        if not self.flag_use_mvar:
+            Timers.tic('get cache backsub_dict')
+            backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
+            Timers.toc('get cache backsub_dict')
+
+            if len(remove_nodes):
+                self.model.remove([self.model.getConstrByName(f'cstr[{node}]') for node in remove_nodes])
+
+
+        if not is_full_assignment and self.count % self.implication_interval == 0:
+            # parallel implication
+            if flag_parallel_implication:
+                backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
+                kwargs = (self.net.n_input, self.lbs_init.detach().cpu().numpy(), self.ubs_init.detach().cpu().numpy())
+                wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count() // 2)
+                Q = multiprocessing.Queue()
+                self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
+                                                        args=(assignment, backsub_dict_np, wl, Q, self.concrete, self.flag_use_mvar, kwargs),
+                                                        name=f'Thread {i}',
+                                                        daemon=True) for i, wl in enumerate(wloads)]
+                for w in self.workers:
+                    w.start()
+
+            else:
+                if not self.flag_use_mvar:
+                    # convert to gurobi LinExpr
+                    Timers.tic('Get Linear Equation')
+                    if backsub_dict_expr is not None:
+                        backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
+                    else:
+                        backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
+
+                    self.backsub_cacher.put(assignment, backsub_dict_expr)
+                    Timers.toc('Get Linear Equation')
+
+        
+        if not self.flag_use_mvar:
+            # convert to gurobi LinExpr
+            Timers.tic('Get Linear Equation')
+            # print(len(new_nodes), len(assignment), len(self.last_assignment))
+            if backsub_dict_expr is not None:
+                for node in new_nodes:
+                    if node not in backsub_dict_expr:
+                        backsub_dict_expr[node] = self._get_equation(backsub_dict[node])
+            else:
+                backsub_dict_expr = {k: self._get_equation(backsub_dict[k]) for k in new_nodes}
+                self.backsub_cacher.put({k: assignment[k] for k in backsub_dict_expr}, backsub_dict_expr)
+
+            Timers.toc('Get Linear Equation')
+
+
+            # add constraints
+            Timers.tic('Add constraints')
+            if len(new_nodes):
+                for node in new_nodes:
+                    status = assignment.get(node, None)
+                    assert status is not None
+                    if status:
+                        ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon, name=f'cstr[{node}]')
+                    else:
+                        ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
+            Timers.toc('Add constraints')
+
+        else:
+
+            Timers.tic('Add constraints')
+            if len(remove_nodes) == 0 and len(new_nodes) <= 2:
+                # print(len(new_nodes), len(assignment), len(backsub_dict))
+                # exit()
+                for node in new_nodes:
+                    status = assignment.get(node, None)
+                    assert status is not None
+                    eqx = self._get_equation(backsub_dict[node])
+                    if status:
+                        self.model.addLConstr(eqx >= DNNTheoremProver.epsilon)
+                    else:
+                        self.model.addLConstr(eqx <= 0)
+
+            elif len(assignment) > 0:
+                lhs = np.zeros([len(backsub_dict), len(self.gurobi_vars)])
+                rhs = np.zeros(len(backsub_dict))
+                # mask = np.zeros(len(mat_dict), dtype=np.int32)
+                for i, node in enumerate(backsub_dict):
+                    status = assignment.get(node, None)
+                    if status is None:
+                        continue
+                    # mask[i] = 1
+                    if status:
+                        lhs[i] = -1 * backsub_dict[node][:-1]
+                        rhs[i] = backsub_dict[node][-1] - 1e-6
+                    else:
+                        lhs[i] = backsub_dict[node][:-1]
+                        rhs[i] = -1 * backsub_dict[node][-1]
+
+                self.model.remove(self.model.getConstrs())
+                self.model.addConstr(lhs @ self.mvars <= rhs) 
+            Timers.toc('Add constraints')
+
 
         # caching assignment
         self.last_assignment = assignment
@@ -413,7 +482,7 @@ class DNNTheoremProver:
         if settings.HEURISTIC_GUROBI_IMPLICATION and self.count % self.implication_interval == 0:
             if flag_parallel_implication:
                 for w in self.workers:
-                    w.join()
+                    w.join(timeout=0.01)
 
                 for w in self.workers:
                     res = Q.get()
@@ -424,14 +493,18 @@ class DNNTheoremProver:
                 for node in unassigned_nodes:
                     implications[node] = {'pos': False, 'neg': False}
                     # neg
+                    if not self.flag_use_mvar:
+                        eqx = backsub_dict_expr[node]
+                    else:
+                        eqx = self._get_equation(backsub_dict[node])
                     if self.concrete[node] <= 0:
-                        ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon)
+                        ci = self.model.addLConstr(eqx >= DNNTheoremProver.epsilon)
                         self._optimize()
                         if self.model.status == grb.GRB.INFEASIBLE:
                             implications[node]['neg'] = True
                     else:
                     # pos
-                        ci = self.model.addLConstr(backsub_dict_expr[node] <= 0)
+                        ci = self.model.addLConstr(eqx <= 0)
                         self._optimize()
                         if self.model.status == grb.GRB.INFEASIBLE:
                             implications[node]['pos'] = True
@@ -464,16 +537,8 @@ class DNNTheoremProver:
         return False
 
     def _compute_output_abstraction(self, lbs, ubs, assignment=None):
-
-        # if settings.HEURISTIC_DEEPZONO: # eran deepzono
-        #     (lower, upper), _ = self.deepzono(lbs, ubs)
-        # else:  # eran deeppoly
-        # if settings.HEURISTIC_DEEPPOLY_W_ASSIGNMENT:
-        #     (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment=assignment)
-        # else:
-        #     (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment=None)
-        # return (lower, upper), hidden_bounds
-
+        if settings.HEURISTIC_DEEPZONO: # eran deepzono
+            return self.deepzono(lbs, ubs)
         return self.deeppoly(lbs, ubs, assignment=assignment)
 
 

@@ -12,8 +12,8 @@ class BacksubInstance:
         self.max_num_hidden = sum([len(layers_mapping[_]) for _ in layers_mapping])
 
     def get_score(self, new_assignment):
-        cached_nodes = []
-        cached_nodes += self.layers_mapping[0]
+        # cached_nodes = []
+        cached_nodes = [n for n in self.layers_mapping[0] if n in self.assignment]
         for idx in range(len(self.layers_mapping) - 1):
             layer_assignment = {n: new_assignment[n] for n in self.layers_mapping[idx] if n in new_assignment}
             if len(layer_assignment) == len(self.layers_mapping[idx]):
@@ -36,6 +36,8 @@ class BacksubCacher:
         
 
     def put(self, assignment, backsub_dict):
+        if len(assignment) == 0:
+            return
         instance = BacksubInstance(self.layers_mapping, assignment, backsub_dict)
         if self.full():
             self.get()

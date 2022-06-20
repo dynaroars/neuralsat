@@ -26,8 +26,8 @@ class TheorySolver(Solver):
     def get_assignment(self) -> dict:
         pass
 
-    def solve(self) -> bool:
-        return self._solver.solve()
+    def solve(self, timeout=None) -> bool:
+        return self._solver.solve(timeout)
 
     def set_early_stop(self, status):
         self._solver.set_early_stop(status)
@@ -71,13 +71,16 @@ class DNNSolver(TheorySolver):
         
         print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
 
+
         if self.get_solution() is not None:
             self.set_early_stop(True)
             return conflict_clause, new_assignments
+
         # Timers.print_stats()
         # print()
-        # print()
-
+        # # print()
+        # if self.dnn_theorem_prover.count == 50:
+        #     exit()
 
         if not theory_sat:
             if hasattr(self.dnn_theorem_prover, 'workers'):

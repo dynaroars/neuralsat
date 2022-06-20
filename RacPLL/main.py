@@ -11,12 +11,13 @@ from utils.timer import Timers
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net', type=str, required=True, help='NNET/ONNX file path.')
-    parser.add_argument('--spec', type=str, required=True, help='VNNLIB file path.')
-    parser.add_argument('--solution', action='store_true', help='Get counter-example.')
-    parser.add_argument('--timer', action='store_true', help='Timer report.')
-    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'], help='Device.')
-    parser.add_argument('--dataset', default='unknown', help='Dataset.')
+    parser.add_argument('--net', type=str, required=True)
+    parser.add_argument('--spec', type=str, required=True)
+    parser.add_argument('--solution', action='store_true')
+    parser.add_argument('--timer', action='store_true')
+    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
+    parser.add_argument('--dataset', default='unknown')
+    parser.add_argument('--timeout', type=int)
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -32,12 +33,12 @@ if __name__ == '__main__':
     for i, s in enumerate(spec_list):
         spec = SpecificationVNNLIB(s)
         solver = DNNSolver(net, spec)
-        status = solver.solve()
+        status = solver.solve(timeout=args.timeout)
         if status:
             break
 
     print(args.net, args.spec, status, time.time() - tic)
-    if status and args.solution:
+    if status=='SAT' and args.solution:
         solution = solver.get_solution()
         output = solver.net(solution)
         print('\t- lower:', spec.get_input_property()['lbs'])

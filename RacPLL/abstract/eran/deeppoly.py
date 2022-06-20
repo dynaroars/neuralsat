@@ -4,6 +4,8 @@ import onnx2pytorch
 import torch
 import math
 
+import utils
+
 class DeepPoly:
 
     def __init__(self, net, back_sub_steps=0):
@@ -32,6 +34,10 @@ class DeepPoly:
                 last = ReshapeTransformer(layer.shape, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
             elif isinstance(layer, onnx2pytorch.operations.Transpose):
                 last = TransposeTransformer(layer.dims, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
+            elif isinstance(layer, utils.read_onnx.Sub):
+                last = SubTransformer(layer).to(self.device)
+            elif isinstance(layer, utils.read_onnx.Div):
+                last = DivTransformer(layer).to(self.device)
             else:
                 print(layer)
                 raise NotImplementedError
@@ -48,7 +54,7 @@ class DeepPoly:
                 hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
 
             bounds, params = layer(bounds, assignment)
-            # print('\t', bounds.shape, math.prod([*bounds.shape]))
+            # print('\t', bounds.shape)
             assert torch.all(bounds[0] <= bounds[1]), layer
 
             if params is not None:
@@ -472,3 +478,27 @@ class Conv2dTransformer(nn.Module):
 
     def __str__(self):
         return f'Conv2d {self.idx}'
+
+
+
+class SubTransformer(nn.Module):
+    def __init__(self, layer, last=None):
+        super(SubTransformer, self).__init__()
+        self.last = last
+        self.constant = layer.constant
+    
+    def forward(self, bounds, assignment):
+        self.bounds = bounds - self.constant
+        return self.bounds, None
+
+
+class DivTransformer(nn.Module):
+    def __init__(self, layer, last=None):
+        super(DivTransformer, self).__init__()
+        self.last = last
+        self.constant = layer.constant
+    
+    def forward(self, bounds, assignment):
+        self.bounds = torch.div(bounds, self.constant)
+        return self.bounds, None
+

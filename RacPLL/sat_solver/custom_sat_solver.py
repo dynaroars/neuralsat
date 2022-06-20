@@ -8,6 +8,7 @@ import sortedcontainers
 import settings
 import random
 import copy
+import time
 
 from sat_solver.sat_solver import Solver
 from utils.timer import Timers
@@ -432,12 +433,16 @@ class CustomSATSolver(Solver):
     def _is_sat(self) -> bool:
         return self._formula.issubset(self._satisfied_clauses)
 
-    def solve(self) -> bool:
+    def solve(self, timeout=None) -> bool:
         self._satisfy_unit_clauses()
+        start = time.time()
         while True:
+            if timeout is not None:
+                if time.time() - start >= timeout:
+                    return 'TIMEOUT'
             self._increment_step()
             if not self.propagate():
-                return False
+                return 'UNSAT'
             if self._is_sat() or self._early_stop:
-                return True
+                return 'SAT'
             self._decide()

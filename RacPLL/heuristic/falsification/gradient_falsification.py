@@ -20,7 +20,7 @@ class GradientFalsification:
         self.get_target()
 
         self.max_eps = 0.3
-        self.attack_iters = 50
+        self.attack_iters = 100
         self.num_restarts = 50
 
     def get_target(self):
