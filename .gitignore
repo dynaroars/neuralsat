@@ -5,6 +5,7 @@ ref/
 archive/
 vnncomp2021/
 baselines/
+*.pynet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

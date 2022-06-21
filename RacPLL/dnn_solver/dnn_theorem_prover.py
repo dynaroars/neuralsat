@@ -58,9 +58,6 @@ class DNNTheoremProver:
         # if settings.HEURISTIC_DEEPZONO:
         #     self.deepzono = deepzono.DeepZono(net)
 
-
-        self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
-
         self.transformer = SymbolicNetwork(net)
 
         if settings.HEURISTIC_DEEPPOLY:
@@ -75,32 +72,35 @@ class DNNTheoremProver:
                 self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=0)
 
 
-            # self.cs = LPSolver(net, spec, self.deeppoly)
-
-            # (l, u), _ = self.deeppoly(self.lbs_init, self.ubs_init)
-            # self.spec.register(l, u)
-
         self.concrete = self.net.get_concrete((self.lbs_init + self.ubs_init) / 2.0)
-
-        self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=50)
-        # self.abstraction_cacher = AbstractionCacher((self.lbs_init, self.ubs_init), max_caches=100)
-
 
         # clean trash
         # os.system('rm -rf gurobi/*')
         os.makedirs('gurobi', exist_ok=True)
 
         # test
-        self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
+        # self.decider.target_direction_list = [[self.rf.targets[0], self.rf.directions[0]]]
 
         self.last_assignment = {}        
-        self.implication_interval = 1
-        self.flag_use_mvar = False
 
         # pgd attack 
-        if 'mnist' in net.dataset or 'cifar' in net.dataset:
-            self.implication_interval = 10
+        if net.n_input <= 10:
+            self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
+            self.implication_interval = 1
+            self.flag_use_mvar = False
+            Timers.tic('Randomized attack')
+            self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
+            stat, adv = self.rf.eval(timeout=1)
+            print('Randomized attack:', stat)
+            if stat:
+                self.solution = adv[0]
+            Timers.toc('Randomized attack')
+
+
+        else:
+            self.implication_interval = 5
             self.flag_use_mvar = True
+            self.mvars = grb.MVar(self.gurobi_vars)
 
             Timers.tic('PGD attack')
             self.gf = gradient_falsification.GradientFalsification(net, spec)
@@ -115,7 +115,13 @@ class DNNTheoremProver:
 
         self.update_input_bounds_last_iter = False
 
-        self.mvars = grb.MVar(self.gurobi_vars)
+        ###########################################################
+        if True:
+            print('- Use MVar:', self.flag_use_mvar)
+            print('- Implication interval:', self.implication_interval)
+            print()
+        ###########################################################
+
 
     def _update_input_bounds(self, lbs, ubs):
         if torch.any(lbs > ubs):
@@ -192,6 +198,7 @@ class DNNTheoremProver:
 
         flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
         # flag_parallel_implication = True
+        print('flag_parallel_implication:', flag_parallel_implication)
 
         if not self.flag_use_mvar:
             Timers.tic('get cache backsub_dict')
@@ -452,28 +459,6 @@ class DNNTheoremProver:
                     self.solution = tmp_input
                     return True, {}, None
                 self.concrete = self.net.get_concrete(tmp_input)
-
-
-
-        # implication heuristic
-        if settings.HEURISTIC_RANDOMIZED_FALSIFICATION and 'acasxu' in self.net.dataset:
-            # tic = time.time()
-            # stat, adv = self.rf.eval_constraints(None)
-            # if stat == 'violated':
-            #     self.solution = adv[0]
-            #     return True, {}, is_full_assignment
-            Timers.tic('randomized_falsification')
-
-            new_ranges = torch.stack([lbs, ubs], dim=1).to(settings.DTYPE)
-            stat, adv = self.rf.eval_constraints(new_ranges)
-
-            Timers.toc('randomized_falsification')
-
-            if stat == 'violated':
-                self.solution = adv[0]
-                return True, {}, is_full_assignment
-
-            # print(time.time() - tic)
 
 
         Timers.tic('Implications')

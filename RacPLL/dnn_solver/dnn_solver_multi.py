@@ -68,6 +68,7 @@ class DNNSolverMulti:
         split_multiple = initial_splits / smears.sum()
         num_splits = [int(np.ceil(smear * split_multiple)) for smear in smears]
         print('num_splits:', num_splits)
+        exit()
         assert all([x>0 for x in num_splits])
         return self.split_multi_bound([(lower, upper)], d=num_splits)
 
@@ -79,22 +80,22 @@ class DNNSolverMulti:
         diffs = torch.zeros(len(lower), dtype=settings.DTYPE)
 
         for sample in range(steps + 1):
-            pred = self.net(inputs[sample])
+            pred = self.net(inputs[sample].unsqueeze(0))
             for index in range(len(lower)):
                 if sample < steps:
                     l_input = [m if i != index else u for i, m, u in zip(range(len(lower)), inputs[sample], inputs[sample+1])]
-                    l_input = torch.tensor(l_input, dtype=settings.DTYPE)
+                    l_input = torch.tensor(l_input, dtype=settings.DTYPE).unsqueeze(0)
                     l_i_pred = self.net(l_input)
                 else:
                     l_i_pred = pred
                 if sample > 0:
                     u_input = [m if i != index else l for i, m, l in zip(range(len(lower)), inputs[sample], inputs[sample-1])]
-                    u_input = torch.tensor(u_input, dtype=settings.DTYPE)
+                    u_input = torch.tensor(u_input, dtype=settings.DTYPE).unsqueeze(0)
                     u_i_pred = self.net(u_input)
                 else:
                     u_i_pred = pred
-                diff = sum([abs(li - m) + abs(ui - m) for li, m, ui in zip(l_i_pred, pred, u_i_pred)])
-                diffs[index] += diff
+                diff = [abs(li - m) + abs(ui - m) for li, m, ui in zip(l_i_pred, pred, u_i_pred)][0]
+                diffs[index] += diff.sum()
         return diffs / steps
 
 

@@ -14,10 +14,10 @@ class RandomizedFalsification:
         self.net = net
         self.device = net.device
 
-        self.n_runs = 3
-        self.n_samples = 10
+        self.n_runs = 10
+        self.n_samples = 50
 
-        self.n_pos_samples = 1
+        self.n_pos_samples = 5
 
         self._find_target_and_direction()
 
