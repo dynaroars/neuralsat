@@ -33,9 +33,13 @@ class DNNSolverMulti:
         lower = torch.tensor(bounds['lbs'], dtype=settings.DTYPE)
         upper = torch.tensor(bounds['ubs'], dtype=settings.DTYPE)
 
-        multi_bounds = self.split_multi_bounds(lower.clone(), upper.clone(), initial_splits)
+        # print(lower)
+        # print(upper)
+        # print()
 
-        for l, u in multi_bounds:
+        self.multi_bounds = self.split_multi_bounds(lower.clone(), upper.clone(), initial_splits)
+
+        for l, u in self.multi_bounds:
             s = copy.deepcopy(spec)
             s.bounds = [(li.item(), ui.item()) for li, ui in zip(l, u)]
             self.new_specs.append(s)
@@ -53,6 +57,8 @@ class DNNSolverMulti:
     def solve(self):
         for idx, spec in enumerate(self.new_specs):
             solver = DNNSolver(self.net, spec)
+            print('lower:', self.multi_bounds[idx][0])
+            print('upper:', self.multi_bounds[idx][1])
             tic = time.time()
             status = solver.solve()
             print(f'{idx}/{len(self.new_specs)}', status, time.time() - tic)
@@ -68,7 +74,6 @@ class DNNSolverMulti:
         split_multiple = initial_splits / smears.sum()
         num_splits = [int(np.ceil(smear * split_multiple)) for smear in smears]
         print('num_splits:', num_splits)
-        exit()
         assert all([x>0 for x in num_splits])
         return self.split_multi_bound([(lower, upper)], d=num_splits)
 
@@ -105,15 +110,21 @@ class DNNSolverMulti:
         else:
             di = d[dim]
         new_multi_bound = []
-        for lower, upper in multi_bound:
-            d_lb = lower[dim]
-            d_ub = upper[dim]
+        for idx, (lower, upper) in enumerate(multi_bound):
+            d_lb = lower[dim].clone()
+            d_ub = upper[dim].clone()
+
             d_range = d_ub-d_lb
             d_step = d_range/di
             for i in range(di):
+                # print(idx, dim, len(multi_bound), d_step, d_lb, d_ub)
                 lower[dim] = d_lb + i*d_step
                 upper[dim] = d_lb + (i+1)*d_step
                 new_multi_bound.append((lower.clone(), upper.clone()))
+                # print('new lower:', new_multi_bound[-1][0])
+                # print('new upper:', new_multi_bound[-1][1])
+            # print()
+        # print('--')
         if dim + 1 < len(upper):
             return self.split_multi_bound(new_multi_bound, dim=dim+1, d=d)
         else:

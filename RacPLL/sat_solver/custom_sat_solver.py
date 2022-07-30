@@ -84,7 +84,7 @@ class CustomSATSolver(Solver):
             elif literal in self._assigned_vsids_count:
                 self._assigned_vsids_count[literal] += 1
 
-    def _assign(self, clause, literal: int):
+    def _assign(self, clause, literal: int, is_implied=False):
         """
         Assigns a satisfying value to the given literal.
         """
@@ -93,7 +93,8 @@ class CustomSATSolver(Solver):
             "value": literal > 0,                           # Satisfy the literal
             "clause": clause,                               # The clause which caused the assignment
             "level": len(self._assignment_by_level) - 1,    # The decision level of the assignment
-            "idx": len(self._assignment_by_level[-1])       # Defines an assignment order in the same level
+            "idx": len(self._assignment_by_level[-1]),      # Defines an assignment order in the same level
+            "is_implied": is_implied
         }
 
         self._all_vars.discard(variable)
@@ -138,7 +139,7 @@ class CustomSATSolver(Solver):
         :return: a (variable: int, value: bool) tuple for every assigned variable.
         """
         for var in self._assignment:
-            yield var, self._assignment[var]["value"]
+            yield var, self._assignment[var]["value"], self._assignment[var]["is_implied"]
 
     def _find_last_literal(self, clause, removed_vars=[]):
         """
@@ -214,8 +215,21 @@ class CustomSATSolver(Solver):
         the BCP continues using them. The BCP uses watch literals.
         :return: None, if there is no conflict. If there is one, the conflict clause is returned.
         """
+        # print('[bcp]', self._last_assigned_literals)
+        
+        # print('\t[variable to watched clause]')
+        # for k, v in self._variable_to_watched_clause.items():
+        #     print(k, '--->', v)
+        # print()
+
+        # print('\t[_satisfied_clauses]')
+        # for k, v in enumerate(self._satisfied_clauses):
+        #     print(k, '--->', v)
+        # print()
+
         while self._last_assigned_literals:
             watch_literal = self._last_assigned_literals.popleft()
+            # print('watch_literal:', watch_literal)
             for clause in self._variable_to_watched_clause[abs(watch_literal)].copy():
                 if clause not in self._satisfied_clauses:
                     conflict_clause = self._replace_watch_literal(clause, watch_literal)
@@ -257,7 +271,9 @@ class CustomSATSolver(Solver):
             # Assign the correct value to it. Because it is now watching the clause,
             # and was also added to self._last_assigned_literals, we will later on
             # check if the assignment causes a conflict
-            self._assign(clause, unassigned_literals.pop())
+            literal = unassigned_literals.pop()
+            self._assign(clause, literal, is_implied=True)
+            # print(f'\t- [c] {clause}, {literal}')
         return None
 
     def _add_conflict_clause(self, conflict_clause):
@@ -275,6 +291,7 @@ class CustomSATSolver(Solver):
                 self._variable_to_watched_clause[abs(literal)].discard(clause_to_remove)
 
         self._new_clauses.append(conflict_clause)
+        # print(f'\t- [add] {conflict_clause}')
         self._add_clause(conflict_clause)
 
 
@@ -297,7 +314,7 @@ class CustomSATSolver(Solver):
             self._add_conflict_clause(conflict_clause)
             self._assign(conflict_clause, watch_literal)
             # print(f'- [Conflict] {abs(watch_literal)}={watch_literal}, dl={level_to_jump_to}')
-            # print(f'\t- [cc] {conflict_clause}')
+            # print(f'\t- [cc] {conflict_clause}, {watch_literal}')
 
             conflict_clause = propagation_func()
         return True
@@ -310,7 +327,7 @@ class CustomSATSolver(Solver):
         if conflict_clause is not None:
             return conflict_clause
         for literal in new_assignments:
-            self._assign(None, literal)
+            self._assign(None, literal, is_implied=True)
             # print(f'- [Imply] {abs(literal)}={literal}')
         return None
 
@@ -428,7 +445,7 @@ class CustomSATSolver(Solver):
             if len(clause) == 1:
                 for literal in clause:
                     if abs(literal) not in self._assignment:
-                        self._assign(clause, literal)
+                        self._assign(clause, literal, is_implied=True)
 
     def _is_sat(self) -> bool:
         return self._formula.issubset(self._satisfied_clauses)

@@ -11,7 +11,7 @@ import settings
 
 class DNNParser:
 
-    def parse(filename, dataset, device=torch.device('cpu')):
+    def parse(filename, dataset='unknown', device=torch.device('cpu')):
         if filename.lower().endswith('.nnet'):
             net = DNNParser.parse_nnet(filename)
         elif filename.lower().endswith('.onnx'):

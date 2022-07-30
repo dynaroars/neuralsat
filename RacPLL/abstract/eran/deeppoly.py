@@ -15,6 +15,7 @@ class DeepPoly:
         self.device = net.device
 
         self._build_network_transformer()
+        self._build_subnetwork_transformer()
 
     def _build_network_transformer(self):
         last = InputTransformer(self.net.input_shape).to(self.device)
@@ -26,23 +27,61 @@ class DeepPoly:
             elif isinstance(layer, nn.ReLU):
                 last = ReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping).to(self.device)
                 idx += 1
-            elif isinstance(layer, nn.Conv2d):
-                last = Conv2dTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx).to(self.device)
             elif isinstance(layer, nn.Flatten):
                 last = FlattenTransformer(last=last, idx=idx).to(self.device)
-            elif isinstance(layer, onnx2pytorch.operations.Reshape):
-                last = ReshapeTransformer(layer.shape, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
-            elif isinstance(layer, onnx2pytorch.operations.Transpose):
-                last = TransposeTransformer(layer.dims, last=last, idx=idx, back_sub_steps=self.back_sub_steps).to(self.device)
-            elif isinstance(layer, utils.read_onnx.Sub):
-                last = SubTransformer(layer).to(self.device)
-            elif isinstance(layer, utils.read_onnx.Div):
-                last = DivTransformer(layer).to(self.device)
             else:
                 print(layer)
                 raise NotImplementedError
             self.layers += [last]
+
+    def _build_subnetwork_transformer(self):
+        self.forward_from_layer = {k: [InputHiddenTransformer(sub_id=k)] for k in self.net.layers_mapping.keys()}
+        
+        for k in self.forward_from_layer:
+            idx = 0
+            for layer in self.net.layers:
+                last = self.forward_from_layer[k][-1]
+                if isinstance(layer, nn.Linear):
+                    last = LinearTransformer(layer, last=last, back_sub_steps=self.back_sub_steps, idx=idx, sub_id=k).to(self.device)
+                elif isinstance(layer, nn.ReLU):
+                    last = ReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, sub_id=k, kwargs=self.net.layers_mapping).to(self.device)
+                    idx += 1
+                elif isinstance(layer, nn.Flatten):
+                    last = FlattenTransformer(last=last, idx=idx, sub_id=k).to(self.device)
+                else:
+                    print(layer)
+                    raise NotImplementedError
+
+                if k < idx:
+                    self.forward_from_layer[k] += [last]
+
+        # for k, v in self.forward_from_layer.items():
+        #     print(k, end=' ')
+        #     for _ in v:
+        #         print(_, end=' -> ')
+        #     print('out')
+
+        # exit()
     
+    @torch.no_grad()
+    def forward_layer(self, lower, upper, layer_id, assignment=None):
+        bounds = (lower, upper)
+        hidden_bounds = []
+        for layer in self.forward_from_layer[layer_id]:
+            # print(layer, layer.last)
+            if isinstance(layer, ReLUTransformer):
+                hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
+            
+            bounds, _ = layer(bounds, assignment)
+            # print('weight', layer.weight if hasattr(layer, 'weight') else None)
+            # print('\t', bounds[0])
+            # print('\t', bounds[1])
+        #     print(layer, end=' -> ')
+        # print('out')
+        return (bounds[0], bounds[1]), hidden_bounds
+
+        # exit()
+
     @torch.no_grad()
     def __call__(self, lower, upper, assignment=None, return_params=False):
         bounds = (lower, upper)
@@ -54,7 +93,10 @@ class DeepPoly:
                 hidden_bounds.append((bounds[0].squeeze(), bounds[1].squeeze()))
 
             bounds, params = layer(bounds, assignment)
-            # print('\t', bounds.shape)
+            # print(layer)
+            # print('weight', layer.weight if hasattr(layer, 'weight') else None)
+            # print('\t', bounds[0])
+            # print('\t', bounds[1])
             assert torch.all(bounds[0] <= bounds[1]), layer
 
             if params is not None:
@@ -68,6 +110,7 @@ class DeepPoly:
 
 
 class InputTransformer(nn.Module):
+
     def __init__(self, input_shape, last=None):
         super(InputTransformer, self).__init__()
         self.last = last
@@ -77,103 +120,31 @@ class InputTransformer(nn.Module):
         self.bounds = torch.stack([bounds[0].view(self.input_shape[1:]), bounds[1].view(self.input_shape[1:])], 0).squeeze()
         return self.bounds, None
     
+
     def __str__(self):
         return 'Input'
 
 
 
-class TransposeTransformer(nn.Module):
-    def __init__(self, dims, last=None, idx=None, back_sub_steps=None):
-        super(TransposeTransformer, self).__init__()
+class InputHiddenTransformer(nn.Module):
+
+    def __init__(self, sub_id=None, last=None):
+        super(InputHiddenTransformer, self).__init__()
         self.last = last
-        self.idx = idx
-        self.dims = dims
+        self.sub_id = sub_id
 
     def forward(self, bounds, assignment):
-        self.bounds = bounds.permute(self.dims)
+        self.bounds = torch.stack([bounds[0], bounds[1]], 0).squeeze()
         return self.bounds, None
     
-    def _back_sub(self, max_steps, params=None):
-        Ml, Mu, bl, bu = params
-        if self.last.last is not None:
-            bounds, params = self.last._back_sub(max_steps, params=params)
-        else:
-            last_bounds = self.last.bounds.permute(self.dims)
-            lower = (torch.clamp(Ml, min=0) @ last_bounds[0].flatten() + torch.clamp(Ml, max=0) @ last_bounds[1].flatten()).flatten() + bl
-            upper = (torch.clamp(Mu, min=0) @ last_bounds[1].flatten() + torch.clamp(Mu, max=0) @ last_bounds[0].flatten()).flatten() + bu
-            bounds = torch.cat([lower, upper], 0)
-        return bounds, params
-
-
-    @property
-    def beta(self):
-        if hasattr(self.last, 'beta'):
-            return self.last.beta.flatten()
-        return None
-
-
-    @property
-    def mu(self):
-        if hasattr(self.last, 'mu'):
-            return self.last.mu.flatten()
-        return None
-
-    @property
-    def lmbda(self):
-        if hasattr(self.last, 'lmbda'):
-            return self.last.lmbda.flatten()
-        return None
-
 
     def __str__(self):
-        return f'Transpose {self.idx}'
-
-
-class ReshapeTransformer(nn.Module):
-    def __init__(self, shape, last=None, idx=None, back_sub_steps=None):
-        super(ReshapeTransformer, self).__init__()
-        self.last = last
-        self.idx = idx
-        self.shape = [i for i in shape]
-        self.back_sub_steps = back_sub_steps
-
-    def forward(self, bounds, assignment):
-        self.bounds = bounds
-        return self.bounds.reshape(self.shape), None
-    
-    def _back_sub(self, max_steps, params=None):
-        # print('_back_sub', self, '--->', self.last)
-        bounds, params = self.last._back_sub(max_steps, params=params)
-        return bounds, params
-    
-
-    @property
-    def beta(self):
-        if hasattr(self.last, 'beta'):
-            return self.last.beta.flatten()
-        return None
-
-
-    @property
-    def mu(self):
-        if hasattr(self.last, 'mu'):
-            return self.last.mu.flatten()
-        return None
-
-    @property
-    def lmbda(self):
-        if hasattr(self.last, 'lmbda'):
-            return self.last.lmbda.flatten()
-        return None
-
-
-    def __str__(self):
-        return f'Reshape {self.idx}'
+        return f'[{self.sub_id}] Input Hidden'
 
 
 class LinearTransformer(nn.Module):
 
-    def __init__(self, layer, last=None, back_sub_steps=0, idx=None):
+    def __init__(self, layer, last=None, back_sub_steps=0, idx=None, sub_id=None):
         super(LinearTransformer, self).__init__()
 
         self.weight = layer.weight
@@ -183,6 +154,7 @@ class LinearTransformer(nn.Module):
         self.back_sub_steps = back_sub_steps
         self.W_plus = torch.clamp(self.weight, min=0.)
         self.W_minus = torch.clamp(self.weight, max=0.)
+        self.sub_id = sub_id
         self.idx = idx
         self.params = None
 
@@ -220,23 +192,26 @@ class LinearTransformer(nn.Module):
             else:
                 return self.last._back_sub(max_steps-1, params=params)
         else:
+            # print(Ml.shape)
+            # print(self.last.bounds[0].shape)
             lower = torch.clamp(Ml, min=0) @ self.last.bounds[0] + torch.clamp(Ml, max=0) @ self.last.bounds[1] + bl
             upper = torch.clamp(Mu, min=0) @ self.last.bounds[1] + torch.clamp(Mu, max=0) @ self.last.bounds[0] + bu
             return torch.stack([lower, upper], 0), params
 
     def __str__(self):
-        return f'Linear {self.idx}'
+        return f'[{self.sub_id}] Linear {self.idx}'
 
 
 
 class ReLUTransformer(nn.Module):
 
-    def __init__(self, last=None, back_sub_steps=0, idx=None, kwargs=None):
+    def __init__(self, last=None, back_sub_steps=0, idx=None, sub_id=None, kwargs=None):
         super(ReLUTransformer, self).__init__()
         self.last = last
         self.back_sub_steps = back_sub_steps
-        self.last_conv_flag = isinstance(self.last, Conv2dTransformer)
+        self.last_conv_flag = False #isinstance(self.last, Conv2dTransformer)
 
+        self.sub_id = sub_id
         self.idx = idx
 
         self.layers_mapping = kwargs
@@ -268,7 +243,7 @@ class ReLUTransformer(nn.Module):
             inactive_ind = la==False
 
             self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind], device=device)
-            self.beta[active_ind] = torch.ones_like(self.beta[active_ind], device=device)
+            self.beta[active_ind] = torch.zeros_like(self.beta[active_ind], device=device)
             self.mu[active_ind] = torch.zeros_like(self.mu[active_ind], device=device)
 
             self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind], device=device)
@@ -282,7 +257,7 @@ class ReLUTransformer(nn.Module):
         return self.bounds, None
 
     def __str__(self):
-        return f'Relu {self.idx}'
+        return f'[{self.sub_id}] Relu {self.idx}'
 
     def back_sub(self, max_steps):
         new_bounds, new_params = self._back_sub(max_steps)
@@ -294,6 +269,7 @@ class ReLUTransformer(nn.Module):
         # self.params = new_params
 
     def _back_sub(self, max_steps, params=None):
+        # print('_back_sub', self, '--->', self.last)
         if self.last_conv_flag:
             if params is None:
                 params = torch.diag(self.beta.flatten()), torch.diag(self.lmbda.flatten()), torch.zeros_like(self.mu).flatten(), self.mu.flatten()
@@ -323,13 +299,16 @@ class ReLUTransformer(nn.Module):
             else:
                 lower = torch.clamp(Ml, min=0) @ self.last.bounds[0] + torch.clamp(Ml, max=0) @ self.last.bounds[1] + bl
                 upper = torch.clamp(Mu, min=0) @ self.last.bounds[1] + torch.clamp(Mu, max=0) @ self.last.bounds[0] + bu
+                # lower = Ml @ self.last.bounds[0] + bl
+                # upper = Mu @ self.last.bounds[1] + bu
                 return torch.stack([lower, upper], 0), params
 
 
 class FlattenTransformer(nn.Module):
-    def __init__(self, last=None, idx=None):
+    def __init__(self, last=None, idx=None, sub_id=None):
         super(FlattenTransformer, self).__init__()
         self.last = last
+        self.sub_id = sub_id
         self.idx = idx
 
     def forward(self, bounds, assignment):
@@ -371,134 +350,4 @@ class FlattenTransformer(nn.Module):
         return self.last.bounds
 
     def __str__(self):
-        return f'Flatten {self.idx}'
-        
-class ReshapeConv(torch.nn.Module):
-
-    def __init__(self, in_dim_1, in_dim_2, in_channels, layer):
-        super(ReshapeConv, self).__init__()
-
-        self.in_dim_1 = in_dim_1
-        self.in_dim_2 = in_dim_2
-        self.in_channels = in_channels
-        self.layer = layer
-
-    def forward(self, x):
-        out = self.layer(x.view(1, self.in_channels, self.in_dim_1, self.in_dim_2))
-        return torch.flatten(out)
-
-class Conv2dTransformer(nn.Module):
-
-    def __init__(self, layer, last=None, back_sub_steps=0, idx=None):
-        super(Conv2dTransformer, self).__init__()
-
-        self.in_channels = layer.in_channels
-        self.out_channels = layer.out_channels
-        self.padding = layer.padding
-        self.kernel_size = layer.kernel_size
-        self.stride = layer.stride
-        self.weight = layer.weight
-        self.bias = layer.bias
-
-        self.device = layer.bias.device
-
-        self.W_plus = torch.clamp(self.weight, min=0)
-        self.conv_plus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
-        self.conv_plus.weight.data = self.W_plus
-        self.conv_plus.bias.data = self.bias/2.
-
-        self.W_minus = torch.clamp(self.weight, max=0)
-        self.conv_minus = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
-        self.conv_minus.weight.data = self.W_minus
-        self.conv_minus.bias.data = self.bias/2.
-        
-        self.conv = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride= self.stride, padding=self.padding).to(self.device)
-        self.conv.weight.data = self.weight
-        self.conv.bias = None
-
-        self.weights_backsub = None
-        self.bias_backsub = None
-
-        self.last = last
-        self.back_sub_steps = back_sub_steps
-        self.idx = idx
-        self.params = None
-    
-    def toeplitz_convmatrix2d(self):
-        inputs = torch.ones_like(self.last.bounds[1].flatten(), device=self.device)
-        _, C, H, W = self.last.bounds.shape
-        reshape_conv = ReshapeConv(H, W, self.in_channels, self.conv).to(self.device)
-        ## hacky but works: find toeplitz by jacobian
-        j = jacobian(reshape_conv, inputs)
-        return j
-
-    def forward(self, bounds, assignment):
-        if isinstance(self.weights_backsub, type(None)) and self.back_sub_steps > 0:
-            self.weights_backsub = self.toeplitz_convmatrix2d()
-        bounds = bounds.unsqueeze(1)
-        upper = self.conv_plus(bounds[1]) + self.conv_minus(bounds[0])
-        lower = self.conv_plus(bounds[0]) + self.conv_minus(bounds[1])
-        self.bounds = torch.stack([lower, upper], 0).squeeze(1)
-        if isinstance(self.bias_backsub, type(None)) and self.back_sub_steps > 0:
-            self.bias_backsub = self.bias.repeat_interleave(self.bounds[1].shape[1]*self.bounds[1].shape[2])
-        if self.back_sub_steps > 0:
-            self.back_sub(self.back_sub_steps)
-        return self.bounds, self.params
-    
-    def back_sub(self, max_steps):
-        new_bounds, new_params = self._back_sub(max_steps)
-        new_bounds = new_bounds.reshape(self.bounds.shape)
-        indl = new_bounds[0] > self.bounds[0]
-        indu = new_bounds[1] < self.bounds[1]
-        self.bounds[0, indl] = new_bounds[0, indl]
-        self.bounds[1, indu] = new_bounds[1, indu]
-        self.params = new_params
-        
-    def _back_sub(self, max_steps, params=None):
-        # print('_back_sub', self, '--->', self.last)
-        if params is None:
-            params = self.weights_backsub, self.weights_backsub, self.bias_backsub, self.bias_backsub
-            
-        Ml, Mu, bl, bu = params
-
-        if max_steps > 0 and self.last.last is not None:
-            if self.last.beta is not None:
-                Mlnew = torch.clamp(Ml, min=0) * self.last.beta.flatten() + torch.clamp(Ml, max=0)* self.last.lmbda.flatten()
-                Munew = torch.clamp(Mu, min=0) * self.last.lmbda.flatten() + torch.clamp(Mu, max=0)* self.last.beta.flatten()
-                blnew = bl + torch.clamp(Ml, max=0) @ self.last.mu.flatten()
-                bunew = bu + torch.clamp(Mu, min=0) @ self.last.mu.flatten()
-                return self.last._back_sub(max_steps-1, params=(Mlnew, Munew, blnew, bunew))
-            else:
-                return self.last._back_sub(max_steps-1, params=params)
-
-        else:
-            lower = (torch.clamp(Ml, min=0) @ self.last.bounds[0].flatten() + torch.clamp(Ml, max=0) @ self.last.bounds[1].flatten()).flatten() + bl
-            upper = (torch.clamp(Mu, min=0) @ self.last.bounds[1].flatten() + torch.clamp(Mu, max=0) @ self.last.bounds[0].flatten()).flatten() + bu
-            return torch.cat([lower, upper], 0), params
-
-    def __str__(self):
-        return f'Conv2d {self.idx}'
-
-
-
-class SubTransformer(nn.Module):
-    def __init__(self, layer, last=None):
-        super(SubTransformer, self).__init__()
-        self.last = last
-        self.constant = layer.constant
-    
-    def forward(self, bounds, assignment):
-        self.bounds = bounds - self.constant
-        return self.bounds, None
-
-
-class DivTransformer(nn.Module):
-    def __init__(self, layer, last=None):
-        super(DivTransformer, self).__init__()
-        self.last = last
-        self.constant = layer.constant
-    
-    def forward(self, bounds, assignment):
-        self.bounds = torch.div(bounds, self.constant)
-        return self.bounds, None
-
+        return f'[{self.sub_id}] Flatten {self.idx}'

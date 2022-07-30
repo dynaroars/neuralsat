@@ -218,7 +218,7 @@ class PyTorchModelWrapper(nn.Module):
             if isinstance(layer, nn.ReLU):
                 s = torch.zeros_like(x, dtype=int) 
                 s[x > 0] = 1
-                implication.update(dict(zip(self.layers_mapping[idx], s.numpy().astype(dtype=bool))))
+                implication.update(dict(zip(self.layers_mapping[idx], s.flatten().numpy().astype(dtype=bool))))
                 idx += 1
         return implication
 
@@ -235,13 +235,15 @@ class PyTorchModelWrapper(nn.Module):
         return implication
 
     @torch.no_grad()
-    def forward_from_layer(self, x, lid):
+    def forward_layer(self, x, lid):
         relu_idx = 0
+        # print(lid)
         for layer in self.layers:
             if isinstance(layer, nn.ReLU):
                 relu_idx += 1
             if relu_idx <= lid:
                 continue
+            # print(layer)
             x = layer(x)
         return x
 

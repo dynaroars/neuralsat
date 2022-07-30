@@ -56,7 +56,7 @@ class SpecificationVNNLIB:
             # vals = torch.tensor(vals)
             # p += torch.mean(vals / self.cac[idx])
 
-        return any(dnf), False
+        return any(dnf), True
 
     def check_solution(self, output):
         for lhs, rhs in self.mat:

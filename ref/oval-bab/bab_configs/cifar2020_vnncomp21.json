@@ -1,0 +1,90 @@
+{
+  "bounding": {
+    "nets": [
+      {
+        "bounding_algorithm": "propagation",
+        "params": {
+          "nb_steps": 2,
+          "initial_step_size": 1e0,
+          "step_size_decay": 0.98,
+          "betas": [0.9, 0.999],
+          "joint_ib": false
+        },
+        "type": "beta-crown",
+        "auto_iters": true,
+        "batch_size": 600
+      },
+      {
+        "bounding_algorithm": "dual-anderson",
+        "params": {
+            "bigm": "init",
+            "cut": "only",
+            "bigm_algorithm": "adam",
+            "nb_iter": 600,
+            "cut_frequency": 450,
+            "max_cuts": 12,
+            "cut_add": 2,
+            "betas": [0.9, 0.999],
+            "initial_step_size": 1e-3,
+            "final_step_size": 1e-6,
+            "init_params": {
+                "nb_outer_iter": 2000,
+                "initial_step_size": 1e-2,
+                "final_step_size": 1e-4,
+                "betas": [0.9, 0.999],
+                "larger_irl_if_naive_init": true
+            },
+            "restrict_factor": 1.5
+        },
+        "auto_iters": true,
+        "batch_size": 20,
+        "hard_overhead": 200
+      }
+    ],
+    "do_ubs": false,
+    "parent_init": true
+  },
+
+  "ibs": {
+    "loose_ib": {
+      "bounding_algorithm": "propagation",
+      "params": {
+        "best_among": ["KW", "crown"]
+      },
+      "type": "best_prop",
+      "max_solver_batch": 10000
+    },
+    "tight_ib": null,
+    "fixed_ib": true,
+    "joint_ib": false
+  },
+
+  "branching": {
+    "heuristic_type": "FSB",
+    "max_domains": 600,
+    "bounding": {
+      "bounding_algorithm": "propagation",
+      "params": {
+        "best_among": ["KW", "crown"]
+      },
+      "type": "best_prop"
+    }
+  },
+
+  "upper_bounding": {
+    "ub_method": "mi_fgsm",
+    "adv_params": {
+      "iters": 500,
+      "optimizer": "default",
+      "lr_tensor": true,
+      "num_adv_ex": 100,
+      "check_adv": 1,
+      "mu_tensor": true,
+      "decay_tensor": true
+    }
+  },
+
+  "bab": {
+    "max_cpu_subdomains": 2e4
+  }
+}

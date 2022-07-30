@@ -11,8 +11,14 @@ if __name__ == '__main__':
 
     nnet_name = 'benchmark/mnistfc/nnet/mnist-net_256x2.onnx'
     spec_name = 'benchmark/mnistfc/spec/prop_7_0.03.vnnlib'
+
+
+    nnet_name = 'benchmark/mnistfc/nnet/mnist-net_256x2.onnx'
+    spec_name = 'benchmark/mnistfc/spec/prop_0_0.05.vnnlib'
+
+
     # nnet_name = 'example/random.nnet'
-    device = torch.device('cuda')
+    device = torch.device('cpu')
 
     net = DNNParser.parse(nnet_name, 'mnistfc', device)
 
@@ -23,7 +29,7 @@ if __name__ == '__main__':
         ff = randomized_falsification.RandomizedFalsification(net, spec)
 
         tic = time.time()
-        stat, adv = ff.eval(timeout=100)
+        stat, adv = ff.eval(timeout=10)
 
         print(stat, time.time() - tic)
         if stat == 'violated':

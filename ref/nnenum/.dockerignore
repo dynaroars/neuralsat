@@ -1,0 +1,5 @@
+.git
+.dockerignore
+.pytest_cache
+__pycache__
+Dockerfile

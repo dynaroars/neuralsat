@@ -62,23 +62,23 @@ class DNNSolver(TheorySolver):
             print('- Assignment:', assignment)
 
         # theory checking
-        tic = time.time()
 
         # Timers.reset()
+        tic = time.time()
         Timers.tic('Theorem deduction')
-        theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment)
+        theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, self._solver._assignment)
         Timers.toc('Theorem deduction')
-        
         print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
+        
+        # Timers.print_stats()
+        # print()
+        # print()
 
 
         if self.get_solution() is not None:
             self.set_early_stop(True)
             return conflict_clause, new_assignments
 
-        # Timers.print_stats()
-        # print()
-        # # print()
         # if self.dnn_theorem_prover.count == 50:
         #     exit()
 
@@ -94,12 +94,21 @@ class DNNSolver(TheorySolver):
             conflict_clause = set()
             if settings.DEBUG:
                 print('    - Check T-SAT: `UNSAT`')
-            for variable, value in self._solver.iterable_assignment():
-                conflict_clause.add(-variable if value else variable)
+
+            # cac = set()
+            for variable, value, is_implied in self._solver.iterable_assignment():
+                if not is_implied:
+                # if True:
+                    conflict_clause.add(-variable if value else variable)
+                # cac.add(-variable if value else variable)
             conflict_clause = frozenset(conflict_clause)
             if settings.DEBUG:
                 print(f'    - Conflict clause: `{list(conflict_clause)}`')
                 print()
+
+            # print('cac:', list(cac))
+            # print('cc :', list(conflict_clause))
+            # print()
             return conflict_clause, new_assignments
 
         if settings.DEBUG:

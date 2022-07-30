@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
     parser.add_argument('--dataset', default='unknown')
     parser.add_argument('--timeout', type=int)
+    parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -49,3 +50,6 @@ if __name__ == '__main__':
     if args.timer:
         Timers.toc('dnn_solver')
         Timers.print_stats()
+
+    with open(args.file, 'w') as fp:
+        print(status, file=fp)

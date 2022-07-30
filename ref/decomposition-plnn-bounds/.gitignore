@@ -1,0 +1,5 @@
+*.egg-info
+*.pyc
+gurobi.log
+.DS_Store
+.idea

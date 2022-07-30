@@ -75,7 +75,7 @@ class NetworkNNET(nn.Module):
         return implication
 
     @torch.no_grad()
-    def forward_from_layer(self, x, lid):
+    def forward_layer(self, x, lid):
         relu_idx = 0
         for layer in self.layers:
             if isinstance(layer, nn.ReLU):

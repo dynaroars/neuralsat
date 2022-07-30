@@ -1,11 +1,16 @@
 RacPLL/benchmark/nn4sys
 RacPLL/gurobi
 RacPLL/test_*
-ref/
+# ref/
 archive/
 vnncomp2021/
 baselines/
 *.pynet
+*.pt
+*.gz
+*.pth
+*-ubyte
+*.h5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

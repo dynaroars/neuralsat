@@ -31,7 +31,7 @@ class Decider:
         if settings.SEED is not None:
             random.seed(settings.SEED)
 
-    def update(self, output_bounds=None, hidden_bounds=None):
+    def update(self, output_bounds=None, hidden_bounds=None, layer_bounds=None):
         if hidden_bounds is not None:
             for idx, (lb, ub) in enumerate(hidden_bounds):
                 b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
@@ -40,15 +40,21 @@ class Decider:
 
         if output_bounds is not None:
             self.output_lower, self.output_upper = output_bounds
+
+        if layer_bounds is not None:
+            for node, bound in layer_bounds.items():
+                self.bounds_mapping[node] = torch.tensor(bound['lb']), torch.tensor(bound['ub'])
+
         
 
     def get_score(self, node):
         l, u = self.bounds_mapping[node]
         # score = (u - l)
-        score = torch.min(u, -l)
+        # score = torch.min(u, -l)
+        score = (u + l) / (u - l)
         # print(score, u, l)
         # exit()
-        return score
+        return score.abs()
 
     def get_impact(self, node):
         l, u = self.bounds_mapping[node]

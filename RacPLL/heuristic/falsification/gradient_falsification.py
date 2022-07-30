@@ -21,7 +21,7 @@ class GradientFalsification:
 
         self.max_eps = 0.3
         self.attack_iters = 100
-        self.num_restarts = 50
+        self.num_restarts = 100
 
     def get_target(self):
         pidx_list = []

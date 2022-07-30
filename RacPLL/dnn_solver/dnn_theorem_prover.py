@@ -14,9 +14,9 @@ import os
 from heuristic.falsification import randomized_falsification
 from heuristic.falsification import gradient_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
-from dnn_solver.worker import implication_gurobi_worker
 from abstract.eran import deepzono, deeppoly
 from lp_solver.lp_solver import LPSolver
+from dnn_solver.worker import *
 
 from utils.cache import BacksubCacher, AbstractionCacher
 from utils.read_nnet import NetworkNNET
@@ -34,6 +34,8 @@ class DNNTheoremProver:
         self.net = net
         self.layers_mapping = net.layers_mapping
         self.spec = spec
+
+        self.hidden_nodes = sum([len(v) for k, v in self.layers_mapping.items()])
 
         self.decider = decider
 
@@ -55,24 +57,14 @@ class DNNTheoremProver:
 
         self.solution = None
 
-        # if settings.HEURISTIC_DEEPZONO:
-        #     self.deepzono = deepzono.DeepZono(net)
-
         self.transformer = SymbolicNetwork(net)
 
         if settings.HEURISTIC_DEEPPOLY:
-            self.flag_use_backsub = True
-            for layer in net.layers:
-                if isinstance(layer, nn.Conv2d):
-                    self.flag_use_backsub = False
-                    break
-            if self.flag_use_backsub:
-                self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=1000)
-            else:
-                self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=0)
+            self.deeppoly = deeppoly.DeepPoly(net, back_sub_steps=1000)
 
 
         self.concrete = self.net.get_concrete((self.lbs_init + self.ubs_init) / 2.0)
+        self.reversed_layers_mapping = {n: k for k, v in self.layers_mapping.items() for n in v}
 
         # clean trash
         # os.system('rm -rf gurobi/*')
@@ -84,70 +76,16 @@ class DNNTheoremProver:
         self.last_assignment = {}        
 
         # pgd attack 
-        if net.n_input <= 10:
-            self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
-            self.implication_interval = 1
-            self.flag_use_mvar = False
-            Timers.tic('Randomized attack')
-            self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
-            stat, adv = self.rf.eval(timeout=1)
+        self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
+
+        Timers.tic('Randomized attack')
+        self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
+        stat, adv = self.rf.eval(timeout=settings.FALSIFICATION_TIMEOUT)
+        if settings.DEBUG:
             print('Randomized attack:', stat)
-            if stat:
-                self.solution = adv[0]
-            Timers.toc('Randomized attack')
-
-
-        else:
-            self.implication_interval = 5
-            self.flag_use_mvar = True
-            self.mvars = grb.MVar(self.gurobi_vars)
-
-            Timers.tic('PGD attack')
-            self.gf = gradient_falsification.GradientFalsification(net, spec)
-            stat, adv = self.gf.evaluate()
-            print('PGD attack:', stat)
-            if stat:
-                assert spec.check_solution(net(adv))
-                assert (adv >= self.gf.lower).all()
-                assert (adv <= self.gf.upper).all()
-                self.solution = adv
-            Timers.toc('PGD attack')
-
-        self.update_input_bounds_last_iter = False
-
-        ###########################################################
-        if True:
-            print('- Use MVar:', self.flag_use_mvar)
-            print('- Implication interval:', self.implication_interval)
-            print()
-        ###########################################################
-
-
-    def _update_input_bounds(self, lbs, ubs):
-        if torch.any(lbs > ubs):
-            return False
-        for i, var in enumerate(self.gurobi_vars):
-            # if abs(lbs[i] - ubs[i]) < DNNTheoremProver.epsilon: # concretize
-            var.lb = lbs[i]
-            var.ub = ubs[i]
-
-            # if (abs(var.lb - lbs[i]) > DNNTheoremProver.skip):
-            #     var.lb = lbs[i]
-            # if (abs(var.ub - ubs[i]) > DNNTheoremProver.skip):
-            #     var.ub = ubs[i]
-        self.model.update()
-        self.update_input_bounds_last_iter = True
-        return True
-
-
-    def _restore_input_bounds(self):
-        if self.update_input_bounds_last_iter:
-            for i, var in enumerate(self.gurobi_vars):
-                var.lb = self.lbs_init[i]
-                var.ub = self.ubs_init[i]
-            self.model.update()
-            self.update_input_bounds_last_iter = False
-
+        if stat=='violated':
+            self.solution = adv[0]
+        Timers.toc('Randomized attack')
 
 
     def _find_unassigned_nodes(self, assignment):
@@ -161,13 +99,11 @@ class DNNTheoremProver:
         return return_nodes
 
     def _get_equation(self, coeffs):
-        # tic = time.time()
         expr = grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
-        # print(len(coeffs), time.time() - tic)
         return expr
 
     @torch.no_grad()
-    def __call__(self, assignment):
+    def __call__(self, assignment, assignment_full=None):
 
         # debug
         self.count += 1
@@ -175,10 +111,7 @@ class DNNTheoremProver:
 
         if self.solution is not None:
             return True, {}, None
-        # reset constraints
-        Timers.tic('Reset solver')
-        self._restore_input_bounds()
-        Timers.toc('Reset solver')
+
 
         Timers.tic('Find node')
         unassigned_nodes = self._find_unassigned_nodes(assignment)
@@ -193,117 +126,55 @@ class DNNTheoremProver:
         Timers.tic('Find caching assignment')
         cache_nodes = self.get_cache_assignment(assignment)
         remove_nodes = [n for n in self.last_assignment if n not in cache_nodes]
-        new_nodes = [n for n in assignment if n not in cache_nodes]
+        new_nodes = [n for n in assignment if n not in cache_nodes and n in backsub_dict]
         Timers.toc('Find caching assignment')
-
-        flag_parallel_implication = False if unassigned_nodes is None else len(unassigned_nodes) > 50
-        # flag_parallel_implication = True
-        print('flag_parallel_implication:', flag_parallel_implication)
-
-        if not self.flag_use_mvar:
-            Timers.tic('get cache backsub_dict')
-            backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
-            Timers.toc('get cache backsub_dict')
-
-            if len(remove_nodes):
-                self.model.remove([self.model.getConstrByName(f'cstr[{node}]') for node in remove_nodes])
-
-
-        if not is_full_assignment and self.count % self.implication_interval == 0:
-            # parallel implication
-            if flag_parallel_implication:
-                backsub_dict_np = {k: v.detach().cpu().numpy() for k, v in backsub_dict.items()}
-                kwargs = (self.net.n_input, self.lbs_init.detach().cpu().numpy(), self.ubs_init.detach().cpu().numpy())
-                wloads = MP.get_workloads(unassigned_nodes, n_cpus=os.cpu_count() // 2)
-                Q = multiprocessing.Queue()
-                self.workers = [multiprocessing.Process(target=implication_gurobi_worker, 
-                                                        args=(assignment, backsub_dict_np, wl, Q, self.concrete, self.flag_use_mvar, kwargs),
-                                                        name=f'Thread {i}',
-                                                        daemon=True) for i, wl in enumerate(wloads)]
-                for w in self.workers:
-                    w.start()
-
-            else:
-                if not self.flag_use_mvar:
-                    # convert to gurobi LinExpr
-                    Timers.tic('Get Linear Equation')
-                    if backsub_dict_expr is not None:
-                        backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
-                    else:
-                        backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
-
-                    self.backsub_cacher.put(assignment, backsub_dict_expr)
-                    Timers.toc('Get Linear Equation')
-
-        
-        if not self.flag_use_mvar:
-            # convert to gurobi LinExpr
-            Timers.tic('Get Linear Equation')
-            # print(len(new_nodes), len(assignment), len(self.last_assignment))
-            if backsub_dict_expr is not None:
-                for node in new_nodes:
-                    if node not in backsub_dict_expr:
-                        backsub_dict_expr[node] = self._get_equation(backsub_dict[node])
-            else:
-                backsub_dict_expr = {k: self._get_equation(backsub_dict[k]) for k in new_nodes}
-                self.backsub_cacher.put({k: assignment[k] for k in backsub_dict_expr}, backsub_dict_expr)
-
-            Timers.toc('Get Linear Equation')
-
-
-            # add constraints
-            Timers.tic('Add constraints')
-            if len(new_nodes):
-                for node in new_nodes:
-                    status = assignment.get(node, None)
-                    assert status is not None
-                    if status:
-                        ci = self.model.addLConstr(backsub_dict_expr[node] >= DNNTheoremProver.epsilon, name=f'cstr[{node}]')
-                    else:
-                        ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
-            Timers.toc('Add constraints')
-
-        else:
-
-            Timers.tic('Add constraints')
-            if len(remove_nodes) == 0 and len(new_nodes) <= 2:
-                # print(len(new_nodes), len(assignment), len(backsub_dict))
-                # exit()
-                for node in new_nodes:
-                    status = assignment.get(node, None)
-                    assert status is not None
-                    eqx = self._get_equation(backsub_dict[node])
-                    if status:
-                        self.model.addLConstr(eqx >= DNNTheoremProver.epsilon)
-                    else:
-                        self.model.addLConstr(eqx <= 0)
-
-            elif len(assignment) > 0:
-                lhs = np.zeros([len(backsub_dict), len(self.gurobi_vars)])
-                rhs = np.zeros(len(backsub_dict))
-                # mask = np.zeros(len(mat_dict), dtype=np.int32)
-                for i, node in enumerate(backsub_dict):
-                    status = assignment.get(node, None)
-                    if status is None:
-                        continue
-                    # mask[i] = 1
-                    if status:
-                        lhs[i] = -1 * backsub_dict[node][:-1]
-                        rhs[i] = backsub_dict[node][-1] - 1e-6
-                    else:
-                        lhs[i] = backsub_dict[node][:-1]
-                        rhs[i] = -1 * backsub_dict[node][-1]
-
-                self.model.remove(self.model.getConstrs())
-                self.model.addConstr(lhs @ self.mvars <= rhs) 
-            Timers.toc('Add constraints')
 
 
         # caching assignment
-        self.last_assignment = assignment
+        self.last_assignment = assignment.copy()
 
-        # upper objective
-        self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MAXIMIZE)
+        if len(new_nodes) == 0 and len(remove_nodes) == 0 and len(assignment) > 0:
+            return True, {}, is_full_assignment
+
+        if len(remove_nodes):
+            remove_constraints = []
+            for node in remove_nodes:
+                cr = self.model.getConstrByName(f'cstr[{node}]')
+                if cr is not None:
+                    remove_constraints.append(cr)
+            self.model.remove(remove_constraints)
+
+
+
+        Timers.tic('get cache backsub_dict')
+        backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
+        Timers.toc('get cache backsub_dict')
+
+        Timers.tic('Get Linear Equation')
+        if backsub_dict_expr is not None:
+            backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
+        else:
+            backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
+
+        self.backsub_cacher.put(assignment, backsub_dict_expr)
+        Timers.toc('Get Linear Equation')
+
+
+        # add constraints
+        Timers.tic('Add constraints')
+        if len(new_nodes):
+            for node in new_nodes:
+                status = assignment.get(node, None)
+                # assert status is not None
+                if status:
+                    ci = self.model.addLConstr(backsub_dict_expr[node] >= 1e-6, name=f'cstr[{node}]')
+                else:
+                    ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
+        Timers.toc('Add constraints')
+        self.model.update()
+
+        
+
 
         # check satisfiability
         Timers.tic('Check output property')
@@ -312,6 +183,7 @@ class DNNTheoremProver:
             Timers.toc('Check output property')
             if self.model.status == grb.GRB.INFEASIBLE:
                 # print('call from partial assignment')
+                # self._restore_input_bounds()
                 return False, cc, None
 
             if settings.DEBUG:
@@ -337,165 +209,185 @@ class DNNTheoremProver:
                 self.solution = self.get_solution()
                 return True, {}, is_full_assignment
             # print('call from full assignment')
+            # self._restore_input_bounds()
             return False, cc, None
 
 
-        # compute new input lower/upper bounds
-        Timers.tic('Tighten bounds')
-        # upper
-        should_update_input = False
-        if self.model.status == grb.GRB.OPTIMAL:
-            ubs = [var.X for var in self.gurobi_vars]
-            should_update_input = True
-        else:
-            ubs = self.ubs_init
+        
+        bounds = {}
+        lidx = self.reversed_layers_mapping[list(unassigned_nodes)[0]]
+        layer_nodes = list(self.layers_mapping[lidx])
 
-        # lower
-        self.model.setObjective(grb.quicksum(self.gurobi_vars), grb.GRB.MINIMIZE)
-        self._optimize()
-        if self.model.status == grb.GRB.OPTIMAL:
-            lbs = [var.X for var in self.gurobi_vars]
-            should_update_input = True
-        else:
-            lbs = self.lbs_init
+        # print('run tighten bounds', lidx, len(layer_nodes))
+
+        ########################################################################
+        ########################################################################
+        ########################################################################
+        # Timers.tic('Tighten bounds')
+        # lbs = torch.empty(self.net.n_input, dtype=settings.DTYPE, device=self.net.device)
+        # ubs = torch.empty(self.net.n_input, dtype=settings.DTYPE, device=self.net.device)
+        # for i, v in enumerate(self.gurobi_vars):
+
+        #     # lower bound
+        #     self.model.setObjective(v, grb.GRB.MINIMIZE)
+        #     self.model.optimize()
+        #     lbs[i] = self.model.objval
+        #     # upper bound
+        #     self.model.setObjective(v, grb.GRB.MAXIMIZE)
+        #     self.model.optimize()
+        #     ubs[i] = self.model.objval
+        # Timers.toc('Tighten bounds')
+
+        # print('lbs', lbs)
+        # print('ubs', ubs)
+        # print(torch.allclose(lbs, self.lbs_init), torch.allclose(ubs, self.ubs_init))
+
+        # Timers.tic('Check output reachability')
+        # (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment)
+
+        # stat, _ = self.spec.check_output_reachability(lower, upper)
+        # Timers.toc('Check output reachability')
+
+        # if not stat: # conflict
+        #     return False, cc, None
+
+        # Timers.tic('Implications')
+        # implications = {}
+        # for node in unassigned_nodes:
+        #     obj = backsub_dict_expr[node]
+        #     # lower bound
+        #     self.model.setObjective(obj, grb.GRB.MINIMIZE)
+        #     self.model.optimize()
+        #     lb = self.model.objval
+        #     # upper bound
+        #     self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+        #     self.model.optimize()
+        #     ub = self.model.objval
+        #     bounds[node] = {'lb': lb, 'ub': ub}
+        # Timers.toc('Implications')
+        ########################################################################
+        ########################################################################
+        ########################################################################
+
+        # obj = grb.quicksum([backsub_dict_expr[n] for n in layer_nodes])
+        # self.model.setObjective(obj, grb.GRB.MINIMIZE)
+        # self.model.optimize()
+        # xl = torch.tensor([v.X for v in self.gurobi_vars], dtype=settings.DTYPE)
+        # self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+        # self.model.optimize()
+        # xu = torch.tensor([v.X for v in self.gurobi_vars], dtype=settings.DTYPE)
+        # print(xl)
+        # print(xu)
+
+        # for node in layer_nodes:
+        #     mat = backsub_dict[node]
+        #     nl = mat[:-1] @ xl + mat[-1]
+        #     nu = mat[:-1] @ xu + mat[-1]
+        #     print(nl > nu, node, nl, nu)
+
+        # exit()
+        ########################################################################
+        ########################################################################
+        ########################################################################
+
+        implications = {}
+
+        Timers.tic('Tighten bounds')
+
+        for node in layer_nodes:
+            if node in unassigned_nodes or 1:
+                obj = backsub_dict_expr[node]
+                # lower bound
+                self.model.setObjective(obj, grb.GRB.MINIMIZE)
+                self.model.optimize()
+                lb = self.model.objval
+                # upper bound
+                self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+                self.model.optimize()
+                ub = self.model.objval
+            else:
+                status = assignment[node]
+                # print(node, status)
+                mat = backsub_dict[node]
+                w_pos = torch.clamp(mat[:-1], min=0)
+                w_neg = torch.clamp(mat[:-1], max=0)
+
+                lb = w_pos @ self.lbs_init + w_neg @ self.ubs_init + mat[-1]
+                ub = w_pos @ self.ubs_init + w_neg @ self.lbs_init + mat[-1]
+
+                if status:
+                    lb = max(lb, 0)
+                else:
+                    ub = min(ub, 0)
+
+                # print(lb, ub)
+                # print()
+            bounds[node] = {'lb': lb, 'ub': ub}
 
         Timers.toc('Tighten bounds')
 
-        if should_update_input:
+        Timers.tic('Check output reachability')
+        lbs = torch.tensor([bounds[node]['lb'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
+        ubs = torch.tensor([bounds[node]['ub'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
+        (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
 
-            lbs = torch.tensor(lbs, dtype=settings.DTYPE, device=self.net.device)
-            ubs = torch.tensor(ubs, dtype=settings.DTYPE, device=self.net.device)
-
-            Timers.tic('Update bounds')
-            stat = self._update_input_bounds(lbs, ubs)
-            Timers.toc('Update bounds')
-                
-            if not stat: # conflict
-                # print('call from update bounds')
-                return False, cc, None
+        stat, _ = self.spec.check_output_reachability(lower, upper)
+        Timers.toc('Check output reachability')
 
 
-            # Timers.tic('Cache abstraction')
-            # score = self.abstraction_cacher.get_score((lbs, ubs))
-            # Timers.toc('Cache abstraction')
+        if not stat: # conflict
+            return False, cc, None
 
-            # should_run_abstraction = True
-            # print('should_run_abstraction:', should_run_abstraction)
+        # print(len(hidden_bounds), lidx)
 
-            # if should_run_abstraction:
-            # reachable heuristic:
-            Timers.tic('Compute output abstraction')
-            (lower, upper), hidden_bounds = self._compute_output_abstraction(lbs, ubs, assignment)
-            Timers.toc('Compute output abstraction')
+        # bounds_mapping = {}
+        # for idx, (lb, ub) in enumerate(hidden_bounds):
+        #     b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
+        #     assert len(b) == len(self.layers_mapping[idx+lidx])
+        #     bounds_mapping.update(dict(zip(self.layers_mapping[idx+lidx], b)))
+        #     # print(idx+lidx)
+
+        # for node in bounds_mapping:
+        #     l, u = bounds_mapping[node]
+
+        #     new_status = None
+        #     if l > 0:
+        #         new_status = True
+        #     elif u <= 0:
+        #         new_status = False
+
+        #     if new_status is not None:
+        #         if node in assignment:
+        #             if assignment[node] != new_status:
+        #                 print(assignment[node], new_status, node, l, u)
+        #                 raise
+        #         else:
+        #             implications[node] = {'pos': new_status, 'neg': not new_status}
 
 
-            Timers.tic('Heuristic Decision Update')
-            if self.decider is not None and settings.DECISION != 'RANDOM':
-                self.decider.update(output_bounds=(lower, upper), hidden_bounds=hidden_bounds)
-            Timers.toc('Heuristic Decision Update')
-
-
-
-            Timers.tic('Check output reachability')
-            stat, should_run_again = self.spec.check_output_reachability(lower, upper)
-            Timers.toc('Check output reachability')
-
-            # self.abstraction_cacher.put((lbs, ubs), stat)
-            # print(stat, score)
-
-            if not stat: # conflict
-                
-                # Timers.tic('_single_range_check')
-                # self._single_range_check(lbs, ubs, assignment)
-                # Timers.toc('_single_range_check')
-
-                # print('call from reachability heuristic')
-                return False, cc, None
-
-            if settings.HEURISTIC_DEEPPOLY and should_run_again and self.flag_use_backsub:
-                Timers.tic('Deeppoly optimization reachability')
-                Ml, Mu, bl, bu  = self.deeppoly.get_params()
-                Timers.tic('Gen constraints')
-                lbs_expr = [grb.LinExpr(wl, self.gurobi_vars) + cl for (wl, cl) in zip(Ml.detach().cpu().numpy(), bl.detach().cpu().numpy())]
-                ubs_expr = [grb.LinExpr(wu, self.gurobi_vars) + cu for (wu, cu) in zip(Mu.detach().cpu().numpy(), bu.detach().cpu().numpy())]
-                Timers.toc('Gen constraints')
-
-                Timers.tic('Get output constraints')
-                dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
-                Timers.toc('Get output constraints')
-
-                flag_sat = False
-                for cnf, adv_obj in dnf_contrs:
-                    Timers.tic('Add constraints + Solve')
-                    ci = [self.model.addLConstr(_) for _ in cnf]
-                    self.model.setObjective(adv_obj, grb.GRB.MINIMIZE)
-                    self._optimize()
-                    self.model.remove(ci)
-                    Timers.toc('Add constraints + Solve')
-                    if self.model.status == grb.GRB.OPTIMAL:
-                        tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
-                        if self.check_solution(tmp_input):
-                            self.solution = tmp_input
-                            Timers.toc('Deeppoly optimization reachability')
-                            # print('ngon')
-                            return True, {}, None
-                        self.concrete = self.net.get_concrete(tmp_input)
-
-                        flag_sat = True
-                        break
-
-                if not flag_sat:
-                    # print('call from optimized reachability heuristic')
-                    Timers.toc('Deeppoly optimization reachability')
-                    return False, cc, None
-                Timers.toc('Deeppoly optimization reachability')
-
-            if not self.flag_use_backsub:
-                tmp_input = torch.tensor(
-                    [random.uniform(lbs[i], ubs[i]) for i in range(self.net.n_input)], 
-                    dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
-
-                if self.check_solution(tmp_input):
-                    self.solution = tmp_input
-                    return True, {}, None
-                self.concrete = self.net.get_concrete(tmp_input)
-
+        Timers.tic('Heuristic Decision Update')
+        if self.decider is not None and settings.DECISION != 'RANDOM':
+            self.decider.update(layer_bounds=bounds, hidden_bounds=hidden_bounds)
+        Timers.toc('Heuristic Decision Update')
 
         Timers.tic('Implications')
-        implications = {}
+        for node in unassigned_nodes:
+            if node in implications:
+                continue
 
-        if settings.HEURISTIC_GUROBI_IMPLICATION and self.count % self.implication_interval == 0:
-            if flag_parallel_implication:
-                for w in self.workers:
-                    w.join(timeout=0.01)
+            new_status = None
+            if bounds[node]['lb'] > -1e-6:
+                implications[node] = {'pos': True, 'neg': False}
+                new_status = True
+            elif bounds[node]['ub'] <= 1e-6:
+                implications[node] = {'pos': False, 'neg': True}
+                new_status = False
+            
+            # if node in assignment and new_status is not None:
+            #     if assignment[node] != new_status:
+            #         raise
 
-                for w in self.workers:
-                    res = Q.get()
-                    implications.update(res)
-
-            else:
-                self._restore_input_bounds()
-                for node in unassigned_nodes:
-                    implications[node] = {'pos': False, 'neg': False}
-                    # neg
-                    if not self.flag_use_mvar:
-                        eqx = backsub_dict_expr[node]
-                    else:
-                        eqx = self._get_equation(backsub_dict[node])
-                    if self.concrete[node] <= 0:
-                        ci = self.model.addLConstr(eqx >= DNNTheoremProver.epsilon)
-                        self._optimize()
-                        if self.model.status == grb.GRB.INFEASIBLE:
-                            implications[node]['neg'] = True
-                    else:
-                    # pos
-                        ci = self.model.addLConstr(eqx <= 0)
-                        self._optimize()
-                        if self.model.status == grb.GRB.INFEASIBLE:
-                            implications[node]['pos'] = True
-                    
-                    self.model.remove(ci)
-
+        # print('implications   :', list(implications.keys()))
         Timers.toc('Implications')
 
         return True, implications, is_full_assignment
@@ -542,10 +434,10 @@ class DNNTheoremProver:
         return cc
 
     def get_cache_assignment(self, assignment):
-        cache_nodes = []
         if len(self.last_assignment) == 0 or len(assignment) == 0:
-            return cache_nodes
+            return []
 
+        cache_nodes = []
         for idx, variables in self.layers_mapping.items():
             a1 = {n: self.last_assignment.get(n, None) for n in variables}
             a2 = {n: assignment.get(n, None) for n in variables}
