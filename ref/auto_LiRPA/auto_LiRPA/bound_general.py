@@ -46,6 +46,7 @@ class BoundedModule(nn.Module):
                  verbose=False, custom_ops={}):
         super(BoundedModule, self).__init__()
         if isinstance(model, BoundedModule):
+            raise
             for key in model.__dict__.keys():
                 setattr(self, key, getattr(model, key))
             return
@@ -78,6 +79,7 @@ class BoundedModule(nn.Module):
         self.final_shape = model(*unpack_inputs(global_input, device=self.device)).shape
         self.bound_opts.update({'final_shape': self.final_shape})
         self._convert(model, global_input)
+        exit()
         self._mark_perturbed_nodes()
 
         # set the default values here
@@ -138,6 +140,7 @@ class BoundedModule(nn.Module):
             kwargs.pop("method_opt")
         else:
             opt = "forward"
+        print(opt)
         for kwarg in [
             'disable_multi_gpu', 'no_replicas', 'get_property',
             'node_class', 'att_name']:
@@ -345,6 +348,7 @@ class BoundedModule(nn.Module):
             else:
                 for attr in ['lower', 'upper', 'interval', 'forward_value', 'd', 'lA', 'lower_d']:
                     if hasattr(l, attr):
+                        print(attr)
                         delattr(l, attr)
 
             for attr in ['zero_backward_coeffs_l', 'zero_backward_coeffs_u', 'zero_lA_mtx', 'zero_uA_mtx']:
@@ -441,6 +445,7 @@ class BoundedModule(nn.Module):
         for n in range(len(nodesOP)):
             attr = nodesOP[n].attr
             inputs, ori_names = self._get_node_input(nodesOP, nodesIn, nodesOP[n])
+            print(nodesOP[n].op, ori_names)
 
             try:
                 if nodesOP[n].op in self.custom_ops:
@@ -457,6 +462,8 @@ class BoundedModule(nn.Module):
                 unsupported_ops.append(nodesOP[n])
                 logger.error('The node has an unsupported operation: {}'.format(nodesOP[n]))
                 continue
+
+            print(op)
 
             if nodesOP[n].op == 'onnx::BatchNormalization':
                 # BatchNormalization node needs model.training flag to set running mean and vars
@@ -513,6 +520,7 @@ class BoundedModule(nn.Module):
                     # order matters in the current implementation because 
                     # `root[0]` is used in some places.
                     self.root_name.append(l.name)
+
 
     def _split_complex(self, nodesOP, nodesIn):
         finished = True
@@ -596,6 +604,7 @@ class BoundedModule(nn.Module):
 
         while True:
             self._build_graph(nodesOP, nodesIn, nodesOut, template)
+            print(self.root_name)
             self.forward(*global_input)  # running means/vars changed
             nodesOP, nodesIn, finished = self._split_complex(nodesOP, nodesIn)
             if finished:

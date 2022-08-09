@@ -4,6 +4,7 @@ A simple example for bounding neural network outputs under input perturbations.
 This example serves as a skeleton for robustness verification of neural networks.
 """
 import os
+import time
 import torch
 import torch.nn as nn
 import torchvision
@@ -22,7 +23,7 @@ def mnist_model():
         nn.ReLU(),
         nn.Conv2d(16, 32, 4, stride=2, padding=1),
         nn.ReLU(),
-        Flatten(),
+        nn.Flatten(),
         nn.Linear(32*7*7,100),
         nn.ReLU(),
         nn.Linear(100, 10)
@@ -31,8 +32,8 @@ def mnist_model():
 
 model = mnist_model()
 # Optionally, load the pretrained weights.
-checkpoint = torch.load(os.path.join(os.path.dirname(__file__),"pretrain/mnist_a_adv.pth"), map_location=torch.device('cpu'))
-model.load_state_dict(checkpoint)
+# checkpoint = torch.load(os.path.join(os.path.dirname(__file__),"pretrain/mnist_a_adv.pth"), map_location=torch.device('cpu'))
+# model.load_state_dict(checkpoint)
 
 ## Step 2: Prepare dataset as usual
 test_data = torchvision.datasets.MNIST("./data", train=False, download=True, transform=torchvision.transforms.ToTensor())
@@ -51,6 +52,7 @@ if torch.cuda.is_available():
 # The second parameter is for constructing the trace of the computational graph, and its content is not important.
 lirpa_model = BoundedModule(model, torch.empty_like(image), device=image.device)
 print('Running on', image.device)
+# exit()
 
 ## Step 4: Compute bounds using LiRPA given a perturbation
 eps = 0.3
@@ -60,11 +62,13 @@ image = BoundedTensor(image, ptb)
 # Get model prediction as usual
 pred = lirpa_model(image)
 label = torch.argmax(pred, dim=1).cpu().detach().numpy()
+exit()
 
 ## Step 5: Compute bounds for final output
-for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', 'CROWN-Optimized (alpha-CROWN)']:
-# for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', ]:
+# for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', 'CROWN-Optimized (alpha-CROWN)']:
+for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', ]:
     print("Bounding method:", method)
+    tic = time.time()
     if 'Optimized' in method:
         # For optimized bound, you can change the number of iterations, learning rate, etc here. Also you can increase verbosity to see per-iteration loss values.
         lirpa_model.set_bound_opts({'optimize_bound_args': {'ob_iteration': 20, 'ob_lr': 0.1, 'ob_verbose': 0}})
@@ -75,7 +79,9 @@ for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', 'CROWN-Opt
             indicator = '(ground-truth)' if j == true_label[i] else ''
             print("f_{j}(x_0): {l:8.3f} <= f_{j}(x_0+delta) <= {u:8.3f} {ind}".format(
                 j=j, l=lb[i][j].item(), u=ub[i][j].item(), ind=indicator))
+    print('Done:', time.time() - tic)
     print()
+exit()
 
 ## An example for computing margin bounds.
 # In compute_bounds() function you can pass in a specification matrix C, which is a final linear matrix applied to the last layer NN output.
@@ -91,7 +97,7 @@ C.scatter_(dim=2, index=groundtruth, value=1.0)
 C.scatter_(dim=2, index=target_label, value=-1.0)
 print('Computing bounds with a specification matrix:\n', C)
 
-for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', 'CROWN-Optimized (alpha-CROWN)']:
+for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)']:#, 'CROWN-Optimized (alpha-CROWN)']:
     print("Bounding method:", method)
     if 'Optimized' in method:
         # For optimized bound, you can change the number of iterations, learning rate, etc here. Also you can increase verbosity to see per-iteration loss values.
