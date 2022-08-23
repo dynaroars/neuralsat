@@ -9,7 +9,29 @@ class BoundedInput(Bound):
         self.from_input = True
 
 
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        print('set', key, value)
+        # Update perturbed property based on the perturbation set.
+        if key == "perturbation":
+            if self.perturbation is not None:
+                self.perturbed = True
+            else:
+                self.perturbed = False
 
+    @Bound.save_io_shape
+    def forward(self):
+        return self.value
+
+
+    def infer_batch_dim(self, batch_size, *x):
+        shape = self.forward_value.shape
+        for i in range(len(shape)):
+            if shape[i] == batch_size:
+                return i
+        return -1
+
+        
 class BoundedBuffers(BoundedInput):
     
     def __init__(self, input_name, name, ori_name, value, perturbation=None):

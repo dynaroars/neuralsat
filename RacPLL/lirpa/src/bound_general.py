@@ -1,3 +1,4 @@
+from collections import OrderedDict, deque, defaultdict
 import torch.nn as nn
 import torch
 import time
@@ -5,6 +6,7 @@ import os
 
 from .parse_graph import parse_module
 from .misc import bound_op_map
+from .bound_tensor import *
 from .operators import *
 from .utils import *
 
@@ -35,7 +37,9 @@ class BoundedModule(nn.Module):
         self.bound_opts = default_bound_opts
         # self.verbose = verbose
         self.custom_ops = custom_ops
-        # self.auto_batch_dim = auto_batch_dim
+
+        if auto_batch_dim:
+            self.init_batch_size = -1
 
         if device == 'auto':
             try:
@@ -90,10 +94,135 @@ class BoundedModule(nn.Module):
             value on the corresponding node instead.
         """
         self._set_input(*x, clear_forward_only=clear_forward_only)
+        degree_in = {}
+        queue = deque()
+        for key in self._modules.keys():
+            l = self._modules[key]
+            degree_in[l.name] = len(l.input_name)
+            if degree_in[l.name] == 0:
+                queue.append(l)
+
+        print(queue)
+
+        forward_values = {}
+        final_output = None
+        while len(queue) > 0:
+            l = queue.popleft()
+            print(l)
+            inp = [forward_values[l_pre] for l_pre in l.input_name]
+            for l_pre in l.inputs:
+                # print('l_pre', l_pre, l_pre.from_input)
+                l.from_input = l.from_input or l_pre.from_input
+
+            fv = l.forward(*inp)
+
+            if isinstance(fv, torch.Size) or isinstance(fv, tuple):
+                fv = torch.tensor(fv, device=self.device)
+
+            # print(l.forward_value)
+            object.__setattr__(l, 'forward_value', fv)
+
+            if not hasattr(l, 'batch_dim'):
+                inp_batch_dim = [l_pre.batch_dim for l_pre in l.inputs]
+                try:
+                    l.batch_dim = l.infer_batch_dim(self.init_batch_size, *inp_batch_dim)
+                except:
+                    raise Exception(
+                        'Fail to infer the batch dimension of ({})[{}]: forward_value shape {}, input batch dimensions {}'.format(
+                            l, l.name, l.forward_value.shape, inp_batch_dim))
+            
+            forward_values[l.name] = l.forward_value
+
+            # Unperturbed node but it is not a root node. Save forward_value to value.
+            # (Can be used in forward bounds.)
+            if not l.from_input and len(l.inputs) > 0:
+                print('lllll', l)
+                l.value = l.forward_value
+
+            for l_next in l.output_name:
+                degree_in[l_next] -= 1
+                if degree_in[l_next] == 0:  # all inputs of this node have already set
+                    queue.append(self._modules[l_next])
+
+
+
+        if final_node_name:
+            return forward_values[final_node_name]
+        else:
+            out = deque([forward_values[n] for n in self.output_name])
+
+            def _fill_template(template):
+                if template is None:
+                    return out.popleft()
+                elif isinstance(template, list) or isinstance(template, tuple):
+                    res = []
+                    for t in template:
+                        res.append(_fill_template(t))
+                    return tuple(res) if isinstance(template, tuple) else res
+                elif isinstance(template, dict):
+                    res = {}
+                    for key in template:
+                        res[key] = _fill_template(template[key])
+                    return res
+                else:
+                    raise NotImplementedError
+
+            return _fill_template(self.output_template)
+
+
+
+
+
+
+
+            # exit()
+
+
+
+
+
+
 
 
     def _set_input(self, *x, new_interval=None, clear_forward_only=False):
         self._clear_and_set_new(new_interval=new_interval, clear_forward_only=clear_forward_only)
+        inputs_unpacked = unpack_inputs(x)
+        for name, index in zip(self.input_name, self.input_index):
+            node = self._modules[name]
+            node.value = inputs_unpacked[index]
+            if isinstance(node.value, (BoundedTensor, BoundedParameter)):
+                node.perturbation = node.value.ptb
+            else:
+                node.perturbation = None
+
+        self._mark_perturbed_nodes()
+        if self.init_batch_size == -1:
+            self.init_batch_size = inputs_unpacked[0].shape[0]
+
+
+    """Mark the graph nodes and determine which nodes need perturbation."""
+    def _mark_perturbed_nodes(self):
+        degree_in = {}
+        queue = deque()
+        for key in self._modules.keys():
+            l = self._modules[key]
+            degree_in[l.name] = len(l.input_name)
+            if degree_in[l.name] == 0:
+                queue.append(l)  # in_degree ==0 -> root node
+            print(key, l, l.input_name, l.output_name)
+
+        while len(queue) > 0:
+            l = queue.popleft()
+            for name_next in l.output_name:
+                node_next = self._modules[name_next]
+                if isinstance(l, BoundedShape):
+                    pass
+                else:
+                    node_next.perturbed = node_next.perturbed or l.perturbed
+                degree_in[name_next] -= 1
+                if degree_in[name_next] == 0:  # all inputs of this node have been visited, now put it in queue.
+                    queue.append(node_next)
+
 
 
     def _clear_and_set_new(self, new_interval, clear_forward_only=False):
@@ -104,7 +233,7 @@ class BoundedModule(nn.Module):
             else:
                 for attr in ['lower', 'upper', 'interval', 'forward_value', 'd', 'lA', 'lower_d']:
                     if hasattr(l, attr):
-                        print(attr)
+                        # print(attr)
                         delattr(l, attr)
 
             for attr in ['zero_backward_coeffs_l', 'zero_backward_coeffs_u', 'zero_lA_mtx', 'zero_uA_mtx']:
@@ -219,8 +348,10 @@ class BoundedModule(nn.Module):
 
         while True:
             self._build_graph(nodesOP, nodesIn, nodesOut, template)
-            print(self.root_name)
             self.forward(*global_input)  # running means/vars changed
+            nodesOP, nodesIn, finished = self._split_complex(nodesOP, nodesIn)
+            if finished:
+                break
 
             exit()
 
@@ -258,6 +389,59 @@ class BoundedModule(nn.Module):
                     self.root_name.append(l.name)
 
 
+    def _split_complex(self, nodesOP, nodesIn):
+        finished = True
+        for n in range(len(nodesOP)):
+            if hasattr(nodesOP[n].bound_node, 'complex') and \
+                    nodesOP[n].bound_node.complex:
+                finished = False
+                _nodesOP, _nodesIn, _nodesOut, _template = self._convert_nodes(
+                    nodesOP[n].bound_node.model, nodesOP[n].bound_node.input)
+                # assuming each supported complex operation only has one output
+                assert len(_nodesOut) == 1
+
+                name_base = nodesOP[n].name + '/split'
+                rename_dict = {}
+                for node in _nodesOP + _nodesIn:
+                    rename_dict[node.name] = name_base + node.name
+                num_inputs = len(nodesOP[n].bound_node.input)
+                for i in range(num_inputs):
+                    rename_dict[_nodesIn[i].name] = nodesOP[n].inputs[i]
+                rename_dict[_nodesOP[-1].name] = nodesOP[n].name
+
+                def rename(node):
+                    node.bound_node.name = rename_dict[node.bound_node.name]
+                    node.bound_node.input_name = [
+                        rename_dict[name] for name in node.bound_node.input_name]
+                    node = node._replace(
+                        name=rename_dict[node.name],
+                        inputs=node.bound_node.input_name)                        
+                    return node
+
+                for i in range(len(_nodesOP)):
+                    _nodesOP[i] = rename(_nodesOP[i])
+                for i in range(len(_nodesIn)):
+                    _nodesIn[i] = rename(_nodesIn[i])
+                output_name = _nodesOP[-1].name
+                # Any input node of some node within the complex node should be 
+                # replaced with the corresponding input node of the complex node.
+                for node in _nodesOP:
+                    for i in range(len(node.bound_node.inputs)):
+                        if node.bound_node.input_name[i] in nodesOP[n].inputs:
+                            index = nodesOP[n].inputs.index(node.bound_node.input_name[i])
+                            node.bound_node.inputs[i] = nodesOP[n].bound_node.inputs[index]
+                # For any output node of this complex node, modify its input node
+                for node in nodesOP:
+                    if output_name in node.bound_node.input_name:
+                        index = node.bound_node.input_name.index(output_name)
+                        node.bound_node.inputs[index] = _nodesOP[-1].bound_node
+
+                nodesOP = nodesOP[:n] + _nodesOP + nodesOP[(n + 1):]
+                nodesIn = nodesIn + _nodesIn[num_inputs:]
+
+                break
+
+        return nodesOP, nodesIn, finished
 
 
 

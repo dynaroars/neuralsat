@@ -25,6 +25,8 @@ class Bound(nn.Module):
         self.input_name, self.name, self.ori_name, self.attr, self.inputs, self.output_index, self.options, self.device = \
             input_name, name, ori_name, attr, inputs, output_index, options, device
 
+        self.from_input = False
+
         self.perturbed = False
         self.forward_value = None
         # If set to true, the backward bound output of this node is 0.
@@ -49,3 +51,9 @@ class Bound(nn.Module):
             return output
 
         return wrapper
+
+    def infer_batch_dim(self, batch_size, *x):
+        # Default implementation assuming the batch dimension is always at 0.
+        # Do not use it if the operator can alter the shape
+        assert x[0] in [0, -1]
+        return x[0]

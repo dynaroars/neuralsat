@@ -4,9 +4,7 @@ import torch
 import time
 import os
 
-from src.bound_general import BoundedModule
-from src.bound_tensor import BoundedTensor
-from src.perturbations import PerturbationLpNorm
+from auto_LiRPA.bound_general import *
 
 ## Step 1: Define computational graph by implementing forward()
 def mnist_model():
@@ -46,4 +44,3 @@ ptb = PerturbationLpNorm(norm=norm, eps=eps)
 image = BoundedTensor(image, ptb)
 
 pred = lirpa_model(image)
-print(pred)

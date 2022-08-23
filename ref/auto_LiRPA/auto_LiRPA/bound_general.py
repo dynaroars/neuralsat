@@ -255,7 +255,10 @@ class BoundedModule(nn.Module):
         while len(queue) > 0:
             l = queue.popleft()
             inp = [forward_values[l_pre] for l_pre in l.input_name]
+            print(l)
+            print()
             for l_pre in l.inputs:
+                print('l_pre', l_pre, l_pre.from_input)
                 l.from_input = l.from_input or l_pre.from_input
             fv = l.forward(*inp)
             if isinstance(fv, torch.Size) or isinstance(fv, tuple):
@@ -276,6 +279,7 @@ class BoundedModule(nn.Module):
             # (Can be used in forward bounds.)
             if not l.from_input and len(l.inputs) > 0:
                 l.value = l.forward_value
+                print('lllll', l)
 
             for l_next in l.output_name:
                 degree_in[l_next] -= 1
