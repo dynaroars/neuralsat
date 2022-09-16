@@ -313,6 +313,7 @@ class BoundRelu(BoundOptimizableActivation):
         # print('unstable neurons:', self.I.sum())
 
         if hasattr(x, 'interval') and Interval.use_relative_bounds(x.interval):
+            raise
             diff_x = x.interval.upper_offset - x.interval.lower_offset
             upper_d = (self.interval.upper_offset - self.interval.lower_offset) / diff_x.clamp(min=epsilon)
             mask_tiny_diff = (diff_x <= epsilon).float()
@@ -324,6 +325,8 @@ class BoundRelu(BoundOptimizableActivation):
 
         flag_expand = False
         ub_lower_d = lb_lower_d = None
+        print('\t- opt_stage:', self.opt_stage)
+        print('\t- relu_options:', self.relu_options)
         if self.relu_options == "same-slope":
             # the same slope for upper and lower
             lower_d = upper_d
@@ -492,6 +495,7 @@ class BoundRelu(BoundOptimizableActivation):
 
         self.masked_beta_lower = self.masked_beta_upper = None
         if self.options.get('optimize_bound_args', {}).get('ob_beta', False):
+            # raise
             if self.options.get('optimize_bound_args', {}).get('ob_single_node_split', False):
                 # Beta-CROWN.
                 A = last_uA if last_uA is not None else last_lA

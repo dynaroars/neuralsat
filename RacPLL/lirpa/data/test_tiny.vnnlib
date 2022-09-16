@@ -1,0 +1,4 @@
+(assert (<= X_0 2))
+(assert (>= X_0 -2))
+
+(assert (>= Y_0 0))

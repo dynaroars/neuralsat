@@ -137,6 +137,7 @@ class BoundLinear(Bound):
 
         # Case #2: weight is perturbed. bias may or may not be perturbed.
         elif self.is_input_perturbed(1):
+            raise
             # Obtain relaxations for matrix multiplication.
             [(lA_x, uA_x), (lA_y, uA_y)], lbias, ubias = self.bound_backward_with_weight(last_lA, last_uA, input_lb, input_ub, x[0], x[1])
             if has_bias:
@@ -161,6 +162,7 @@ class BoundLinear(Bound):
 
         # Case 3: Only bias is perturbed, weight is not perturbed.
         elif not self.is_input_perturbed(1) and has_bias and self.is_input_perturbed(2):
+            raise
             if isinstance(last_lA, eyeC) and isinstance(last_uA, eyeC):
                 # Use this layer's W as the next bound matrices. Duplicate the batch dimension. Other dimensions are kept 1.
                 lA_x = uA_x = input_lb[1].unsqueeze(1).repeat([1, batch_size] + [1] * (input_lb[1].ndim - 1))

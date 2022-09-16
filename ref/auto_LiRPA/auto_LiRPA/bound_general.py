@@ -79,11 +79,10 @@ class BoundedModule(nn.Module):
         self.final_shape = model(*unpack_inputs(global_input, device=self.device)).shape
         self.bound_opts.update({'final_shape': self.final_shape})
         self._convert(model, global_input)
-        exit()
         self._mark_perturbed_nodes()
 
         # set the default values here
-        optimize_bound_args = {'ob_iteration': 20, 'ob_beta': False, 'ob_alpha': True, 'ob_alpha_share_slopes': False,
+        optimize_bound_args = {'ob_iteration': 5, 'ob_beta': False, 'ob_alpha': True, 'ob_alpha_share_slopes': False,
                                'ob_opt_coeffs': False, 'ob_opt_bias': False,
                                'ob_optimizer': 'adam', 'ob_verbose': 0,
                                'ob_keep_best': True, 'ob_update_by_layer': True, 'ob_lr': 0.5,
@@ -140,7 +139,7 @@ class BoundedModule(nn.Module):
             kwargs.pop("method_opt")
         else:
             opt = "forward"
-        print(opt)
+        # print(opt)
         for kwarg in [
             'disable_multi_gpu', 'no_replicas', 'get_property',
             'node_class', 'att_name']:
@@ -255,10 +254,10 @@ class BoundedModule(nn.Module):
         while len(queue) > 0:
             l = queue.popleft()
             inp = [forward_values[l_pre] for l_pre in l.input_name]
-            print(l)
-            print()
+            # print(l)
+            # print()
             for l_pre in l.inputs:
-                print('l_pre', l_pre, l_pre.from_input)
+                # print('l_pre', l_pre, l_pre.from_input)
                 l.from_input = l.from_input or l_pre.from_input
             fv = l.forward(*inp)
             if isinstance(fv, torch.Size) or isinstance(fv, tuple):
@@ -352,7 +351,7 @@ class BoundedModule(nn.Module):
             else:
                 for attr in ['lower', 'upper', 'interval', 'forward_value', 'd', 'lA', 'lower_d']:
                     if hasattr(l, attr):
-                        print(attr)
+                        # print(attr)
                         delattr(l, attr)
 
             for attr in ['zero_backward_coeffs_l', 'zero_backward_coeffs_u', 'zero_lA_mtx', 'zero_uA_mtx']:
@@ -449,7 +448,7 @@ class BoundedModule(nn.Module):
         for n in range(len(nodesOP)):
             attr = nodesOP[n].attr
             inputs, ori_names = self._get_node_input(nodesOP, nodesIn, nodesOP[n])
-            print(nodesOP[n].op, ori_names)
+            # print(nodesOP[n].op, ori_names)
 
             try:
                 if nodesOP[n].op in self.custom_ops:
@@ -467,7 +466,7 @@ class BoundedModule(nn.Module):
                 logger.error('The node has an unsupported operation: {}'.format(nodesOP[n]))
                 continue
 
-            print(op)
+            # print(op)
 
             if nodesOP[n].op == 'onnx::BatchNormalization':
                 # BatchNormalization node needs model.training flag to set running mean and vars
@@ -608,7 +607,7 @@ class BoundedModule(nn.Module):
 
         while True:
             self._build_graph(nodesOP, nodesIn, nodesOut, template)
-            print(self.root_name)
+            # print(self.root_name)
             self.forward(*global_input)  # running means/vars changed
             nodesOP, nodesIn, finished = self._split_complex(nodesOP, nodesIn)
             if finished:
@@ -679,7 +678,7 @@ class BoundedModule(nn.Module):
             node.init_opt_parameters(start_nodes)
             node.opt_start()
             init_intermediate_bounds[node.inputs[0].name] = ([node.inputs[0].lower.detach(), node.inputs[0].upper.detach()])
-
+            print(init_intermediate_bounds)
         print("alpha-CROWN optimizable variables initialized.")
         return l, u, init_intermediate_bounds
 
@@ -702,6 +701,8 @@ class BoundedModule(nn.Module):
                              average_A=False, new_interval=None, reference_bounds=None, aux_reference_bounds=None, needed_A_dict=None):
         # optimize CROWN lower bound by alpha and beta
         opts = self.bound_opts['optimize_bound_args']
+        # print(opts)
+        # exit()
         iteration = opts['ob_iteration']; beta = opts['ob_beta']; alpha = opts['ob_alpha']
         opt_coeffs = opts['ob_opt_coeffs']; opt_bias = opts['ob_opt_bias']
         verbose = opts['ob_verbose']; opt_choice = opts['ob_optimizer']
@@ -721,6 +722,7 @@ class BoundedModule(nn.Module):
         assert alpha or beta, "nothing to optimize, use compute bound instead!"
 
         if C is not None:
+            raise
             self.final_shape = C.size()[:2]
             self.bound_opts.update({'final_shape': self.final_shape})
         if init:
@@ -748,6 +750,7 @@ class BoundedModule(nn.Module):
                     m.alpha[alpha_m].requires_grad_()
 
         if beta:
+            raise
             if len(self.relus) != len(self.optimizable_activations):
                 raise NotImplementedError("Beta-CROWN for tanh models is not supported yet")
 
@@ -795,6 +798,7 @@ class BoundedModule(nn.Module):
         best_intermediate_bounds = []  # TODO: this should be a dictionary to handle more general architectures.
 
         if sparse_intermediate_bounds and aux_reference_bounds is None and reference_bounds is not None:
+            raise
             aux_reference_bounds = {}
             for name, (lb, ub) in reference_bounds.items():
                 aux_reference_bounds[name] = (lb.detach().clone(), ub.detach().clone())
@@ -830,6 +834,7 @@ class BoundedModule(nn.Module):
             ret_l, ret_u = ret[0], ret[1]
 
             if beta and opt_bias and not single_node_split:
+                raise
                 ret_l = ret_l + self.beta_bias()
                 ret = (ret_l, ret_u)  # where is A matrix?
 
@@ -875,6 +880,7 @@ class BoundedModule(nn.Module):
                             best_betas[ii][idx] = betas[ii][idx].clone().detach()
 
                     if not single_node_split and beta:
+                        raise
                         for ii, b in enumerate(betas):
                             best_betas[ii][idx] = b[idx].clone().detach()
 
@@ -945,6 +951,7 @@ class BoundedModule(nn.Module):
             # If loss has become worse for some element, reset those to current best.
             with torch.no_grad():
                 if beta and opt_choice == "adam-autolr" and i > iteration * 0.2:
+                    raise
                     for ii, model in enumerate(self.relus):
                         if alpha:
                             # each alpha has shape (2, output_shape, batch, *shape)
@@ -1075,7 +1082,7 @@ class BoundedModule(nn.Module):
         Returns:
             bound (tuple): a tuple of computed lower bound and upper bound respectively.
         """
-
+        print('con cac nhe bounds')
         if not bound_lower and not bound_upper:
             raise ValueError('At least one of bound_lower and bound_upper must be True')
 
@@ -1172,6 +1179,7 @@ class BoundedModule(nn.Module):
         final = self._modules[self.final_name] if final_node_name is None else self._modules[final_node_name]
         logger.debug('Final node {}[{}]'.format(final, final.name))
 
+        print('C', C, self.ibp_relative)
         if IBP:
             res = self._IBP_general(node=final, C=C)
             if self.ibp_relative:
@@ -1226,9 +1234,12 @@ class BoundedModule(nn.Module):
             if not i.used:
                 continue
             if hasattr(i, 'nonlinear') and i.nonlinear:
+                print('[+] nonlinear', i)
                 for l_name in i.input_name:
                     node = self._modules[l_name]
+                    print('\t- ', node, node.perturbed, node.from_input)
                     if not hasattr(node, 'lower'):
+
                         assert not IBP, 'There should be no missing intermediate bounds when IBP is enabled'
                         if not node.perturbed and hasattr(node, 'forward_value'):
                             node.interval = node.lower, node.upper = \
@@ -1240,6 +1251,7 @@ class BoundedModule(nn.Module):
                             node.lower = node.upper = node.forward_value
                             continue
                         if forward:
+                            raise
                             l, u = self._forward_general(
                                 node=node, root=root, dim_in=dim_in, concretize=True)
                         else:
@@ -1261,6 +1273,7 @@ class BoundedModule(nn.Module):
                             else:
                                 first_layer_flag = False
                                 # This is the list of all intermediate layers where we need to refine.
+                                print('\t- ', intermediate_constr)
                                 if intermediate_constr is not None:
                                     intermediate_beta_enabled_layers = [k for v in intermediate_constr.values() for k in v]
                                 else:
@@ -1271,13 +1284,22 @@ class BoundedModule(nn.Module):
                                     for l_pre in node.input_name:
                                         if type(self._modules[l_pre]) == BoundInput:
                                             node.lower, node.upper = self._IBP_general(node)
+                                            print(node.lower.sum())
+                                            print(node.upper.sum())
                                             first_layer_flag = True
                                             break
+                                print('\t-  first_layer_flag', first_layer_flag)
                                 if not first_layer_flag:
                                     reduced_dim = False  # Only partial neurons (unstable neurons) are bounded.
                                     unstable_idx = None
                                     unstable_size = 99999
                                     dim = int(prod(node.output_shape[1:]))
+                                    print('\t- ', node, dim)
+                                    print('\t-  node.name:', node.name)
+                                    print('\t-  aux_reference_bounds:', aux_reference_bounds)
+                                    print('\t-  self._modules[node.output_name[0]]:', self._modules[node.output_name[0]])
+
+
                                     sparse_intermediate_bounds = node.name in aux_reference_bounds and self.bound_opts.get('sparse_intermediate_bounds', False) and isinstance(self._modules[node.output_name[0]], BoundRelu)
                                     sparse_conv_intermediate_bounds = self.bound_opts.get('sparse_conv_intermediate_bounds', False)
                                     # FIXME: C matrix shape incorrect for BoundParams.
@@ -1374,6 +1396,9 @@ class BoundedModule(nn.Module):
                                             newC = torch.eye(dim, device=self.device) \
                                                 .unsqueeze(0).expand(batch_size, -1, -1) \
                                                 .view(batch_size, dim, *node.output_shape[1:])
+                                                
+                                    print('\t-  unstable_idx:', unstable_idx)
+                                    print('\t-  unstable_size:', unstable_size)
                                     if unstable_idx is None or unstable_size > 0:
                                         # Compute backward bounds only when there are unstable neurons, or when we don't know which neurons are unstable.
                                         self._backward_general(C=newC, node=node, root=root, return_A=False, intermediate_constr=intermediate_constr, unstable_idx=unstable_idx)
@@ -1423,6 +1448,7 @@ class BoundedModule(nn.Module):
 
         if method == 'backward':
             # This is for the final output bound. No need to pass in intermediate layer beta constraints.
+            print('backward')
             return self._backward_general(C=C, node=final, root=root, bound_lower=bound_lower, bound_upper=bound_upper,
                                           return_A=return_A, needed_A_dict=needed_A_dict, average_A=average_A, A_dict=A_dict,
                                           return_b=return_b, b_dict=b_dict, unstable_idx=alpha_idx, need_A_only=need_A_only)
@@ -1479,8 +1505,10 @@ class BoundedModule(nn.Module):
             res = self._IBP_loss_fusion(node, C)
             if res is not None:
                 return res
+        # print('\n\n[+] processing node', node)
 
         if not node.perturbed and hasattr(node, 'forward_value'):
+            # print('here')
             node.lower, node.upper = node.interval = (node.forward_value, node.forward_value)
             if self.ibp_relative:
                 node.interval = Interval(
@@ -1490,10 +1518,15 @@ class BoundedModule(nn.Module):
                     upper_offset=torch.zeros_like(node.forward_value))
             
         if not hasattr(node, 'interval'):
+            # print('interval')
             for n in node.inputs:
                 if not hasattr(n, 'interval'):
                     self._IBP_general(n)
             inp = [n_pre.interval for n_pre in node.inputs]
+
+            # print('continue processing node', node)
+
+
             if C is not None and isinstance(node, BoundLinear) and not node.is_input_perturbed(1):
                 # merge the last BoundLinear node with the specification, available when 
                 # weights of this layer are not perturbed
@@ -1568,6 +1601,7 @@ class BoundedModule(nn.Module):
                           intermediate_constr=None, unstable_idx=None, need_A_only=False):
         logger.debug('Backward from ({})[{}]'.format(node, node.name))
         _print_time = False
+        print('\n\nBackward from {} ({})'.format(node, node.name))
 
         degree_out = {}
         for l in self._modules.values():
@@ -1578,6 +1612,7 @@ class BoundedModule(nn.Module):
         all_nodes_before = []
         while len(queue) > 0:
             l = queue.popleft()
+            print('\t - queue:', l)
             self.backward_from[l.name].append(node)
             for l_pre in l.input_name:
                 all_nodes_before.append(l_pre)
@@ -1585,6 +1620,7 @@ class BoundedModule(nn.Module):
                 if self._modules[l_pre].bounded:
                     self._modules[l_pre].bounded = False
                     queue.append(self._modules[l_pre])
+
         node.bounded = True
         if isinstance(C, Patches):
             if C.unstable_idx is None:
@@ -1616,6 +1652,7 @@ class BoundedModule(nn.Module):
         queue = deque([node])
         while len(queue) > 0:
             l = queue.popleft()  # backward from l
+            print('\t- processing', l)
             l.bounded = True
 
             if return_b:
@@ -1631,6 +1668,8 @@ class BoundedModule(nn.Module):
 
             # Initially, l.lA or l.uA will be set to C for this node.
             if l.lA is not None or l.uA is not None:
+                # print('\t- lA', l.lA)
+                # print('\t- uA', l.uA)
                 # Propagate lA and uA to a preceding node 
                 def add_bound(node, lA, uA):
                     if lA is not None:
@@ -1653,11 +1692,18 @@ class BoundedModule(nn.Module):
                 if _print_time:
                     start_time = time.time()
 
+                print('\t- perturbed', l.perturbed)
                 # FIXME make fixed nodes have fixed `forward_value` that is never cleaned out
                 if not l.perturbed and hasattr(l, 'forward_value'):
                     lb = lb + l.get_bias(l.lA, l.forward_value)  # FIXME (09/16): shape for the bias of BoundConstant.
                     ub = ub + l.get_bias(l.uA, l.forward_value)
                     continue
+
+                print('\t- zero_lA_mtx', l.zero_lA_mtx)
+                print('\t- zero_uA_mtx', l.zero_uA_mtx)
+
+                assert not l.zero_lA_mtx
+                assert not l.zero_uA_mtx
 
                 if l.zero_uA_mtx and l.zero_lA_mtx:
                     # A matrices are all zero, no need to propagate.
@@ -1695,6 +1741,9 @@ class BoundedModule(nn.Module):
                         upper_b = upper_b.transpose(0,1).reshape(upper_b.size(1), -1).t()
                 lb = lb + lower_b
                 ub = ub + upper_b
+                print(lb.sum())
+                print(ub.sum())
+
                 if return_A and needed_A_dict and node.name in needed_A_dict:
                     # FIXME ???
                     # if isinstance(self._modules[l.output_name[0]], BoundRelu):
@@ -1720,7 +1769,10 @@ class BoundedModule(nn.Module):
 
                 for i, l_pre in enumerate(l.input_name):
                     _l = self._modules[l_pre]
+                    print('==================>', l_pre, _l, i)
                     add_bound(_l, lA=A[i][0], uA=A[i][1])
+
+        # exit()
 
         if lb.ndim >= 2:
             lb = lb.transpose(0, 1)

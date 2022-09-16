@@ -11,6 +11,9 @@ baselines/
 *.pth
 *-ubyte
 *.h5
+*.pkl
+*.model
+*.npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

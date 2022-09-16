@@ -35,6 +35,7 @@ class BoundConv(Bound):
     def bound_backward(self, last_lA, last_uA, *x):
         if self.is_input_perturbed(1):
             raise NotImplementedError("Weight perturbation for convolution layers has not been implmented.")
+        print('[+] Bound backward from', self)
 
         lA_y = uA_y = lA_bias = uA_bias = None
         weight = x[1].lower
@@ -127,6 +128,8 @@ class BoundConv(Bound):
                     raise NotImplementedError()
                 padding = last_A.padding if last_A is not None else (0, 0, 0, 0)  # (left, right, top, bottom)
                 stride = last_A.stride if last_A is not None else 1
+                print('\t - padding', padding)
+                print('\t - stride', stride)
 
                 if type(padding) == int:
                     padding = padding * self.stride[0] + self.padding[0]
@@ -144,6 +147,7 @@ class BoundConv(Bound):
                         sum_bias = sum_bias.reshape(sum_bias.size(0), -1).transpose(0,1)
                     A_matrix = A_matrix.transpose(0,1)  # Spec dimension at the front.
                     return A_matrix, sum_bias
+                print('\t - unstable_idx', last_lA.unstable_idx)
                 return Patches(pieces, stride, padding, pieces.shape, unstable_idx=last_A.unstable_idx, output_shape=last_A.output_shape), sum_bias
             else:
                 raise NotImplementedError()

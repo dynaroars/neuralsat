@@ -136,6 +136,11 @@ class BoundFlatten(Bound):
 
         return [(_bound_oneside(last_lA), _bound_oneside(last_uA)), (None, None)], 0, 0
 
+    # def bound_forward(self, dim_in, x):
+    #     print(x)
+    #     print(x.lb.shape)
+    #     print(x.lw.shape)
+    #     exit()
 
 class BoundConcat(Bound):
     def __init__(self, input_name, name, ori_name, attr, inputs, output_index, options, device):
