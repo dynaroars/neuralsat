@@ -1,4 +1,3 @@
-from multiprocessing import Pool
 from pprint import pprint
 import gurobipy as grb
 import multiprocessing
@@ -24,28 +23,6 @@ from utils.read_nnet import NetworkNNET
 from utils.timer import Timers
 from utils.misc import MP
 import settings
-
-from lp_solver.glpk_solver import GLPKSolver
-
-
-
-        
-def init_worker(wfunc, solver):
-    wfunc.solver = solver
-    # print(wfunc)
-
-
-def worker_func(param):
-    # print(param)
-
-    solver = worker_func.solver
-
-    idx = param
-
-    lb = solver.minimize_output(idx)
-    ub = solver.minimize_output(idx, maximize=True)
-
-    return idx, (lb, ub)
 
 
 
@@ -113,7 +90,6 @@ class DNNTheoremProver:
 
         self.crown = CrownWrapper(net)
 
-        # self.glpk_solver = GLPKSolver(net.n_input)
 
     def _find_unassigned_nodes(self, assignment):
         assigned_nodes = list(assignment.keys()) 
@@ -163,7 +139,7 @@ class DNNTheoremProver:
         if len(new_nodes) == 0 and len(remove_nodes) == 0 and len(assignment) > 0:
             return True, {}, is_full_assignment
 
-        Timers.tic('remove constraints')
+        Timers.tic('Gurobi functions')
         if len(remove_nodes):
             remove_constraints = []
             for node in remove_nodes:
@@ -171,7 +147,7 @@ class DNNTheoremProver:
                 if cr is not None:
                     remove_constraints.append(cr)
             self.model.remove(remove_constraints)
-        Timers.toc('remove constraints')
+        Timers.toc('Gurobi functions')
 
 
 
@@ -190,8 +166,8 @@ class DNNTheoremProver:
 
 
         # add constraints
-        Timers.tic('Add constraints')
-        # Timers.tic('Gurobi functions')
+        # Timers.tic('Add constraints')
+        Timers.tic('Gurobi functions')
         if len(new_nodes):
             for node in new_nodes:
                 status = assignment.get(node, None)
@@ -200,8 +176,8 @@ class DNNTheoremProver:
                     ci = self.model.addLConstr(backsub_dict_expr[node] >= 1e-6, name=f'cstr[{node}]')
                 else:
                     ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
-        # Timers.toc('Gurobi functions')
-        Timers.toc('Add constraints')
+        Timers.toc('Gurobi functions')
+        # Timers.toc('Add constraints')
         self.model.update()
 
         
@@ -251,31 +227,83 @@ class DNNTheoremProver:
         lidx = self.reversed_layers_mapping[list(unassigned_nodes)[0]]
         layer_nodes = list(self.layers_mapping[lidx])
 
+        # print('run tighten bounds', lidx, len(layer_nodes))
+
+        ########################################################################
+        ########################################################################
+        ########################################################################
+        # Timers.tic('Tighten bounds')
+        # lbs = torch.empty(self.net.n_input, dtype=settings.DTYPE, device=self.net.device)
+        # ubs = torch.empty(self.net.n_input, dtype=settings.DTYPE, device=self.net.device)
+        # for i, v in enumerate(self.gurobi_vars):
+
+        #     # lower bound
+        #     self.model.setObjective(v, grb.GRB.MINIMIZE)
+        #     self.model.optimize()
+        #     lbs[i] = self.model.objval
+        #     # upper bound
+        #     self.model.setObjective(v, grb.GRB.MAXIMIZE)
+        #     self.model.optimize()
+        #     ubs[i] = self.model.objval
+        # Timers.toc('Tighten bounds')
+
+        # print('lbs', lbs)
+        # print('ubs', ubs)
+        # print( (lbs - self.lbs_init).abs().sum(), (ubs - self.ubs_init).abs().sum() )
+
+        # Timers.tic('Check output reachability')
+        # (lower, upper), hidden_bounds = self.deeppoly(lbs, ubs, assignment)
+
+        # stat, _ = self.spec.check_output_reachability(lower, upper)
+        # Timers.toc('Check output reachability')
+
+        # if not stat: # conflict
+        #     return False, cc, None
+
+        # Timers.tic('Implications')
+        # implications = {}
+        # for node in unassigned_nodes:
+        #     obj = backsub_dict_expr[node]
+        #     # lower bound
+        #     self.model.setObjective(obj, grb.GRB.MINIMIZE)
+        #     self.model.optimize()
+        #     lb = self.model.objval
+        #     # upper bound
+        #     self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+        #     self.model.optimize()
+        #     ub = self.model.objval
+        #     bounds[node] = {'lb': lb, 'ub': ub}
+        # Timers.toc('Implications')
+        ########################################################################
+        ########################################################################
+        ########################################################################
+
+        # obj = grb.quicksum([backsub_dict_expr[n] for n in layer_nodes])
+        # self.model.setObjective(obj, grb.GRB.MINIMIZE)
+        # self.model.optimize()
+        # xl = torch.tensor([v.X for v in self.gurobi_vars], dtype=settings.DTYPE)
+        # self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+        # self.model.optimize()
+        # xu = torch.tensor([v.X for v in self.gurobi_vars], dtype=settings.DTYPE)
+        # print(xl)
+        # print(xu)
+
+        # for node in layer_nodes:
+        #     mat = backsub_dict[node]
+        #     nl = mat[:-1] @ xl + mat[-1]
+        #     nu = mat[:-1] @ xu + mat[-1]
+        #     print(nl > nu, node, nl, nu)
+
+        # exit()
+        ########################################################################
+        ########################################################################
+        ########################################################################
+
         implications = {}
         hidden_bounds = {}
 
         # Timers.tic('Tighten bounds')
         self.optimize_input_bounds()
-
-        # li = [x.lb for x in self.gurobi_vars]
-        # ui = [x.ub for x in self.gurobi_vars]
-
-        # Timers.tic('GLPK functions')
-        # self.glpk_solver.build(backsub_dict, assignment, li, ui, normalize=False)
-
-
-        # init_arg = (worker_func, self.glpk_solver)
-        # params = layer_nodes
-
-        # with Pool(initializer=init_worker, initargs=init_arg, processes=50) as pool:
-
-        #     for i, res in enumerate(pool.imap_unordered(worker_func, params)):
-        #         pass
-
-        # pool.close() # do we need this? we're in a manager
-
-        # Timers.toc('GLPK functions')
-
 
         Timers.tic('Gurobi functions')
         for node in layer_nodes:
@@ -322,9 +350,9 @@ class DNNTheoremProver:
         # print(upper)
         # print()
 
-        # Timers.tic('Crown')
-        (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
-        # Timers.toc('Crown')
+        Timers.tic('Crown')
+        lower, upper = self.crown.forward_layer(lbs, ubs, lidx)
+        Timers.toc('Crown')
         # print(lower2)
         # print(upper2)
         # print('---------------------------')

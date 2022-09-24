@@ -4,6 +4,9 @@ import torch
 from utils.adam import AdamClipping
 import settings
 
+torch._C._jit_set_profiling_executor(False)
+torch._C._jit_set_profiling_mode(False)
+
 class GradientFalsification:
 
     def __init__(self, net, spec):

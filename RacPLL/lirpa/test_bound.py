@@ -4,9 +4,9 @@ import torch
 import time
 import os
 
-from src.bound_general import BoundedModule
-from src.bound_tensor import BoundedTensor
-from src.perturbations import PerturbationLpNorm
+from auto_lirpa.bound_general import BoundedModule
+from auto_lirpa.bound_tensor import BoundedTensor
+from auto_lirpa.perturbations import PerturbationLpNorm
 
 torch.manual_seed(0)
 
@@ -31,6 +31,10 @@ def mnist_model():
         nn.ReLU(),
         nn.Linear(32,32),
         nn.ReLU(),
+        nn.Linear(32,32),
+        nn.ReLU(),
+        nn.Linear(32,32),
+        nn.ReLU(),
         nn.Linear(32, 10)
     )
     return model
@@ -44,7 +48,7 @@ model = mnist_model()
 test_data = torchvision.datasets.MNIST("./data", train=False, download=True, transform=torchvision.transforms.ToTensor())
 
 # For illustration we only use 2 image from dataset
-N = 2
+N = 1
 n_classes = 10
 image = test_data.data[:N].view(N,1,28,28)
 true_label = test_data.targets[:N]
@@ -65,7 +69,7 @@ pred = lirpa_model(image)
 # for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', 'CROWN-Optimized (alpha-CROWN)']:
 # for method in ['IBP', 'IBP+backward (CROWN-IBP)', 'backward (CROWN)', ]:
 # for method in ['backward (CROWN)', ]:
-for method in ['CROWN-Optimized (alpha-CROWN)']:
+for method in ['backward']:
     lb, ub = lirpa_model.compute_bounds(x=(image,), method=method.split()[0])
     print(method.split()[0])
     print('lower:', lb)

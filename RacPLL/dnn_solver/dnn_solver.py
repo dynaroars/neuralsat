@@ -83,6 +83,7 @@ class DNNSolver(TheorySolver):
         #     exit()
 
         if not theory_sat:
+            self.dnn_theorem_prover.restore_input_bounds()
             if hasattr(self.dnn_theorem_prover, 'workers'):
                 for w in self.dnn_theorem_prover.workers:
                     w.terminate()

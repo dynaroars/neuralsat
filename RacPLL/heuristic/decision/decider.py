@@ -8,6 +8,8 @@ import settings
 from utils.timer import Timers
 
 
+torch._C._jit_set_profiling_executor(False)
+torch._C._jit_set_profiling_mode(False)
 
 def compute_ratio(lower_bound, upper_bound):
     lower_temp = lower_bound.clamp(max=0)

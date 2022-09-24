@@ -787,6 +787,9 @@ class BoundedModule(nn.Module):
     def compute_bounds(self, x=None, aux=None, C=None, method='backward', IBP=False, forward=False, bound_lower=True, bound_upper=True, reuse_ibp=False, return_A=False, needed_A_dict=None, final_node_name=None, average_A=False, new_interval=None, return_b=False, b_dict=None, reference_bounds=None, intermediate_constr=None, alpha_idx=None, aux_reference_bounds=None, need_A_only=False):
         # Several shortcuts.
         method = method.lower() if method is not None else method
+
+        count_unstable_neuron = 0
+        
         if method == 'ibp':
             # Pure IBP bounds.
             method = None
@@ -923,7 +926,7 @@ class BoundedModule(nn.Module):
                 continue
 
             if hasattr(i, 'nonlinear') and i.nonlinear:
-                # print('------------------------- [+] nonlinear', i)
+                print('------------------------- [+] nonlinear', i)
                 for l_name in i.input_name:
                     node = self._modules[l_name]
                     # print('\t- ', node, node.perturbed, node.from_input, hasattr(node, 'lower'))
@@ -978,8 +981,8 @@ class BoundedModule(nn.Module):
                                     unstable_idx = None
                                     unstable_size = 99999
                                     dim = int(math.prod(node.output_shape[1:]))
-                                    # print('\t- ', node, dim)
-                                    # print('\t-  node.name:', node.name)
+                                    print('\t- ', node, dim)
+                                    print('\t-  node.name:', node.name)
                                     # print('\t-  node.output_name:', node.output_name)
                                     # print('\t-  aux_reference_bounds:', aux_reference_bounds)
                                     # print('\t-  self._modules[node.output_name[0]]:', self._modules[node.output_name[0]])
@@ -1088,7 +1091,18 @@ class BoundedModule(nn.Module):
                                     # print('\t-  unstable_idx:', unstable_idx)
                                     # print('\t-  unstable_size:', unstable_size)
                                     if unstable_idx is None or unstable_size > 0:
-                                        self._backward_general(C=newC, node=node, root=root, return_A=False, intermediate_constr=intermediate_constr, unstable_idx=unstable_idx)
+                                        # print('hehe', unstable_idx, unstable_size)
+                                        lbs, ubs = self._backward_general(C=newC, node=node, root=root, return_A=False, intermediate_constr=intermediate_constr, unstable_idx=unstable_idx)
+
+                                        print('\t- lbs', lbs)
+                                        print('\t- ubs', ubs)
+
+                                        cac = torch.logical_and(lbs < 0, ubs > 0).numel()
+
+                                        print('\t- cac:', cac)
+
+
+
 
                                     if reduced_dim:
                                         if unstable_size > 0:
@@ -1141,7 +1155,7 @@ class BoundedModule(nn.Module):
                                       return_b=return_b, b_dict=b_dict, unstable_idx=alpha_idx, need_A_only=need_A_only)
 
     def _backward_general(self, C=None, node=None, root=None, bound_lower=True, bound_upper=True, return_A=False, needed_A_dict=None, average_A=False, A_dict=None, return_b=False, b_dict=None, intermediate_constr=None, unstable_idx=None, need_A_only=False):
-        # print('\n\nBackward from {} ({})'.format(node, node.name))
+        # print('\t\t- Backward from {} ({})'.format(node, node.name))
 
         degree_out = {}
         for l in self._modules.values():
@@ -1202,7 +1216,7 @@ class BoundedModule(nn.Module):
         queue = deque([node])
         while len(queue) > 0:
             l = queue.popleft()  # backward from l
-            # print('[+] processing', l)
+            # print('\t\t\t[+]', l)
             l.bounded = True
 
             if return_b:
