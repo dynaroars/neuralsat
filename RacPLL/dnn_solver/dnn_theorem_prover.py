@@ -310,7 +310,6 @@ class DNNTheoremProver:
         # Timers.toc('Tighten bounds')
         Timers.toc('Gurobi functions')
 
-        Timers.tic('Check output reachability')
         lbs = torch.tensor([bounds[node]['lb'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
         ubs = torch.tensor([bounds[node]['ub'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
         # Timers.tic('DeepPoly')
@@ -322,15 +321,14 @@ class DNNTheoremProver:
         # print(upper)
         # print()
 
-        # Timers.tic('Crown')
+        Timers.tic('Crown functions')
         (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
-        # Timers.toc('Crown')
+        Timers.toc('Crown functions')
         # print(lower2)
         # print(upper2)
         # print('---------------------------')
 
         stat, _ = self.spec.check_output_reachability(lower, upper)
-        Timers.toc('Check output reachability')
 
 
         if not stat: # conflict
