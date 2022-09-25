@@ -4,11 +4,12 @@ import numpy as np
 import torch
 
 from utils.timer import Timers
+import settings
 
 class CrownWrapper:
 
     def __init__(self, net):
-        x = torch.zeros(net.input_shape)
+        x = torch.zeros(net.input_shape, dtype=settings.DTYPE, device=net.device)
 
         from_layer = {k: [] for k in net.layers_mapping.keys()}
         input_from_layer = {}
