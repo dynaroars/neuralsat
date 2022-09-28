@@ -255,6 +255,7 @@ def bab(unwrapped_model, data, target, y, eps=None, data_ub=None, data_lb=None, 
     num_outputs = arguments.Config["data"]["num_outputs"]
     # assert num_outputs > 1
     if y is not None:
+        print('================', y)
         if num_outputs > 1:
             c = torch.zeros((1, 1, num_outputs), device=arguments.Config["general"]["device"])  # we only support c with shape of (1, 1, n)
             c[0, 0, y] = 1
@@ -266,6 +267,8 @@ def bab(unwrapped_model, data, target, y, eps=None, data_ub=None, data_lb=None, 
         # if there is no ture label, we only verify the target output
         c = torch.zeros((1, 1, num_outputs), device=arguments.Config["general"]["device"])  # we only support c with shape of (1, 1, n)
         c[0, 0, target] = -1
+
+    print(data.shape, arguments.Config["general"]["deterministic"])
 
     # This will use the refined bounds if the complete verifier is "bab-refine".
     model = LiRPAConvNet(unwrapped_model, y, target, device=arguments.Config["general"]["device"], in_size=data.shape,
@@ -432,6 +435,7 @@ def main():
             # model_ori = load_model_onnx(os.path.join(file_root, onnx_path), input_shape=(1,))
             vnnlib = read_vnnlib_simple(os.path.join(file_root, vnnlib_path), 1, 1)
             # model_ori = convert_test_model(model_ori)
+            # raise
             model_ori = mnist_model()
 
         elif arguments.Config["data"]["dataset"] == 'NN4SYS':
@@ -497,6 +501,7 @@ def main():
 
             # Incomplete verification is enabled by default. The intermediate lower and upper bounds will be reused in bab and mip.
             if not verified_success and (arguments.Config["general"]["enable_incomplete_verification"] or arguments.Config["general"]["complete_verifier"] == "bab-refine"):
+                raise
                 y, pidx_list = get_labels(model_ori, x, vnnlib)
                 verified_status, init_global_lb, saved_bounds, saved_slopes = incomplete_verifier(model_ori, x, y, data_ub=data_max, data_lb=data_min)
                 verified_success = verified_status != "unknown"
@@ -524,8 +529,12 @@ def main():
 
             # BaB bounds. (not do bab if unknown by mip solver for now)
             if not verified_success and arguments.Config["general"]["complete_verifier"] != "skip" and verified_status != "unknown-mip":
+                print(len(vnnlib[0][1]))
                 for prop_mat, prop_rhs in vnnlib[0][1]:
+                    print(len(prop_rhs),prop_mat, prop_rhs)
+
                     if len(prop_rhs) > 1:
+                        raise
                         # Multiple properties in a "and" clause (e.g., marabou-cifar10). Only need to verify one of the easiest properties.
                         select_using_verified_bounds = True
                         if select_using_verified_bounds:
@@ -559,6 +568,7 @@ def main():
                         arguments.Config["bab"]["decision_thresh"] = prop_rhs[0]
 
                     print('##### [{}] True label: {}, Tested against: {}, onnx_path: {}, vnnlib_path: {} ######'.format(new_idx, y, pidx, onnx_path, vnnlib_path))
+
                     if pidx == y:
                         raise NotImplementedError
 
@@ -569,6 +579,7 @@ def main():
                     # Complete verification (BaB, BaB with refine, or MIP).
                     start = time.time()
                     if arguments.Config["general"]["enable_incomplete_verification"]:
+                        raise
                         # Reuse results from incomplete results, or from refined MIPs.
                         # skip the prop that already verified
                         rlb, rub = list(lower_bounds), list(upper_bounds)
@@ -583,7 +594,9 @@ def main():
                                                  lower_bounds=lower_bounds, upper_bounds=upper_bounds, reference_slopes=saved_slopes)
                     else:
                         assert arguments.Config["general"]["complete_verifier"] == "bab"  # for MIP and BaB-Refine.
-                        print(x, data_max, data_min)
+                        print(x.shape, data_max.shape)
+                        print((data_max - data_min).sum())
+                        # exit()
                         l, u, nodes, _ = bab(model_ori, x, pidx, y, data_ub=data_max, data_lb=data_min)
                     time_cost = time.time() - start
                     print('Image {} against label {} verification end, Time cost: {}'.format(new_idx, pidx, time_cost))
@@ -663,11 +676,11 @@ def main():
 if __name__ == "__main__":
     config_args()
     # arguments.Config["general"]["onnx_path"] = 'tests/test_tiny.onnx'
-    arguments.Config["general"]["seed"] = 0
-    arguments.Config["general"]["vnnlib_path"] = 'tests/test_tiny.vnnlib'
-    arguments.Config["data"]["dataset"] = 'TEST'
-    arguments.Config["attack"]["pgd_order"] = 'skip'
+    # arguments.Config["general"]["seed"] = 0
+    # arguments.Config["general"]["vnnlib_path"] = 'tests/test_tiny.vnnlib'
+    # arguments.Config["data"]["dataset"] = 'TEST'
+    # arguments.Config["attack"]["pgd_order"] = 'skip'
     arguments.Config["general"]["enable_incomplete_verification"] = False
-    arguments.Config["data"]["num_outputs"] = 1
-    print(arguments.Config["bab"]["timeout"])
+    # arguments.Config["data"]["num_outputs"] = 1
+    # print(arguments.Config["bab"]["timeout"])
     main()

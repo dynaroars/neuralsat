@@ -26,11 +26,12 @@ import pandas as pd
 import onnx2pytorch
 import onnx
 import onnxruntime as ort
-import arguments
-from attack_pgd import attack_pgd
+import torch.nn as nn
+# import arguments
+# from attack_pgd import attack_pgd
 
 # Import all model architectures.
-from model_defs import *
+# from model_defs import *
 
 
 def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):

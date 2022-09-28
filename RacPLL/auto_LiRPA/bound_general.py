@@ -1023,7 +1023,7 @@ class BoundedModule(nn.Module):
                        bound_lower=True, bound_upper=True, reuse_ibp=False,
                        return_A=False, needed_A_dict=None, final_node_name=None, average_A=False, new_interval=None,
                        return_b=False, b_dict=None, reference_bounds=None, intermediate_constr=None, alpha_idx=None,
-                       aux_reference_bounds=None, need_A_only=False):
+                       aux_reference_bounds=None, need_A_only=False, return_count_unstable_neuron=False):
         r"""Main function for computing bounds.
 
         Args:
@@ -1416,9 +1416,14 @@ class BoundedModule(nn.Module):
 
         if method == 'backward':
             # This is for the final output bound. No need to pass in intermediate layer beta constraints.
+            if return_count_unstable_neuron:
+                return self._backward_general(C=C, node=final, root=root, bound_lower=bound_lower, bound_upper=bound_upper,
+                                              return_A=return_A, needed_A_dict=needed_A_dict, average_A=average_A, A_dict=A_dict,
+                                              return_b=return_b, b_dict=b_dict, unstable_idx=alpha_idx, need_A_only=need_A_only), count_unstable_neuron
+
             return self._backward_general(C=C, node=final, root=root, bound_lower=bound_lower, bound_upper=bound_upper,
                                           return_A=return_A, needed_A_dict=needed_A_dict, average_A=average_A, A_dict=A_dict,
-                                          return_b=return_b, b_dict=b_dict, unstable_idx=alpha_idx, need_A_only=need_A_only), count_unstable_neuron
+                                          return_b=return_b, b_dict=b_dict, unstable_idx=alpha_idx, need_A_only=need_A_only) 
         elif method == 'forward':
             return self._forward_general(C=C, node=final, root=root, dim_in=dim_in, concretize=True)
         else:

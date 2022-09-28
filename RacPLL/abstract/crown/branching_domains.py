@@ -267,17 +267,21 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
     2. add to a binary tree
     # diving: we are adding diving domains if True
     """
-    unsat_list = []
+    # unsat_list = []
+    domain_list = []
     batch = len(selected_domains)
     for i in range(batch):
         infeasible = False
-        if lb[i] < decision_thresh:
-            if check_infeasibility:
-                for ii, (l, u) in enumerate(zip(lb_all[i][1:-1], up_all[i][1:-1])):
-                    if (l-u).max() > 1e-6:
-                        infeasible = True
-                        print('infeasible detected when adding to domain!!!!!!!!!!!!!!')
-                        break
+        # print(lb[i])
+        # print(lb[i+batch])
+        # if lb[i] < decision_thresh:
+        if True:
+            # if check_infeasibility:
+            #     for ii, (l, u) in enumerate(zip(lb_all[i][1:-1], up_all[i][1:-1])):
+            #         if (l-u).max() > 1e-6:
+            #             infeasible = True
+            #             print('infeasible detected when adding to domain!!!!!!!!!!!!!!')
+            #             break
 
             if not infeasible:
                 priority=0 if priorities is None else priorities[i].item()
@@ -306,10 +310,11 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                     # assert (m[mp == 0] == 0).all(), m[mp == 0].abs().sum()
                     # assert (m[mp == 1] == 1).all(), m[mp == 1].abs().sum()
                 # bisect.insort_left(domains, left)
-                domains.add(left)
+                domain_list.append(left)
 
         infeasible = False
-        if lb[i+batch] < decision_thresh:
+        # if lb[i+batch] < decision_thresh:
+        if True:
             # if growth_rate and (selected_domains[i].lower_bound - lb[i+batch]) > selected_domains[i].lower_bound * growth_rate and flag:
             #     selected_domains[i].split = True
             #     bisect.insort_left(domains, selected_domains[i])
@@ -317,12 +322,12 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
             #     # if len(unsat_list) == 1: choice = unsat_list[0]
             # else:
 
-            if check_infeasibility:
-                for ii, (l, u) in enumerate(zip(lb_all[i+batch][1:-1], up_all[i+batch][1:-1])):
-                    if (l-u).max() > 1e-6:
-                        infeasible = True
-                        print('infeasible detected when adding to domain!!!!!!!!!!!!!!')
-                        break
+            # if check_infeasibility:
+            #     for ii, (l, u) in enumerate(zip(lb_all[i+batch][1:-1], up_all[i+batch][1:-1])):
+            #         if (l-u).max() > 1e-6:
+            #             infeasible = True
+            #             print('infeasible detected when adding to domain!!!!!!!!!!!!!!')
+            #             break
 
             if not infeasible:
                 priority=0 if priorities is None else priorities[i+batch].item()
@@ -352,9 +357,9 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                 # assert (m[mp == 1] == 1).all(), m[mp == 1].abs().sum()
 
                 # bisect.insort_left(domains, right)
-                domains.add(right)
+                domain_list.append(right)
 
-    return unsat_list
+    return domain_list
 
 
 def pick_out(domains, threshold):

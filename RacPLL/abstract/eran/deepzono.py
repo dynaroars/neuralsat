@@ -28,6 +28,50 @@ class DeepZono:
         self.net = net
         self._build_network_transformer()
 
+
+        self.from_layer = {k: [] for k in net.layers_mapping.keys()}
+
+        for k in self.from_layer:
+            idx = 0
+            for layer in net.layers:
+                if isinstance(layer, nn.ReLU):
+                    idx += 1
+                if k < idx:
+                    if isinstance(layer, nn.Linear):
+                        l = LinearTransformer(layer)
+                    elif isinstance(layer, nn.ReLU):
+                        l = ReLUTransformer()
+                    else:
+                        raise NotImplementedError
+                    self.from_layer[k] += [l]
+
+        # for k in self.from_layer:
+        #     print(k, self.from_layer[k])
+        # exit()
+
+    @torch.no_grad()
+    def forward_layer(self, lower, upper, layer_id):
+
+        # lbs = lower.view(self.net.input_shape)
+        # ubs = upper.view(self.net.input_shape)
+        # print(lower.shape)
+        # exit()
+        lbs = lower.unsqueeze(0)
+        ubs = upper.unsqueeze(0)
+
+        center = (ubs + lbs) / 2
+        error = (ubs - lbs) / 2
+
+        error = torch.diag(torch.ones(len(lower)) * error.flatten())
+        error = error.view((len(lower), len(lower)))
+
+        center = center.to(settings.DTYPE)
+        error = error.to(settings.DTYPE)
+
+        for layer in self.from_layer[layer_id]:
+            center, error = layer(center, error)
+        return get_bound(center, error)
+
     def _build_network_transformer(self):
         self.layers = []
         for layer in self.net.layers:

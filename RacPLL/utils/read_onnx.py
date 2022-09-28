@@ -8,7 +8,9 @@ import onnx2pytorch
 import numpy as np
 import torch
 import onnx
+import math
 
+from abstract.crown.utils import *
 import settings
 
 def make_model_with_graph(model, graph, check_model=True):
@@ -190,7 +192,10 @@ class PyTorchModelWrapper(nn.Module):
     def __init__(self, layers):
         super().__init__()
 
-        self.layers = nn.Sequential(*layers)
+        if isinstance(layers, list):
+            self.layers = nn.Sequential(*layers)
+        else:
+            self.layers = layers
 
         self.layers_mapping = None
         self.input_shape = None
@@ -397,62 +402,6 @@ class ONNXParser:
         return [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name in node.input]
 
 
-    # def _process_node(self, curr_input_idx, nodes, i):
-    #     node = nodes[i]
-
-    #     curr_input_idx = node.output[0]
-
-    #     if node.op_type == "MatMul":
-
-    #         [weights] = self._get_weights(node)
-
-    #         # if self.transpose_needed:
-    #         #     weights = weights.T
-
-    #         if i + 1 < len(nodes) and nodes[i + 1].op_type == "Add":
-    #             [bias] = self._get_weights(nodes[i + 1])
-    #             next_i = i + 2
-    #             curr_input_idx = nodes[i + 1].output[0]
-    #         else:
-    #             bias = np.zeros(weights.shape[0])
-    #             next_i = i + 1
-    #             curr_input_idx = node.output[0]
-    #         # print(weights.shape)
-    #         layer = nn.Linear(weights.shape[1], weights.shape[0])
-    #         layer.weight.data = torch.Tensor(weights.copy()).to(settings.DTYPE)
-    #         layer.bias.data = torch.Tensor(bias.copy()).to(settings.DTYPE)
-    #         return layer, curr_input_idx, next_i
-
-    #     elif node.op_type == "Relu":
-    #         return nn.ReLU(), curr_input_idx, i + 1
-
-    #     elif node.op_type == "Flatten":
-    #         layer = nn.Flatten()
-    #         return layer, curr_input_idx, i + 1
-
-    #     elif node.op_type == "Gemm":
-    #         return self._gemm_to_torch(node), curr_input_idx, i + 1
-
-    #     elif node.op_type == "Conv":
-    #         return self._conv_to_torch(node), curr_input_idx, i + 1
-
-    #     else:
-    #         for n in self.model.graph.node:
-    #             if n.name == '21':
-    #                 print(n)
-
-    #         print(node)
-    #         print('Unsupported:', node.op_type, len(node.attribute))
-    #         for i in node.input:
-    #             print(i, type(i), onnx.numpy_helper.to_array(node))
-
-
-    #         exit()
-    #         raise 
-    #         return None, curr_input_idx, i + 1
-
-
-
     def _gemm_to_torch(self, node) -> nn.Linear:
         [weights] = [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name == node.input[1]]
         [bias] = [onnx.numpy_helper.to_array(t) for t in self.model.graph.initializer if t.name == node.input[2]]
@@ -504,3 +453,18 @@ class ONNXParser:
         assert relu_nodes, "expected at least one relu layer in network"
         io_shapes = get_io_shapes(self.model)
         return [io_shapes[r.input[0]] for r in relu_nodes]
+
+
+
+
+class ONNXParser2:
+
+    def __init__(self, filename, transpose_weight=False):
+
+        self.input_shape = (1,28,28)
+        model, is_channel_last = load_model_onnx(filename, input_shape=self.input_shape)
+
+        self.pytorch_model = PyTorchModelWrapper(model)
+        self.pytorch_model.n_input = math.prod(self.input_shape)
+        self.pytorch_model.n_output = 10
+        self.pytorch_model.input_shape = self.input_shape

@@ -68,7 +68,7 @@ class LiRPAConvNet:
             history = []
         start = time.time()
 
-        lp_test = arguments.Config["debug"]["lp_test"]
+        # lp_test = arguments.Config["debug"]["lp_test"]
 
         if single_node_split:
             ret = self.update_bounds_parallel(pre_lbs, pre_ubs, split, slopes, betas=betas, early_stop=False, history=history,
@@ -84,29 +84,29 @@ class LiRPAConvNet:
         beta_crown_lbs = [i[-1].item() for i in lower_bounds]
         beta_time = time.time()-start
 
-        if lp_test == "LP_intermediate_refine":
-            refine_time = time.time()
-            for bdi, bd in enumerate(split["decision"]):
-                total_batch = len(split["decision"])
-                assert 2 * total_batch == len(lower_bounds)
-                init_lp_glb0, refined_lp_glb0 = self.update_the_model_lp(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
-                init_lp_glb1, refined_lp_glb1 = self.update_the_model_lp(lower_bounds[bdi + total_batch],
-                                         upper_bounds[bdi + total_batch], bd[0], choice=0)
-                print("############ bound tightness summary ##############")
-                print(f"init opt crown: {pre_lbs[-1][-1].item()}")
-                print("beta crown for split:", beta_crown_lbs)
-                print(f"init lp for split: [{init_lp_glb0}, {init_lp_glb1}]")
-                print(f"lp intermediate refined for split: [{refined_lp_glb0}, {refined_lp_glb1}]")
-                print("lp_refine time:", time.time() - refine_time, "beta crown time:", beta_time)
-                exit()
+        # if lp_test == "LP_intermediate_refine":
+        #     refine_time = time.time()
+        #     for bdi, bd in enumerate(split["decision"]):
+        #         total_batch = len(split["decision"])
+        #         assert 2 * total_batch == len(lower_bounds)
+        #         init_lp_glb0, refined_lp_glb0 = self.update_the_model_lp(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
+        #         init_lp_glb1, refined_lp_glb1 = self.update_the_model_lp(lower_bounds[bdi + total_batch],
+        #                                  upper_bounds[bdi + total_batch], bd[0], choice=0)
+        #         print("############ bound tightness summary ##############")
+        #         print(f"init opt crown: {pre_lbs[-1][-1].item()}")
+        #         print("beta crown for split:", beta_crown_lbs)
+        #         print(f"init lp for split: [{init_lp_glb0}, {init_lp_glb1}]")
+        #         print(f"lp intermediate refined for split: [{refined_lp_glb0}, {refined_lp_glb1}]")
+        #         print("lp_refine time:", time.time() - refine_time, "beta crown time:", beta_time)
+        #         exit()
 
-        elif lp_test == "MIP_intermediate_refine":
-            for bdi, bd in enumerate(split["decision"]):
-                total_batch = len(split["decision"])
-                assert 2 * total_batch == len(lower_bounds)
-                self.update_the_model_mip(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
-                self.update_the_model_mip(lower_bounds[bdi + total_batch],
-                                          upper_bounds[bdi + total_batch], bd[0], choice=0)
+        # elif lp_test == "MIP_intermediate_refine":
+        #     for bdi, bd in enumerate(split["decision"]):
+        #         total_batch = len(split["decision"])
+        #         assert 2 * total_batch == len(lower_bounds)
+        #         self.update_the_model_mip(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
+        #         self.update_the_model_mip(lower_bounds[bdi + total_batch],
+        #                                   upper_bounds[bdi + total_batch], bd[0], choice=0)
 
         end = time.time()
         # print('batch bounding time: ', end - start)
@@ -149,7 +149,7 @@ class LiRPAConvNet:
             # Per-neuron alpha.
             cpu_layer.alpha = OrderedDict()
             for spec_name, alpha in layer.alpha.items():
-                cpu_layer.alpha[spec_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
+                cpu_layer.alpha[spec_name] = alpha.to(device='cpu', non_blocking=non_blocking)
         # For get_beta().
         for cpu_layer, layer in zip(cpu_net.relus, net.relus):
             if layer.sparse_beta is not None:

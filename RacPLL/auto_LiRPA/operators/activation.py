@@ -8,8 +8,8 @@ class BoundActivation(Bound):
         self.relaxed = False
 
     def _init_masks(self, x):
-        self.mask_pos = torch.ge(x.lower, 0).to(torch.float)
-        self.mask_neg = torch.le(x.upper, 0).to(torch.float)
+        self.mask_pos = torch.ge(x.lower, 0).to(torch.float32)
+        self.mask_neg = torch.le(x.upper, 0).to(torch.float32)
         self.mask_both = 1 - self.mask_pos - self.mask_neg
 
     def _init_linear(self, x, dim_opt=None):
@@ -57,7 +57,7 @@ class BoundActivation(Bound):
                 if _bias.ndim > 2:
                     _bias = torch.sum(_bias, dim=list(range(2, _bias.ndim)))
             elif self.batch_dim == -1:
-                mask = torch.gt(last_A, 0.).to(torch.float)
+                mask = torch.gt(last_A, 0.).to(torch.float32)
                 _A = last_A * (mask * w_pos.unsqueeze(1) +
                                 (1 - mask) * w_neg.unsqueeze(1))
                 _bias = last_A * (mask * b_pos.unsqueeze(1) +
@@ -240,8 +240,7 @@ class BoundRelu(BoundOptimizableActivation):
         self.alpha = OrderedDict()
         ref = self.inputs[0].lower # a reference variable for getting the shape
         for ns, size_s in start_nodes:
-            self.alpha[ns] = torch.empty([2, size_s, ref.size(0), *self.shape], 
-                dtype=torch.float, device=ref.device, requires_grad=True)
+            self.alpha[ns] = torch.empty([2, size_s, ref.size(0), *self.shape], dtype=torch.float32, device=ref.device, requires_grad=True)
         for k, v in self.alpha.items():
             v.data.copy_(self.lower_d.data)  # Initial from adaptive lower bounds.    
 
@@ -257,20 +256,15 @@ class BoundRelu(BoundOptimizableActivation):
     def bound_relax(self, x):
         # FIXME maybe avoid using `mask` which looks inefficient
         # m = torch.min((x.lower + x.upper) / 2, x.lower + 0.99)
-        self._add_linear(mask=self.mask_neg, type='lower',
-                         k=torch.zeros_like(x.lower), x0=0, y0=0)
-        self._add_linear(mask=self.mask_neg, type='upper',
-                         k=torch.zeros_like(x.lower), x0=0, y0=0)
-        self._add_linear(mask=self.mask_pos, type='lower',
-                         k=torch.ones_like(x.lower), x0=0, y0=0)
-        self._add_linear(mask=self.mask_pos, type='upper',
-                         k=torch.ones_like(x.lower), x0=0, y0=0)
+        self._add_linear(mask=self.mask_neg, type='lower', k=torch.zeros_like(x.lower), x0=0, y0=0)
+        self._add_linear(mask=self.mask_neg, type='upper', k=torch.zeros_like(x.lower), x0=0, y0=0)
+        self._add_linear(mask=self.mask_pos, type='lower', k=torch.ones_like(x.lower), x0=0, y0=0)
+        self._add_linear(mask=self.mask_pos, type='upper', k=torch.ones_like(x.lower), x0=0, y0=0)
         upper = torch.max(x.upper, x.lower + 1e-8)
         delta = 1e-8
         r = (x.upper - x.lower).clamp(min=delta)
         upper_k = x.upper / r + delta / r
-        self._add_linear(mask=self.mask_both, type='upper',
-                         k=upper_k, x0=x.lower, y0=0)
+        self._add_linear(mask=self.mask_both, type='upper', k=upper_k, x0=x.lower, y0=0)
         if self.relu_options == "same-slope":
             lower_k = upper_k
         elif self.relu_options == "zero-lb":
@@ -284,15 +278,14 @@ class BoundRelu(BoundOptimizableActivation):
             lower_k = alpha = self.alpha['_forward'][0, 0]
         else:
             # adaptive
-            lower_k = torch.gt(torch.abs(x.upper), torch.abs(x.lower)).to(torch.float)
+            lower_k = torch.gt(torch.abs(x.upper), torch.abs(x.lower)).to(torch.float32)
         # NOTE #FIXME Saved for initialization bounds for optimization.
         # In the backward mode, same-slope bounds are used.
         # But here it is using adaptive bounds which seem to be better
         # for nn4sys benchmark with loose input bounds. Need confirmation 
         # for other cases.
         self.d = lower_k.detach() # saved for initializing optimized bounds           
-        self._add_linear(mask=self.mask_both, type='lower',
-                         k=lower_k, x0=0., y0=0.)
+        self._add_linear(mask=self.mask_both, type='lower', k=lower_k, x0=0., y0=0.)
 
     def bound_backward(self, last_lA, last_uA, x=None, start_node=None, beta_for_intermediate_layers=False, unstable_idx=None):
         if x is not None:

@@ -4,6 +4,7 @@ import torch
 import time
 import copy
 
+# from dnn_solver.dnn_theorem_prover_2 import DNNTheoremProver
 from dnn_solver.dnn_theorem_prover import DNNTheoremProver
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
@@ -56,6 +57,11 @@ class DNNSolver(TheorySolver):
         conflict_clause = None
         new_assignments = []
 
+        if self.dnn_theorem_prover.verified:
+            self.set_early_stop('UNSAT')
+            return conflict_clause, new_assignments
+        # exit()
+
         assignment = {k: v['value'] for k, v in self._solver._assignment.items()}
 
         if settings.DEBUG:
@@ -66,7 +72,7 @@ class DNNSolver(TheorySolver):
         # Timers.reset()
         tic = time.time()
         Timers.tic('Theorem deduction')
-        theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, self._solver._assignment)
+        theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node())
         Timers.toc('Theorem deduction')
         print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
         
@@ -76,7 +82,7 @@ class DNNSolver(TheorySolver):
 
 
         if self.get_solution() is not None:
-            self.set_early_stop(True)
+            self.set_early_stop('SAT')
             return conflict_clause, new_assignments
 
         # if self.dnn_theorem_prover.count == 50:

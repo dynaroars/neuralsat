@@ -82,7 +82,8 @@ def batch_verification(d, net, batch, pre_relu_indices, growth_rate, layer_set_b
 
 
         # Use_optimized_split = not Use_optimized_split
-        print('splitting decisions: {}'.format(branching_decision[:10]))
+        print(branching_method, 'splitting decisions: {}'.format(branching_decision[:10]))
+        # exit()
         # print("splitting coeffs: {}".format(split["coeffs"]))
 
         if not Use_optimized_split:
@@ -180,6 +181,7 @@ def relu_bab_parallel(net, domain, x, use_neuron_set_strategy=False, refined_low
         global_ub, global_lb, _, _, primals, updated_mask, lA, lower_bounds, upper_bounds, pre_relu_indices, slope, history = net.build_the_model_with_refined_bounds(
             domain, x, None, None, stop_criterion_func=stop_criterion_sum(decision_thresh), reference_slopes=None)
     elif refined_lower_bounds is None or refined_upper_bounds is None:
+        # raise
         global_ub, global_lb, _, _, primals, updated_mask, lA, lower_bounds, upper_bounds, pre_relu_indices, slope, history = net.build_the_model(
             domain, x, stop_criterion_func=stop_criterion_sum(decision_thresh))
     else:
@@ -196,7 +198,8 @@ def relu_bab_parallel(net, domain, x, use_neuron_set_strategy=False, refined_low
         return global_lb, global_ub, [[time.time()-start, global_lb]], 0
     # return global_lb, global_ub, [[time.time()-start, global_lb]], 0
 
-    print(global_lb)
+    # print(global_lb)
+    # exit()
     if global_lb > decision_thresh:
         return global_lb, global_ub, [[time.time()-start, global_lb]], 0
 

@@ -77,7 +77,7 @@ class ConfigHandler:
         self.add_argument('--pkl_path', type=str, default=None, help="Load properties to verify from a .pkl file (only used for oval20 dataset).", hierarchy=h + ["pkl_path"])
 
         h = ["specification"]
-        self.add_argument("--spec_type", type=str, default='lp', choices=['lp', 'bound'], help='Type of verification specification. "lp" = L_p norm, "bounds" = element-wise lower and upper bound provided by dataloader.', hierarchy=h + ["type"])
+        self.add_argument("--type", type=str, default='bound', choices=['lp', 'bound'], help='Type of verification specification. "lp" = L_p norm, "bounds" = element-wise lower and upper bound provided by dataloader.', hierarchy=h + ["type"])
         self.add_argument("--norm", type=float, default='inf', help='Lp-norm for epsilon perturbation in robustness verification (1, 2, inf).', hierarchy=h + ["norm"])
         self.add_argument("--epsilon", type=float, default=None, help='Set perturbation size (Lp norm). If not set, a default value may be used based on dataset loader.', hierarchy=h + ["epsilon"])
 
@@ -241,8 +241,8 @@ class ConfigHandler:
         # For compatibility, we still return all the arguments from argparser.
         parsed_args = self.defaults_parser.parse_args()
         # Print all configuration.
-        print('Configurations:\n')
-        print(self.dump_config(self.all_args))
+        # print('Configurations:\n')
+        # print(self.dump_config(self.all_args))
         return parsed_args
 
     def keys(self):
@@ -261,5 +261,43 @@ class ConfigHandler:
 
 
 # Global configuration variable
-Config = ConfigHandler()
+# Config = ConfigHandler()
 
+
+Config = {
+    'general': {
+        'seed': 0,
+        'conv_mode': 'patches',
+        'deterministic': False,
+        'double_fp': False,
+        'loss_reduction_func': 'sum',
+        'record_bounds': False,
+    },
+    'data': {
+        'num_outputs': 10
+    },
+    'solver': {
+        'alpha-crown': {
+            'lr_alpha': 0.1,
+            'iteration': 10,
+            'share_slopes': False,
+            'no_joint_opt': False,
+        },
+        'beta-crown': {
+            'batch_size': 1,
+            'lr_alpha': 0.01,
+            'lr_beta': 0.05,
+            'lr_decay': 0.98,
+            'optimizer': 'adam',
+            'iteration': 50,
+            'beta': True,
+            'beta_warmup': True,
+        },
+    },
+    'bab': {
+        'get_upper_bound': False,
+        'branching': {
+            'reduceop': 'min',
+        }
+    }
+}

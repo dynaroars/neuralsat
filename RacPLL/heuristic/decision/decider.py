@@ -4,9 +4,9 @@ import numpy as np
 import torch
 import random
 
-import settings
 from utils.timer import Timers
-
+from abstract.crown import *
+import settings
 
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
@@ -33,7 +33,7 @@ class Decider:
         if settings.SEED is not None:
             random.seed(settings.SEED)
 
-    def update(self, output_bounds=None, hidden_bounds=None, layer_bounds=None):
+    def update(self, output_bounds=None, hidden_bounds=None, layer_bounds=None, crown_params=None):
         if hidden_bounds is not None:
             for idx, (lb, ub) in enumerate(hidden_bounds):
                 b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
@@ -46,6 +46,10 @@ class Decider:
         if layer_bounds is not None:
             for node, bound in layer_bounds.items():
                 self.bounds_mapping[node] = torch.tensor(bound['lb']), torch.tensor(bound['ub'])
+
+        if crown_params is not None:
+            self.crown_params = crown_params
+
 
         
 
@@ -199,6 +203,23 @@ class Decider:
             assert node in unassigned_nodes
             l, u = self.bounds_mapping[node]
             return node, u.abs() >= l.abs()
+
+
+        if settings.DECISION == 'BABSR':
+            branching_reduceop = arguments.Config['bab']['branching']['reduceop']
+            orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, slopes, betas, history = self.crown_params
+
+            branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, batch=1, branching_reduceop=branching_reduceop)
+
+            decision_layer, decision_index = branching_decision[0]
+            # print(mask)
+            for m in range(decision_layer):
+                decision_index += mask[m].numel()
+
+            node = decision_index + 1
+            print('branching_decision', branching_decision, node, 'assigned:', node in unassigned_nodes)
+
+            return node, random.choice([True, False])
 
 
 

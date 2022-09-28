@@ -112,8 +112,10 @@ class DNNTheoremProver:
         Timers.toc('Randomized attack')
 
         self.crown = CrownWrapper(net)
+        self.deepzono = deepzono.DeepZono(net)
 
         # self.glpk_solver = GLPKSolver(net.n_input)
+        self.verified = False
 
     def _find_unassigned_nodes(self, assignment):
         assigned_nodes = list(assignment.keys()) 
@@ -130,7 +132,7 @@ class DNNTheoremProver:
         return expr
 
     @torch.no_grad()
-    def __call__(self, assignment, assignment_full=None):
+    def __call__(self, assignment, info=None):
 
         # debug
         self.count += 1
@@ -324,6 +326,13 @@ class DNNTheoremProver:
         Timers.tic('Crown functions')
         (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
         Timers.toc('Crown functions')
+
+
+        # Timers.tic('DeepZono functions')
+        # lower, upper = self.deepzono.forward_layer(lbs, ubs, lidx)
+        # Timers.toc('DeepZono functions')
+
+
         # print(lower2)
         # print(upper2)
         # print('---------------------------')

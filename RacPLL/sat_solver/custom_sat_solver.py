@@ -58,9 +58,29 @@ class CustomSATSolver(Solver):
         self.decider = decider
 
         self._early_stop = False
+        self._early_return_status = None
+
+        self._crown_decision_mapping = {}
+        for lid, lnodes in self._layers_mapping.items():
+            for jj, node in enumerate(lnodes):
+                self._crown_decision_mapping[node] = (lid, jj)
+
+
 
     def set_early_stop(self, status):
-        self._early_stop = status
+        self._early_stop = True
+        self._early_return_status = status
+
+    def get_current_assigned_node(self):
+        # print('_assignment_by_level', self._assignment_by_level)
+        dl = len(self._assignment_by_level) - 1
+        # if dl == 0:
+            # return None, 0, None
+        if len(self._assignment_by_level[dl]):
+            variable = self._assignment_by_level[dl][0] # index: 0
+        else:
+            variable = None
+        return variable, dl, [self._crown_decision_mapping.get(variable, None)]
 
     def _add_clause(self, clause):
         """
@@ -460,6 +480,8 @@ class CustomSATSolver(Solver):
             self._increment_step()
             if not self.propagate():
                 return 'UNSAT'
-            if self._is_sat() or self._early_stop:
+            if self._is_sat():
                 return 'SAT'
+            if self._early_stop:
+                return self._early_return_status
             self._decide()

@@ -374,6 +374,7 @@ class BoundRelu(BoundOptimizableActivation):
             lower_mask = lower > 0
             upper_mask = upper < 0
             if last_lA is not None:
+                # assert selected_alpha[0].dtype == torch.float32
                 lb_lower_d = selected_alpha[0].clamp(min=0.0, max=1.0)
                 lb_lower_d[:, lower_mask] = 1.0
                 lb_lower_d[:, upper_mask] = 0.0

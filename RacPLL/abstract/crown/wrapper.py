@@ -6,6 +6,7 @@ import torch
 from utils.timer import Timers
 import settings
 
+
 class CrownWrapper:
 
     def __init__(self, net):
@@ -47,7 +48,7 @@ class CrownWrapper:
         ptb = PerturbationLpNorm(norm=np.inf, eps=None, x_L=lower, x_U=upper)
         data = (lower + upper) / 2
         x = BoundedTensor(data, ptb).to(self.device)
-        (lb, ub), unstable_neurons = module.compute_bounds(x=(x,), method='backward')
+        (lb, ub), unstable_neurons = module.compute_bounds(x=(x,), method='backward', return_count_unstable_neuron=True)
 
         lb = lb.squeeze(0)
         ub = ub.squeeze(0)
