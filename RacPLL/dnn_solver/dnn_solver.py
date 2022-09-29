@@ -5,7 +5,8 @@ import time
 import copy
 
 # from dnn_solver.dnn_theorem_prover_2 import DNNTheoremProver
-from dnn_solver.dnn_theorem_prover import DNNTheoremProver
+from dnn_solver.dnn_theorem_prover_gurobi import DNNTheoremProverGurobi
+from dnn_solver.dnn_theorem_prover_crown import DNNTheoremProverCrown
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
 from utils.dnn_parser import DNNParser
@@ -36,15 +37,21 @@ class TheorySolver(Solver):
 
 class DNNSolver(TheorySolver):
 
-    def __init__(self, net, spec):
+    def __init__(self, net, spec, dataset):
 
         self.net = net
+        print(net)
+        # exit()
 
         layers_mapping = net.layers_mapping
         variables = [v for d in layers_mapping.values() for v in d]
 
-        self.decider = decider.Decider(net)
-        self.dnn_theorem_prover = DNNTheoremProver(net, spec=spec, decider=self.decider)
+        self.decider = decider.Decider(net, dataset)
+        if dataset == 'acasxu':
+            self.dnn_theorem_prover = DNNTheoremProverGurobi(net, spec=spec, decider=self.decider)
+        else:
+            self.dnn_theorem_prover = DNNTheoremProverCrown(net, spec=spec, decider=self.decider)
+
 
         super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
         

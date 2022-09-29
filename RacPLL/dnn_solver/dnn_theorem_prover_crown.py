@@ -28,7 +28,7 @@ from auto_LiRPA.utils import *
 from abstract.crown import *
 
 
-class DNNTheoremProver:
+class DNNTheoremProverCrown:
 
     def __init__(self, net, spec, decider=None):
 
@@ -42,10 +42,28 @@ class DNNTheoremProver:
         self.verified = False
         self.decider = decider
 
-        prop_mat, prop_rhs = spec.mat[0]
 
-        print(prop_mat, prop_rhs)
+        ##########################################################################################
+
+        # with contextlib.redirect_stdout(open(os.devnull, 'w')):
+        self.model = grb.Model()
+        self.model.setParam('OutputFlag', False)
+
+        # input bounds
+        bounds_init = self.spec.get_input_property()
+        self.lbs_init = torch.tensor(bounds_init['lbs'], dtype=settings.DTYPE, device=net.device)
+        self.ubs_init = torch.tensor(bounds_init['ubs'], dtype=settings.DTYPE, device=net.device)
+
+        self.gurobi_vars = [
+            self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
+            for i in range(self.net.n_input)
+        ]
+        self.transformer = SymbolicNetwork(net)
+        self.last_assignment = {}        
+        self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
         
+        ##########################################################################################
+        prop_mat, prop_rhs = spec.mat[0]
         if len(prop_rhs) > 1:
             raise
         else:
@@ -79,7 +97,10 @@ class DNNTheoremProver:
 
         if net.dataset == 'mnist':
             input_shape = (1, 1, 28, 28)
-
+        elif net.dataset == 'cifar':
+            input_shape = (1, 3, 32, 32)
+        elif net.dataset == 'test':
+            input_shape = (1, 1)
         else:
             raise
 
@@ -115,6 +136,11 @@ class DNNTheoremProver:
         self.last_domain = None
 
 
+
+    def _get_equation(self, coeffs):
+        expr = grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
+        return expr
+
     def _find_unassigned_nodes(self, assignment):
         assigned_nodes = list(assignment.keys()) 
         for k, v in self.layers_mapping.items():
@@ -124,6 +150,28 @@ class DNNTheoremProver:
             else:
                 return set(v).difference(intersection_nodes)
         return return_nodes
+
+
+    def _optimize(self):
+        self.model.update()
+        self.model.reset()
+        self.model.optimize()
+
+
+    def get_solution(self):
+        if self.model.status == grb.GRB.LOADED:
+            self._optimize()
+        if self.model.status == grb.GRB.OPTIMAL:
+            return torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
+        return None
+
+
+    def check_solution(self, solution):
+        if torch.any(solution < self.lbs_init.view(self.net.input_shape)) or torch.any(solution > self.ubs_init.view(self.net.input_shape)):
+            return False
+        if self.spec.check_solution(self.net(solution)):
+            return True
+        return False
 
 
     def __call__(self, assignment, info=None):
@@ -201,7 +249,42 @@ class DNNTheoremProver:
             return True, implications, is_full_assignment
 
         if is_full_assignment:
-            raise
+            output_mat, backsub_dict = self.transformer(assignment)
+            backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
+
+            if backsub_dict_expr is not None:
+                backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
+            else:
+                backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
+
+            self.backsub_cacher.put(assignment, backsub_dict_expr)
+            constrs = []
+            for node, status in assignment.items():
+                if status:
+                    constrs.append(self.model.addLConstr(backsub_dict_expr[node] >= 1e-6))
+                else:
+                    constrs.append(self.model.addLConstr(backsub_dict_expr[node] <= 0))
+            
+            flag_sat = False
+            output_constraint = self.spec.get_output_property(
+                [self._get_equation(output_mat[i]) for i in range(self.net.n_output)]
+            )
+            for cnf in output_constraint:
+                ci = [self.model.addLConstr(_) for _ in cnf]
+                self._optimize()
+                self.model.remove(ci)
+                if self.model.status == grb.GRB.OPTIMAL:
+                    if self.check_solution(self.get_solution()):
+                        flag_sat = True
+                        break
+
+            self.model.remove(constrs)
+            
+            if flag_sat:
+                self.solution = self.get_solution()
+                return True, {}, is_full_assignment
+            return False, cc, None
+
 
         if (self.last_dl is not None) and (self.last_dl == dl) and (self.last_domain is not None):
             print('vao day')
@@ -259,7 +342,7 @@ class DNNTheoremProver:
 
         else:
             print('Back to', dl, cur_var, assignment[cur_var])
-            self.last_domain = self.domains[-1]
+            self.last_domain = self.domains.pop()
 
 
 
@@ -279,6 +362,24 @@ class DNNTheoremProver:
             self.decider.update(crown_params=crown_params)
 
         self.last_dl = dl
+
+
+        count = 1
+        for lbs, ubs in zip(orig_lbs[:-1], orig_ubs[:-1]):
+            if (lbs - ubs).max() > 1e-6:
+                return False, cc, None
+
+            for jj, (l, u) in enumerate(zip(lbs[0].flatten(), ubs[0].flatten())):
+                node = count + jj
+                if node in assignment:
+                    continue
+                if u <= 0:
+                    implications[node] = {'pos': False, 'neg': True}
+                elif l > 0:
+                    implications[node] = {'pos': True, 'neg': False}
+            count += lbs.numel()
+
+        print(implications)
 
         return True, implications, is_full_assignment
 

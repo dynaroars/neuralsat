@@ -21,7 +21,7 @@ def compute_ratio(lower_bound, upper_bound):
 
 class Decider:
 
-    def __init__(self, net):
+    def __init__(self, net, dataset):
 
         self.net = net
         self.layers_mapping = net.layers_mapping
@@ -29,6 +29,7 @@ class Decider:
         self.bounds_mapping = {}
         self.target_direction_list = None
         self.device = net.device
+        self.dataset = dataset
 
         if settings.SEED is not None:
             random.seed(settings.SEED)
@@ -93,101 +94,102 @@ class Decider:
 
 
     def get(self, unassigned_nodes):
-        if settings.DECISION == 'MAX_BOUND':
-            scores = [(n, self.get_score(n)) for n in unassigned_nodes]
-            scores = sorted(scores, key=lambda tup: tup[1], reverse=True)
-            node = scores[0][0]
-            l, u = self.bounds_mapping[node]
-            return node, u.abs() >= l.abs()
+        # if settings.DECISION == 'MAX_BOUND':
+        #     scores = [(n, self.get_score(n)) for n in unassigned_nodes]
+        #     scores = sorted(scores, key=lambda tup: tup[1], reverse=True)
+        #     node = scores[0][0]
+        #     l, u = self.bounds_mapping[node]
+        #     return node, u.abs() >= l.abs()
 
-        if settings.DECISION == 'MIN_BOUND':
+        if self.dataset == 'acasxu':
+        # if settings.DECISION == 'MIN_BOUND':
             scores = [(n, self.get_score(n)) for n in unassigned_nodes]
             scores = sorted(scores, key=lambda tup: tup[1], reverse=False)
             node = scores[0][0]
             l, u = self.bounds_mapping[node]
             return node, u.abs() >= l.abs()
 
-        if settings.DECISION == 'RANDOM':
-            node = random.choice(unassigned_nodes)
-            return node, random.choice([True, False])
+        # if settings.DECISION == 'RANDOM':
+        #     node = random.choice(unassigned_nodes)
+        #     return node, random.choice([True, False])
         
-        if settings.DECISION == 'KW':
-            relu_idx = len(self.layers_mapping) - 1
+        # if settings.DECISION == 'KW':
+        #     relu_idx = len(self.layers_mapping) - 1
 
-            # for idx, direction in self.target_direction_list:
-            #     if direction == 'maximize':
-            #         val = self.output_upper[idx]
-            #     else:
-            #         val = self.output_lower[idx]
+        #     # for idx, direction in self.target_direction_list:
+        #     #     if direction == 'maximize':
+        #     #         val = self.output_upper[idx]
+        #     #     else:
+        #     #         val = self.output_lower[idx]
 
-            ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE, device=self.device)
+        #     ratio = torch.ones(self.net.n_output, dtype=settings.DTYPE, device=self.device)
 
-            decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
+        #     decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
 
-            mask_c = torch.tensor([True if i in unassigned_nodes else False for i in self.layers_mapping[decision_layer]])
-            # print(mask_c)
+        #     mask_c = torch.tensor([True if i in unassigned_nodes else False for i in self.layers_mapping[decision_layer]])
+        #     # print(mask_c)
             
-            intercept_tb = []
-            score = []
+        #     intercept_tb = []
+        #     score = []
 
-            for layer_idx, layer in reversed(list(enumerate(self.net.layers))):
-                # print(layer_idx, layer)
-                if isinstance(layer, nn.Linear):
-                    ratio = ratio.unsqueeze(-1)
-                    ratio = layer.weight.t() @ ratio
-                    ratio = ratio.view(-1)
-                if isinstance(layer, nn.ReLU):
-                    # print(relu_idx)
-                    nodes = self.layers_mapping[relu_idx]
-                    # if relu_idx == decision_layer:
-                    #     mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in nodes])
-                    # else:
-                    #     mask = torch.tensor([0 if (self.bounds_mapping[n][0] > 0 or self.bounds_mapping[n][0] < 0) else 1 for n in nodes])
+        #     for layer_idx, layer in reversed(list(enumerate(self.net.layers))):
+        #         # print(layer_idx, layer)
+        #         if isinstance(layer, nn.Linear):
+        #             ratio = ratio.unsqueeze(-1)
+        #             ratio = layer.weight.t() @ ratio
+        #             ratio = ratio.view(-1)
+        #         if isinstance(layer, nn.ReLU):
+        #             # print(relu_idx)
+        #             nodes = self.layers_mapping[relu_idx]
+        #             # if relu_idx == decision_layer:
+        #             #     mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in nodes])
+        #             # else:
+        #             #     mask = torch.tensor([0 if (self.bounds_mapping[n][0] > 0 or self.bounds_mapping[n][0] < 0) else 1 for n in nodes])
 
-                    lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE, device=self.device)
-                    ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE, device=self.device)
-                    ratio_temp_0, ratio_temp_1 = compute_ratio(lb, ub)
-                    # print('ratio_temp_0:', ratio_temp_0)
-                    # print('ratio_temp_1:', ratio_temp_1)
+        #             lb = torch.tensor([self.bounds_mapping[node][0] for node in nodes], dtype=settings.DTYPE, device=self.device)
+        #             ub = torch.tensor([self.bounds_mapping[node][1] for node in nodes], dtype=settings.DTYPE, device=self.device)
+        #             ratio_temp_0, ratio_temp_1 = compute_ratio(lb, ub)
+        #             # print('ratio_temp_0:', ratio_temp_0)
+        #             # print('ratio_temp_1:', ratio_temp_1)
 
-                    # intercept
-                    intercept_temp = torch.clamp(ratio, max=0)
-                    intercept_candidate = intercept_temp * ratio_temp_1
-                    # print(intercept_candidate.shape)
-                    # intercept_tb.insert(0, intercept_candidate.view(-1) * mask)
+        #             # intercept
+        #             intercept_temp = torch.clamp(ratio, max=0)
+        #             intercept_candidate = intercept_temp * ratio_temp_1
+        #             # print(intercept_candidate.shape)
+        #             # intercept_tb.insert(0, intercept_candidate.view(-1) * mask)
 
-                    # bias
-                    b_temp = self.net.layers[layer_idx-1].bias.detach()
-                    if isinstance(self.net.layers[layer_idx-1], nn.Conv2d):
-                        b_temp = b_temp.unsqueeze(-1).unsqueeze(-1)
+        #             # bias
+        #             b_temp = self.net.layers[layer_idx-1].bias.detach()
+        #             if isinstance(self.net.layers[layer_idx-1], nn.Conv2d):
+        #                 b_temp = b_temp.unsqueeze(-1).unsqueeze(-1)
 
-                    ratio_1 = ratio * (ratio_temp_0 - 1)
-                    bias_candidate_1 = b_temp * ratio_1
-                    ratio = ratio * ratio_temp_0
-                    bias_candidate_2 = b_temp * ratio
-                    bias_candidate = torch.max(bias_candidate_1, bias_candidate_2)
-                    # print(bias_candidate.shape)
+        #             ratio_1 = ratio * (ratio_temp_0 - 1)
+        #             bias_candidate_1 = b_temp * ratio_1
+        #             ratio = ratio * ratio_temp_0
+        #             bias_candidate_2 = b_temp * ratio
+        #             bias_candidate = torch.max(bias_candidate_1, bias_candidate_2)
+        #             # print(bias_candidate.shape)
 
-                    score_candidate = bias_candidate + intercept_candidate
-                    # print(score_candidate.shape)
-                    # print(mask.shape)
-                    score.insert(0, abs(score_candidate).view(-1))
+        #             score_candidate = bias_candidate + intercept_candidate
+        #             # print(score_candidate.shape)
+        #             # print(mask.shape)
+        #             score.insert(0, abs(score_candidate).view(-1))
 
-                    if relu_idx == decision_layer:
-                        break
+        #             if relu_idx == decision_layer:
+        #                 break
 
-                    relu_idx -= 1
+        #             relu_idx -= 1
 
-            info = torch.max(score[0][mask_c], 0) 
-            decision_index = info[1].item()
+        #     info = torch.max(score[0][mask_c], 0) 
+        #     decision_index = info[1].item()
 
-            # node = self.layers_mapping[decision_layer][decision_index]
-            node = unassigned_nodes[decision_index]
+        #     # node = self.layers_mapping[decision_layer][decision_index]
+        #     node = unassigned_nodes[decision_index]
 
-            l, u = self.bounds_mapping[node]
-            return node, u.abs() >= l.abs()
+        #     l, u = self.bounds_mapping[node]
+        #     return node, u.abs() >= l.abs()
 
-        if settings.DECISION == 'GRAD':
+        # if settings.DECISION == 'GRAD':
             decision_layer = self.reversed_layers_mapping[unassigned_nodes[0]]
             mask = torch.tensor([1 if i in unassigned_nodes else 0 for i in self.layers_mapping[decision_layer]])
             bounds = torch.tensor([self.bounds_mapping[n] for n in self.layers_mapping[decision_layer]], dtype=settings.DTYPE, device=self.device)
@@ -205,7 +207,8 @@ class Decider:
             return node, u.abs() >= l.abs()
 
 
-        if settings.DECISION == 'BABSR':
+        # if settings.DECISION == 'BABSR':
+        else:
             branching_reduceop = arguments.Config['bab']['branching']['reduceop']
             orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, slopes, betas, history = self.crown_params
 
@@ -217,7 +220,7 @@ class Decider:
                 decision_index += mask[m].numel()
 
             node = decision_index + 1
-            print('branching_decision', branching_decision, node, 'assigned:', node in unassigned_nodes)
+            print('branching_decision', branching_decision, node, 'unassigned:', node in unassigned_nodes)
 
             return node, random.choice([True, False])
 

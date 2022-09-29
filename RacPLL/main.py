@@ -7,18 +7,17 @@ from dnn_solver.spec import SpecificationVNNLIB
 from utils.read_vnnlib import read_vnnlib_simple
 from utils.dnn_parser import DNNParser
 from utils.timer import Timers
-from abstract.crown import *
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--net', type=str, required=True)
     parser.add_argument('--spec', type=str, required=True)
+    parser.add_argument('--dataset', type=str, required=True, choices=['acasxu', 'mnist', 'cifar', 'test'])
     parser.add_argument('--solution', action='store_true')
     parser.add_argument('--timer', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
-    parser.add_argument('--dataset', default='mnist')
-    parser.add_argument('--timeout', type=int)
+    parser.add_argument('--timeout', type=int, default=360)
     parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
@@ -39,13 +38,11 @@ if __name__ == '__main__':
         for i in spec_list[0][1]:
             new_spec_list.append((bounds, [i]))
         spec_list = new_spec_list
-    print(len(spec_list))
 
     for i, s in enumerate(spec_list):
         spec = SpecificationVNNLIB(s)
-        solver = DNNSolver(net, spec)
+        solver = DNNSolver(net, spec, args.dataset)
         status = solver.solve(timeout=args.timeout)
-        print('done', i, status)
         if status == 'SAT':
             break
 

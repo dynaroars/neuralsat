@@ -49,7 +49,7 @@ def worker_func(param):
 
 
 
-class DNNTheoremProver:
+class DNNTheoremProverGurobi:
 
     epsilon = 1e-6
     skip = 1e-3
@@ -102,14 +102,14 @@ class DNNTheoremProver:
         # pgd attack 
         self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
 
-        Timers.tic('Randomized attack')
-        self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
-        stat, adv = self.rf.eval(timeout=settings.FALSIFICATION_TIMEOUT)
-        if settings.DEBUG:
-            print('Randomized attack:', stat)
-        if stat == 'violated':
-            self.solution = adv[0]
-        Timers.toc('Randomized attack')
+        # Timers.tic('Randomized attack')
+        # self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
+        # stat, adv = self.rf.eval(timeout=settings.FALSIFICATION_TIMEOUT)
+        # if settings.DEBUG:
+        #     print('Randomized attack:', stat)
+        # if stat == 'violated':
+        #     self.solution = adv[0]
+        # Timers.toc('Randomized attack')
 
         self.crown = CrownWrapper(net)
         self.deepzono = deepzono.DeepZono(net)
@@ -135,6 +135,7 @@ class DNNTheoremProver:
     def __call__(self, assignment, info=None):
 
         # debug
+        print(assignment)
         self.count += 1
         cc = frozenset()
 

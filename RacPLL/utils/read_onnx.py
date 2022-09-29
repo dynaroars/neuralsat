@@ -369,8 +369,6 @@ class ONNXParser:
                 layers.append(op)
             elif isinstance(op, nn.ReLU):
                 layers.append(op)
-            elif isinstance(op, nn.ReLU):
-                layers.append(op)
             elif isinstance(op, nn.Linear):
                 weight = op.weight.data
 

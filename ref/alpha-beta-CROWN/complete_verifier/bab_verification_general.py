@@ -338,11 +338,11 @@ def update_parameters(model):
 def mnist_model():
     model = nn.Sequential(
         nn.Flatten(),
-        nn.Linear(1,32),
+        nn.Linear(1,8),
+        # nn.ReLU(),
+        # nn.Linear(32,32),
         nn.ReLU(),
-        nn.Linear(32,32),
-        nn.ReLU(),
-        nn.Linear(32, 1)
+        nn.Linear(8, 1)
     )
     return model
 
@@ -437,6 +437,8 @@ def main():
             # model_ori = convert_test_model(model_ori)
             # raise
             model_ori = mnist_model()
+            # torch.onnx.export(model_ori, torch.zeros(shape), "test_tiny.onnx")
+            # exit()
 
         elif arguments.Config["data"]["dataset"] == 'NN4SYS':
             from convert_nn4sys_model import convert_and_save_nn4sys, get_path
