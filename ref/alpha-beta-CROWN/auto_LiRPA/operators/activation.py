@@ -455,7 +455,6 @@ class BoundRelu(BoundOptimizableActivation):
                     bias = bias + torch.einsum('sb...,sb...->sb', neg_A, b_neg)
                 return A, bias
             elif type(last_A) == Patches:
-                raise
                 # if last_A is not an identity matrix
                 assert last_A.identity == 0
                 if last_A.identity == 0:
