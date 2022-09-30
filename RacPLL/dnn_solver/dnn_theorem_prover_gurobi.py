@@ -328,18 +328,18 @@ class DNNTheoremProverGurobi:
 
         lbs = torch.tensor([bounds[node]['lb'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
         ubs = torch.tensor([bounds[node]['ub'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
-        # Timers.tic('DeepPoly')
-        # (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
-        # Timers.toc('DeepPoly')
+        Timers.tic('DeepPoly')
+        (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
+        Timers.toc('DeepPoly')
 
         # print('---------------------------')
         # print(lower)
         # print(upper)
         # print()
 
-        Timers.tic('Crown functions')
-        (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
-        Timers.toc('Crown functions')
+        # Timers.tic('Crown functions')
+        # (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
+        # Timers.toc('Crown functions')
 
 
         # Timers.tic('DeepZono functions')
