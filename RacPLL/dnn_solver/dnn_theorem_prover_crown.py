@@ -95,15 +95,10 @@ class DNNTheoremProverCrown:
 
         print(f'##### True label: {y}, Tested against: {target} ######')
 
-        if net.dataset == 'mnist':
-            input_shape = (1, 1, 28, 28)
-        elif net.dataset == 'cifar':
-            input_shape = (1, 3, 32, 32)
-        elif net.dataset == 'test':
-            input_shape = (1, 1)
-        else:
-            raise
+        # if target != 1:
+        #     self.verified = True
 
+        input_shape = net.input_shape
         x_range = torch.tensor(spec.bounds, dtype=settings.DTYPE, device=net.device)
         data_min = x_range[:, 0].reshape(input_shape)
         data_max = x_range[:, 1].reshape(input_shape)
@@ -116,7 +111,7 @@ class DNNTheoremProverCrown:
 
         self.lirpa = LiRPAConvNet(net.layers, y, target, device=net.device, in_size=input_shape, deterministic=False, conv_mode='patches', c=c)
 
-        print('Model prediction is:', self.lirpa.net(data))
+        # print('Model prediction is:', self.lirpa.net(data))
 
         self.decision_thresh = decision_thresh
 
@@ -175,20 +170,24 @@ class DNNTheoremProverCrown:
 
 
     def __call__(self, assignment, info=None):
-        print('\n\n-------------------------------------------------\n')
+        # print('\n\n-------------------------------------------------\n')
         
         self.count += 1
         cc = frozenset()
         implications = {}
         cur_var, dl, branching_decision = info
-        print(cur_var, dl, branching_decision, assignment.get(cur_var, None), assignment)
+
+        # print(cur_var, dl, branching_decision, assignment.get(cur_var, None), assignment)
+
         unassigned_nodes = self._find_unassigned_nodes(assignment)
         is_full_assignment = True if unassigned_nodes is None else False
 
         # initialize
         if len(assignment) == 0:
+            Timers.tic('build_the_model')
             global_ub, global_lb, _, _, primals, updated_mask, lA, lower_bounds, upper_bounds, pre_relu_indices, slope, history = self.lirpa.build_the_model(
                 None, self.x, stop_criterion_func=stop_criterion_sum(self.decision_thresh))
+            Timers.toc('build_the_model')
 
             self.pre_relu_indices = pre_relu_indices
 
@@ -249,6 +248,7 @@ class DNNTheoremProverCrown:
             return True, implications, is_full_assignment
 
         if is_full_assignment:
+            Timers.tic('check full assignment')
             output_mat, backsub_dict = self.transformer(assignment)
             backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
 
@@ -279,7 +279,8 @@ class DNNTheoremProverCrown:
                         break
 
             self.model.remove(constrs)
-            
+            Timers.toc('check full assignment')
+
             if flag_sat:
                 self.solution = self.get_solution()
                 return True, {}, is_full_assignment
@@ -287,14 +288,14 @@ class DNNTheoremProverCrown:
 
 
         if (self.last_dl is not None) and (self.last_dl == dl) and (self.last_domain is not None):
-            print('vao day')
+            # print('vao day')
             # implication iteration
             # TODO: haven't known yet
             return True, implications, is_full_assignment
 
-        print('branching_decision:', cur_var, dl, branching_decision)
         # last_domain = self.domains[-1]
         if self.last_domain is not None:
+            # print('branching_decision:', cur_var, dl, branching_decision)
             # assert dl == self.last_domain.depth + 1, f"{dl}, {self.last_domain.depth}"
 
             mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(self.last_domain)
@@ -305,21 +306,24 @@ class DNNTheoremProverCrown:
             split["decision"] = [[bd] for bd in branching_decision]
             split["coeffs"] = [[1.] for i in range(len(branching_decision))]
             split["diving"] = 0
-            print(split)
+            # print(split)
 
-
+            Timers.tic('get_lower_bound')
             ret = self.lirpa.get_lower_bound(orig_lbs, orig_ubs, split, slopes=slopes, history=history,
                                     split_history=split_history, layer_set_bound=True, betas=betas,
                                     single_node_split=True, intermediate_betas=intermediate_betas)
+            Timers.toc('get_lower_bound')
 
             dom_ub, dom_lb, dom_ub_point, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas, primals = ret
 
             batch = 1
+            Timers.tic('add_domain')
             domain_list = add_domain_parallel(lA=lAs[:2*batch], lb=dom_lb[:2*batch], ub=dom_ub[:2*batch], lb_all=dom_lb_all[:2*batch], up_all=dom_ub_all[:2*batch],
                                              domains=None, selected_domains=selected_domains[:batch], slope=slopes[:2*batch], beta=betas[:2*batch],
                                              growth_rate=0, branching_decision=branching_decision, decision_thresh=self.decision_thresh,
                                              split_history=split_history[:2*batch], intermediate_betas=intermediate_betas[:2*batch],
                                              check_infeasibility=False, primals=primals[:2*batch] if primals is not None else None)
+            Timers.toc('add_domain')
             # for d in domain_list:
             #     print(d.lower_bound)
             # print(cur_var, assignment[cur_var])
@@ -329,7 +333,7 @@ class DNNTheoremProverCrown:
             else:
                 save_domain, self.last_domain = domain_list
 
-            print(self.last_domain.lower_bound)
+            # print(self.last_domain.lower_bound)
 
             self.domains.append(save_domain)
 
@@ -341,7 +345,7 @@ class DNNTheoremProverCrown:
 
 
         else:
-            print('Back to', dl, cur_var, assignment[cur_var])
+            # print('Back to', dl, cur_var, assignment[cur_var])
             self.last_domain = self.domains.pop()
 
 
@@ -349,7 +353,7 @@ class DNNTheoremProverCrown:
         if self.last_domain.lower_bound >= self.decision_thresh:
             self.last_domain = None
             self.last_dl = None
-            print('unsat')
+            # print('unsat')
             return False, cc, None
 
 
@@ -358,7 +362,7 @@ class DNNTheoremProverCrown:
 
 
         crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
-        if self.decider is not None and settings.DECISION != 'RANDOM':
+        if self.decider:
             self.decider.update(crown_params=crown_params)
 
         self.last_dl = dl
@@ -379,7 +383,7 @@ class DNNTheoremProverCrown:
                     implications[node] = {'pos': True, 'neg': False}
             count += lbs.numel()
 
-        print(implications)
+        # print(implications)
 
         return True, implications, is_full_assignment
 

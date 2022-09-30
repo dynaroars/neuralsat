@@ -220,7 +220,7 @@ class Decider:
                 decision_index += mask[m].numel()
 
             node = decision_index + 1
-            print('branching_decision', branching_decision, node, 'unassigned:', node in unassigned_nodes)
+            # print('branching_decision', branching_decision, node, 'unassigned:', node in unassigned_nodes)
 
             return node, random.choice([True, False])
 

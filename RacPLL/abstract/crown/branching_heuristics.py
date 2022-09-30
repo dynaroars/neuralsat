@@ -254,7 +254,7 @@ def choose_node_parallel_crown(lower_bounds, upper_bounds, orig_mask, net, pre_r
                 #     print('using first layer split')
                 # print('\tusing intercept score')
             else:
-                print('\t using a random choice')
+                # print('\t using a random choice')
                 mask_item = [m[b] for m in mask]
                 for preferred_layer in np.random.choice(len(pre_relu_indices), len(pre_relu_indices), replace=False):
                     if len(mask_item[preferred_layer].nonzero(as_tuple=False)) != 0:

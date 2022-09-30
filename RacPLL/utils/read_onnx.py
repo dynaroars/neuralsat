@@ -457,12 +457,24 @@ class ONNXParser:
 
 class ONNXParser2:
 
-    def __init__(self, filename, transpose_weight=False):
+    def __init__(self, filename, dataset):
 
-        self.input_shape = (1,28,28)
-        model, is_channel_last = load_model_onnx(filename, input_shape=self.input_shape)
+        if dataset == 'mnist':
+            input_shape = (1, 1, 28, 28)
+            n_output = 10
+        elif dataset == 'cifar':
+            input_shape = (1, 3, 32, 32)
+            n_output = 10
+        else:
+            raise 
+
+        model, is_channel_last = load_model_onnx(filename, input_shape=input_shape[1:])
+
+        if is_channel_last:
+            input_shape = input_shape[:1] + input_shape[2:] + input_shape[1:2]
+            print(f'Notice: this ONNX file has NHWC order. We assume the X in vnnlib is also flattend in in NHWC order {input_shape}')
 
         self.pytorch_model = PyTorchModelWrapper(model)
-        self.pytorch_model.n_input = math.prod(self.input_shape)
-        self.pytorch_model.n_output = 10
-        self.pytorch_model.input_shape = self.input_shape
+        self.pytorch_model.n_input = math.prod(input_shape)
+        self.pytorch_model.n_output = n_output
+        self.pytorch_model.input_shape = input_shape

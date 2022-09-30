@@ -40,8 +40,6 @@ class DNNSolver(TheorySolver):
     def __init__(self, net, spec, dataset):
 
         self.net = net
-        print(net)
-        # exit()
 
         layers_mapping = net.layers_mapping
         variables = [v for d in layers_mapping.values() for v in d]
@@ -52,10 +50,7 @@ class DNNSolver(TheorySolver):
         else:
             self.dnn_theorem_prover = DNNTheoremProverCrown(net, spec=spec, decider=self.decider)
 
-
         super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
-        
-
 
     def propagate(self):
         if settings.DEBUG:
@@ -81,7 +76,11 @@ class DNNSolver(TheorySolver):
         Timers.tic('Theorem deduction')
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node())
         Timers.toc('Theorem deduction')
-        print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
+
+        if hasattr(self.dnn_theorem_prover, 'domains'):
+            print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), 'domains =', len(self.dnn_theorem_prover.domains), time.time() - tic)
+        else:
+            print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len(assignment), time.time() - tic)
         
         # Timers.print_stats()
         # print()

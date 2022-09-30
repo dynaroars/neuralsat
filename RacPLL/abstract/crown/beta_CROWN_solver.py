@@ -1486,7 +1486,7 @@ class LiRPAConvNet:
         # first get CROWN bounds
         # Reference bounds are intermediate layer bounds from initial CROWN bounds.
         lb, ub, aux_reference_bounds = self.net.init_slope((self.x,), share_slopes=share_slopes, c=self.c, bound_upper=False)
-        print('initial CROWN bounds:', lb, ub)
+        # print('initial CROWN bounds:', lb, ub)
         if stop_criterion_func(lb).all().item():
             # Fast path. Initial CROWN bound can verify the network.
             if not self.simplify:
@@ -1510,7 +1510,7 @@ class LiRPAConvNet:
         # self.layer_names.sort()
 
         # update bounds
-        print('initial alpha-CROWN bounds:', lb, ub)
+        # print('initial alpha-CROWN bounds:', lb, ub)
         primals, duals, mini_inp = None, None, None
         # mini_inp, primals = self.get_primals(self.A_dict)
         lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + 99)  # primals are better upper bounds

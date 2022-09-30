@@ -47,11 +47,13 @@ class CustomSATSolver(Solver):
 
         self._all_vars = sortedcontainers.SortedList(variables)
 
+        Timers.tic('_add_clause')
         for var in self._all_vars:
             self._formula.add(frozenset({var, -var}))
 
         for clause in self._formula:
             self._add_clause(clause)
+        Timers.toc('_add_clause')
 
         self.start = True
 
@@ -77,7 +79,7 @@ class CustomSATSolver(Solver):
         # if dl == 0:
             # return None, 0, None
         if len(self._assignment_by_level[dl]):
-            variable = self._assignment_by_level[dl][0] # index: 0
+            variable = self._assignment_by_level[dl][-1] # index: -1
         else:
             variable = None
         return variable, dl, [self._crown_decision_mapping.get(variable, None)]
@@ -472,10 +474,10 @@ class CustomSATSolver(Solver):
 
     def solve(self, timeout=None) -> bool:
         self._satisfy_unit_clauses()
-        start = time.time()
+        start = time.perf_counter()
         while True:
             if timeout is not None:
-                if time.time() - start >= timeout:
+                if time.perf_counter() - start >= timeout:
                     return 'TIMEOUT'
             self._increment_step()
             if not self.propagate():

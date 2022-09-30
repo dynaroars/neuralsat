@@ -28,7 +28,7 @@ class SymbolicNetwork:
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
                 l = SymbolicConv2d(layer, self.device)
-            elif isinstance(layer, nn.Flatten):
+            elif isinstance(layer, nn.Flatten) or isinstance(layer, onnx2pytorch.operations.Flatten):
                 l = SymbolicFlatten(self.device)
             elif isinstance(layer, onnx2pytorch.operations.Reshape):
                 l = SymbolicReshape(layer, self.device)

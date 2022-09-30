@@ -673,7 +673,7 @@ class BoundedModule(nn.Module):
             node.opt_start()
             init_intermediate_bounds[node.inputs[0].name] = ([node.inputs[0].lower.detach(), node.inputs[0].upper.detach()])
 
-        print("alpha-CROWN optimizable variables initialized.")
+        # print("alpha-CROWN optimizable variables initialized.")
         return l, u, init_intermediate_bounds
 
     def beta_bias(self):
@@ -881,7 +881,7 @@ class BoundedModule(nn.Module):
                     f"loss: {loss.item()}, lr: {opt.param_groups[0]['lr']}")
 
             if isinstance(stop_criterion, torch.Tensor) and stop_criterion.all():
-                print(f"\nall verified at {i}th iter")
+                # print(f"\nall verified at {i}th iter")
                 break
 
             current_lr = []
@@ -984,7 +984,7 @@ class BoundedModule(nn.Module):
                     if infeasible_neurons.any():
                         print('infeasible!!!!!!!!!!!!!!', infeasible_neurons.sum().item(), infeasible_neurons.nonzero()[:, 0])
 
-        print("best_l after optimization:", best_l.sum().item(), "with beta sum per layer:", [p.sum().item() for p in betas])
+        # print("best_l after optimization:", best_l.sum().item(), "with beta sum per layer:", [p.sum().item() for p in betas])
         # np.save('solve_slope.npy', np.array(record))
         # print('alpha/beta optimization time:', time.time() - start)
         return best_ret

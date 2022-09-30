@@ -13,6 +13,6 @@ print('SEED:', SEED)
 HEURISTIC_DEEPZONO = False
 HEURISTIC_DEEPPOLY = True
 
-FALSIFICATION_TIMEOUT = 0.01
+FALSIFICATION_TIMEOUT = 0.5
 
 BENCHMARKS = ['acasxu', 'cifar2020', 'mnistfc']#, 'oval21', 'nn4sys', 'eran', 'marabou-cifar10']

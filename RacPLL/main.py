@@ -2,9 +2,10 @@ import argparse
 import torch
 import time
 
-from dnn_solver.dnn_solver import DNNSolver
-from dnn_solver.spec import SpecificationVNNLIB
+from heuristic.falsification import gradient_falsification
 from utils.read_vnnlib import read_vnnlib_simple
+from dnn_solver.spec import SpecificationVNNLIB
+from dnn_solver.dnn_solver import DNNSolver
 from utils.dnn_parser import DNNParser
 from utils.timer import Timers
 
@@ -15,9 +16,10 @@ if __name__ == '__main__':
     parser.add_argument('--spec', type=str, required=True)
     parser.add_argument('--dataset', type=str, required=True, choices=['acasxu', 'mnist', 'cifar', 'test'])
     parser.add_argument('--solution', action='store_true')
+    parser.add_argument('--attack', action='store_true')
     parser.add_argument('--timer', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
-    parser.add_argument('--timeout', type=int, default=360)
+    parser.add_argument('--timeout', type=int, default=3600)
     parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
@@ -33,27 +35,39 @@ if __name__ == '__main__':
     tic = time.time()
 
     new_spec_list = []
+    attacked = False
+    status = 'UNKNOWN'
     if args.dataset != 'acasxu':
+        if args.attack:
+            Timers.tic('PGD attack')
+            pgd = gradient_falsification.GradientFalsification(net, SpecificationVNNLIB(spec_list[0]))
+            attacked, adv = pgd.evaluate()
+            if attacked:
+                status = 'SAT'
+                print(args.net, args.spec, status, time.time() - tic)
+            Timers.toc('PGD attack')
+
         bounds = spec_list[0][0]
         for i in spec_list[0][1]:
             new_spec_list.append((bounds, [i]))
         spec_list = new_spec_list
 
-    for i, s in enumerate(spec_list):
-        spec = SpecificationVNNLIB(s)
-        solver = DNNSolver(net, spec, args.dataset)
-        status = solver.solve(timeout=args.timeout)
-        if status == 'SAT':
-            break
+    if not attacked:
+        for i, s in enumerate(spec_list):
+            spec = SpecificationVNNLIB(s)
+            solver = DNNSolver(net, spec, args.dataset)
+            status = solver.solve(timeout=args.timeout)
+            if status in ['SAT', 'TIMEOUT']:
+                break
 
-    print(args.net, args.spec, status, time.time() - tic)
-    if status=='SAT' and args.solution:
-        solution = solver.get_solution()
-        output = solver.net(solution)
-        print('\t- lower:', spec.get_input_property()['lbs'])
-        print('\t- upper:', spec.get_input_property()['ubs'])
-        print('\t- solution:', solution.detach().numpy().tolist())
-        print('\t- output:', output.detach().numpy().tolist())
+        print(args.net, args.spec, status, time.time() - tic)
+        if status=='SAT' and args.solution:
+            solution = solver.get_solution()
+            output = solver.net(solution)
+            print('\t- lower:', spec.get_input_property()['lbs'])
+            print('\t- upper:', spec.get_input_property()['ubs'])
+            print('\t- solution:', solution.detach().numpy().tolist())
+            print('\t- output:', output.detach().numpy().tolist())
 
     if args.timer:
         Timers.toc('dnn_solver')
