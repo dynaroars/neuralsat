@@ -291,7 +291,7 @@ class DNNTheoremProverGurobi:
             if node in self.optimized_layer_bounds:
                 lb, ub = self.optimized_layer_bounds[node]
 
-            if (lb > -1e-6 or ub <= 1e-6) and False:
+            if (lb > -1e-6 or ub <= 1e-6):
                 pass
             else:
                 obj = backsub_dict_expr[node]
