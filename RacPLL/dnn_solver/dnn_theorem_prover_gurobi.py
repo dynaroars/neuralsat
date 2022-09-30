@@ -484,8 +484,8 @@ class DNNTheoremProverGurobi:
 
     def optimize_input_bounds(self):
         return
-        Timers.tic('Gurobi functions')
-        # Timers.tic('Tighten input bounds')
+        # Timers.tic('Gurobi functions')
+        Timers.tic('Tighten input bounds')
         self.model.update()
         for i, v in enumerate(self.gurobi_vars):
 
@@ -498,5 +498,5 @@ class DNNTheoremProverGurobi:
             self.model.optimize()
             v.ub = self.model.objval
         self.model.update()
-        Timers.toc('Gurobi functions')
-        # Timers.toc('Tighten input bounds')
+        # Timers.toc('Gurobi functions')
+        Timers.toc('Tighten input bounds')

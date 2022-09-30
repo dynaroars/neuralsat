@@ -77,10 +77,11 @@ class DNNSolver(TheorySolver):
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node())
         Timers.toc('Theorem deduction')
 
-        if hasattr(self.dnn_theorem_prover, 'domains'):
-            print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(domains={len(self.dnn_theorem_prover.domains)})', time.time() - tic)
-        else:
-            print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
+        if False:
+            if hasattr(self.dnn_theorem_prover, 'domains'):
+                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(domains={len(self.dnn_theorem_prover.domains)})', time.time() - tic)
+            else:
+                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
         
         # Timers.print_stats()
         # print()
