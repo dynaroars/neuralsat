@@ -103,11 +103,15 @@ class Decider:
 
         if self.dataset == 'acasxu':
         # if settings.DECISION == 'MIN_BOUND':
-            scores = [(n, self.get_score(n)) for n in unassigned_nodes]
-            scores = sorted(scores, key=lambda tup: tup[1], reverse=False)
-            node = scores[0][0]
-            l, u = self.bounds_mapping[node]
-            return node, u.abs() >= l.abs()
+            try:
+                scores = [(n, self.get_score(n)) for n in unassigned_nodes]
+                scores = sorted(scores, key=lambda tup: tup[1], reverse=False)
+                node = scores[0][0]
+                l, u = self.bounds_mapping[node]
+                return node, u.abs() >= l.abs()
+            except KeyError:
+                node = random.choice(unassigned_nodes)
+                return node, random.choice([True, False])
 
         # if settings.DECISION == 'RANDOM':
         #     node = random.choice(unassigned_nodes)
