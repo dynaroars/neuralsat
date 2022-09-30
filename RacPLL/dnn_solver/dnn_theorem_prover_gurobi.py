@@ -254,7 +254,7 @@ class DNNTheoremProverGurobi:
         if self.next_iter_implication:
             self.next_iter_implication = False
             return True, {}, is_full_assignment
-            
+
         bounds = {}
         lidx = self.reversed_layers_mapping[list(unassigned_nodes)[0]]
         layer_nodes = list(self.layers_mapping[lidx])
@@ -291,7 +291,7 @@ class DNNTheoremProverGurobi:
             if node in self.optimized_layer_bounds:
                 lb, ub = self.optimized_layer_bounds[node]
 
-            if lb > -1e-6 or ub <= 1e-6:
+            if (lb > -1e-6 or ub <= 1e-6) and False:
                 pass
             else:
                 obj = backsub_dict_expr[node]
@@ -328,18 +328,18 @@ class DNNTheoremProverGurobi:
 
         lbs = torch.tensor([bounds[node]['lb'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
         ubs = torch.tensor([bounds[node]['ub'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
-        # Timers.tic('DeepPoly')
-        # (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
-        # Timers.toc('DeepPoly')
+        Timers.tic('DeepPoly')
+        (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
+        Timers.toc('DeepPoly')
 
         # print('---------------------------')
         # print(lower)
         # print(upper)
         # print()
 
-        Timers.tic('Crown functions')
-        (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
-        Timers.toc('Crown functions')
+        # Timers.tic('Crown functions')
+        # (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
+        # Timers.toc('Crown functions')
 
 
         # Timers.tic('DeepZono functions')
