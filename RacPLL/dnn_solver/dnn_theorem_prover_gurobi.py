@@ -135,7 +135,7 @@ class DNNTheoremProverGurobi:
     def __call__(self, assignment, info=None):
 
         # debug
-        print(assignment)
+        # print(assignment)
         self.count += 1
         cc = frozenset()
 
