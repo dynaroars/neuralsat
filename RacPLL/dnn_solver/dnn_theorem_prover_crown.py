@@ -397,6 +397,7 @@ class DNNTheoremProverCrown:
         device = self.net.device
         batch = 1
 
+        selected_candidate_domain.to_device(device, partial=True)
         lAs.append(selected_candidate_domain.lA)
         lower_all.append(selected_candidate_domain.lower_all)
         upper_all.append(selected_candidate_domain.upper_all)
