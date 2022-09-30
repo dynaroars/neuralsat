@@ -287,23 +287,23 @@ class DNNTheoremProverGurobi:
 
         Timers.tic('Gurobi functions')
         for node in layer_nodes:
-            # lb, ub = -1, 1
-            # if node in self.optimized_layer_bounds:
-            #     lb, ub = self.optimized_layer_bounds[node]
+            lb, ub = -1, 1
+            if node in self.optimized_layer_bounds:
+                lb, ub = self.optimized_layer_bounds[node]
 
-            # if lb > -1e-6 or ub <= 1e-6:
-            #     pass
-            # else:
-            obj = backsub_dict_expr[node]
-            # lower bound
-            self.model.setObjective(obj, grb.GRB.MINIMIZE)
-            self.model.optimize()
-            lb = self.model.objval
-            # upper bound
-            self.model.setObjective(obj, grb.GRB.MAXIMIZE)
-            self.model.optimize()
-            ub = self.model.objval
-            self.optimized_layer_bounds[node] = (lb, ub)
+            if lb > -1e-6 or ub <= 1e-6:
+                pass
+            else:
+                obj = backsub_dict_expr[node]
+                # lower bound
+                self.model.setObjective(obj, grb.GRB.MINIMIZE)
+                self.model.optimize()
+                lb = self.model.objval
+                # upper bound
+                self.model.setObjective(obj, grb.GRB.MAXIMIZE)
+                self.model.optimize()
+                ub = self.model.objval
+                self.optimized_layer_bounds[node] = (lb, ub)
             # else:
             #     status = assignment[node]
             #     # print(node, status)

@@ -96,6 +96,11 @@ class DNNSolver(TheorySolver):
 
         if not theory_sat:
             self.dnn_theorem_prover.restore_input_bounds()
+
+            
+            if hasattr(self.dnn_theorem_prover, 'optimized_layer_bounds'):
+                self.dnn_theorem_prover.optimized_layer_bounds = {}
+
             if hasattr(self.dnn_theorem_prover, 'next_iter_implication'):
                 self.dnn_theorem_prover.next_iter_implication = False
 
