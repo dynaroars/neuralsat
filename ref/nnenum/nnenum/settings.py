@@ -26,7 +26,7 @@ class Settings(metaclass=FreezableMeta):
         'assign default settings'
 
         # settings / optimizations
-        cls.NUM_PROCESSES = 0 #len(os.sched_getaffinity(0)) # use multiple cores
+        cls.NUM_PROCESSES = 1 # len(os.sched_getaffinity(0)) # use multiple cores
         cls.TIMEOUT = np.inf # verification timeout, in seconds (np.inf = no timeout)
 
         cls.SINGLE_SET = False # only do single-set overapproximation (no splitting)

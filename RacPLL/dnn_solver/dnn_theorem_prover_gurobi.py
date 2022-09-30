@@ -116,6 +116,8 @@ class DNNTheoremProverGurobi:
 
         # self.glpk_solver = GLPKSolver(net.n_input)
         self.verified = False
+        self.optimized_layer_bounds = {}
+        self.next_iter_implication = False
 
     def _find_unassigned_nodes(self, assignment):
         assigned_nodes = list(assignment.keys()) 
@@ -249,7 +251,10 @@ class DNNTheoremProverGurobi:
             return False, cc, None
 
 
-        
+        if self.next_iter_implication:
+            self.next_iter_implication = False
+            return True, {}, is_full_assignment
+            
         bounds = {}
         lidx = self.reversed_layers_mapping[list(unassigned_nodes)[0]]
         layer_nodes = list(self.layers_mapping[lidx])
@@ -282,6 +287,13 @@ class DNNTheoremProverGurobi:
 
         Timers.tic('Gurobi functions')
         for node in layer_nodes:
+            # lb, ub = -1, 1
+            # if node in self.optimized_layer_bounds:
+            #     lb, ub = self.optimized_layer_bounds[node]
+
+            # if lb > -1e-6 or ub <= 1e-6:
+            #     pass
+            # else:
             obj = backsub_dict_expr[node]
             # lower bound
             self.model.setObjective(obj, grb.GRB.MINIMIZE)
@@ -291,6 +303,7 @@ class DNNTheoremProverGurobi:
             self.model.setObjective(obj, grb.GRB.MAXIMIZE)
             self.model.optimize()
             ub = self.model.objval
+            self.optimized_layer_bounds[node] = (lb, ub)
             # else:
             #     status = assignment[node]
             #     # print(node, status)
@@ -395,6 +408,8 @@ class DNNTheoremProverGurobi:
 
         # print('implications   :', list(implications.keys()))
         Timers.toc('Implications')
+        if len(implications):
+            self.next_iter_implication = True
 
         return True, implications, is_full_assignment
 
