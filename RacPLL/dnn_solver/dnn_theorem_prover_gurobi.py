@@ -483,6 +483,7 @@ class DNNTheoremProverGurobi:
 
 
     def optimize_input_bounds(self):
+        return
         Timers.tic('Gurobi functions')
         # Timers.tic('Tighten input bounds')
         self.model.update()
