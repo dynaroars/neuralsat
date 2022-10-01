@@ -72,6 +72,9 @@ def gen_marabou_spec():
                                     q.append(f'+y{li}')
                                 elif lv == -1:
                                     q.append(f'-y{li}')
+
+                            if len(q) == 1:
+                                q[0] = q[0][1:]
                             if mul == 1:
                                 fp.write(f'{" ".join(q)} <= {r}\n')
                             else:
@@ -102,7 +105,7 @@ def gen_marabou_scripts():
 if __name__ == '__main__':
 
     gen_marabou_spec()
-    gen_marabou_scripts()
-    gen_scripts()
+    # gen_marabou_scripts()
+    # gen_scripts()
 
 
