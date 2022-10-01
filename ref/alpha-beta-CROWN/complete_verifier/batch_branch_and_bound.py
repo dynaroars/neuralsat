@@ -82,7 +82,7 @@ def batch_verification(d, net, batch, pre_relu_indices, growth_rate, layer_set_b
 
 
         # Use_optimized_split = not Use_optimized_split
-        print(branching_method, 'splitting decisions: {}'.format(branching_decision[:10]))
+        # print(branching_method, 'splitting decisions: {}'.format(branching_decision[:10]))
         # exit()
         # print("splitting coeffs: {}".format(split["coeffs"]))
 

@@ -1,5 +1,6 @@
 RacPLL/benchmark/nn4sys
 RacPLL/gurobi
+RacPLL/baseline
 RacPLL/test_*
 # ref/
 archive/
