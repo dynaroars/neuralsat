@@ -28,6 +28,8 @@ def gen_scripts():
                 result_file = 'result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(spec).replace('.vnnlib', '') + '.txt'
                 cmd = f'./vnncomp_scripts/run_instance.sh v1 {benchmark} {root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec} {result_file} 3600\n'
                 fp.write(cmd)
+                fp.write('echo ""\n')
+                fp.write('echo ""\n')
 
 
 def gen_marabou_spec():
@@ -98,6 +100,8 @@ def gen_marabou_scripts():
                 for si in specs:
                     cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5\n'
                     fp.write(cmd)
+                    fp.write('echo ""\n')
+                    fp.write('echo ""\n')
 
 
 
@@ -105,7 +109,7 @@ def gen_marabou_scripts():
 if __name__ == '__main__':
 
     gen_marabou_spec()
-    # gen_marabou_scripts()
-    # gen_scripts()
+    gen_marabou_scripts()
+    gen_scripts()
 
 
