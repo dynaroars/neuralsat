@@ -56,13 +56,26 @@ def gen_marabou_spec():
                         for l, r in zip(prop_mat, prop_rhs):
                             # print(j, l, r)
                             q = []
+                            mul = 1
+                            for lv in l:
+                                if lv ==0:
+                                    continue
+                                if lv > 0:
+                                    break
+                                if lv < 0:
+                                    mul = -1
+                                    break
+
                             for li, lv in enumerate(l):
+                                lv = lv * mul
                                 if lv == 1.0:
                                     q.append(f'+y{li}')
                                 elif lv == -1:
                                     q.append(f'-y{li}')
-
-                            fp.write(f'{" ".join(q)} <= {r}\n')
+                            if mul == 1:
+                                fp.write(f'{" ".join(q)} <= {r}\n')
+                            else:
+                                fp.write(f'{" ".join(q)} >= {-r if r != 0.0 else 0.0}\n')
 
 def gen_marabou_scripts():
     root = os.path.abspath('.')
