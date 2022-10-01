@@ -26,13 +26,13 @@ def gen_scripts():
             for line in open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'):
                 nnet, spec, _ = line.split(',')
                 result_file = 'result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(spec).replace('.vnnlib', '') + '.txt'
-                print('start=$(date +%s.%N)', file=fp)
+                # print('start=$(date +%s.%N)', file=fp)
                 cmd = f'./vnncomp_scripts/run_instance.sh v1 {benchmark} {root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec} {result_file} 3600\n'
                 fp.write(cmd)
-                print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
-                print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec}: %.6f seconds" $dur', file=fp)
-                fp.write('echo\n')
-                fp.write('echo\n\n')
+                # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
+                # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec}: %.6f seconds" $dur', file=fp)
+                # fp.write('echo\n')
+                # fp.write('echo\n\n')
 
 
 def gen_marabou_spec():
@@ -101,13 +101,13 @@ def gen_marabou_scripts():
                 specs = [s for s in benchmark_specs if spec_name+'_' in s]
                 # print(spec_name, specs)
                 for si in specs:
-                    print('start=$(date +%s.%N)', file=fp)
+                    # print('start=$(date +%s.%N)', file=fp)
                     cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5\n'
                     fp.write(cmd)
-                    print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
-                    print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/{si}: %.6f seconds" $dur', file=fp)
-                    fp.write('echo\n')
-                    fp.write('echo\n\n')
+                    # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
+                    # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/{si}: %.6f seconds" $dur', file=fp)
+                    # fp.write('echo\n')
+                    # fp.write('echo\n\n')
 
 
 
