@@ -30,6 +30,7 @@ def gen_scripts():
                 fp.write(cmd)
                 fp.write('echo ""\n')
                 fp.write('echo ""\n')
+                fp.write('sleep(1)\n')
 
 
 def gen_marabou_spec():
@@ -102,6 +103,7 @@ def gen_marabou_scripts():
                     fp.write(cmd)
                     fp.write('echo ""\n')
                     fp.write('echo ""\n')
+                    fp.write('sleep(1)\n')
 
 
 
