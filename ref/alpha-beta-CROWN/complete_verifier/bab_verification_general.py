@@ -503,7 +503,6 @@ def main():
 
             # Incomplete verification is enabled by default. The intermediate lower and upper bounds will be reused in bab and mip.
             if not verified_success and (arguments.Config["general"]["enable_incomplete_verification"] or arguments.Config["general"]["complete_verifier"] == "bab-refine"):
-                raise
                 y, pidx_list = get_labels(model_ori, x, vnnlib)
                 verified_status, init_global_lb, saved_bounds, saved_slopes = incomplete_verifier(model_ori, x, y, data_ub=data_max, data_lb=data_min)
                 verified_success = verified_status != "unknown"
@@ -512,7 +511,6 @@ def main():
             # continue  # uncomment for checking opt crown initial results
 
             if not verified_success and arguments.Config["attack"]["pgd_order"] == "after":
-                raise
                 attack_ret, attack_images, attack_margin = pgd_attack(arguments.Config["data"]["dataset"], model_ori, x, max_eps, data_min, data_max, vnnlib=vnnlib)
                 del attack_images, attack_margin
                 if attack_ret:
@@ -522,7 +520,6 @@ def main():
 
             # MIP or MIP refined bounds.
             if not verified_success and (arguments.Config["general"]["complete_verifier"] == "mip" or arguments.Config["general"]["complete_verifier"] == "bab-refine"):
-                raise
                 start_mip = time.time()
                 verified_status, init_global_lb, lower_bounds, upper_bounds = mip(saved_bounds=saved_bounds, y=y)
                 verified_success = verified_status != "unknown"
@@ -531,12 +528,10 @@ def main():
 
             # BaB bounds. (not do bab if unknown by mip solver for now)
             if not verified_success and arguments.Config["general"]["complete_verifier"] != "skip" and verified_status != "unknown-mip":
-                print(len(vnnlib[0][1]))
                 for prop_mat, prop_rhs in vnnlib[0][1]:
                     print(len(prop_rhs),prop_mat, prop_rhs)
 
                     if len(prop_rhs) > 1:
-                        raise
                         # Multiple properties in a "and" clause (e.g., marabou-cifar10). Only need to verify one of the easiest properties.
                         select_using_verified_bounds = True
                         if select_using_verified_bounds:
@@ -606,7 +601,6 @@ def main():
                     arguments.Config["bab"]["timeout"] -= time_cost  # total timeout - time_cost
                     if l < arguments.Config["bab"]["decision_thresh"]:
                         # timeout or all nodes are split. Break to run next sample save time if any label is not verified
-                        raise
                         break
                 else:
                     # All target label verified.
@@ -615,8 +609,6 @@ def main():
 
             del init_global_lb, saved_bounds, saved_slopes
 
-        print(verified_status)
-        exit()
 
         # Summarize results.
         if arguments.Config["general"]["csv_name"] is None:

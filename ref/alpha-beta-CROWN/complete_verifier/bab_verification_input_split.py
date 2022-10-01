@@ -102,7 +102,7 @@ def main():
     if arguments.Config["general"]["device"] != 'cpu':
         torch.cuda.manual_seed_all(arguments.Config["general"]["seed"])
 
-    shape = (1, 1)
+    shape = (1, 5)
 
     if arguments.Config["general"]["csv_name"] is not None:
         file_root = arguments.Config["general"]["root_path"] + '/'
@@ -136,10 +136,10 @@ def main():
         onnx_path, vnnlib_path, arguments.Config["bab"]["timeout"] = csv_item
         arguments.Config["bab"]["timeout"] = int(arguments.Config["bab"]["timeout"])
 
-        # model_ori = load_model_onnx(file_root + onnx_path, input_shape=(shape[1],))
-        # model_ori = nn.Sequential(*list(model_ori.modules())[1:])
+        model_ori = load_model_onnx(file_root + onnx_path, input_shape=(shape[1],))
+        model_ori = nn.Sequential(*list(model_ori.modules())[1:])
 
-        model_ori = mnist_model()
+        # model_ori = mnist_model()
 
         vnnlib = read_vnnlib_simple(file_root + vnnlib_path, shape[1], shape[1])
         vnnlib_shape = shape
@@ -200,7 +200,6 @@ def main():
                     pidx_all_verified = False
                     # break to run next sample save time if any label is not verified
                     break
-                print(ret)
                 # print(verified_ret)
                 # break
 
@@ -216,8 +215,6 @@ def main():
             # all props verified
             verified_ret.append([new_idx+1, 'UNSAT'])
 
-        print(verified_ret)
-        exit()
 
         if arguments.Config["general"]["csv_name"] is None:
             with open(save_path, "w") as file:
@@ -228,8 +225,6 @@ def main():
         np.set_printoptions(suppress=True)
         ret = np.array(ret)
         verified_ret = np.array(verified_ret)
-        print(ret)
-        print(verified_ret)
         if ret.size > 0:
             print('time mean: {}, branches mean: {}'.format(ret[:, 3].mean(), ret[:, 2].mean()))
 
@@ -243,8 +238,4 @@ def main():
 
 if __name__ == "__main__":
     config_args()
-
-    arguments.Config["general"]["onnx_path"] = 'tests/test_tiny.onnx'
-    arguments.Config["general"]["vnnlib_path"] = 'tests/test_tiny.vnnlib'
-
     main()

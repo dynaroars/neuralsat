@@ -1,9 +1,9 @@
 #!/bin/bash
 
 VERSION_STRING=v1
-if [[ -z "${VNNCOMP_PYTHON_PATH}" ]]; then
-	VNNCOMP_PYTHON_PATH=/home/ubuntu/anaconda3/envs/alpha-beta-crown/bin
-fi
+# if [[ -z "${VNNCOMP_PYTHON_PATH}" ]]; then
+# 	VNNCOMP_PYTHON_PATH=/home/ubuntu/anaconda3/envs/alpha-beta-crown/bin
+# fi
 
 # check arguments
 if [ "$1" != ${VERSION_STRING} ]; then
@@ -26,4 +26,4 @@ TOOL_DIR=$(dirname $(dirname $(realpath $0)))
 rm $RESULTS_FILE
 
 # run the tool to produce the results file
-exec ${VNNCOMP_PYTHON_PATH}/python3 ${TOOL_DIR}/complete_verifier/vnncomp_main.py "$CATEGORY" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"
+exec python3 ${TOOL_DIR}/complete_verifier/vnncomp_main.py "$CATEGORY" "$ONNX_FILE" "$VNNLIB_FILE" "$RESULTS_FILE" "$TIMEOUT"

@@ -22,6 +22,9 @@ echo "Running $TOOL_NAME on benchmark instance in category '$CATEGORY' with onnx
 
 # setup environment variable for tool (doing it earlier won't be persistent with docker)"
 DIR=$(dirname $(dirname $(realpath $0)))
+
+echo $DIR
+
 export PYTHONPATH="$PYTHONPATH:$DIR/src"
 
 export OPENBLAS_NUM_THREADS=1
