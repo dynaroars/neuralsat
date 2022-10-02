@@ -1,6 +1,7 @@
 import argparse
 import torch
 import time
+import os
 
 from heuristic.falsification import gradient_falsification
 from utils.read_vnnlib import read_vnnlib_simple
@@ -25,6 +26,7 @@ if __name__ == '__main__':
 
     device = torch.device(args.device)
 
+    tic = time.time()
     net = DNNParser.parse(args.net, args.dataset, args.device)
     spec_list = read_vnnlib_simple(args.spec, net.n_input, net.n_output)
 
@@ -32,7 +34,6 @@ if __name__ == '__main__':
         Timers.reset()
         Timers.tic('dnn_solver')
         
-    tic = time.time()
 
     new_spec_list = []
     attacked = False
@@ -73,5 +74,6 @@ if __name__ == '__main__':
         Timers.toc('dnn_solver')
         Timers.print_stats()
 
-    with open(args.file, 'w') as fp:
-        print(status, file=fp)
+    os.makedirs(f'results/{args.dataset}', exist_ok=True)
+    with open(os.path.join(f'results/{args.dataset}', args.file), 'w') as fp:
+        print(f'{status},{time.time()-tic:.02f}', file=fp)
