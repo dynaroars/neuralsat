@@ -21,7 +21,6 @@ class SymbolicNetwork:
         layers = []
         idx = 0
         for layer in self.net.layers:
-            print(type(layer))
             if isinstance(layer, nn.Linear):
                 l = SymbolicLinear(layer, self.device)
             elif isinstance(layer, nn.ReLU):
