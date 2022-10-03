@@ -380,7 +380,8 @@ class DNNTheoremProverCrown:
                     # print(d.history)
                     # print(self.domains[key].history)
                     if d.history != self.domains[key].history:
-                        self.domains[key] = d
+                        # FIXME: 03/10/22: same key, different order of history
+                        pass
                         
             Timers.toc('save_domain')
 
