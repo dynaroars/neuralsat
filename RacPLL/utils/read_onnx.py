@@ -474,6 +474,7 @@ class ONNXParser2:
             raise 
 
         model, is_channel_last = load_model_onnx(filename, input_shape[1:], force_convert=force_convert)
+        model = model.eval()
 
         if is_channel_last:
             input_shape = input_shape[:1] + input_shape[2:] + input_shape[1:2]

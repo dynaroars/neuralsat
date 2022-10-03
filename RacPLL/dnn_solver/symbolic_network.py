@@ -21,6 +21,7 @@ class SymbolicNetwork:
         layers = []
         idx = 0
         for layer in self.net.layers:
+            print(type(layer))
             if isinstance(layer, nn.Linear):
                 l = SymbolicLinear(layer, self.device)
             elif isinstance(layer, nn.ReLU):
@@ -28,16 +29,18 @@ class SymbolicNetwork:
                 idx += 1
             elif isinstance(layer, nn.Conv2d):
                 l = SymbolicConv2d(layer, self.device)
-            elif isinstance(layer, nn.Flatten) or isinstance(layer, onnx2pytorch.operations.Flatten):
+            elif isinstance(layer, nn.Flatten) or isinstance(layer, onnx2pytorch.operations.flatten.Flatten):
                 l = SymbolicFlatten(self.device)
-            elif isinstance(layer, onnx2pytorch.operations.Reshape):
-                l = SymbolicReshape(layer, self.device)
-            elif isinstance(layer, onnx2pytorch.operations.Transpose):
-                l = SymbolicTranspose(layer, self.device)
-            elif isinstance(layer, utils.read_onnx.Sub):
-                l = SymbolicSub(layer, self.device)
-            elif isinstance(layer, utils.read_onnx.Div):
-                l = SymbolicDiv(layer, self.device)
+            # elif isinstance(layer, onnx2pytorch.operations.Reshape):
+            #     l = SymbolicReshape(layer, self.device)
+            # elif isinstance(layer, onnx2pytorch.operations.Transpose):
+            #     l = SymbolicTranspose(layer, self.device)
+            # elif isinstance(layer, utils.read_onnx.Sub):
+            #     l = SymbolicSub(layer, self.device)
+            # elif isinstance(layer, utils.read_onnx.Div):
+            #     l = SymbolicDiv(layer, self.device)
+            elif isinstance(layer, nn.BatchNorm2d):
+                l = SymbolicBatchNorm2d(layer)
             else:
                 print(layer, type(layer))
                 raise NotImplementedError
@@ -201,3 +204,17 @@ class SymbolicDiv:
         x = torch.div(x, self.constant)
         return x, False, {}
 
+
+
+
+
+class SymbolicBatchNorm2d:
+
+    def __init__(self, layer):
+        self.running_mean = layer.running_mean.repeat(1, 1, 1).permute(2, 0, 1)
+        self.running_var = layer.running_var.repeat(1, 1, 1, 1).permute(3, 0, 1, 2)
+
+    def __call__(self, x, assignment):
+        x[..., -1] -= self.running_mean
+        x /= self.running_var
+        return x, False, {}
