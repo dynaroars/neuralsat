@@ -267,6 +267,7 @@ class ConfigHandler:
 Config = {
     'general': {
         'seed': 0,
+        'batch': 1,
         'conv_mode': 'patches',
         'deterministic': False,
         'double_fp': False,

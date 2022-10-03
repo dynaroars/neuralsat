@@ -431,7 +431,7 @@ def pick_out_batch(domains, threshold, batch, device='cuda', DFS_percent=0, divi
 
     idx, idx2 = 0, 0
     batch = min(len(domains), batch)
-    print('------------------------ batch', batch, 'domains', len(domains))
+    # print('------------------------ batch', batch, 'domains', len(domains))
     lAs, lower_all, upper_all, slopes_all, betas_all, intermediate_betas_all, selected_candidate_domains = [], [], [], [], [], [], []
     assert len(domains) > 0, "The given domains list is empty."
     while True:

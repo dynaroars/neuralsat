@@ -134,13 +134,23 @@ class CustomSATSolver(Solver):
             self._assigned_vsids_count[cur_sign] = self._unassigned_vsids_count[cur_sign]
             del self._unassigned_vsids_count[cur_sign]
 
-        # print({k: v['value'] for k, v in self._assignment.items()})
+        # if abs(literal) == 93:
+        #     print(f'[Assign] lit={literal}, var={abs(literal)}, is_implied:{is_implied}')
+        # print({k: v['value'] for k, v in self._assignment.items() if not v['is_implied']})
+        # print()
+        # print()
 
 
     def _unassign(self, variable: int):
         """
         Unassigns the given variable.
         """
+        # if variable == 93:
+        #     print(f'[Unssign] var={variable}, is_implied:{self._assignment[variable]["is_implied"] if variable in self._assignment else None}')
+        # print({k: v['value'] for k, v in self._assignment.items() if not v['is_implied']})
+        # print()
+        # print()
+
         del self._assignment[variable]
             
         for cur_sign in [variable, -variable]:
@@ -445,8 +455,14 @@ class CustomSATSolver(Solver):
     def _decide(self):
         Timers.tic('Heuristic Decision Get')
 
-        unassigned_variables = self._layers_mapping[self._reversed_layers_mapping[self._all_vars[0]]]
+        if self._theory_solver.dataset == 'acasxu':
+            unassigned_variables = self._layers_mapping[self._reversed_layers_mapping[self._all_vars[0]]]
+        else:
+            unassigned_variables = list(self._all_vars)
         variable, value = self.decider.get(unassigned_variables)
+        # if variable in self._assignment:
+            # print('dit me may', variable, self._assignment[variable]['is_implied'])
+            # exit()
         self.create_new_decision_level()
         self._assign(None, variable if value else -variable)
         if settings.DEBUG:

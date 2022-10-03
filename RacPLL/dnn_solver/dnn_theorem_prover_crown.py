@@ -35,6 +35,7 @@ class DNNTheoremProverCrown:
         torch.manual_seed(arguments.Config["general"]["seed"])
         random.seed(arguments.Config["general"]["seed"])
         np.random.seed(arguments.Config["general"]["seed"])
+        self.batch = arguments.Config["general"]["batch"]
 
         self.net = net
         self.layers_mapping = net.layers_mapping
@@ -136,7 +137,7 @@ class DNNTheoremProverCrown:
         # self.last_dl = None
         # self.last_domain = None
 
-        # self.next_iter_implication = False
+        self.next_iter_implication = False
 
 
     def _get_equation(self, coeffs):
@@ -184,7 +185,7 @@ class DNNTheoremProverCrown:
         implications = {}
         # cur_var, dl, branching_decision = info
 
-        # print('\n\n', self.count, len(assignment), full_assignment, len([d for _, d in self.domains.items() if d.valid]))
+        # print('\n\nstart loop', self.count, len(assignment), full_assignment, len([d for _, d in self.domains.items() if d.valid]))
 
         unassigned_nodes = self._find_unassigned_nodes(assignment)
         is_full_assignment = True if unassigned_nodes is None else False
@@ -213,26 +214,33 @@ class DNNTheoremProverCrown:
             mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(candidate_domain)
             history = [sd.history for sd in selected_domains]
 
-
+            # print('=========================>', self.count, orig_lbs[0].flatten()[92], orig_ubs[0].flatten()[92])
             # print(unassigned_nodes)
             # print(orig_lbs)
+            # print(orig_lbs[0].shape)
+            # print(orig_lbs[1].shape)
             # print(lower_bounds)
 
             if use_implication:
                 count = 1
-                for lbs, ubs in zip(lower_bounds[:-1], upper_bounds[:-1]):
+                for lbs, ubs in zip(orig_lbs[:-1], orig_ubs[:-1]):
                     # print(lbs)
                     if (lbs - ubs).max() > 1e-6:
                         return False, cc, None
 
                     for jj, (l, u) in enumerate(zip(lbs.flatten(), ubs.flatten())):
-
+                        if (count + jj) in assignment:
+                            continue
                         if u <= 0:
                             implications[count + jj] = {'pos': False, 'neg': True}
+                            # print('u', count+jj, u)
                         elif l > 0:
                             implications[count + jj] = {'pos': True, 'neg': False}
+                            # print('l', count+jj, l)
                     count += lbs.numel()
 
+            # print(orig_lbs[1].flatten()[161], orig_ubs[1].flatten()[161])
+            # exit()
             # print(len(implications))
 
             if self.decider is not None and settings.DECISION != 'RANDOM':
@@ -300,30 +308,39 @@ class DNNTheoremProverCrown:
 
         domain_key = hash(frozenset(full_assignment.items()))
         cur_domain = self.domains.get(domain_key, None)
-        # print('\t', 'full_assignment:', full_assignment)
+        # print('\tfull_assignment:', full_assignment)
         # print('\t', 'full_assignment:', full_assignment)
         # print('\t', 'cur_domain:', cur_domain.get_assignment() if cur_domain is not None else None)
         # print('\t', 'dl:', info[1])
 
         if cur_domain is None:
             cur_var, _, crown_decision = info
-            # print('\tcac', self.count, cur_var, crown_decision)
+            # print('\tcac:', cur_var, crown_decision)
             last_assignment = copy.deepcopy(full_assignment)
             del last_assignment[cur_var]
-            # print(last_assignment)
+            # print('\tlast_assignment:', last_assignment)
             cur_domain = self.domains[hash(frozenset(last_assignment.items()))]
-            cur_domain.valid = False
-            del self.domains[hash(frozenset(last_assignment.items()))]
+            # del self.domains[hash(frozenset(last_assignment.items()))]
+            mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain, batch=self.batch)
+            # cur_domain.valid = False
 
-            mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain, batch=3)
+
             for d in selected_domains:
                 d.valid = False # mark as processed
+                # print('cac', d.get_assignment())
                 # del self.domains[hash(frozenset(d.get_assignment().items()))]
 
             batch = len(selected_domains)
             if len(selected_domains) > 1:
+                assert cur_domain == selected_domains[0]
                 branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, batch=batch, branching_reduceop=self.branching_reduceop)
-                assert crown_decision[0] == branching_decision[0]
+                # print(crown_decision)
+                # print(branching_decision)
+                # print(len(selected_domains))
+                # print(len(branching_decision))
+                # assert crown_decision[0] in branching_decision
+                branching_decision[0] = crown_decision[0]
+
             else:
                 branching_decision = crown_decision
 
@@ -353,25 +370,23 @@ class DNNTheoremProverCrown:
 
             Timers.tic('save_domain')
             for d in domain_list:
-                # print('\t---------------------> add:', hash(frozenset(d.get_assignment().items())) in self.domains, 'assignment', d.get_assignment(), d.valid)
+                # print('\t---> add:', 'assignment', d.get_assignment(), d.valid)
                 key = hash(frozenset(d.get_assignment().items()))
-                assert key not in self.domains
-                self.domains[key] = d
+                if key not in self.domains:
+                    self.domains[key] = d
+                else:
+                    assert d.history == self.domains[key].history
             Timers.toc('save_domain')
 
             # print(len(domain_list), full_assignment == domain_list[0].get_assignment())
             # print(len(domain_list), full_assignment == domain_list[1].get_assignment())
 
+            # print('\tfull_assignment:', full_assignment)
             cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
 
 
         # print('\t', 'cur_domain:', cur_domain.history)
 
-        if cur_domain.lower_bound >= self.decision_thresh:
-            del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
-            # print('\t', self.count, 'unsat')
-            return False, cc, None
-        
         mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain)
 
         history = [sd.history for sd in selected_domains]
@@ -380,20 +395,26 @@ class DNNTheoremProverCrown:
             # print('\t', self.count, 'update crown_params')
             self.decider.update(crown_params=crown_params)
 
+        if cur_domain.lower_bound >= self.decision_thresh:
+            del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
+            # print('\t===============>', self.count, 'unsat')
+            return False, cc, None
+        
         if use_implication:
             count = 1
             for lbs, ubs in zip(orig_lbs[:-1], orig_ubs[:-1]):
                 if (lbs - ubs).max() > 1e-6:
                     return False, cc, None
 
-                for jj, (l, u) in enumerate(zip(lbs[0].flatten(), ubs[0].flatten())):
-                    node = count + jj
-                    if node in assignment:
+                for jj, (l, u) in enumerate(zip(lbs.flatten(), ubs.flatten())):
+                    if (count + jj) in assignment:
                         continue
                     if u <= 0:
-                        implications[node] = {'pos': False, 'neg': True}
+                        implications[count + jj] = {'pos': False, 'neg': True}
                     elif l > 0:
-                        implications[node] = {'pos': True, 'neg': False}
+                        implications[count + jj] = {'pos': True, 'neg': False}
+                count += lbs.numel()
+
 
         if len(implications):
             self.next_iter_implication = True
@@ -410,20 +431,27 @@ class DNNTheoremProverCrown:
         lAs, lower_all, upper_all, slopes_all, betas_all, intermediate_betas_all, selected_candidate_domains = [], [], [], [], [], [], []
         device = self.net.device
 
-        idx = 1
-        current_domain.to_device(device, partial=True)
-        # current_domain.valid = False  # set False to avoid another pop
-        lAs.append(current_domain.lA)
-        lower_all.append(current_domain.lower_all)
-        upper_all.append(current_domain.upper_all)
-        slopes_all.append(current_domain.slope)
-        betas_all.append(current_domain.beta)
-        intermediate_betas_all.append(current_domain.intermediate_betas)
-        selected_candidate_domains.append(current_domain)
+        selected_domain_hashes = []
 
-        if batch > 1:
+        idx = 0
+        # if current_domain.valid is True and current_domain.lower_bound < self.decision_thresh:
+        if 1:
+            current_domain.to_device(device, partial=True)
+            # current_domain.valid = False  # set False to avoid another pop
+            lAs.append(current_domain.lA)
+            lower_all.append(current_domain.lower_all)
+            upper_all.append(current_domain.upper_all)
+            slopes_all.append(current_domain.slope)
+            betas_all.append(current_domain.beta)
+            intermediate_betas_all.append(current_domain.intermediate_betas)
+            selected_candidate_domains.append(current_domain)
+            selected_domain_hashes.append(current_domain.get_assignment())
+            idx += 1
+
+        if batch > idx:
             for k, selected_candidate_domain in self.domains.items():
-                if selected_candidate_domain.lower_bound < self.decision_thresh and selected_candidate_domain.valid is True:
+                if selected_candidate_domain.lower_bound < self.decision_thresh and selected_candidate_domain.valid is True and selected_candidate_domain.get_assignment() not in selected_domain_hashes:
+                    # print('--------> select:', selected_candidate_domain.get_assignment())
                     selected_candidate_domain.to_device(device, partial=True)
                     # selected_candidate_domain.valid = False  # set False to avoid another pop
                     lAs.append(selected_candidate_domain.lA)
@@ -433,6 +461,7 @@ class DNNTheoremProverCrown:
                     betas_all.append(selected_candidate_domain.beta)
                     intermediate_betas_all.append(selected_candidate_domain.intermediate_betas)
                     selected_candidate_domains.append(selected_candidate_domain)
+                    selected_domain_hashes.append(selected_candidate_domain.get_assignment())
                     idx += 1
                     if idx == batch:
                         break

@@ -43,6 +43,7 @@ class DNNSolver(TheorySolver):
 
         layers_mapping = net.layers_mapping
         variables = [v for d in layers_mapping.values() for v in d]
+        self.dataset = dataset
 
         self.decider = decider.Decider(net, dataset)
         if dataset == 'acasxu':

@@ -223,9 +223,18 @@ class Decider:
             for m in range(decision_layer):
                 decision_index += mask[m].numel()
 
-            node = decision_index + 1
-            # print('branching_decision', branching_decision, node, 'unassigned:', node in unassigned_nodes)
+            # print(branching_decision, history)
 
+            # exit()
+            node = decision_index + 1
+            # if node not in unassigned_nodes:
+            #     return random.choice(unassigned_nodes), random.choice([True, False])
+                # print(branching_decision)
+                # print(orig_lbs[0].flatten()[node - 1])
+                # print(orig_ubs[0].flatten()[node - 1])
+                # print('dit', node)
+                # raise
+            # if node in unassigned_nodes:
             return node, random.choice([True, False])
 
 

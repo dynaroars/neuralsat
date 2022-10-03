@@ -9,6 +9,7 @@ from dnn_solver.spec import SpecificationVNNLIB
 from dnn_solver.dnn_solver import DNNSolver
 from utils.dnn_parser import DNNParser
 from utils.timer import Timers
+from abstract.crown import *
 
 
 if __name__ == '__main__':
@@ -21,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--timer', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
     parser.add_argument('--timeout', type=int, default=3600)
+    parser.add_argument('--batch', type=int, default=1)
     parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
@@ -34,7 +36,7 @@ if __name__ == '__main__':
         Timers.reset()
         Timers.tic('dnn_solver')
         
-
+    arguments.Config["general"]["batch"] = args.batch
     new_spec_list = []
     attacked = False
     status = 'UNKNOWN'
@@ -58,7 +60,6 @@ if __name__ == '__main__':
             spec = SpecificationVNNLIB(s)
             solver = DNNSolver(net, spec, args.dataset)
             status = solver.solve(timeout=args.timeout)
-            break
             if status in ['SAT', 'TIMEOUT']:
                 break
 

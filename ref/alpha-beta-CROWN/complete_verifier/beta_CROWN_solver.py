@@ -404,7 +404,6 @@ class LiRPAConvNet:
 
         if beta is None:
             beta = arguments.Config["solver"]["beta-crown"]["beta"] # might need to set beta False in FSB node selection
-        print(beta, history)
 
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         iteration = arguments.Config["solver"]["beta-crown"]["iteration"]

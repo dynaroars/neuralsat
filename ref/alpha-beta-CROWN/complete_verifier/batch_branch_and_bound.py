@@ -74,6 +74,7 @@ def batch_verification(d, net, batch, pre_relu_indices, growth_rate, layer_set_b
             raise NotImplementedError
 
 
+        print(branching_decision)
         if len(branching_decision) < len(mask[0]):
             print('all nodes are split!!')
             global all_node_split

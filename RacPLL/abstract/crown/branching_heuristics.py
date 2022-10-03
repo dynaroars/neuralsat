@@ -258,6 +258,7 @@ def choose_node_parallel_crown(lower_bounds, upper_bounds, orig_mask, net, pre_r
                 mask_item = [m[b] for m in mask]
                 for preferred_layer in np.random.choice(len(pre_relu_indices), len(pre_relu_indices), replace=False):
                     if len(mask_item[preferred_layer].nonzero(as_tuple=False)) != 0:
+                        # print('random:', [preferred_layer, mask_item[preferred_layer].nonzero(as_tuple=False)[0].item()])
                         decision.append([preferred_layer, mask_item[preferred_layer].nonzero(as_tuple=False)[0].item()])
                         break
                 Icp_score_counter = 0
