@@ -375,7 +375,13 @@ class DNNTheoremProverCrown:
                 if key not in self.domains:
                     self.domains[key] = d
                 else:
-                    assert d.history == self.domains[key].history
+                    # print(d.get_assignment)
+                    # print(d.get_assignment() == self.domains[key].get_assignment())
+                    # print(d.history)
+                    # print(self.domains[key].history)
+                    if d.history != self.domains[key].history:
+                        self.domains[key] = d
+                        
             Timers.toc('save_domain')
 
             # print(len(domain_list), full_assignment == domain_list[0].get_assignment())
