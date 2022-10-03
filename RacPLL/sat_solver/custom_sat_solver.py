@@ -65,7 +65,7 @@ class CustomSATSolver(Solver):
         self._crown_decision_mapping = {}
         for lid, lnodes in self._layers_mapping.items():
             for jj, node in enumerate(lnodes):
-                self._crown_decision_mapping[node] = (lid, jj)
+                self._crown_decision_mapping[node] = [lid, jj]
 
 
 

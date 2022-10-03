@@ -16,7 +16,7 @@ baselines/
 *.pkl
 *.model
 *.npy
-
+*.io.bkp
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

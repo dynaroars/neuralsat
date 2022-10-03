@@ -58,7 +58,7 @@ class ReLUDomain:
     """
 
     def __init__(self, lA=None, lb=-float('inf'), ub=float('inf'), lb_all=None, up_all=None, slope=None, beta=None,
-                 depth=None, split_history=None, history=None, gnn_decision=None, intermediate_betas=None, primals=None, priority=0):
+                 depth=None, split_history=None, history=None, gnn_decision=None, intermediate_betas=None, primals=None, priority=0, assignment_mapping=None):
         if history is None:
             history = []
         if split_history is None:
@@ -86,6 +86,19 @@ class ReLUDomain:
         # z: stable relus have -1, others all unstable neuron from 0 to 1
         self.primals = primals
         self.priority = priority  # Higher priority will be more likely to be selected.
+        self.assignment_mapping = assignment_mapping
+
+    def get_assignment(self):
+        assignment = {}
+        for lid, (lnodes, lsigns) in enumerate(self.history):
+            # if len(lnodes):
+                # print(lid, lnodes, lsigns)
+                # for i in range(len(lnodes)):
+                #     print(i, lnodes[i], lsigns[i])
+                #     print((lid, lnodes[i]))
+                #     print(self.assignment_mapping)
+            assignment.update({self.assignment_mapping[(lid, lnodes[i])]: lsigns[i] > 0 for i in range(len(lnodes))})
+        return assignment
 
     def __lt__(self, other):
         if self.priority == other.priority:
@@ -302,7 +315,8 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                                   selected_domains[i].depth+1, split_history=split_history[i],
                                   history=new_history,
                                   intermediate_betas=intermediate_betas[i],
-                                  primals=left_primals, priority=priority)
+                                  primals=left_primals, priority=priority,
+                                  assignment_mapping=selected_domains[i].assignment_mapping)
                 if save_tree:
                     selected_domains[i].left = left
                     left.parent = selected_domains[i]
@@ -310,6 +324,9 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                     # assert (m[mp == 0] == 0).all(), m[mp == 0].abs().sum()
                     # assert (m[mp == 1] == 1).all(), m[mp == 1].abs().sum()
                 # bisect.insort_left(domains, left)
+                if left.lower_bound >= decision_thresh:
+                    left.valid = False
+
                 domain_list.append(left)
 
         infeasible = False
@@ -341,7 +358,9 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                                    slope[i+batch],  beta[i+batch], selected_domains[i].depth+1, split_history=split_history[i+batch],
                                    history=new_history,
                                    intermediate_betas=intermediate_betas[i + batch],
-                                   primals=right_primals, priority=priority)
+                                   primals=right_primals, priority=priority,
+                                   assignment_mapping=selected_domains[i].assignment_mapping)
+
 
                 if save_tree:
                     selected_domains[i].right = right
@@ -357,6 +376,8 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, domains, selected_domains, s
                 # assert (m[mp == 1] == 1).all(), m[mp == 1].abs().sum()
 
                 # bisect.insort_left(domains, right)
+                if right.lower_bound >= decision_thresh:
+                    right.valid = False
                 domain_list.append(right)
 
     return domain_list

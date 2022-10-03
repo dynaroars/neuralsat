@@ -43,11 +43,6 @@ class DNNTheoremProverCrown:
         self.decider = decider
 
 
-        self.crown_decision_mapping = {}
-        for lid, lnodes in self.layers_mapping.items():
-            for jj, node in enumerate(lnodes):
-                self.crown_decision_mapping[(lid, jj)] = node
-
         ##########################################################################################
 
         # with contextlib.redirect_stdout(open(os.devnull, 'w')):
@@ -125,18 +120,16 @@ class DNNTheoremProverCrown:
 
 
 
-        self.branching_reduceop = arguments.Config['bab']['branching']['reduceop']
         # exit()
         self.count = 0
 
-        self.domains = {}
+        self.domains = []
 
         self.solution = None
 
-        # self.last_dl = None
-        # self.last_domain = None
+        self.last_dl = None
+        self.last_domain = None
 
-        # self.next_iter_implication = False
 
 
     def _get_equation(self, coeffs):
@@ -176,15 +169,15 @@ class DNNTheoremProverCrown:
         return False
 
 
-    def __call__(self, assignment, info=None, full_assignment=None, use_implication=True):
+    def __call__(self, assignment, full_assignment=None, info=None):
         # print('\n\n-------------------------------------------------\n')
         
         self.count += 1
         cc = frozenset()
         implications = {}
-        # cur_var, dl, branching_decision = info
+        cur_var, dl, branching_decision = info
 
-        # print('\n\n', self.count, len(assignment), full_assignment, len([d for _, d in self.domains.items() if d.valid]))
+        # print(cur_var, dl, branching_decision, assignment.get(cur_var, None), assignment)
 
         unassigned_nodes = self._find_unassigned_nodes(assignment)
         is_full_assignment = True if unassigned_nodes is None else False
@@ -201,14 +194,16 @@ class DNNTheoremProverCrown:
             if global_lb >= self.decision_thresh:
                 return False, cc, None
 
-            # We only keep the alpha for the last layer.
-            new_slope = defaultdict(dict)
-            output_layer_name = self.lirpa.net.final_name
-            for relu_layer, alphas in slope.items():
-                new_slope[relu_layer][output_layer_name] = alphas[output_layer_name]
-            slope = new_slope
+            if True:
+                # If we are not optimizing intermediate layer bounds, we do not need to save all the intermediate alpha.
+                # We only keep the alpha for the last layer.
+                new_slope = defaultdict(dict)
+                output_layer_name = self.lirpa.net.final_name
+                for relu_layer, alphas in slope.items():
+                    new_slope[relu_layer][output_layer_name] = alphas[output_layer_name]
+                slope = new_slope
 
-            candidate_domain = ReLUDomain(lA, global_lb, global_ub, lower_bounds, upper_bounds, slope, history=history, depth=0, primals=primals, assignment_mapping=self.crown_decision_mapping).to_device(self.net.device, partial=True)
+            candidate_domain = ReLUDomain(lA, global_lb, global_ub, lower_bounds, upper_bounds, slope, history=history, depth=dl, primals=primals).to_device(self.net.device, partial=True)
 
             mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(candidate_domain)
             history = [sd.history for sd in selected_domains]
@@ -218,34 +213,37 @@ class DNNTheoremProverCrown:
             # print(orig_lbs)
             # print(lower_bounds)
 
-            if use_implication:
-                count = 1
-                for lbs, ubs in zip(lower_bounds[:-1], upper_bounds[:-1]):
-                    # print(lbs)
-                    if (lbs - ubs).max() > 1e-6:
-                        return False, cc, None
 
-                    for jj, (l, u) in enumerate(zip(lbs.flatten(), ubs.flatten())):
+            count = 1
+            for lbs, ubs in zip(lower_bounds[:-1], upper_bounds[:-1]):
+                # print(lbs)
+                if (lbs - ubs).max() > 1e-6:
+                    return False, cc, None
 
-                        if u <= 0:
-                            implications[count + jj] = {'pos': False, 'neg': True}
-                        elif l > 0:
-                            implications[count + jj] = {'pos': True, 'neg': False}
-                    count += lbs.numel()
+                for jj, (l, u) in enumerate(zip(lbs.flatten(), ubs.flatten())):
 
+                    if u <= 0:
+                        implications[count + jj] = {'pos': False, 'neg': True}
+                    elif l > 0:
+                        implications[count + jj] = {'pos': True, 'neg': False}
+                count += lbs.numel()
+
+
+
+
+                # print(lbs)
+                # print(ubs)
+                # print()
             # print(len(implications))
 
+            crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
             if self.decider is not None and settings.DECISION != 'RANDOM':
-                crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
                 self.decider.update(crown_params=crown_params)
 
-            # candidate_domain.valid = True
-            self.domains[hash(frozenset(assignment.items()))] = candidate_domain
+            self.last_dl = dl
 
             # self.domains.append(candidate_domain)
-            # self.last_domain.valid = False
-            if len(implications):
-                self.next_iter_implication = True
+            self.last_domain = candidate_domain
 
             return True, implications, is_full_assignment
 
@@ -289,60 +287,36 @@ class DNNTheoremProverCrown:
             return False, cc, None
 
 
-        if self.next_iter_implication:
-
-            self.next_iter_implication = False
-            # print('\t', self.count, 'implication')
+        if (self.last_dl is not None) and (self.last_dl == dl) and (self.last_domain is not None):
+            # print('vao day')
             # implication iteration
             # TODO: haven't known yet
             return True, implications, is_full_assignment
 
+        # last_domain = self.domains[-1]
+        if self.last_domain is not None:
+            # print('branching_decision:', cur_var, dl, branching_decision)
+            # assert dl == self.last_domain.depth + 1, f"{dl}, {self.last_domain.depth}"
 
-        domain_key = hash(frozenset(full_assignment.items()))
-        cur_domain = self.domains.get(domain_key, None)
-        # print('\t', 'full_assignment:', full_assignment)
-        # print('\t', 'full_assignment:', full_assignment)
-        # print('\t', 'cur_domain:', cur_domain.get_assignment() if cur_domain is not None else None)
-        # print('\t', 'dl:', info[1])
-
-        if cur_domain is None:
-            cur_var, _, crown_decision = info
-            # print('\tcac', self.count, cur_var, crown_decision)
-            last_assignment = copy.deepcopy(full_assignment)
-            del last_assignment[cur_var]
-            # print(last_assignment)
-            cur_domain = self.domains[hash(frozenset(last_assignment.items()))]
-            cur_domain.valid = False
-            del self.domains[hash(frozenset(last_assignment.items()))]
-
-            mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain, batch=3)
-            for d in selected_domains:
-                d.valid = False # mark as processed
-                # del self.domains[hash(frozenset(d.get_assignment().items()))]
-
-            batch = len(selected_domains)
-            if len(selected_domains) > 1:
-                branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, batch=batch, branching_reduceop=self.branching_reduceop)
-                assert crown_decision[0] == branching_decision[0]
-            else:
-                branching_decision = crown_decision
-
-            # print('\t --->', self.count, batch, branching_decision)
-
+            mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(self.last_domain)
             history = [sd.history for sd in selected_domains]
             split_history = [sd.split_history for sd in selected_domains]
+            # print(last_domain.depth, selected_domains[0].depth)
             split = {}
             split["decision"] = [[bd] for bd in branching_decision]
             split["coeffs"] = [[1.] for i in range(len(branching_decision))]
             split["diving"] = 0
+            # print(split)
 
             Timers.tic('get_lower_bound')
-            ret = self.lirpa.get_lower_bound(orig_lbs, orig_ubs, split, slopes=slopes, history=history, split_history=split_history, layer_set_bound=True, betas=betas, single_node_split=True, intermediate_betas=intermediate_betas)
+            ret = self.lirpa.get_lower_bound(orig_lbs, orig_ubs, split, slopes=slopes, history=history,
+                                    split_history=split_history, layer_set_bound=True, betas=betas,
+                                    single_node_split=True, intermediate_betas=intermediate_betas)
             Timers.toc('get_lower_bound')
-
 
             dom_ub, dom_lb, dom_ub_point, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas, primals = ret
 
+            batch = 1
             Timers.tic('add_domain')
             domain_list = add_domain_parallel(lA=lAs[:2*batch], lb=dom_lb[:2*batch], ub=dom_ub[:2*batch], lb_all=dom_lb_all[:2*batch], up_all=dom_ub_all[:2*batch],
                                              domains=None, selected_domains=selected_domains[:batch], slope=slopes[:2*batch], beta=betas[:2*batch],
@@ -350,53 +324,66 @@ class DNNTheoremProverCrown:
                                              split_history=split_history[:2*batch], intermediate_betas=intermediate_betas[:2*batch],
                                              check_infeasibility=False, primals=primals[:2*batch] if primals is not None else None)
             Timers.toc('add_domain')
+            # for d in domain_list:
+            #     print(d.lower_bound)
+            # print(cur_var, assignment[cur_var])
 
-            Timers.tic('save_domain')
-            for d in domain_list:
-                # print('\t---------------------> add:', hash(frozenset(d.get_assignment().items())) in self.domains, 'assignment', d.get_assignment(), d.valid)
-                key = hash(frozenset(d.get_assignment().items()))
-                assert key not in self.domains
-                self.domains[key] = d
-            Timers.toc('save_domain')
+            if assignment[cur_var]:
+                self.last_domain, save_domain = domain_list
+            else:
+                save_domain, self.last_domain = domain_list
 
-            # print(len(domain_list), full_assignment == domain_list[0].get_assignment())
-            # print(len(domain_list), full_assignment == domain_list[1].get_assignment())
+            # print(self.last_domain.lower_bound)
 
-            cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
+            self.domains.append(save_domain)
+
+            # if self.last_domain.lower_bound >= self.decision_thresh:
+            #     self.last_domain = None
+            #     self.last_dl = None
+            #     print('unsat')
+            #     return False, cc, None
 
 
-        # print('\t', 'cur_domain:', cur_domain.history)
+        else:
+            # print('Back to', dl, cur_var, assignment[cur_var])
+            self.last_domain = self.domains.pop()
 
-        if cur_domain.lower_bound >= self.decision_thresh:
-            del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
-            # print('\t', self.count, 'unsat')
+
+
+        if self.last_domain.lower_bound >= self.decision_thresh:
+            self.last_domain = None
+            self.last_dl = None
+            # print('unsat')
             return False, cc, None
-        
-        mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain)
 
+
+        mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(self.last_domain)
         history = [sd.history for sd in selected_domains]
+
+
+        crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
         if self.decider:
-            crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
-            # print('\t', self.count, 'update crown_params')
             self.decider.update(crown_params=crown_params)
 
-        if use_implication:
-            count = 1
-            for lbs, ubs in zip(orig_lbs[:-1], orig_ubs[:-1]):
-                if (lbs - ubs).max() > 1e-6:
-                    return False, cc, None
+        self.last_dl = dl
 
-                for jj, (l, u) in enumerate(zip(lbs[0].flatten(), ubs[0].flatten())):
-                    node = count + jj
-                    if node in assignment:
-                        continue
-                    if u <= 0:
-                        implications[node] = {'pos': False, 'neg': True}
-                    elif l > 0:
-                        implications[node] = {'pos': True, 'neg': False}
 
-        if len(implications):
-            self.next_iter_implication = True
+        count = 1
+        for lbs, ubs in zip(orig_lbs[:-1], orig_ubs[:-1]):
+            if (lbs - ubs).max() > 1e-6:
+                return False, cc, None
+
+            for jj, (l, u) in enumerate(zip(lbs[0].flatten(), ubs[0].flatten())):
+                node = count + jj
+                if node in assignment:
+                    continue
+                if u <= 0:
+                    implications[node] = {'pos': False, 'neg': True}
+                elif l > 0:
+                    implications[node] = {'pos': True, 'neg': False}
+            count += lbs.numel()
+
+        # print(implications)
 
         return True, implications, is_full_assignment
 
@@ -405,42 +392,21 @@ class DNNTheoremProverCrown:
         pass
 
 
-    def get_domain_params(self, current_domain, batch=1):
-
+    def get_domain_params(self, selected_candidate_domain):
         lAs, lower_all, upper_all, slopes_all, betas_all, intermediate_betas_all, selected_candidate_domains = [], [], [], [], [], [], []
         device = self.net.device
+        batch = 1
 
-        idx = 1
-        current_domain.to_device(device, partial=True)
-        # current_domain.valid = False  # set False to avoid another pop
-        lAs.append(current_domain.lA)
-        lower_all.append(current_domain.lower_all)
-        upper_all.append(current_domain.upper_all)
-        slopes_all.append(current_domain.slope)
-        betas_all.append(current_domain.beta)
-        intermediate_betas_all.append(current_domain.intermediate_betas)
-        selected_candidate_domains.append(current_domain)
-
-        if batch > 1:
-            for k, selected_candidate_domain in self.domains.items():
-                if selected_candidate_domain.lower_bound < self.decision_thresh and selected_candidate_domain.valid is True:
-                    selected_candidate_domain.to_device(device, partial=True)
-                    # selected_candidate_domain.valid = False  # set False to avoid another pop
-                    lAs.append(selected_candidate_domain.lA)
-                    lower_all.append(selected_candidate_domain.lower_all)
-                    upper_all.append(selected_candidate_domain.upper_all)
-                    slopes_all.append(selected_candidate_domain.slope)
-                    betas_all.append(selected_candidate_domain.beta)
-                    intermediate_betas_all.append(selected_candidate_domain.intermediate_betas)
-                    selected_candidate_domains.append(selected_candidate_domain)
-                    idx += 1
-                    if idx == batch:
-                        break
-                # selected_candidate_domain.valid = False   # set False to avoid another pop
-
-        batch = len(selected_candidate_domains)
-
+        selected_candidate_domain.to_device(device, partial=True)
+        lAs.append(selected_candidate_domain.lA)
+        lower_all.append(selected_candidate_domain.lower_all)
+        upper_all.append(selected_candidate_domain.upper_all)
+        slopes_all.append(selected_candidate_domain.slope)
+        betas_all.append(selected_candidate_domain.beta)
+        intermediate_betas_all.append(selected_candidate_domain.intermediate_betas)
+        selected_candidate_domains.append(selected_candidate_domain)
         lower_bounds = []
+
         for j in range(len(lower_all[0])):
             lower_bounds.append(torch.cat([lower_all[i][j]for i in range(batch)]))
         lower_bounds = [t.to(device=device, non_blocking=True) for t in lower_bounds]

@@ -134,7 +134,7 @@ class DNNTheoremProverGurobi:
         return expr
 
     @torch.no_grad()
-    def __call__(self, assignment, info=None):
+    def __call__(self, assignment, full_assignment=None, info=None):
 
         # debug
         # print(assignment)

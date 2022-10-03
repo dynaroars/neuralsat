@@ -58,6 +58,7 @@ if __name__ == '__main__':
             spec = SpecificationVNNLIB(s)
             solver = DNNSolver(net, spec, args.dataset)
             status = solver.solve(timeout=args.timeout)
+            break
             if status in ['SAT', 'TIMEOUT']:
                 break
 
