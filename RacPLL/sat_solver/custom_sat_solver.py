@@ -460,9 +460,7 @@ class CustomSATSolver(Solver):
         else:
             unassigned_variables = list(self._all_vars)
         variable, value = self.decider.get(unassigned_variables)
-        # if variable in self._assignment:
-            # print('dit me may', variable, self._assignment[variable]['is_implied'])
-            # exit()
+        assert variable not in self._assignment
         self.create_new_decision_level()
         self._assign(None, variable if value else -variable)
         if settings.DEBUG:
