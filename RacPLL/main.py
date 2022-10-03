@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import argparse
 import torch
 import time

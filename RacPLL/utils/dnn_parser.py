@@ -1,6 +1,7 @@
 from pprint import pprint
 import sortedcontainers
 import torch.nn as nn
+import onnx2pytorch
 import numpy as np
 import torch
 import math
@@ -43,7 +44,7 @@ class DNNParser:
 
     def parse_onnx(filename, dataset):
 
-        if dataset in ['acasxu', 'test']:
+        if dataset in ['test']:
             model = ONNXParser(filename)
             pytorch_model = model.pytorch_model
 

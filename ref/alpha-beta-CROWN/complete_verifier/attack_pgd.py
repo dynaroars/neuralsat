@@ -422,6 +422,8 @@ def pgd_attack(dataset, model, x, max_eps, data_min, data_max, vnnlib=None, y=No
         success (bool): True if attack is successful. Otherwise False.
         attack_images (torch.tensor): last adversarial examples so far, may not be a real adversarial example if attack failed
     """
+    print(model)
+    exit()
     assert arguments.Config["specification"]["norm"] == np.inf, print('We only support Linf-norm attack.')
     if dataset in ["MNIST", "CIFAR", "UNKNOWN"]:  # FIXME (01/11/2022): Make the attack function generic, not for the two datasets only!
         # FIXME (01/11/2022): Generic specification PGD.

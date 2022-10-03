@@ -459,16 +459,21 @@ class ONNXParser2:
 
     def __init__(self, filename, dataset):
 
+        force_convert = False
         if dataset == 'mnist':
             input_shape = (1, 1, 28, 28)
             n_output = 10
         elif dataset == 'cifar':
             input_shape = (1, 3, 32, 32)
             n_output = 10
+        elif dataset == 'acasxu':
+            input_shape = (1, 5)
+            n_output = 5
+            force_convert = True
         else:
             raise 
 
-        model, is_channel_last = load_model_onnx(filename, input_shape=input_shape[1:])
+        model, is_channel_last = load_model_onnx(filename, input_shape[1:], force_convert=force_convert)
 
         if is_channel_last:
             input_shape = input_shape[:1] + input_shape[2:] + input_shape[1:2]

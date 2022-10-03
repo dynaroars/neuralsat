@@ -173,6 +173,9 @@ def load_model_onnx(path, input_shape, compute_test_acc=False, force_convert=Fal
     input_shape = tuple(input_shape)
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model)
 
+    print(pytorch_model)
+    exit()
+
     if force_convert:
         new_modules = []
         modules = list(pytorch_model.modules())[1:]

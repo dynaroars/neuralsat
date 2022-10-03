@@ -157,7 +157,6 @@ def load_onnx(path):
 
 
 def inference_onnx(path, *inputs):
-    print(inputs)
     sess = ort.InferenceSession(load_onnx(path).SerializeToString())
     names = [i.name for i in sess.get_inputs()]
     inp = dict(zip(names, inputs))
@@ -191,10 +190,10 @@ def load_model_onnx(path, input_shape, compute_test_acc=False, force_convert=Fal
                 raise NotImplementedError
 
         seq_model = nn.Sequential(*new_modules)
-        return seq_model
+        return seq_model, False
 
     if len(input_shape) <= 2:
-        return pytorch_model
+        return pytorch_model, False
 
     # Check model input shape.
     is_channel_last = False
@@ -253,7 +252,6 @@ def load_model(weights_loaded=True):
     # You can customize this function to load your own model based on model name.
     model_ori = eval(arguments.Config['model']['name'])()
     model_ori.eval()
-    print(model_ori)
 
     if not weights_loaded:
         return model_ori
