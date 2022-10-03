@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import math
 
-from utils.read_onnx import ONNXParser, ONNXParser2
+from utils.read_onnx import ONNXParser
 from utils.read_nnet import NetworkNNET
 import settings
 
@@ -45,30 +45,9 @@ class DNNParser:
     def parse_onnx(filename, dataset):
 
         if dataset in ['test']:
-            model = ONNXParser(filename)
-            pytorch_model = model.pytorch_model
-
-            # test to make transpose weights:
-            x = torch.randn(pytorch_model.input_shape, dtype=settings.DTYPE)
-            try:
-                pytorch_model(x)
-            except RuntimeError:
-                model = ONNXParser(filename, transpose_weight=True)
-                pytorch_model = model.pytorch_model
-                print(f'Notice: Transposed weights of model', filename)
-
-            relus = model.extract_ordered_relu_shapes()
-            shapes = [0] + [math.prod(s) for s in relus]
-            shapes = np.cumsum(shapes)
-            res = list(zip(shapes, shapes[1:]))
-
-            layers_mapping = {
-                i: sortedcontainers.SortedList(
-                    range(s[0]+1, s[1]+1)
-                ) for i, s in enumerate(res)
-            }
+            raise
         else:
-            model = ONNXParser2(filename, dataset)
+            model = ONNXParser(filename, dataset)
             pytorch_model = model.pytorch_model
             x = torch.randn(pytorch_model.input_shape, dtype=settings.DTYPE)
 
