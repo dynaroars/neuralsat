@@ -102,7 +102,11 @@ def gen_marabou_scripts():
                 # print(spec_name, specs)
                 for si in specs:
                     # print('start=$(date +%s.%N)', file=fp)
-                    cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5\n'
+                    result_file = 'result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(si).replace('.vnnlib', '') + '.txt'
+                    
+                    if benchmark == 'acasxu':
+                        nnet = nnet.replace('.onnx', '.nnet')
+                    cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5 --timeout 1000 --verbosity 0 --summary-file {result_file}\n'
                     fp.write(cmd)
                     # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
                     # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/{si}: %.6f seconds" $dur', file=fp)
@@ -114,8 +118,8 @@ def gen_marabou_scripts():
 
 if __name__ == '__main__':
 
-    gen_marabou_spec()
+    # gen_marabou_spec()
     gen_marabou_scripts()
-    gen_scripts()
+    # gen_scripts()
 
 
