@@ -48,14 +48,17 @@ def gen_scripts():
                 if benchmark == 'acasxu':
                     dataset = 'acasxu'
                     batch = 500
+                    device = 'cpu'
                 elif benchmark == 'mnistfc':
                     dataset = 'mnist'
+                    device = 'cuda'
                     batch = 500
                 elif benchmark == 'cifar2020':
                     dataset = 'cifar'
+                    device = 'cuda'
                     batch = 100
 
-                cmd = f'python3 main.py --net benchmark/{benchmark}/{nnet} --spec benchmark/{benchmark}/{spec} --dataset {dataset} --file {result_file} --attack --solution --timer --batch {batch}\n'
+                cmd = f'python3 main.py --net benchmark/{benchmark}/{nnet} --spec benchmark/{benchmark}/{spec} --dataset {dataset} --file {result_file} --attack --solution --timer --batch {batch} --device {device}\n'
                 fp.write(cmd)
                 # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
                 # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec}: %.6f seconds" $dur', file=fp)
