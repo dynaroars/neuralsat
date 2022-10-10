@@ -288,8 +288,8 @@ class DNNTheoremProverGurobi:
         Timers.tic('Gurobi functions')
         for node in layer_nodes:
             lb, ub = -1, 1
-            if node in self.optimized_layer_bounds:
-                lb, ub = self.optimized_layer_bounds[node]
+            # if node in self.optimized_layer_bounds:
+            #     lb, ub = self.optimized_layer_bounds[node]
 
             if (lb > -1e-6 or ub <= 1e-6):
                 pass
@@ -303,7 +303,7 @@ class DNNTheoremProverGurobi:
                 self.model.setObjective(obj, grb.GRB.MAXIMIZE)
                 self.model.optimize()
                 ub = self.model.objval
-                self.optimized_layer_bounds[node] = (lb, ub)
+                # self.optimized_layer_bounds[node] = (lb, ub)
             # else:
             #     status = assignment[node]
             #     # print(node, status)
@@ -323,6 +323,9 @@ class DNNTheoremProverGurobi:
                 # print()
             bounds[node] = {'lb': lb, 'ub': ub}
 
+        # print(f'\t[{self.count}] full_assignment:', full_assignment)
+        # print(f'\t[{self.count}] layer bounds:', bounds)
+
         # Timers.toc('Tighten bounds')
         Timers.toc('Gurobi functions')
 
@@ -333,8 +336,10 @@ class DNNTheoremProverGurobi:
         Timers.toc('DeepPoly')
 
         # print('---------------------------')
-        # print(lower)
-        # print(upper)
+        # print(f'\t[{self.count}] lower:', lower)
+        # print(f'\t[{self.count}] upper:', upper)
+        # print()
+        # print()
         # print()
 
         # Timers.tic('Crown functions')
@@ -352,6 +357,8 @@ class DNNTheoremProverGurobi:
         # print('---------------------------')
 
         stat, _ = self.spec.check_output_reachability(lower, upper)
+
+        # print(f'\t[{self.count}] stat:', stat)
 
 
         if not stat: # conflict

@@ -34,11 +34,12 @@ class Decider:
         if settings.SEED is not None:
             random.seed(settings.SEED)
 
-    def update(self, output_bounds=None, hidden_bounds=None, layer_bounds=None, crown_params=None):
+    def update(self, output_bounds=None, hidden_bounds=None, layer_bounds=None, crown_params=None, bounds_mapping=None):
         if hidden_bounds is not None:
             for idx, (lb, ub) in enumerate(hidden_bounds):
                 b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
                 assert len(b) == len(self.layers_mapping[idx])
+                assert (lb <= ub).all()
                 self.bounds_mapping.update(dict(zip(self.layers_mapping[idx], b)))
 
         if output_bounds is not None:
@@ -51,6 +52,8 @@ class Decider:
         if crown_params is not None:
             self.crown_params = crown_params
 
+        if bounds_mapping is not None:
+            self.bounds_mapping.update(bounds_mapping)
 
         
 

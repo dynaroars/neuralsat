@@ -79,12 +79,12 @@ class DNNSolver(TheorySolver):
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node(), full_assignment=full_assignment)
         Timers.toc('Theorem deduction')
 
-        if False:
+        if 1:
             if hasattr(self.dnn_theorem_prover, 'domains'):
-                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])})', time.time() - tic)
+                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
             else:
                 print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
-        
+
         # Timers.print_stats()
         # print()
         # print()
@@ -133,7 +133,7 @@ class DNNSolver(TheorySolver):
                 print()
 
             # print('cac:', list(cac))
-            # print('cc :', list(conflict_clause))
+            # print(self.dnn_theorem_prover.count, 'cc :', list(conflict_clause))
             # print()
             return conflict_clause, new_assignments
 
