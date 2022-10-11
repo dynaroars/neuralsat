@@ -4,9 +4,11 @@ import torch
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
 
-class BatchDeepPoly:
+class BatchDeepPoly(nn.Module):
 
     def __init__(self, net, back_sub_steps=100):
+        super(BatchDeepPoly, self).__init__()
+
         self.net = net
         self.back_sub_steps = back_sub_steps
         self.device = net.device
@@ -15,7 +17,7 @@ class BatchDeepPoly:
 
     def _build_network_transformer(self):
         last = BatchInputTransformer(self.net.input_shape).to(self.device)
-        self.layers = [last]
+        layers = [last]
         idx = 0
         for layer in self.net.layers:
             if isinstance(layer, nn.Linear):
@@ -26,7 +28,11 @@ class BatchDeepPoly:
             else:
                 print(layer)
                 raise NotImplementedError
-            self.layers += [last]
+            layers += [last]
+            # self._modules[str(last)] = last
+
+        self.layers = nn.Sequential(*layers)
+
 
     def _build_subnetwork_transformer(self):
         self.forward_from_layer = {k: [BatchInputHiddenTransformer(sub_id=k)] for k in self.net.layers_mapping.keys()}
@@ -49,11 +55,12 @@ class BatchDeepPoly:
         # for k in self.forward_from_layer:
         #     print(k, [str(l) for l in self.forward_from_layer[k]])
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def __call__(self, lower, upper, assignment=None, return_hidden_bounds=False):
         bounds = (lower, upper)
         hidden_bounds = []
         for layer in self.layers:
+            # print('[+] processing:', layer)
             if isinstance(layer, BatchReLUTransformer):
                 hidden_bounds.append(bounds.permute(1, 2, 0)) # B x 2 x H
             bounds, params = layer(bounds, assignment)
@@ -101,6 +108,7 @@ class BatchInputTransformer(nn.Module):
         self.input_shape = input_shape
 
     def forward(self, bounds, assignment):
+        # print('\t- Forward:', self)
         self.bounds = torch.stack([bounds[0], bounds[1]], dim=2).transpose(0, 1) # H x B x 2
         return self.bounds, None
     
@@ -117,6 +125,9 @@ class BatchLinearTransformer(nn.Module):
         self.weight = layer.weight
         self.bias = layer.bias
 
+        self.weight.requires_grad = False
+        self.bias.requires_grad = False
+
         self.last = last
         self.back_sub_steps = back_sub_steps
         self.W_plus = torch.clamp(self.weight, min=0.)
@@ -126,6 +137,7 @@ class BatchLinearTransformer(nn.Module):
         self.params = None
 
     def forward(self, bounds, assignment):
+        # print('\t- Forward:', self)
         # print(self, bounds.shape) # H x B x 2
         upper = self.W_plus @ bounds[..., 1] + self.W_minus @ bounds[..., 0] # H x B
         lower = self.W_plus @ bounds[..., 0] + self.W_minus @ bounds[..., 1] # H x B
@@ -137,6 +149,7 @@ class BatchLinearTransformer(nn.Module):
         return self.bounds, self.params
     
     def back_sub(self, max_steps):
+        # print('\t- Backward:', self)
         new_bounds, new_params = self._back_sub(max_steps) # H x B x 2
         # new_bounds = new_bounds.reshape(self.bounds.shape)
         indl = new_bounds[..., 0] > self.bounds[..., 0]
@@ -146,7 +159,7 @@ class BatchLinearTransformer(nn.Module):
         self.params = new_params
         
     def _back_sub(self, max_steps, params=None):
-        # print('_back_sub', self, '--->', self.last)
+        # print('\t\t-', self, '--->', self.last)
         # print(params)
         if params is None:
             params = self.weight.data, self.weight.data, self.bias.data, self.bias.data
@@ -228,11 +241,26 @@ class BatchReLUTransformer(nn.Module):
 
         self.layers_mapping = kwargs
         self.params = None
-    
+
+        # self.beta = None
+        self.register_parameter('beta', None)
+
+    def init_parameters(self, x):
+        self.beta = nn.Parameter(torch.zeros(x.shape[0], x.shape[1], device=x.device), requires_grad=True)
+        # nn.init.uniform_(self.beta)
+        # print('init beta', self, self.beta.shape, self.beta)
+        # print(self.beta.requires_grad)
+
     def forward(self, bounds, assignment):
+        if self.beta is None:
+            self.init_parameters(bounds)
+
+        # print('\tbeta:', self.beta.flatten().detach().numpy().tolist())
+        # print('\t- Forward:', self)
         # H x B x 2
         device = bounds.device
-        ind2 = bounds[..., 0] >= 0 # H x B
+        ind1 = bounds[..., 1] <= 0 # H x B
+        ind2 = bounds[..., 0] > 0 # H x B
         ind3 = (bounds[..., 1] > 0) * (bounds[..., 0] < 0) # H x B
         # ind4 = (bounds[1] > -bounds[0]) * ind3
 
@@ -241,30 +269,42 @@ class BatchReLUTransformer(nn.Module):
         # self.bounds[:, ind4] = bounds[:, ind4]
 
         self.lmbda = torch.zeros_like(bounds[..., 1], device=device) # H x B
-        self.beta = torch.zeros_like(bounds[..., 1], device=device) # H x B
         self.mu = torch.zeros_like(bounds[..., 1], device=device) # H x B
         self.lmbda[ind2] = torch.ones_like(self.lmbda[ind2], device=device)
+
+        self.beta.data[ind1] = torch.zeros_like(self.beta.data[ind1], device=device) # note: inactive indices should be set to 0
+        self.beta.data[ind2] = torch.ones_like(self.beta.data[ind2], device=device) # note: active indices should be set to 1
 
         diff = bounds[..., 1][ind3] - bounds[..., 0][ind3] 
         self.lmbda[ind3] = torch.div(bounds[..., 1][ind3], diff)
         # self.beta[ind4] = torch.ones_like(self.beta[ind4])
         self.mu[ind3] = torch.div(-bounds[..., 0][ind3] * bounds[..., 1][ind3], diff)
         self.bounds[..., :][ind2] = bounds[..., :][ind2]
-        self.beta[ind2] = torch.ones_like(self.beta[ind2], device=device)
-        # if assignment is not None:
-        #     la = torch.Tensor([assignment.get(i, 2) for i in self.layers_mapping[self.idx]]).view(self.lmbda.shape)
-        #     active_ind = la==True
-        #     inactive_ind = la==False
 
-        #     self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind], device=device)
-        #     self.beta[active_ind] = torch.zeros_like(self.beta[active_ind], device=device)
-        #     self.mu[active_ind] = torch.zeros_like(self.mu[active_ind], device=device)
+        # if (self.beta[ind1].sum() != 0):
+        #     print(self.beta.detach()[ind1].numpy())
+        #     raise
 
-        #     self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind], device=device)
-        #     self.beta[inactive_ind] = torch.zeros_like(self.beta[inactive_ind], device=device)
-        #     self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind], device=device)
+        self.zero_grad_indices = (ind1, ind2)
 
-        #     self.bounds[:, inactive_ind] = torch.zeros_like(self.bounds[:, inactive_ind], device=device)
+        # print( self.beta[ind2])
+        # print(self.beta[ind2].shape)
+        if assignment is not None:
+            assert len(assignment) == bounds.shape[1]
+            la = torch.stack([torch.Tensor([a.get(i, 2) for i in self.layers_mapping[self.idx]]) for a in assignment], dim=-1)
+            active_ind = la==True
+            inactive_ind = la==False
+
+            self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind], device=device)
+            self.beta.data[active_ind] = torch.zeros_like(self.beta.data[active_ind], device=device)
+            self.mu[active_ind] = torch.zeros_like(self.mu[active_ind], device=device)
+
+            self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind], device=device)
+            self.beta.data[inactive_ind] = torch.zeros_like(self.beta.data[inactive_ind], device=device)
+            self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind], device=device)
+
+            self.bounds[..., :][inactive_ind] = torch.zeros_like(self.bounds[..., :][inactive_ind], device=device)
+            self.zero_grad_indices += (active_ind, inactive_ind)
 
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
@@ -274,6 +314,7 @@ class BatchReLUTransformer(nn.Module):
         return f'[{self.sub_id}] Relu {self.idx}'
 
     def back_sub(self, max_steps):
+        # print('\t- Backward:', self)
         # new_bounds, new_params = self._back_sub(max_steps)
         # new_bounds = new_bounds.reshape(self.bounds.shape)
         # indl = new_bounds[0] > self.bounds[0] + 1e-6
@@ -299,10 +340,10 @@ class BatchReLUTransformer(nn.Module):
          
 
     def _back_sub(self, max_steps, params=None):
-        # print('_back_sub', self, '--->', self.last)
+        # print('\t\t-', self, '--->', self.last)
     
         if params is None:
-            device = self.beta.device
+            device = self.lmbda.device
             params = torch.diag_embed(self.beta.transpose(0, 1)), torch.diag_embed(self.lmbda.transpose(0, 1)), torch.zeros_like(self.mu, device=device), self.mu
         Ml, Mu, bl, bu = params
         # print(Ml.shape)

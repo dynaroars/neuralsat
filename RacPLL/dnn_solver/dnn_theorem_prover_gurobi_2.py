@@ -381,12 +381,15 @@ class DNNTheoremProverGurobi:
             #     pool.close()
 
             Timers.tic('Optimize bounds')
+            tic = time.time()
             for idx, d in enumerate(ds):
                 lid = d.optimize_bounds()
                 if d.unsat:
                     batch_layer_id[idx] = -1
                 else:
                     batch_layer_id[idx] = lid
+
+            print(f'[{self.count}] Optimized {len(ds)} domains in', time.time() - tic)
             Timers.toc('Optimize bounds')
 
             # exit()
