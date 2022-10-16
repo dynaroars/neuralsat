@@ -45,7 +45,8 @@ class ReLUDomain:
         self.backsub_dict = None
 
     def init_optimizer(self):
-        with contextlib.redirect_stdout(open(os.devnull, 'w')):
+        # with contextlib.redirect_stdout(open(os.devnull, 'w')):
+        if 1:
             self.model = grb.Model()
             self.model.setParam('OutputFlag', False)
     
@@ -108,7 +109,28 @@ class ReLUDomain:
         return torch.stack([torch.tensor(lb, dtype=settings.DTYPE, device=self.net.device), torch.tensor(ub, dtype=settings.DTYPE, device=self.net.device)])
 
 
+    def optimize_input_bounds(self):
+        # print([v.lb for v in self.model.getVars()])
+        for i, v in enumerate(self.model.getVars()):
+            # lower bound
+            self.model.setObjective(v, grb.GRB.MINIMIZE)
+            self.model.optimize()
+            if self.model.status == grb.GRB.INFEASIBLE:
+                self.unsat = True
+                return
+            v.lb = self.model.objval
+            # upper bound
+            self.model.setObjective(v, grb.GRB.MAXIMIZE)
+            self.model.optimize()
+            v.ub = self.model.objval
+        self.model.update()
+        # Timers.toc('Gurobi functions')
+        # print([v.lb for v in self.model.getVars()])
+        # print()
+
     def optimize_bounds(self):
+
+        self.optimize_input_bounds()
 
         # print(len(self.assignment), len(self.model.getConstrs()))
         # self.model.write(f'gurobi/{hash(frozenset(self.assignment.items()))}.lp')
@@ -139,10 +161,11 @@ class ReLUDomain:
             self.model.optimize()
             ub = self.model.objval
 
-            # old_lb, old_ub = self.bounds_mapping[node]
+            old_lb, old_ub = self.bounds_mapping[node]
             # if lb > old_lb or ub < old_ub:
-            #     print(f'[{node}] from ({old_lb:.02f}, {old_ub:.02f}) to ({lb:.02f}, {ub:.02f})')
-            self.bounds_mapping[node] = (lb, ub)
+            # print(f'[{node}] from ({old_lb:.02f}, {old_ub:.02f}) to ({lb:.02f}, {ub:.02f})')
+            # self.model.write('gurobi/cac.lp')
+            self.bounds_mapping[node] = (max(lb, old_lb), min(ub, old_ub))
 
         # lid, lnodes = self.get_layer_nodes()
         # unassigned_nodes = [n for n in lnodes if self.bounds_mapping[n][0] < 0 < self.bounds_mapping[n][1]]

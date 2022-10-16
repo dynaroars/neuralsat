@@ -66,6 +66,7 @@ class DNNTheoremProverGurobi:
         with contextlib.redirect_stdout(open(os.devnull, 'w')):
             self.model = grb.Model()
             self.model.setParam('OutputFlag', False)
+            self.model.setParam('FeasibilityTol', 1e-8)
 
         # input bounds
         bounds_init = self.spec.get_input_property()
@@ -102,14 +103,14 @@ class DNNTheoremProverGurobi:
         # pgd attack 
         self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
 
-        Timers.tic('Randomized attack')
-        self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
-        stat, adv = self.rf.eval(timeout=settings.FALSIFICATION_TIMEOUT)
-        if settings.DEBUG:
-            print('Randomized attack:', stat)
-        if stat == 'violated':
-            self.solution = adv[0]
-        Timers.toc('Randomized attack')
+        # Timers.tic('Randomized attack')
+        # self.rf = randomized_falsification.RandomizedFalsification(net, spec, seed=settings.SEED)
+        # stat, adv = self.rf.eval(timeout=settings.FALSIFICATION_TIMEOUT)
+        # if settings.DEBUG:
+        #     print('Randomized attack:', stat)
+        # if stat == 'violated':
+        #     self.solution = adv[0]
+        # Timers.toc('Randomized attack')
 
         self.crown = CrownWrapper(net)
         self.deepzono = deepzono.DeepZono(net)
@@ -130,7 +131,7 @@ class DNNTheoremProverGurobi:
         return return_nodes
 
     def _get_equation(self, coeffs):
-        expr = grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1]
+        expr = grb.LinExpr(coeffs[:-1], self.gurobi_vars) + coeffs[-1] + 1e-10
         return expr
 
     @torch.no_grad()
@@ -144,6 +145,7 @@ class DNNTheoremProverGurobi:
         if self.solution is not None:
             return True, {}, None
 
+        # print(f'\t[{self.count}] assignment:', assignment)
 
         Timers.tic('Find node')
         unassigned_nodes = self._find_unassigned_nodes(assignment)
@@ -202,7 +204,7 @@ class DNNTheoremProverGurobi:
                 status = assignment.get(node, None)
                 # assert status is not None
                 if status:
-                    ci = self.model.addLConstr(backsub_dict_expr[node] >= 1e-6, name=f'cstr[{node}]')
+                    ci = self.model.addLConstr(backsub_dict_expr[node] >= 1e-8, name=f'cstr[{node}]')
                 else:
                     ci = self.model.addLConstr(backsub_dict_expr[node] <= 0, name=f'cstr[{node}]')
         # Timers.toc('Gurobi functions')
@@ -246,7 +248,9 @@ class DNNTheoremProverGurobi:
             if flag_sat:
                 self.solution = self.get_solution()
                 return True, {}, is_full_assignment
-            # print('call from full assignment')
+
+            # self.model.write('gurobi/unsat.lp')
+            # print(f'\t[{self.count}] Call from full assignment')
             # self._restore_input_bounds()
             return False, cc, None
 
@@ -287,23 +291,26 @@ class DNNTheoremProverGurobi:
 
         Timers.tic('Gurobi functions')
         for node in layer_nodes:
-            lb, ub = -1, 1
-            # if node in self.optimized_layer_bounds:
-            #     lb, ub = self.optimized_layer_bounds[node]
+            # lb, ub = -1, 1
+            # # if node in self.optimized_layer_bounds:
+            # #     lb, ub = self.optimized_layer_bounds[node]
 
-            if (lb > -1e-6 or ub <= 1e-6):
-                pass
-            else:
+            # if (lb > -1e-6 or ub <= 1e-6):
+            #     pass
+            # else:
+            if 1:
                 obj = backsub_dict_expr[node]
                 # lower bound
                 self.model.setObjective(obj, grb.GRB.MINIMIZE)
                 self.model.optimize()
                 lb = self.model.objval
+
                 # upper bound
                 self.model.setObjective(obj, grb.GRB.MAXIMIZE)
                 self.model.optimize()
                 ub = self.model.objval
                 # self.optimized_layer_bounds[node] = (lb, ub)
+                assert lb <= ub, print(lb, ub)
             # else:
             #     status = assignment[node]
             #     # print(node, status)
@@ -319,7 +326,7 @@ class DNNTheoremProverGurobi:
             #     else:
             #         ub = min(ub, 0)
 
-                # print(lb, ub)
+                # print(node, lb, ub)
                 # print()
             bounds[node] = {'lb': lb, 'ub': ub}
 
@@ -336,8 +343,11 @@ class DNNTheoremProverGurobi:
         Timers.toc('DeepPoly')
 
         # print('---------------------------')
-        # print(f'\t[{self.count}] lower:', lower)
-        # print(f'\t[{self.count}] upper:', upper)
+        # print(f'\t[{self.count}] lbs:', lbs)
+        # print(f'\t[{self.count}] ubs:', ubs)
+        # print(f'\t[{self.count}] output lower:', lower)
+        # print(f'\t[{self.count}] output upper:', upper)
+        # print(f'\t[{self.count}] hidden_bounds:', hidden_bounds)
         # print()
         # print()
         # print()
@@ -414,6 +424,7 @@ class DNNTheoremProverGurobi:
             #         raise
 
         # print('implications   :', list(implications.keys()))
+        # print(f'\t[{self.count}] implications:', implications)
         Timers.toc('Implications')
         if len(implications):
             self.next_iter_implication = True
@@ -437,9 +448,10 @@ class DNNTheoremProverGurobi:
     def check_solution(self, solution):
         if torch.any(solution < self.lbs_init.view(self.net.input_shape)) or torch.any(solution > self.ubs_init.view(self.net.input_shape)):
             return False
-        if self.spec.check_solution(self.net(solution)):
-            return True
-        return False
+        # print(self.net(solution).numpy().tolist())
+        # if self.spec.check_solution(self.net(solution)):
+        #     return True
+        return True
 
     def _compute_output_abstraction(self, lbs, ubs, assignment=None):
         if settings.HEURISTIC_DEEPZONO: # eran deepzono

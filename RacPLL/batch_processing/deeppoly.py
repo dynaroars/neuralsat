@@ -6,7 +6,7 @@ torch._C._jit_set_profiling_mode(False)
 
 class BatchDeepPoly(nn.Module):
 
-    def __init__(self, net, back_sub_steps=100):
+    def __init__(self, net, back_sub_steps=1000):
         super(BatchDeepPoly, self).__init__()
 
         self.net = net
@@ -52,6 +52,7 @@ class BatchDeepPoly(nn.Module):
                 if k < idx:
                     self.forward_from_layer[k] += [last]
 
+        self.forward_from_layer = {k: nn.Sequential(*v) for k, v in self.forward_from_layer.items()}
         # for k in self.forward_from_layer:
         #     print(k, [str(l) for l in self.forward_from_layer[k]])
 
@@ -59,21 +60,37 @@ class BatchDeepPoly(nn.Module):
     def __call__(self, lower, upper, assignment=None, return_hidden_bounds=False):
         bounds = (lower, upper)
         hidden_bounds = []
+        # self.reset_parameter()
         for layer in self.layers:
             # print('[+] processing:', layer)
             if isinstance(layer, BatchReLUTransformer):
                 hidden_bounds.append(bounds.permute(1, 2, 0)) # B x 2 x H
-            bounds, params = layer(bounds, assignment)
+            bounds, _ = layer(bounds, assignment)
+            # print(bounds)
             assert torch.all(bounds[..., 0] <= bounds[..., 1])
         if return_hidden_bounds:
             return (bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)), hidden_bounds
         return bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)
 
+    def reset_parameter(self):
+        for layer in self.layers:
+            if isinstance(layer, BatchReLUTransformer):
+                layer.reset_beta()
 
-    @torch.no_grad()
-    def forward_layer(self, lower, upper, layer_id, assignment=None, return_hidden_bounds=False):
+   
+    def reset_parameter_layer(self, layer_id):
+        for layer in self.forward_from_layer[layer_id]:
+            if isinstance(layer, BatchReLUTransformer):
+                layer.reset_beta()
+
+     
+
+    # @torch.no_grad()
+    def forward_layer(self, lower, upper, layer_id, assignment=None, return_hidden_bounds=False, reset_param=False):
         bounds = (lower, upper)
         hidden_bounds = []
+        if reset_param:
+            self.reset_parameter_layer(layer_id)
         for layer in self.forward_from_layer[layer_id]:
             if isinstance(layer, BatchReLUTransformer):
                 hidden_bounds.append(bounds.permute(1, 2, 0)) # B x 2 x H
@@ -144,8 +161,10 @@ class BatchLinearTransformer(nn.Module):
 
         self.bounds  = torch.stack([lower, upper], dim=2) + self.bias[:, None, None] # H x B x 2
         # print(self, self.bounds.shape)
+        # print('\t- Before backsub:', self.bounds)
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
+        # print('\t- After backsub:', self.bounds)
         return self.bounds, self.params
     
     def back_sub(self, max_steps):
@@ -242,18 +261,22 @@ class BatchReLUTransformer(nn.Module):
         self.layers_mapping = kwargs
         self.params = None
 
+        self.register_parameter('beta', None)
+        # self.reset_beta()
+
         # self.beta = None
+    def reset_beta(self):
         self.register_parameter('beta', None)
 
     def init_parameters(self, x):
         self.beta = nn.Parameter(torch.zeros(x.shape[0], x.shape[1], device=x.device), requires_grad=True)
         # nn.init.uniform_(self.beta)
-        # print('init beta', self, self.beta.shape, self.beta)
+        # print('init beta', self, self.beta.shape)
         # print(self.beta.requires_grad)
 
     def forward(self, bounds, assignment):
         if self.beta is None:
-            self.init_parameters(bounds)
+            self.init_parameters(bounds)    
 
         # print('\tbeta:', self.beta.flatten().detach().numpy().tolist())
         # print('\t- Forward:', self)
@@ -306,8 +329,12 @@ class BatchReLUTransformer(nn.Module):
             self.bounds[..., :][inactive_ind] = torch.zeros_like(self.bounds[..., :][inactive_ind], device=device)
             self.zero_grad_indices += (active_ind, inactive_ind)
 
+
+        # print('\t- Before backsub:', self.bounds)
+
         if self.back_sub_steps > 0:
             self.back_sub(self.back_sub_steps)
+        # print('\t- After backsub:', self.bounds)
         return self.bounds, None
 
     def __str__(self):

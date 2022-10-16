@@ -46,7 +46,7 @@ class DNNSolver(TheorySolver):
         self.dataset = dataset
 
         self.decider = decider.Decider(net, dataset)
-        if dataset == 'acasxu':
+        if dataset in ['acasxu', 'test']:
             self.dnn_theorem_prover = DNNTheoremProverGurobi(net, spec=spec, decider=self.decider)
         else:
             self.dnn_theorem_prover = DNNTheoremProverCrown(net, spec=spec, decider=self.decider)
@@ -80,10 +80,11 @@ class DNNSolver(TheorySolver):
         Timers.toc('Theorem deduction')
 
         if 1:
-            if hasattr(self.dnn_theorem_prover, 'domains'):
-                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
-            else:
-                print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
+            if time.time() - tic > 0.01:
+                if hasattr(self.dnn_theorem_prover, 'domains'):
+                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
+                else:
+                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
 
         # Timers.print_stats()
         # print()

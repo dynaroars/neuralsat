@@ -104,7 +104,7 @@ class Decider:
         #     l, u = self.bounds_mapping[node]
         #     return node, u.abs() >= l.abs()
 
-        if self.dataset == 'acasxu':
+        if self.dataset in ['acasxu', 'test']:
         # if settings.DECISION == 'MIN_BOUND':
             try:
                 scores = [(n, self.get_score(n)) for n in unassigned_nodes]

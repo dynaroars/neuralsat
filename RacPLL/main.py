@@ -69,8 +69,8 @@ if __name__ == '__main__':
             output = solver.net(solution)
             print('\t- lower:', spec.get_input_property()['lbs'])
             print('\t- upper:', spec.get_input_property()['ubs'])
-            print('\t- solution:', solution.detach().numpy().tolist())
-            print('\t- output:', output.detach().numpy().tolist())
+            print('\t- solution:', solution.detach())
+            print('\t- output:', output.detach())
 
     if args.timer:
         Timers.toc('dnn_solver')

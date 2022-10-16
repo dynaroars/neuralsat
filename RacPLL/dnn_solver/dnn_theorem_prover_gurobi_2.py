@@ -14,8 +14,8 @@ import os
 import pickle
 from contextlib import contextmanager
 
+from batch_processing import deeppoly, domain, gradient_abstractor
 from dnn_solver.symbolic_network import SymbolicNetwork
-from batch_processing import deeppoly, domain
 from dnn_solver.worker import *
 
 from utils.cache import BacksubCacher
@@ -103,9 +103,12 @@ class DNNTheoremProverGurobi:
 
         self.decider = decider
 
-        with contextlib.redirect_stdout(open(os.devnull, 'w')):
+        # with contextlib.redirect_stdout(open(os.devnull, 'w')):
+        if 1:
             self.model = grb.Model()
             self.model.setParam('OutputFlag', False)
+            self.model.setParam('FeasibilityTol', 1e-8)
+            
 
         # input bounds
         bounds_init = self.spec.get_input_property()
@@ -126,7 +129,7 @@ class DNNTheoremProverGurobi:
         self.transformer = SymbolicNetwork(net)
 
         self.deeppoly = deeppoly.BatchDeepPoly(net, back_sub_steps=1000)
-
+        self.ga = gradient_abstractor.GradientAbstractor(net, spec)
 
         # self.concrete = self.net.get_concrete((self.lbs_init + self.ubs_init) / 2.0)
         # self.reversed_layers_mapping = {n: k for k, v in self.layers_mapping.items() for n in v}
@@ -182,7 +185,6 @@ class DNNTheoremProverGurobi:
             if var in d.assignment:
                 print('duplicated:', var)
                 raise
-            # print('var:', var)
             if var is None:
                 continue
             # f_assignment = copy.deepcopy(d.assignment)
@@ -190,8 +192,6 @@ class DNNTheoremProverGurobi:
             new_d1 = d.clone(var, False)
             new_d2 = d.clone(var, True)
 
-            # print(new_d1.assignment)
-            # print(new_d2.assignment)
             # print(d.assignment)
 
             self.domains[hash(frozenset(new_d1.assignment.items()))] = new_d1
@@ -212,11 +212,10 @@ class DNNTheoremProverGurobi:
                 break
         return ds
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def __call__(self, assignment, info=None, full_assignment=None, use_implication=True):
 
         # debug
-        # print('assignment:', assignment)
         self.count += 1
         cc = frozenset()
         implications = {}
@@ -289,7 +288,7 @@ class DNNTheoremProverGurobi:
             for i, (node, status) in enumerate(assignment.items()):
                 if status:
                     lhs[i] = -1 * backsub_dict[node][:-1]
-                    rhs[i] = backsub_dict[node][-1] - 1e-6
+                    rhs[i] = backsub_dict[node][-1] - 1e-8
                 else:
                     lhs[i] = backsub_dict[node][:-1]
                     rhs[i] = -1 * backsub_dict[node][-1]
@@ -389,7 +388,7 @@ class DNNTheoremProverGurobi:
                 else:
                     batch_layer_id[idx] = lid
 
-            print(f'[{self.count}] Optimized {len(ds)} domains in', time.time() - tic)
+            # print(f'[{self.count}] Optimized {len(ds)} domains in', time.time() - tic)
             Timers.toc('Optimize bounds')
 
             # exit()
@@ -415,12 +414,17 @@ class DNNTheoremProverGurobi:
 
                 # print(f'\t[{self.count}] batch_lower:', batch_lower.numpy().tolist())
                 # print(f'\t[{self.count}] batch_upper:', batch_upper.numpy().tolist())
-                
-                (lbs, ubs), hidden_bounds = self.deeppoly.forward_layer(batch_lower, batch_upper, lid, return_hidden_bounds=True)
+                # with torch.no_grad():
+                #     (lbs, ubs), hidden_bounds = self.deeppoly.forward_layer(batch_lower, batch_upper, lid, return_hidden_bounds=True, reset_param=True)
 
-                # print(f'\t[{self.count}] lbs:', lbs.numpy())
-                # print(f'\t[{self.count}] ubs:', ubs.numpy())
+                # print(f'\t[{self.count}] lbs 1:', lbs.numpy().tolist())
+                # print(f'\t[{self.count}] ubs 1:', ubs.numpy().tolist())
 
+
+                (lbs, ubs), hidden_bounds = self.ga.get_optimized_bounds(batch_lower, batch_upper, lid)
+
+                # print(f'\t[{self.count}] lbs 2:', lbs.detach().numpy().tolist())
+                # print(f'\t[{self.count}] ubs 2:', ubs.detach().numpy().tolist())
 
                 for bidx in range(len(indices)):
                     stat, _ = self.spec.check_output_reachability(lbs[bidx], ubs[bidx])
@@ -507,9 +511,9 @@ class DNNTheoremProverGurobi:
     def check_solution(self, solution):
         if torch.any(solution < self.lbs_init.view(self.net.input_shape)) or torch.any(solution > self.ubs_init.view(self.net.input_shape)):
             return False
-        if self.spec.check_solution(self.net(solution)):
-            return True
-        return False
+        # if self.spec.check_solution(self.net(solution)):
+        #     return True
+        return True
 
     def _compute_output_abstraction(self, lbs, ubs, assignment=None):
         if settings.HEURISTIC_DEEPZONO: # eran deepzono
