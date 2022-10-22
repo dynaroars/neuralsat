@@ -5,7 +5,7 @@ import time
 import copy
 
 # from dnn_solver.dnn_theorem_prover_2 import DNNTheoremProver
-from dnn_solver.dnn_theorem_prover_gurobi import DNNTheoremProverGurobi
+from dnn_solver.dnn_theorem_prover_gurobi_3 import DNNTheoremProverGurobi
 from dnn_solver.dnn_theorem_prover_crown import DNNTheoremProverCrown
 from sat_solver.custom_sat_solver import CustomSATSolver
 from sat_solver.sat_solver import Solver
@@ -80,18 +80,19 @@ class DNNSolver(TheorySolver):
         Timers.toc('Theorem deduction')
 
         if 1:
-            if time.time() - tic > 0.01:
+            if time.time() - tic > 0.01 or 1:
                 if hasattr(self.dnn_theorem_prover, 'domains'):
                     print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
                 else:
-                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic)
+                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic, 'SAT' if theory_sat else 'UNSAT')
 
         # Timers.print_stats()
         # print()
         # print()
         # for d in self.dnn_theorem_prover.domains.values():
         #     print('\t', d.lower_bound, d.get_assignment())
-
+        # if self.dnn_theorem_prover.count >= 25:
+        #     exit()
 
         if self.get_solution() is not None:
             self.set_early_stop('SAT')

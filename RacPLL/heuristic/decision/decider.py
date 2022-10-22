@@ -60,11 +60,11 @@ class Decider:
     def get_score(self, node):
         l, u = self.bounds_mapping[node]
         # score = (u - l)
-        # score = torch.min(u, -l)
-        score = (u + l) / (u - l)
-        # print(score, u, l)
+        score = min(u, -l)
+        # score = (u + l) / (u - l)
+        # print(node, score, u, l)
         # exit()
-        return score.abs()
+        return score#.abs()
 
     def get_impact(self, node):
         l, u = self.bounds_mapping[node]
@@ -106,12 +106,15 @@ class Decider:
 
         if self.dataset in ['acasxu', 'test']:
         # if settings.DECISION == 'MIN_BOUND':
+            # print('unassigned_nodes:', unassigned_nodes)
             try:
                 scores = [(n, self.get_score(n)) for n in unassigned_nodes]
-                scores = sorted(scores, key=lambda tup: tup[1], reverse=False)
+                reverse=True
+                scores = sorted(scores, key=lambda tup: tup[1], reverse=reverse)
                 node = scores[0][0]
                 l, u = self.bounds_mapping[node]
-                return node, u.abs() >= l.abs()
+                # print('\t- Decide:', node)
+                return node, True #u.abs() >= l.abs()
             except KeyError:
                 node = random.choice(unassigned_nodes)
                 return node, random.choice([True, False])

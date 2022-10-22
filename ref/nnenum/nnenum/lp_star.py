@@ -268,6 +268,8 @@ class LpStar(Freezable):
                     if should_skip[d, 1] and np.dot(hyperplane_vec, max_wit) > rhs:
                         should_skip[d, 1] = False
 
+        # print(self.lpi)
+
         if Settings.CONTRACT_LP_OPTIMIZED and cur_box is not None:
             rv = self.update_input_box_bounds_new(cur_box, should_skip, count_lps)
         else:

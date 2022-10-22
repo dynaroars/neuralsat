@@ -31,7 +31,7 @@ class Settings(metaclass=FreezableMeta):
 
         cls.SINGLE_SET = False # only do single-set overapproximation (no splitting)
 
-        cls.PRINT_OUTPUT = True # print anything to stdout? (controls all output)
+        cls.PRINT_OUTPUT = 0 # print anything to stdout? (controls all output)
 
         cls.RESULT_SAVE_POLYS = False # save 2-d projections of output polygons to Result.polys?
         cls.RESULT_SAVE_POLYS_DIMS = (0, 1) # (x_dim, y_dim) of 2-d projections, used if RESULT_SAVE_POLYGONS is True
@@ -45,7 +45,7 @@ class Settings(metaclass=FreezableMeta):
         #########################
         ### advanced settings ###
         cls.PRINT_PROGRESS = True # print periodic progress updates
-        cls.PRINT_INTERVAL = 0.1 # print interval in seconds (0 = no printing)
+        cls.PRINT_INTERVAL = 0 # print interval in seconds (0 = no printing)
         cls.TIMING_STATS = False # compute and print detailed timing stats
 
         cls.CHECK_SINGLE_THREAD_BLAS = True

@@ -57,20 +57,35 @@ class BatchDeepPoly(nn.Module):
         #     print(k, [str(l) for l in self.forward_from_layer[k]])
 
     # @torch.no_grad()
-    def __call__(self, lower, upper, assignment=None, return_hidden_bounds=False):
+    def __call__(self, lower, upper, assignment=None, return_hidden_bounds=False, reset_param=False):
         bounds = (lower, upper)
         hidden_bounds = []
-        # self.reset_parameter()
+        invalid_batch = []
+        if reset_param:
+            self.reset_parameter()
         for layer in self.layers:
             # print('[+] processing:', layer)
+
             if isinstance(layer, BatchReLUTransformer):
+                # if torch.any(bounds[..., 0] > bounds[..., 1]):
+                #     invalid_batch += (torch.where(bounds[..., 0] > bounds[..., 1]))[1].numpy().tolist()
                 hidden_bounds.append(bounds.permute(1, 2, 0)) # B x 2 x H
             bounds, _ = layer(bounds, assignment)
             # print(bounds)
-            assert torch.all(bounds[..., 0] <= bounds[..., 1])
+            if torch.any(bounds[..., 0] > bounds[..., 1]):
+                # print(bounds[..., 0].flatten())
+                # print(bounds[..., 1].flatten())
+                # print(bounds[torch.where(bounds[..., 0] > bounds[..., 1])])
+                # print(bounds.shape)
+                
+                # exit()
+                invalid_batch += (torch.where(bounds[..., 0] > bounds[..., 1]))[1].numpy().tolist()
+                # print(invalid_batch)
+                # exit()
         if return_hidden_bounds:
-            return (bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)), hidden_bounds
-        return bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)
+            # print(lower.shape, len(hidden_bounds))
+            return (bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)), list(set(invalid_batch)), hidden_bounds
+        return (bounds[..., 0].transpose(0, 1), bounds[..., 1].transpose(0, 1)), list(set(invalid_batch))
 
     def reset_parameter(self):
         for layer in self.layers:
@@ -84,6 +99,9 @@ class BatchDeepPoly(nn.Module):
                 layer.reset_beta()
 
      
+    def get_params(self):
+        return self.layers[-1].params    
+
 
     # @torch.no_grad()
     def forward_layer(self, lower, upper, layer_id, assignment=None, return_hidden_bounds=False, reset_param=False):
@@ -285,11 +303,11 @@ class BatchReLUTransformer(nn.Module):
         ind1 = bounds[..., 1] <= 0 # H x B
         ind2 = bounds[..., 0] > 0 # H x B
         ind3 = (bounds[..., 1] > 0) * (bounds[..., 0] < 0) # H x B
-        # ind4 = (bounds[1] > -bounds[0]) * ind3
+        ind4 = (bounds[..., 1] > -bounds[..., 0]) * ind3
 
         self.bounds = torch.zeros_like(bounds, device=device) # H x B x 2
-        self.bounds[..., 1][ind3] = bounds[...,1][ind3]
-        # self.bounds[:, ind4] = bounds[:, ind4]
+        self.bounds[..., 1][ind3] = bounds[..., 1][ind3]
+        self.bounds[..., :][ind4] = bounds[..., :][ind4]
 
         self.lmbda = torch.zeros_like(bounds[..., 1], device=device) # H x B
         self.mu = torch.zeros_like(bounds[..., 1], device=device) # H x B
@@ -300,7 +318,9 @@ class BatchReLUTransformer(nn.Module):
 
         diff = bounds[..., 1][ind3] - bounds[..., 0][ind3] 
         self.lmbda[ind3] = torch.div(bounds[..., 1][ind3], diff)
-        # self.beta[ind4] = torch.ones_like(self.beta[ind4])
+        if not torch.is_grad_enabled():
+            self.beta.data[ind4] = torch.ones_like(self.beta.data[ind4])
+            
         self.mu[ind3] = torch.div(-bounds[..., 0][ind3] * bounds[..., 1][ind3], diff)
         self.bounds[..., :][ind2] = bounds[..., :][ind2]
 
@@ -319,7 +339,7 @@ class BatchReLUTransformer(nn.Module):
             inactive_ind = la==False
 
             self.lmbda[active_ind] = torch.ones_like(self.lmbda[active_ind], device=device)
-            self.beta.data[active_ind] = torch.zeros_like(self.beta.data[active_ind], device=device)
+            self.beta.data[active_ind] = torch.ones_like(self.beta.data[active_ind], device=device)
             self.mu[active_ind] = torch.zeros_like(self.mu[active_ind], device=device)
 
             self.lmbda[inactive_ind] = torch.zeros_like(self.lmbda[inactive_ind], device=device)
@@ -327,6 +347,7 @@ class BatchReLUTransformer(nn.Module):
             self.mu[inactive_ind] = torch.zeros_like(self.mu[inactive_ind], device=device)
 
             self.bounds[..., :][inactive_ind] = torch.zeros_like(self.bounds[..., :][inactive_ind], device=device)
+            self.bounds[..., :][active_ind] = bounds[..., :][active_ind].clamp(min=0)
             self.zero_grad_indices += (active_ind, inactive_ind)
 
 
@@ -356,7 +377,7 @@ class BatchReLUTransformer(nn.Module):
         # new_bounds = new_bounds.reshape(self.bounds.shape)
         indl = new_bounds[..., 0] > self.bounds[..., 0]
         indu = new_bounds[..., 1] < self.bounds[..., 1]
-        self.bounds[..., 0][indl] = new_bounds[..., 0][indl]
+        self.bounds[..., 0][indl] = new_bounds[..., 0][indl].clamp(min=0)
         self.bounds[..., 1][indu] = new_bounds[..., 1][indu]
         self.params = new_params
 

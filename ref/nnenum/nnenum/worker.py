@@ -79,6 +79,7 @@ class Worker(Freezable):
                 
                 if self.priv.work_list: # pop from local
                     self.priv.ss = self.priv.work_list.pop()
+                    print('[+] Pop:', self.priv.ss)
                     
                 else: # pop from global (shared)
 
@@ -86,6 +87,7 @@ class Worker(Freezable):
                         self.priv.ss = self.shared.get_global_queue(timeout=0.01)
 
                     if self.priv.ss is not None:
+                        print('[+] Pop:', self.priv.ss)
                         
                         # make sure we tell other people we have work now
                         self.priv.shared_update_urgent = True
@@ -130,6 +132,8 @@ class Worker(Freezable):
         spec = self.shared.spec
 
         assert ss.remaining_splits() > 0
+
+        print(' ----- consider approx -----')
 
         if Settings.BRANCH_MODE == Settings.BRANCH_OVERAPPROX:
             do_overapprox = True
@@ -206,8 +210,12 @@ class Worker(Freezable):
                     else:
                         otypes = Settings.OVERAPPROX_TYPES_NEAR_ROOT
 
+                    print('[+] Abstraction:', ss)
                     res = do_overapprox_rounds(ss, network, spec, prerelu_sims, check_cancel_func, gen_limit,
                                                overapprox_types=otypes)
+                    print('\t- safe:', ss, res.is_safe)
+                    if res.is_safe:
+                        print(ss.star.lpi)
 
                     if res.concrete_io_tuple is not None:
                         if Settings.PRINT_OUTPUT:
@@ -217,7 +225,6 @@ class Worker(Freezable):
                         self.found_unsafe(res.concrete_io_tuple)
                         self.add_branch_str('CONCRETE UNSAFE')
                     else:
-
                         is_safe = res.is_safe
                         safe_str = "safe" if is_safe else "unsafe"
                         self.add_branch_str(f"{safe_str} {res}")
@@ -236,6 +243,8 @@ class Worker(Freezable):
                     # fix timers
                     while Timers.stack and Timers.stack[-1].name != timer_name:
                         Timers.toc(Timers.stack[-1].name)
+
+                    print('\t- stat: cancelled')
 
                     self.add_branch_str(f'{str(e)}')
                     self.priv.max_approx_gen = 0 # reset limit
@@ -833,6 +842,7 @@ class Worker(Freezable):
 
                 # note: new_star may be done... but for expected branching order we still add it
                 self.priv.stars_in_progress += 1
+                print('[+] Append:', new_star)
                 self.priv.work_list.append(new_star)
 
         Timers.toc('advance')

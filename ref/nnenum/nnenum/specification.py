@@ -79,6 +79,7 @@ class DisjunctiveSpec(Freezable):
         for spec in self.spec_list:
             if spec.zono_might_violate_spec(zono):
                 rv = True
+                # print('zono_might_violate_spec')
                 break
 
         return rv
@@ -188,6 +189,7 @@ class Specification(Freezable):
 
         for i, row in enumerate(self.mat):
             min_dot = zono.minimize_val(row)
+            # print(row, min_dot, self.rhs[i])
             
             if min_dot > self.rhs[i]:
                 might_violate = False

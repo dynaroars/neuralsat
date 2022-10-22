@@ -217,11 +217,11 @@ class ReLUTransformer(nn.Module):
         device = bounds.device
         ind2 = bounds[0] >= 0 
         ind3 = (bounds[1] > 0) * (bounds[0] < 0) 
-        # ind4 = (bounds[1] > -bounds[0]) * ind3
+        ind4 = (bounds[1] > -bounds[0]) * ind3
 
         self.bounds = torch.zeros_like(bounds, device=device)
         self.bounds[1, ind3] = bounds[1, ind3]
-        # self.bounds[:, ind4] = bounds[:, ind4]
+        self.bounds[:, ind4] = bounds[:, ind4]
         self.lmbda = torch.zeros_like(bounds[1], device=device)
         self.beta = torch.zeros_like(bounds[1], device=device)
         self.mu = torch.zeros_like(bounds[1], device=device)
@@ -229,7 +229,7 @@ class ReLUTransformer(nn.Module):
 
         diff = bounds[1, ind3] - bounds[0, ind3] 
         self.lmbda[ind3] = torch.div(bounds[1, ind3], diff)
-        # self.beta[ind4] = torch.ones_like(self.beta[ind4])
+        self.beta[ind4] = torch.ones_like(self.beta[ind4])
         self.mu[ind3] = torch.div(-bounds[0, ind3] * bounds[1, ind3], diff)
         self.bounds[:, ind2] = bounds[:, ind2]
         self.beta[ind2] = torch.ones_like(self.beta[ind2], device=device)

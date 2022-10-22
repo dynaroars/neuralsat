@@ -4,6 +4,7 @@ import torch
 import time
 
 from batch_processing.deeppoly import BatchDeepPoly, BatchReLUTransformer
+from utils.timer import Timers
 
 
 class BetaClipper:
@@ -62,7 +63,7 @@ class DeepPolyLayerWrapper(nn.Module):
 
 class GradientAbstractor:
 
-    def __init__(self, net, spec, n_iters=10, lr=0.1):
+    def __init__(self, net, spec, n_iters=20, lr=0.2):
 
         self.abstractor = BatchDeepPoly(net)
         self.spec = spec
@@ -76,16 +77,21 @@ class GradientAbstractor:
         self.layer_abstractors = {k: DeepPolyLayerWrapper(v) for k, v in self.abstractor.forward_from_layer.items()}
 
 
-    def get_optimized_bounds(self, lower, upper, layer_id):
+    def get_optimized_bounds_from_layer(self, lower, upper, layer_id):
+        Timers.tic('Init Optimize')
         abstractor = self.layer_abstractors[layer_id]
         # print('--------run init')
         abstractor(lower, upper, reset_param=True)
 
         optimizer = torch.optim.Adam(abstractor.parameters(), lr=self.lr)
+        Timers.toc('Init Optimize')
+
         for it in range(self.n_iters):
             # print('optimize iter:', it)
             optimizer.zero_grad()
+            Timers.tic('Abstraction')
             (lb, ub), hb = abstractor(lower, upper, return_hidden_bounds=True, reset_param=False)
+            Timers.toc('Abstraction')
             # loss = (uo - lo).sum()
             sat_mask = self.get_sat_mask(lb, ub)
             # print(unsat_mask)
@@ -99,12 +105,23 @@ class GradientAbstractor:
             loss = self.get_loss(lb[sat_mask], ub[sat_mask])
             
             # print(it, loss)
+            Timers.tic('Backward Loss')
             loss.backward()
-            self.abstractor.apply(self.zero_grader)
-            optimizer.step()
-            abstractor.apply(self.clipper)
+            Timers.toc('Backward Loss')
 
-        return (lb, ub), hb
+            # Timers.tic('Zero Grad')
+            # self.abstractor.apply(self.zero_grader)
+            # Timers.toc('Zero Grad')
+
+            Timers.tic('Update Beta')
+            optimizer.step()
+            Timers.toc('Update Beta')
+
+            Timers.tic('Clip Beta')
+            abstractor.apply(self.clipper)
+            Timers.toc('Clip Beta')
+
+        return (lb, ub), [], hb
 
     def get_sat_mask(self, lower, upper):
         # print(lower.shape)
@@ -119,4 +136,46 @@ class GradientAbstractor:
         # return (upper*mask)[..., 0].mean()
         return (upper - lower).mean()
     
-   
+    def get_optimized_bounds_from_input(self, lower, upper, assignment=None):
+        Timers.tic('Init Optimize')
+        self.abstractor(lower, upper, reset_param=True)
+
+        optimizer = torch.optim.Adam(self.abstractor.parameters(), lr=self.lr)
+        Timers.toc('Init Optimize')
+
+        for it in range(self.n_iters):
+            # print('optimize iter:', it)
+            optimizer.zero_grad()
+            Timers.tic('Abstraction')
+            (lb, ub), invalid_batch, hb = self.abstractor(lower, upper, assignment=assignment, return_hidden_bounds=True, reset_param=False)
+            Timers.toc('Abstraction')
+            # loss = (uo - lo).sum()
+            sat_mask = self.get_sat_mask(lb, ub)
+            # print(unsat_mask)
+
+            if sat_mask.sum() == 0:
+                # print('all unsat at iter', it)
+                break
+            # print(it, unsat_mask.sum(), len(lb))
+            # idx_sat = torch.where(unsat_mask == True)
+            # print(idx_sat)
+            loss = self.get_loss(lb[sat_mask], ub[sat_mask])
+            
+            # print(it, loss)
+            Timers.tic('Backward Loss')
+            loss.backward()
+            Timers.toc('Backward Loss')
+
+            # Timers.tic('Zero Grad')
+            # self.abstractor.apply(self.zero_grader)
+            # Timers.toc('Zero Grad')
+
+            Timers.tic('Update Beta')
+            optimizer.step()
+            Timers.toc('Update Beta')
+
+            Timers.tic('Clip Beta')
+            self.abstractor.apply(self.clipper)
+            Timers.toc('Clip Beta')
+
+        return (lb, ub), invalid_batch, hb

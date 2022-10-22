@@ -123,7 +123,7 @@ def check_round(ss, sets, spec_arg, check_cancel_func=None):
         
         for s in sets:
             single_safe = s.check_spec(single_spec, check_cancel_func)
-
+            # print(s, single_safe)
             if isinstance(s, StarOverapprox) and not single_safe:
                 violation_star = s.violation_star
 
@@ -559,6 +559,7 @@ class ZonoOverapprox(Freezable):
         'returns is_safe?'
 
         may_be_unsafe = spec.zono_might_violate_spec(self.zono)
+        # print(self.zono)
 
         return not may_be_unsafe
         

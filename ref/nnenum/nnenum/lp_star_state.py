@@ -70,7 +70,7 @@ class LpStarState(Freezable):
             str_list = [str(s) for s in self.prefilter.output_bounds.branching_neurons]
             split_str = f"{n} splits remaining: " + ", ".join(str_list)
         
-        return f"LpStateState at layer {self.cur_layer} with {split_str}"
+        return f"LpStateState at layer {self.cur_layer//2} with {split_str}"
 
     def branch_str(self):
         'get the branch tuples string'
@@ -303,8 +303,12 @@ class LpStarState(Freezable):
         assert self.prefilter.output_bounds.branching_neurons.size > 0
         
         index = self.prefilter.output_bounds.branching_neurons[0]
-
+        print('[+] Splitting')
+        print('\t- layer:', self.cur_layer // 2)
+        print('\t- neurons:', self.prefilter.output_bounds.branching_neurons)
+        print('\t- choose:', index)
         rv = self.split_enumerate(index, network, spec, start_time)
+        # print(rv)
 
         Timers.toc('do_first_relu_split')
 

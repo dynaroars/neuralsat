@@ -329,7 +329,6 @@ class DNNTheoremProverGurobi:
 
 
 
-        # print(f'\t[{self.count}] full_assignment:', full_assignment)
 
         cur_domain = self.domains[hash(frozenset(full_assignment.items()))] 
         if cur_domain.valid:
@@ -350,8 +349,16 @@ class DNNTheoremProverGurobi:
 
             #     # implication:
             #     return True, implications, is_full_assignment
-            
+            print(f'\t[{self.count}] unassigned:', [_-1 for _ in unassigned_nodes])
 
+            print(f'\t[{self.count}] len(a)={len(full_assignment)}, len(cstrs)={len(cur_domain.model.getConstrs())}')
+
+            print(f'\t[{self.count}] input lower:', cur_domain.input_lower)
+            print(f'\t[{self.count}] input upper:', cur_domain.input_upper)
+            
+            # print(f'\t[{self.count}] input lower:', [_.lb for _ in cur_domain.model.getVars()])
+            # print(f'\t[{self.count}] input upper:', [_.ub for _ in cur_domain.model.getVars()])
+            
 
             ds = self.get_domains(cur_domain, batch=self.batch)
             # print(len(ds))
@@ -414,14 +421,19 @@ class DNNTheoremProverGurobi:
 
                 # print(f'\t[{self.count}] batch_lower:', batch_lower.numpy().tolist())
                 # print(f'\t[{self.count}] batch_upper:', batch_upper.numpy().tolist())
+                with torch.no_grad():
+                    (lbs, ubs), hidden_bounds = self.deeppoly.forward_layer(batch_lower, batch_upper, lid, return_hidden_bounds=True, reset_param=True)
+
+                print(f'\t[{self.count}] lbs 1:', lbs.numpy().tolist())
+                print(f'\t[{self.count}] ubs 1:', ubs.numpy().tolist())
+
+
+                # tl = torch.Tensor([cur_domain.input_lower])
+                # tu = torch.Tensor([cur_domain.input_upper])
                 # with torch.no_grad():
-                #     (lbs, ubs), hidden_bounds = self.deeppoly.forward_layer(batch_lower, batch_upper, lid, return_hidden_bounds=True, reset_param=True)
+                #     (lbs, ubs), hidden_bounds = self.deeppoly(tl, tu, assignment=[cur_domain.assignment], return_hidden_bounds=True, reset_param=True)
 
-                # print(f'\t[{self.count}] lbs 1:', lbs.numpy().tolist())
-                # print(f'\t[{self.count}] ubs 1:', ubs.numpy().tolist())
-
-
-                (lbs, ubs), hidden_bounds = self.ga.get_optimized_bounds(batch_lower, batch_upper, lid)
+                # (lbs, ubs), hidden_bounds = self.ga.get_optimized_bounds(batch_lower, batch_upper, lid)
 
                 # print(f'\t[{self.count}] lbs 2:', lbs.detach().numpy().tolist())
                 # print(f'\t[{self.count}] ubs 2:', ubs.detach().numpy().tolist())
@@ -432,7 +444,8 @@ class DNNTheoremProverGurobi:
                         # print(bidx, 'unsat roi hehe')
                     ds[indices[bidx]].unsat = not stat
 
-                # print(f'\t[{self.count}] stat:', stat)
+                print(f'\t[{self.count}] stat:', stat)
+                cur_domain.model.write(f'gurobi/{self.count}.lp')
                 # print(lbs.shape)
                 # print(ubs.shape)
                 # print(len(hidden_bounds))

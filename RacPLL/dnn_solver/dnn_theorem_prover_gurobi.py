@@ -152,6 +152,8 @@ class DNNTheoremProverGurobi:
         is_full_assignment = True if unassigned_nodes is None else False
         Timers.toc('Find node')
 
+        # print(f'\t[{self.count}] unassigned_nodes:', len(unassigned_nodes), [_-1 for _ in unassigned_nodes])
+
         # forward
         Timers.tic('backsub_dict')
         output_mat, backsub_dict = self.transformer(assignment)
@@ -312,7 +314,6 @@ class DNNTheoremProverGurobi:
                 # self.optimized_layer_bounds[node] = (lb, ub)
                 assert lb <= ub, print(lb, ub)
             # else:
-            #     status = assignment[node]
             #     # print(node, status)
             #     mat = backsub_dict[node]
             #     w_pos = torch.clamp(mat[:-1], min=0)
@@ -320,11 +321,11 @@ class DNNTheoremProverGurobi:
 
             #     lb = w_pos @ self.lbs_init + w_neg @ self.ubs_init + mat[-1]
             #     ub = w_pos @ self.ubs_init + w_neg @ self.lbs_init + mat[-1]
-
-            #     if status:
-            #         lb = max(lb, 0)
-            #     else:
-            #         ub = min(ub, 0)
+                # status = assignment.get(node, None)
+                # if status is True:
+                #     lb = max(lb, 0)
+                # elif status is False:
+                #     ub = min(ub, 0)
 
                 # print(node, lb, ub)
                 # print()
@@ -338,16 +339,14 @@ class DNNTheoremProverGurobi:
 
         lbs = torch.tensor([bounds[node]['lb'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
         ubs = torch.tensor([bounds[node]['ub'] for node in layer_nodes], dtype=settings.DTYPE, device=self.net.device)
+
+        
         Timers.tic('DeepPoly')
         (lower, upper), hidden_bounds = self.deeppoly.forward_layer(lbs, ubs, lidx)
         Timers.toc('DeepPoly')
 
         # print('---------------------------')
-        # print(f'\t[{self.count}] lbs:', lbs)
-        # print(f'\t[{self.count}] ubs:', ubs)
-        # print(f'\t[{self.count}] output lower:', lower)
-        # print(f'\t[{self.count}] output upper:', upper)
-        # print(f'\t[{self.count}] hidden_bounds:', hidden_bounds)
+        print(f'\t[{self.count}] hidden_bounds:', hidden_bounds)
         # print()
         # print()
         # print()
@@ -356,6 +355,11 @@ class DNNTheoremProverGurobi:
         # (lower, upper), unstable_neurons = self.crown.forward_layer(lbs, ubs, lidx)
         # Timers.toc('Crown functions')
 
+
+        # print(f'\t[{self.count}] lbs:', lbs)
+        # print(f'\t[{self.count}] ubs:', ubs)
+        print(f'\t[{self.count}] output lower:', lower)
+        print(f'\t[{self.count}] output upper:', upper)
 
         # Timers.tic('DeepZono functions')
         # lower, upper = self.deepzono.forward_layer(lbs, ubs, lidx)
@@ -368,7 +372,9 @@ class DNNTheoremProverGurobi:
 
         stat, _ = self.spec.check_output_reachability(lower, upper)
 
-        # print(f'\t[{self.count}] stat:', stat)
+        print(f'\t[{self.count}] stat:', stat)
+        # print()
+        # print()
 
 
         if not stat: # conflict
