@@ -1,8 +1,8 @@
-RacPLL/benchmark/nn4sys
-RacPLL/gurobi
-RacPLL/baseline
-RacPLL/results
-RacPLL/test_*
+src/benchmark/nn4sys
+src/gurobi
+src/baseline
+src/results
+src/test_*
 *.DS_Store
 # ref/
 archive/
