@@ -714,7 +714,7 @@ class DNNTheoremProverGurobi:
         # # print(batch_assignment * 28)
         # for i in range(len(new_lowers)):
         #     print('======== lower', i, new_lowers[i])
-        if 0:
+        if 1:
             with torch.no_grad():
                 (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(new_lowers, new_uppers, assignment=new_assignments, return_hidden_bounds=True, reset_param=True)
         else:    
