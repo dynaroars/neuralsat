@@ -113,7 +113,7 @@ class Decider:
                 scores = sorted(scores, key=lambda tup: tup[1], reverse=reverse)
                 node = scores[0][0]
                 l, u = self.bounds_mapping[node]
-                # print('\t- Decide:', node)
+                print('\t- Decide:', (node-1) % 50)
                 return node, True #u.abs() >= l.abs()
             except KeyError:
                 node = random.choice(unassigned_nodes)

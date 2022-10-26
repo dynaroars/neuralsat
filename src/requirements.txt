@@ -1,0 +1,1 @@
+git+https://github.com/Sarimuko/onnx2pytorch@8879f72c41ba960ff6495ae754d885eac2ebf656#egg=onnx2pytorch

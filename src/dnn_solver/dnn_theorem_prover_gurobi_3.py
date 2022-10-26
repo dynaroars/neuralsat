@@ -9,6 +9,7 @@ import random
 import torch
 import time
 import copy
+import math
 import re
 import os
 import pickle
@@ -63,7 +64,7 @@ class DNNTheoremProverGurobi:
         self.transformer = SymbolicNetwork(net)
 
         self.deeppoly = deeppoly.BatchDeepPoly(net, back_sub_steps=1000)
-        self.ga = gradient_abstractor.GradientAbstractor(net, spec)
+        self.ga = gradient_abstractor.GradientAbstractor(net, spec, n_iters=10, lr=0.2)
 
         # self.concrete = self.net.get_concrete((self.lbs_init + self.ubs_init) / 2.0)
         # self.reversed_layers_mapping = {n: k for k, v in self.layers_mapping.items() for n in v}
@@ -201,7 +202,6 @@ class DNNTheoremProverGurobi:
         Timers.toc('Find node')
 
         print('\t', self.count, 'full_assignment:', full_assignment)
-        # print('\t', self.count, 'unassigned_nodes', [(i-1) % 50 for i in unassigned_nodes])
         # print(f'\t[{self.count}] full_assignment:', full_assignment)
 
 
@@ -330,6 +330,7 @@ class DNNTheoremProverGurobi:
             # print(f'\t[{self.count}] unassigned:', [_-1 for _ in unassigned_nodes])
             # print(f'\t[{self.count}] len(a)={len(full_assignment)}, len(cstrs)={len(cur_domain.model.getConstrs())}')
 
+            print('\t', self.count, 'unassigned_nodes', [(i-1) % 50 for i in unassigned_nodes])
 
             ds = self.get_domains(cur_domain, batch=self.batch)
             # print(len(ds))
@@ -351,29 +352,29 @@ class DNNTheoremProverGurobi:
             batch_assignment = [d.assignment for d in ds]
             assert (batch_lower <= batch_upper).all()
 
-            print(f'\t[{self.count}] batch_lower:', batch_lower)
-            print(f'\t[{self.count}] batch_upper:', batch_upper)
+            print(f'\t[{self.count}] batch_lower:', batch_lower.numpy().tolist())
+            print(f'\t[{self.count}] batch_upper:', batch_upper.numpy().tolist())
 
             # print(f'\t[{self.count}] batch_delta:', batch_upper - batch_lower)
 
 
 
-            (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(batch_lower, batch_upper, batch_assignment, initial_splits=self.initial_splits)
+            (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(batch_lower.clone(), batch_upper.clone(), batch_assignment, initial_splits=self.initial_splits)
 
 
             for i in range(len(ds)):
                 ds[i].update_output_bounds(lbs[i], ubs[i])
 
-            print(f'\t[{self.count}] output lower 1:', lbs.shape, lbs)
-            print(f'\t[{self.count}] output upper 1:', ubs.shape, ubs)
+            print(f'\t[{self.count}] output lower 1:', lbs.data)
+            print(f'\t[{self.count}] output upper 1:', ubs.data)
 
 
 
             # with torch.no_grad():
             #     (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(batch_lower, batch_upper, assignment=batch_assignment, return_hidden_bounds=True, reset_param=True)
 
-            # print(f'\t[{self.count}] output lower 2:', lbs.shape, lbs)
-            # print(f'\t[{self.count}] output upper 2:', ubs.shape, ubs)
+            print(f'\t[{self.count}] output lower 2:', cur_domain.output_lower.data)
+            print(f'\t[{self.count}] output upper 2:', cur_domain.output_upper.data)
 
 
             for bidx in invalid_batch:
@@ -649,6 +650,9 @@ class DNNTheoremProverGurobi:
         # print(smears.argmax())
         split_multiple = initial_splits / smears.sum()
         num_splits = [int(np.ceil(smear * split_multiple)) for smear in smears]
+        # num_splits = [5 if i >= 5 else i for i in num_splits]
+        print(f'\t[{self.count}] num_splits 1:', num_splits)
+        num_splits = self.balancing_num_splits(num_splits)
         # num_splits = [i-1 if i > 2 else i-3 if i > 3 else i for i in num_splits ]
         # for i in num_splits:
         #     if i == 1: i = 2
@@ -658,7 +662,7 @@ class DNNTheoremProverGurobi:
         # num_splits = [i+1 if i < 2 else i for i in num_splits]
         # num_splits = [3] * 5
         # num_splits[-1] = 1
-        print(f'\t[{self.count}] num_splits:', num_splits)
+        print(f'\t[{self.count}] num_splits 2:', num_splits)
         # num_splits = [i+1 if i==1 else i for i in num_splits ]
         # num_splits[-1] = 1
         # print('num_splits:', num_splits)
@@ -692,13 +696,14 @@ class DNNTheoremProverGurobi:
         new_uppers = torch.stack(new_uppers)
         batch_idx = torch.tensor(batch_idx, dtype=torch.int16)
 
-        # print(new_lowers.shape)
+        # print(new_lowers.amin(dim=0))
+        # print(new_uppers.amax(dim=0))
         # print(batch_idx)
         # print(len(new_assignments))
         assert (new_lowers <= new_uppers).all()
 
 
-        print(f'\t[{self.count}] ===================> batch', len(new_lowers))
+        # print(f'\t[{self.count}] ===================> batch', len(new_lowers))
 
         # new_batch_lower = torch.stack([mb[0] for mb in multi_bounds])
         # new_batch_upper = torch.stack([mb[1] for mb in multi_bounds])
@@ -707,18 +712,29 @@ class DNNTheoremProverGurobi:
         # # print(new_batch_lower.shape)
         # # print((new_batch_lower <= new_batch_lower).all())
         # # print(batch_assignment * 28)
-        with torch.no_grad():
-            (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(new_lowers, new_uppers, assignment=new_assignments, return_hidden_bounds=True, reset_param=True)
+        # for i in range(len(new_lowers)):
+        #     print('======== lower', i, new_lowers[i])
+        if 0:
+            with torch.no_grad():
+                (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(new_lowers, new_uppers, assignment=new_assignments, return_hidden_bounds=True, reset_param=True)
+        else:    
+            (lbs, ubs), invalid_batch, hidden_bounds = self.ga.get_optimized_bounds_from_input(new_lowers, new_uppers, assignment=new_assignments)
 
-        # print(invalid_batch)
+
+        
+        # for i in range(len(lbs)):
+        #     print('======== lower', i, lbs[i])
+
+            
+        # print(invalid_batch, len(invalid_batch))
         # print(len(hidden_bounds), len(hidden_bounds[0]))
         valid_bidx = torch.ones(len(new_lowers)).to(torch.bool)
         valid_bidx[invalid_batch] = False
-        # print(valid_bidx)
+        # print(valid_bidx, len(valid_bidx))
         lbs = lbs[valid_bidx]
         ubs = ubs[valid_bidx]
         batch_idx = batch_idx[valid_bidx]
-        # print(batch_idx)
+        # print(lbs.shape)
 
         new_hidden_bounds = []
         new_invalid_batch = []
@@ -767,3 +783,37 @@ class DNNTheoremProverGurobi:
         # print(new_ubs)
 
         return (new_lbs, new_ubs), new_invalid_batch, new_hidden_bounds
+
+    def balancing_num_splits(self, num_splits, max_batch=200):
+        # num_add = math.floor(max_batch / math.prod(num_splits))
+        # # print(num_add, num_splits)
+        # count = 0
+        # if 1 < num_add <= 3:
+        #     for i in range(len(num_splits)):
+        #         if num_splits[i] == 1:
+        #             num_splits[i] += 1
+        #             count += 1
+        #         if count == 1:
+        #             break
+        # elif 3 < num_add <= 5:
+        #     for i in range(len(num_splits)):
+        #         if num_splits[i] == 1:
+        #             num_splits[i] += 1
+        #             count += 1
+        #         if count == 2:
+        #             break
+        # print(num_add, num_splits)
+        # exit()
+        # return [3] * len(num_splits)
+        num_splits = np.array(num_splits)
+        while True:
+            # print(num_splits)
+            idx = np.argmin(num_splits)
+            num_splits[idx] += 1
+            # print(num_splits)
+            # exit()
+            if math.prod(num_splits) > max_batch:
+                num_splits[idx] -= 1
+                break
+
+        return num_splits.tolist()

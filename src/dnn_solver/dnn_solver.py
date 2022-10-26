@@ -91,8 +91,8 @@ class DNNSolver(TheorySolver):
         # print()
         # for d in self.dnn_theorem_prover.domains.values():
         #     print('\t', d.lower_bound, d.get_assignment())
-        # if self.dnn_theorem_prover.count >= 25:
-        #     exit()
+        if self.dnn_theorem_prover.count >= 21:
+            exit()
 
         if self.get_solution() is not None:
             self.set_early_stop('SAT')

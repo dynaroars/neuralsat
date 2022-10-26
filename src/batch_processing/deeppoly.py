@@ -72,6 +72,9 @@ class BatchDeepPoly(nn.Module):
                 hidden_bounds.append(bounds.permute(1, 2, 0)) # B x 2 x H
             bounds, _ = layer(bounds, assignment)
             # print(bounds)
+            # print('\tlower:', bounds[..., 0].flatten())
+            # print('\tupper:', bounds[..., 1].flatten())
+            # print()
             if torch.any(bounds[..., 0] > bounds[..., 1]):
                 # print(bounds[..., 0].flatten())
                 # print(bounds[..., 1].flatten())
@@ -293,8 +296,10 @@ class BatchReLUTransformer(nn.Module):
         # print(self.beta.requires_grad)
 
     def forward(self, bounds, assignment):
+        flag_init_step = False
         if self.beta is None:
             self.init_parameters(bounds)    
+            flag_init_step = True
 
         # print('\tbeta:', self.beta.flatten().detach().numpy().tolist())
         # print('\t- Forward:', self)
@@ -318,7 +323,7 @@ class BatchReLUTransformer(nn.Module):
 
         diff = bounds[..., 1][ind3] - bounds[..., 0][ind3] 
         self.lmbda[ind3] = torch.div(bounds[..., 1][ind3], diff)
-        if not torch.is_grad_enabled():
+        if not torch.is_grad_enabled() or flag_init_step:
             self.beta.data[ind4] = torch.ones_like(self.beta.data[ind4])
             
         self.mu[ind3] = torch.div(-bounds[..., 0][ind3] * bounds[..., 1][ind3], diff)
