@@ -148,13 +148,14 @@ class GradientAbstractor:
     def get_optimized_bounds_from_input(self, lower, upper, assignment=None):
         # print(lower.shape)
         (lb, ub), invalid_batch, hidden_bounds = self.abstractor(lower, upper, assignment=assignment, return_hidden_bounds=True, reset_param=True)
+        # print(invalid_batch, len(list(set(invalid_batch))))
         sat_mask = self.get_sat_mask(lb, ub)
-        # print(invalid_batch)
-        invalid_batch += torch.where(sat_mask==False)[0].numpy().tolist()
+        invalid_batch += torch.where(sat_mask==False)[0].detach().cpu().numpy().tolist()
         if sat_mask.sum() == 0:
             # print('all unsat')
             return (lb, ub), list(set(invalid_batch)), hidden_bounds
 
+        # print(invalid_batch, len(list(set(invalid_batch))))
 
         # Timers.tic('Init Optimize')
         # Timers.toc('Init Optimize')
@@ -164,9 +165,11 @@ class GradientAbstractor:
         # print(active_batch.numpy().tolist(), len(active_batch))
         valid_batch = torch.ones(len(lower), dtype=torch.bool, device=lower.device)
         valid_batch[invalid_batch] = False
+        if valid_batch.sum() == 0:
+            return (lb, ub), list(set(invalid_batch)), hidden_bounds
         # print(valid_batch.sum())
 
-        if valid_batch.sum() > 10:
+        if valid_batch.sum() >= 10:
             return (lb, ub), list(set(invalid_batch)), hidden_bounds
 
         # exit()
@@ -175,25 +178,26 @@ class GradientAbstractor:
         new_lower = lower.clone()[valid_batch]
         new_upper = upper.clone()[valid_batch]
         # new_assignment = assignment[valid_batch.numpy()]
-        active_batch = torch.where(valid_batch==True)[0].numpy()
+        active_batch = torch.where(valid_batch==True)[0].detach().cpu()#.numpy()
         new_assignment = [assignment[i] for i in active_batch]
-        # print(len(active_batch))
 
         self.abstractor(new_lower, new_upper, assignment=new_assignment, return_hidden_bounds=True, reset_param=True)
         optimizer = torch.optim.Adam(self.abstractor.parameters(), lr=self.lr)
 
+        new_invalid_batch = []
         for it in range(self.n_iters):
             # print('optimize iter:', it)
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             Timers.tic('Abstraction')
             (l, u), iv, hb = self.abstractor(new_lower, new_upper, assignment=new_assignment, return_hidden_bounds=True, reset_param=False)
             Timers.toc('Abstraction')
             # loss = (uo - lo).sum()
             sat_mask = self.get_sat_mask(l, u)
             # print(unsat_mask)
-            invalid_batch += [active_batch[i] for i in iv]
-            invalid_batch += [active_batch[i] for i in torch.where(sat_mask==False)[0]]
-
+            invalid_batch += [int(active_batch[i]) for i in iv]
+            invalid_batch += [int(active_batch[i]) for i in torch.where(sat_mask==False)[0]]
+            new_invalid_batch += iv
+            new_invalid_batch += torch.where(sat_mask==False)[0].detach().cpu().numpy().tolist()
             # active_batch = tensor_delete_indices(active_batch.clone(), iv)
 
             if sat_mask.sum() == 0:
@@ -203,7 +207,6 @@ class GradientAbstractor:
             # idx_sat = torch.where(unsat_mask == True)
             # print(idx_sat)
             loss = self.get_loss(l[sat_mask], u[sat_mask])
-            print(it, len(new_lower) , loss.item(), sat_mask.sum())
             
             Timers.tic('Backward Loss')
             loss.backward()
@@ -220,11 +223,20 @@ class GradientAbstractor:
             Timers.tic('Clip Beta')
             self.abstractor.apply(self.clipper)
             Timers.toc('Clip Beta')
-        
+
+        optimizer.zero_grad(set_to_none=True)
+        del optimizer
         # print(lb[valid_batch].shape, l.shape)
         # old_lb = lb.clone()
-        lb[valid_batch] = l
-        ub[valid_batch] = u
+        new_invalid_batch = list(set(new_invalid_batch))
+        new_valid_batch = torch.ones(valid_batch.sum(), dtype=torch.bool, device=lower.device)
+        new_valid_batch[new_invalid_batch] = False
+        # print(new_valid_batch.sum())
+        lb[valid_batch][new_valid_batch] = l[new_valid_batch]
+        ub[valid_batch][new_valid_batch] = u[new_valid_batch]
+        
+        # print(lb[valid_batch][new_valid_batch])
+        # print(ub[valid_batch][new_valid_batch])
         # old_hidden = copy.deepcopy(hidden_bounds)
         for idx in range(len(hidden_bounds)):
             for i1, i2 in enumerate(active_batch):

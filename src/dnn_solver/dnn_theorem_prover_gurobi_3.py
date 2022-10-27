@@ -14,6 +14,7 @@ import re
 import os
 import pickle
 from contextlib import contextmanager
+import gc
 
 from batch_processing import deeppoly, domain, gradient_abstractor
 from dnn_solver.symbolic_network import SymbolicNetwork
@@ -97,7 +98,7 @@ class DNNTheoremProverGurobi:
         os.makedirs('gurobi', exist_ok=True)
         # self.cac_queue = multiprocessing.Queue()
 
-        self.grads = self.estimate_grads(self.lbs_init, self.ubs_init, steps=3)
+        # self.grads = self.estimate_grads(self.lbs_init, self.ubs_init, steps=3)
         # print(self.grads)
         # exit()
         self.initial_splits = 12
@@ -352,11 +353,10 @@ class DNNTheoremProverGurobi:
             batch_assignment = [d.assignment for d in ds]
             assert (batch_lower <= batch_upper).all()
 
-            print(f'\t[{self.count}] batch_lower:', batch_lower.numpy().tolist())
-            print(f'\t[{self.count}] batch_upper:', batch_upper.numpy().tolist())
+            print(f'\t[{self.count}] batch_lower:', batch_lower.detach().cpu().numpy().tolist())
+            print(f'\t[{self.count}] batch_upper:', batch_upper.detach().cpu().numpy().tolist())
 
             # print(f'\t[{self.count}] batch_delta:', batch_upper - batch_lower)
-
 
 
             (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(batch_lower.clone(), batch_upper.clone(), batch_assignment, initial_splits=self.initial_splits)
@@ -365,8 +365,8 @@ class DNNTheoremProverGurobi:
             for i in range(len(ds)):
                 ds[i].update_output_bounds(lbs[i], ubs[i])
 
-            print(f'\t[{self.count}] output lower 1:', lbs.data)
-            print(f'\t[{self.count}] output upper 1:', ubs.data)
+            # print(f'\t[{self.count}] output lower 1:', lbs.data)
+            # print(f'\t[{self.count}] output upper 1:', ubs.data)
 
 
 
@@ -589,21 +589,22 @@ class DNNTheoremProverGurobi:
 
 
     def estimate_grads(self, lower, upper, steps=3):
+        # print(lower.device)
         inputs = [(((steps - i) * lower + i * upper) / steps) for i in range(steps + 1)]
-        diffs = torch.zeros(len(lower), dtype=settings.DTYPE)
+        diffs = torch.zeros(len(lower), dtype=settings.DTYPE, device=lower.device)
 
         for sample in range(steps + 1):
             pred = self.net(inputs[sample].unsqueeze(0))
             for index in range(len(lower)):
                 if sample < steps:
                     l_input = [m if i != index else u for i, m, u in zip(range(len(lower)), inputs[sample], inputs[sample+1])]
-                    l_input = torch.tensor(l_input, dtype=settings.DTYPE).unsqueeze(0)
+                    l_input = torch.tensor(l_input, dtype=settings.DTYPE, device=lower.device).unsqueeze(0)
                     l_i_pred = self.net(l_input)
                 else:
                     l_i_pred = pred
                 if sample > 0:
                     u_input = [m if i != index else l for i, m, l in zip(range(len(lower)), inputs[sample], inputs[sample-1])]
-                    u_input = torch.tensor(u_input, dtype=settings.DTYPE).unsqueeze(0)
+                    u_input = torch.tensor(u_input, dtype=settings.DTYPE, device=lower.device).unsqueeze(0)
                     u_i_pred = self.net(u_input)
                 else:
                     u_i_pred = pred
@@ -646,12 +647,15 @@ class DNNTheoremProverGurobi:
         if initial_splits <= 1:
             return ([(lower, upper)])
         self.grads = self.estimate_grads(lower, upper, steps=3)
-        smears = np.multiply(torch.abs(self.grads) + 1e-6, [u - l for u, l in zip(upper, lower)]) + 1e-6
+        smears = (self.grads.abs() + 1e-6) * (upper - lower + 1e-6)
+        # print(smears)
         # print(smears.argmax())
         split_multiple = initial_splits / smears.sum()
-        num_splits = [int(np.ceil(smear * split_multiple)) for smear in smears]
+        # print(split_multiple)
+        num_splits = [int(torch.ceil(smear * split_multiple)) for smear in smears]
         # num_splits = [5 if i >= 5 else i for i in num_splits]
-        print(f'\t[{self.count}] num_splits 1:', num_splits)
+        # print(f'\t[{self.count}] num_splits 1:', num_splits)
+        # exit()
         num_splits = self.balancing_num_splits(num_splits)
         # num_splits = [i-1 if i > 2 else i-3 if i > 3 else i for i in num_splits ]
         # for i in num_splits:
@@ -662,7 +666,7 @@ class DNNTheoremProverGurobi:
         # num_splits = [i+1 if i < 2 else i for i in num_splits]
         # num_splits = [3] * 5
         # num_splits[-1] = 1
-        print(f'\t[{self.count}] num_splits 2:', num_splits)
+        print(f'\t[{self.count}] num_splits:', num_splits)
         # num_splits = [i+1 if i==1 else i for i in num_splits ]
         # num_splits[-1] = 1
         # print('num_splits:', num_splits)
@@ -699,7 +703,6 @@ class DNNTheoremProverGurobi:
         # print(new_lowers.amin(dim=0))
         # print(new_uppers.amax(dim=0))
         # print(batch_idx)
-        # print(len(new_assignments))
         assert (new_lowers <= new_uppers).all()
 
 
@@ -714,12 +717,12 @@ class DNNTheoremProverGurobi:
         # # print(batch_assignment * 28)
         # for i in range(len(new_lowers)):
         #     print('======== lower', i, new_lowers[i])
-        if 1:
+        if 0:
             with torch.no_grad():
                 (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(new_lowers, new_uppers, assignment=new_assignments, return_hidden_bounds=True, reset_param=True)
         else:    
             (lbs, ubs), invalid_batch, hidden_bounds = self.ga.get_optimized_bounds_from_input(new_lowers, new_uppers, assignment=new_assignments)
-
+            gc.collect()
 
         
         # for i in range(len(lbs)):

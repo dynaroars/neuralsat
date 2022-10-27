@@ -91,7 +91,7 @@ class DNNSolver(TheorySolver):
         # print()
         # for d in self.dnn_theorem_prover.domains.values():
         #     print('\t', d.lower_bound, d.get_assignment())
-        # if self.dnn_theorem_prover.count >= 21:
+        # if self.dnn_theorem_prover.count >= 35:
         #     exit()
 
         if self.get_solution() is not None:

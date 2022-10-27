@@ -82,7 +82,7 @@ class BatchDeepPoly(nn.Module):
                 # print(bounds.shape)
                 
                 # exit()
-                invalid_batch += (torch.where(bounds[..., 0] > bounds[..., 1]))[1].numpy().tolist()
+                invalid_batch += (torch.where(bounds[..., 0] > bounds[..., 1]))[1].detach().cpu().numpy().tolist()
                 # print(invalid_batch)
                 # exit()
         if return_hidden_bounds:

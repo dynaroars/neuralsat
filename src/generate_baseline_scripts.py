@@ -35,91 +35,108 @@ def gen_scripts():
                 # fp.write('echo\n\n')
 
 
-def gen_marabou_spec():
-    root = os.path.abspath('.')
-    for benchmark in BENCHMARKS:
-        baseline_dir = f'baseline/spec/{benchmark}'
-        os.makedirs(baseline_dir, exist_ok=True)
-        bar = tqdm.tqdm(open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'))
-        bar.set_description(benchmark)
-        for line in bar:
-            nnet, spec, _ = line.split(',')
-            # if 'prop_6' not in spec:
-            #     continue
-            # print(spec)
-            spec_list = read_vnnlib_simple(f'{root}/benchmark/{benchmark}/{spec}', N_INPUT[benchmark], N_OUTPUT[benchmark])
-            for i, (bound, mat) in enumerate(spec_list):
-                # print(bound)
-                # print(mat)
-                for j, (prop_mat, prop_rhs) in enumerate(mat):
-                    # print(prop_mat, prop_rhs)
-                    with open(f"{baseline_dir}/{os.path.basename(spec).replace('.vnnlib', '')}_{i}_{j}.vnnlib", 'w') as fp:
-                        for bi, (bl, bu) in enumerate(bound):
-                            fp.write(f'x{bi} >= {bl}\n')
-                            fp.write(f'x{bi} <= {bu}\n')
+# def gen_marabou_spec():
+#     root = os.path.abspath('.')
+#     for benchmark in BENCHMARKS:
+#         baseline_dir = f'baseline/spec/{benchmark}'
+#         os.makedirs(baseline_dir, exist_ok=True)
+#         bar = tqdm.tqdm(open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'))
+#         bar.set_description(benchmark)
+#         for line in bar:
+#             nnet, spec, _ = line.split(',')
+#             # if 'prop_6' not in spec:
+#             #     continue
+#             # print(spec)
+#             spec_list = read_vnnlib_simple(f'{root}/benchmark/{benchmark}/{spec}', N_INPUT[benchmark], N_OUTPUT[benchmark])
+#             for i, (bound, mat) in enumerate(spec_list):
+#                 # print(bound)
+#                 # print(mat)
+#                 for j, (prop_mat, prop_rhs) in enumerate(mat):
+#                     # print(prop_mat, prop_rhs)
+#                     with open(f"{baseline_dir}/{os.path.basename(spec).replace('.vnnlib', '')}_{i}_{j}.vnnlib", 'w') as fp:
+#                         for bi, (bl, bu) in enumerate(bound):
+#                             fp.write(f'x{bi} >= {bl}\n')
+#                             fp.write(f'x{bi} <= {bu}\n')
 
-                        for l, r in zip(prop_mat, prop_rhs):
-                            # print(j, l, r)
-                            q = []
-                            mul = 1
-                            for lv in l:
-                                if lv ==0:
-                                    continue
-                                if lv > 0:
-                                    break
-                                if lv < 0:
-                                    mul = -1
-                                    break
+#                         for l, r in zip(prop_mat, prop_rhs):
+#                             # print(j, l, r)
+#                             q = []
+#                             mul = 1
+#                             for lv in l:
+#                                 if lv ==0:
+#                                     continue
+#                                 if lv > 0:
+#                                     break
+#                                 if lv < 0:
+#                                     mul = -1
+#                                     break
 
-                            for li, lv in enumerate(l):
-                                lv = lv * mul
-                                if lv == 1.0:
-                                    q.append(f'+y{li}')
-                                elif lv == -1:
-                                    q.append(f'-y{li}')
+#                             for li, lv in enumerate(l):
+#                                 lv = lv * mul
+#                                 if lv == 1.0:
+#                                     q.append(f'+y{li}')
+#                                 elif lv == -1:
+#                                     q.append(f'-y{li}')
 
-                            if len(q) == 1:
-                                q[0] = q[0][1:]
-                            if mul == 1:
-                                fp.write(f'{" ".join(q)} <= {r}\n')
-                            else:
-                                fp.write(f'{" ".join(q)} >= {-r if r != 0.0 else 0.0}\n')
+#                             if len(q) == 1:
+#                                 q[0] = q[0][1:]
+#                             if mul == 1:
+#                                 fp.write(f'{" ".join(q)} <= {r}\n')
+#                             else:
+#                                 fp.write(f'{" ".join(q)} >= {-r if r != 0.0 else 0.0}\n')
+
+# def gen_marabou_scripts():
+#     root = os.path.abspath('.')
+#     baseline_dir = 'baseline/marabou'
+#     os.makedirs(baseline_dir, exist_ok=True)
+
+#     for benchmark in BENCHMARKS:
+#         benchmark_specs = list(recursive_walk(f'baseline/spec/{benchmark}'))
+#         with open(f'{baseline_dir}/{benchmark}_scripts.sh', 'w') as fp:
+#             bar = tqdm.tqdm(open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'))
+#             bar.set_description(benchmark)
+#             for line in bar:
+#                 nnet, spec, _ = line.split(',')
+#                 spec_name = os.path.basename(spec).replace('.vnnlib', '')
+#                 specs = [s for s in benchmark_specs if spec_name+'_' in s]
+#                 # print(spec_name, specs)
+#                 for si in specs:
+#                     # print('start=$(date +%s.%N)', file=fp)
+#                     result_file = 'result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(si).replace('.vnnlib', '') + '.txt'
+                    
+#                     if benchmark == 'acasxu':
+#                         nnet = nnet.replace('.onnx', '.nnet')
+#                     cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5 --timeout 1000 --verbosity 0 --summary-file {result_file}\n'
+#                     fp.write(cmd)
+#                     # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
+#                     # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/{si}: %.6f seconds" $dur', file=fp)
+#                     # fp.write('echo\n')
+#                     # fp.write('echo\n\n')
+
+
 
 def gen_marabou_scripts():
     root = os.path.abspath('.')
     baseline_dir = 'baseline/marabou'
     os.makedirs(baseline_dir, exist_ok=True)
-
     for benchmark in BENCHMARKS:
-        benchmark_specs = list(recursive_walk(f'baseline/spec/{benchmark}'))
         with open(f'{baseline_dir}/{benchmark}_scripts.sh', 'w') as fp:
-            bar = tqdm.tqdm(open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'))
-            bar.set_description(benchmark)
-            for line in bar:
+            for line in open(f'benchmark/{benchmark}/instances.csv').read().strip().split('\n'):
                 nnet, spec, _ = line.split(',')
-                spec_name = os.path.basename(spec).replace('.vnnlib', '')
-                specs = [s for s in benchmark_specs if spec_name+'_' in s]
-                # print(spec_name, specs)
-                for si in specs:
-                    # print('start=$(date +%s.%N)', file=fp)
-                    result_file = 'result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(si).replace('.vnnlib', '') + '.txt'
-                    
-                    if benchmark == 'acasxu':
-                        nnet = nnet.replace('.onnx', '.nnet')
-                    cmd = f'./build/Marabou {root}/benchmark/{benchmark}/{nnet} {root}/{si} --snc --num-workers=16 --initial-divides=4 --initial-timeout=5 --num-online-divides=4 --timeout-factor=1.5 --timeout 1000 --verbosity 0 --summary-file {result_file}\n'
-                    fp.write(cmd)
-                    # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
-                    # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/{si}: %.6f seconds" $dur', file=fp)
-                    # fp.write('echo\n')
-                    # fp.write('echo\n\n')
-
-
+                result_file = f'results/{benchmark}/result_' + os.path.basename(nnet).replace('.onnx', '') + '_' + os.path.basename(spec).replace('.vnnlib', '') + '.txt'
+                # print('start=$(date +%s.%N)', file=fp)
+                cmd = f'mkdir -p results/{benchmark} && ./prepare_instance.sh v1 {benchmark} {root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec} && ./run_instance.sh v1 {benchmark} {root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec} {result_file} 1000\n'
+                fp.write(cmd)
+                # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
+                # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec}: %.6f seconds" $dur', file=fp)
+                # fp.write('echo\n')
+                # fp.write('echo\n\n')
 
 
 if __name__ == '__main__':
 
     # gen_marabou_spec()
     gen_marabou_scripts()
-    # gen_scripts()
+    gen_scripts()
 
 
