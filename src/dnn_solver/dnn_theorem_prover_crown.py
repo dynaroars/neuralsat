@@ -331,14 +331,20 @@ class DNNTheoremProverCrown:
                 # del self.domains[hash(frozenset(d.get_assignment().items()))]
 
             batch = len(selected_domains)
+            history = [sd.history for sd in selected_domains]
+
             if len(selected_domains) > 1:
                 assert cur_domain == selected_domains[0]
-                branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, batch=batch, branching_reduceop=self.branching_reduceop)
+
+                branching_decision = choose_node_parallel_kFSB(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, branching_reduceop=self.branching_reduceop, slopes=slopes, betas=betas, history=history)
+                # branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, batch=batch, branching_reduceop=self.branching_reduceop)
                 # print(crown_decision)
                 # print(branching_decision)
                 # print(len(selected_domains))
                 # print(len(branching_decision))
                 # assert crown_decision[0] in branching_decision
+                # if branching_decision[0] != crown_decision[0]:
+                    # raise
                 branching_decision[0] = crown_decision[0]
 
             else:
@@ -346,7 +352,6 @@ class DNNTheoremProverCrown:
 
             # print('\t --->', self.count, batch, branching_decision)
 
-            history = [sd.history for sd in selected_domains]
             split_history = [sd.split_history for sd in selected_domains]
             split = {}
             split["decision"] = [[bd] for bd in branching_decision]
@@ -388,6 +393,7 @@ class DNNTheoremProverCrown:
             # print(len(domain_list), full_assignment == domain_list[0].get_assignment())
             # print(len(domain_list), full_assignment == domain_list[1].get_assignment())
 
+            del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
             # print('\tfull_assignment:', full_assignment)
             cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
 

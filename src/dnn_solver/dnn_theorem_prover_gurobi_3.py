@@ -787,7 +787,7 @@ class DNNTheoremProverGurobi:
 
         return (new_lbs, new_ubs), new_invalid_batch, new_hidden_bounds
 
-    def balancing_num_splits(self, num_splits, max_batch=100):
+    def balancing_num_splits(self, num_splits, max_batch=32):
         # num_add = math.floor(max_batch / math.prod(num_splits))
         # # print(num_add, num_splits)
         # count = 0

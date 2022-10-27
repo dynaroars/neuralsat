@@ -222,7 +222,9 @@ class Decider:
             branching_reduceop = arguments.Config['bab']['branching']['reduceop']
             orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, slopes, betas, history = self.crown_params
 
-            branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, batch=1, branching_reduceop=branching_reduceop)
+            # branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, lirpa_model, pre_relu_indices, lAs, batch=1, branching_reduceop=branching_reduceop)
+
+            branching_decision = choose_node_parallel_kFSB(orig_lbs, orig_ubs, mask, lirpa_model,pre_relu_indices, lAs, branching_reduceop=branching_reduceop, slopes=slopes, betas=betas, history=history)
 
             decision_layer, decision_index = branching_decision[0]
             # print(mask)

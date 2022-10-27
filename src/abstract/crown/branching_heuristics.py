@@ -171,8 +171,7 @@ def choose_node_conv(lower_bounds, upper_bounds, orig_mask, layers, pre_relu_ind
 
 
 @torch.no_grad()
-def choose_node_parallel_crown(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, sparsest_layer=0,
-                               decision_threshold=0.001, batch=5, branching_reduceop='min'):
+def choose_node_parallel_crown(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, sparsest_layer=0, decision_threshold=0.001, batch=5, branching_reduceop='min'):
     batch = min(batch, len(orig_mask[0]))
     # Mask is 1 for unstable neurons. Otherwise it's 0.
     mask = orig_mask
@@ -267,8 +266,7 @@ def choose_node_parallel_crown(lower_bounds, upper_bounds, orig_mask, net, pre_r
 
 
 @torch.no_grad()
-def choose_node_parallel_FSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, branching_candidates=5, branching_reduceop='min', slopes=None,
-                             betas=None, history=None, use_beta=False):
+def choose_node_parallel_FSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, branching_candidates=5, branching_reduceop='min', slopes=None, betas=None, history=None, use_beta=False):
 
     batch = len(orig_mask[0])
     # Mask is 1 for unstable neurons. Otherwise it's 0.
@@ -425,9 +423,7 @@ def choose_node_parallel_FSB(lower_bounds, upper_bounds, orig_mask, net, pre_rel
     return final_decision
 
 @torch.no_grad()
-def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs,
-                              branching_candidates=5, branching_reduceop='min', slopes=None,
-                              betas=None, history=None, use_beta=False, keep_all_decision=False, prioritize_slopes='none'):
+def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, branching_candidates=5, branching_reduceop='min', slopes=None, betas=None, history=None, use_beta=False, keep_all_decision=False, prioritize_slopes='none'):
 
     batch = len(orig_mask[0])
     # Mask is 1 for unstable neurons. Otherwise it's 0.

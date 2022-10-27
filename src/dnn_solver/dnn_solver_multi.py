@@ -63,7 +63,7 @@ class Worker:
                 # self.shared_status[self.index] = True
                 # time.sleep(1)
                 # print(f'Thread {self.index}: len(conflict_clauses) =', len(list(solver._solver._generated_conflict_clauses)))
-                status = solver.solve(timeout=1)
+                status = solver.solve(timeout=2)
                 if status == 'TIMEOUT':
                     bounds = spec.get_input_property()
                     lower = torch.tensor(bounds['lbs'], dtype=settings.DTYPE, device=self.net.device)
@@ -76,7 +76,7 @@ class Worker:
                         # print(s.get_input_property())
                         self.put_intance((s, solver._solver._generated_conflict_clauses))
                 else: 
-                    print(f'Thread {self.index} finished:', status, solver._solver._generated_conflict_clauses)
+                    print(f'Thread {self.index} finished:', status, len(list(solver._solver._generated_conflict_clauses)))
                 # self.put_intance([(i+self.index+1) for i in instance])
                 # self.put_intance([(i+self.index+2) for i in instance])
             else:
@@ -238,7 +238,7 @@ class DNNSolverMulti:
         shared_queue.put((self.spec, set([])))
         processes = []
 
-        N_PROCS = 4
+        N_PROCS = 1
         shared_status = SharedStatus(N_PROCS)
 
         for index in range(N_PROCS):
