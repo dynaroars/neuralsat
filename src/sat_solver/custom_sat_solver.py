@@ -67,6 +67,11 @@ class CustomSATSolver(Solver):
             for jj, node in enumerate(lnodes):
                 self._crown_decision_mapping[node] = [lid, jj]
 
+        self._generated_conflict_clauses = set([])
+
+
+    def get_conflict_clauses(self):
+        return self._generated_conflict_clauses
 
 
     def set_early_stop(self, status):
@@ -208,6 +213,11 @@ class CustomSATSolver(Solver):
         """
         # print('--------------_conflict_resolution--------------')
         conflict_clause = set(conflict_clause)
+        # print('conflict_clause:', conflict_clause)
+        # if frozenset(conflict_clause) not in self._generated_conflict_clauses:
+        #     self._add_conflict_clause(frozenset(conflict_clause))
+        self._generated_conflict_clauses.add(frozenset(conflict_clause))
+        
         removed_vars = []
         while True:
             last_literal, prev_max_level, max_level, max_level_count = self._find_last_literal(conflict_clause, removed_vars)
@@ -325,6 +335,7 @@ class CustomSATSolver(Solver):
         self._new_clauses.append(conflict_clause)
         # print(f'\t- [add] {conflict_clause}')
         self._add_clause(conflict_clause)
+        self._generated_conflict_clauses.add(conflict_clause)
 
 
     def _constraint_propagation_to_exhaustion(self, propagation_func):

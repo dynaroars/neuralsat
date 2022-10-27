@@ -202,7 +202,7 @@ class DNNTheoremProverGurobi:
         is_full_assignment = True if unassigned_nodes is None else False
         Timers.toc('Find node')
 
-        print('\t', self.count, 'full_assignment:', full_assignment)
+        # print('\t', self.count, 'full_assignment:', full_assignment)
         # print(f'\t[{self.count}] full_assignment:', full_assignment)
 
 
@@ -331,7 +331,7 @@ class DNNTheoremProverGurobi:
             # print(f'\t[{self.count}] unassigned:', [_-1 for _ in unassigned_nodes])
             # print(f'\t[{self.count}] len(a)={len(full_assignment)}, len(cstrs)={len(cur_domain.model.getConstrs())}')
 
-            print('\t', self.count, 'unassigned_nodes', [(i-1) % 50 for i in unassigned_nodes])
+            # print('\t', self.count, 'unassigned_nodes', [(i-1) % 50 for i in unassigned_nodes])
 
             ds = self.get_domains(cur_domain, batch=self.batch)
             # print(len(ds))
@@ -353,8 +353,8 @@ class DNNTheoremProverGurobi:
             batch_assignment = [d.assignment for d in ds]
             assert (batch_lower <= batch_upper).all()
 
-            print(f'\t[{self.count}] batch_lower:', batch_lower.detach().cpu().numpy().tolist())
-            print(f'\t[{self.count}] batch_upper:', batch_upper.detach().cpu().numpy().tolist())
+            # print(f'\t[{self.count}] batch_lower:', batch_lower.detach().cpu().numpy().tolist())
+            # print(f'\t[{self.count}] batch_upper:', batch_upper.detach().cpu().numpy().tolist())
 
             # print(f'\t[{self.count}] batch_delta:', batch_upper - batch_lower)
 
@@ -373,8 +373,8 @@ class DNNTheoremProverGurobi:
             # with torch.no_grad():
             #     (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(batch_lower, batch_upper, assignment=batch_assignment, return_hidden_bounds=True, reset_param=True)
 
-            print(f'\t[{self.count}] output lower 2:', cur_domain.output_lower.data)
-            print(f'\t[{self.count}] output upper 2:', cur_domain.output_upper.data)
+            # print(f'\t[{self.count}] output lower 2:', cur_domain.output_lower.data)
+            # print(f'\t[{self.count}] output upper 2:', cur_domain.output_upper.data)
 
 
             for bidx in invalid_batch:
@@ -460,7 +460,7 @@ class DNNTheoremProverGurobi:
                 d.unsat = d.unsat or (not stat)
 
 
-            print(f'\t[{self.count}] stat:', not cur_domain.unsat)
+            # print(f'\t[{self.count}] stat:', not cur_domain.unsat)
 
             Timers.toc('Abstraction')
 
@@ -666,7 +666,7 @@ class DNNTheoremProverGurobi:
         # num_splits = [i+1 if i < 2 else i for i in num_splits]
         # num_splits = [3] * 5
         # num_splits[-1] = 1
-        print(f'\t[{self.count}] num_splits:', num_splits)
+        # print(f'\t[{self.count}] num_splits:', num_splits)
         # num_splits = [i+1 if i==1 else i for i in num_splits ]
         # num_splits[-1] = 1
         # print('num_splits:', num_splits)
@@ -717,12 +717,12 @@ class DNNTheoremProverGurobi:
         # # print(batch_assignment * 28)
         # for i in range(len(new_lowers)):
         #     print('======== lower', i, new_lowers[i])
-        if 0:
+        if 1:
             with torch.no_grad():
                 (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(new_lowers, new_uppers, assignment=new_assignments, return_hidden_bounds=True, reset_param=True)
         else:    
             (lbs, ubs), invalid_batch, hidden_bounds = self.ga.get_optimized_bounds_from_input(new_lowers, new_uppers, assignment=new_assignments)
-            gc.collect()
+            # gc.collect()
 
         
         # for i in range(len(lbs)):
@@ -787,7 +787,7 @@ class DNNTheoremProverGurobi:
 
         return (new_lbs, new_ubs), new_invalid_batch, new_hidden_bounds
 
-    def balancing_num_splits(self, num_splits, max_batch=200):
+    def balancing_num_splits(self, num_splits, max_batch=100):
         # num_add = math.floor(max_batch / math.prod(num_splits))
         # # print(num_add, num_splits)
         # count = 0
