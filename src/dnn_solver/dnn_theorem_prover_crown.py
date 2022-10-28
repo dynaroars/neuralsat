@@ -71,7 +71,14 @@ class DNNTheoremProverCrown:
         ##########################################################################################
         prop_mat, prop_rhs = spec.mat[0]
         if len(prop_rhs) > 1:
-            raise
+            output = self.net((self.lbs_init + self.ubs_init)/2).detach().cpu().numpy().flatten()
+            vec = prop_mat.dot(output)
+            selected_prop = prop_mat[vec.argmax()]
+            y = int(np.where(selected_prop == 1)[0])  # true label
+            target = int(np.where(selected_prop == -1)[0])  # target label
+            decision_thresh = prop_rhs[vec.argmax()]
+            self.recheck_property = True
+            # raise
         else:
             assert len(prop_mat) == 1
             y = np.where(prop_mat[0] == 1)[0]
@@ -84,7 +91,7 @@ class DNNTheoremProverCrown:
             if y is not None and target is None:
                 y, target = target, y  # Fix vnnlib with >= const property.
             decision_thresh = prop_rhs[0]
-            arguments.Config["bab"]["decision_thresh"] = decision_thresh
+        arguments.Config["bab"]["decision_thresh"] = decision_thresh
 
         if y is not None:
             if net.n_output > 1:
@@ -100,7 +107,6 @@ class DNNTheoremProverCrown:
             c[0, 0, target] = -1
 
         print(f'##### True label: {y}, Tested against: {target} ######')
-
         # if target != 1:
         #     self.verified = True
 
