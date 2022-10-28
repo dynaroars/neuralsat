@@ -77,7 +77,7 @@ class ReLUDomain:
             new_lb, new_ub = new_bounds_mapping[node]
             self.bounds_mapping[node] = (max(old_lb, new_lb), min(old_ub, new_ub))
 
-    def clone(self, node, status):
+    def clone(self, node, status, assignment={}):
         new_assignment = copy.deepcopy(self.assignment)
         new_assignment[node] = status
 
@@ -107,6 +107,13 @@ class ReLUDomain:
                 full_assignment[n] = True
             elif u <= 1e-6:
                 full_assignment[n] = False
+        flag_unsat = False
+        for node, status in assignment.items():
+            if node in full_assignment:
+                if full_assignment[node] != status:
+                    flag_unsat = True
+            else:
+                full_assignment[node] = status
 
         # print('full:', full_assignment.keys())
         output_mat, backsub_dict = self.transformer(full_assignment)
@@ -117,19 +124,20 @@ class ReLUDomain:
         new_domain = ReLUDomain(self.net, [_.lb for _ in old_vars], [_.ub for _ in old_vars], new_assignment, new_bounds_mapping)
         new_domain.output_upper = self.output_upper.clone() if self.output_upper is not None else None
         new_domain.output_lower = self.output_lower.clone() if self.output_lower is not None else None
-
+        new_domain.unsat = flag_unsat
+        # new_domain.backsub_dict = backsub_dict
         # output_mat, backsub_dict = self.transformer(new_assignment)
         new_domain.model = self.model.copy()
         # assert id(new_domain.model) == id(self.model)
         new_vars = new_domain.model.getVars()
-        coeffs = backsub_dict[node]
-        cstr = grb.LinExpr(coeffs[:-1], new_vars) + coeffs[-1]
-        new_domain.backsub_dict = backsub_dict
-        if status:
-            new_domain.model.addLConstr(cstr >= 1e-6)
-        else:
-            new_domain.model.addLConstr(cstr <= 0)
-        new_domain.model.update()
+        if node in backsub_dict:
+            coeffs = backsub_dict[node]
+            cstr = grb.LinExpr(coeffs[:-1], new_vars) + coeffs[-1]
+            if status:
+                new_domain.model.addLConstr(cstr >= 1e-6)
+            else:
+                new_domain.model.addLConstr(cstr <= 0)
+            new_domain.model.update()
         return new_domain
 
     def get_layer_bounds(self, lid):
@@ -179,14 +187,14 @@ class ReLUDomain:
         # print([v.lb for v in self.model.getVars()])
         # print()
 
-    def optimize_bounds(self):
+    def optimize_bounds(self, assignment=None):
 
         # self.optimize_input_bounds()
 
         # print(len(self.assignment), len(self.model.getConstrs()))
         # self.model.write(f'gurobi/{hash(frozenset(self.assignment.items()))}.lp')
 
-
+        # if full_assignment is None:
         full_assignment = {}
         full_assignment.update(self.assignment)
         for n in self.bounds_mapping:
@@ -198,8 +206,16 @@ class ReLUDomain:
             elif u <= 1e-6:
                 full_assignment[n] = False
 
+        for node, status in assignment.items():
+            if node in full_assignment:
+                if full_assignment[node] != status:
+                    self.unsat = True
+                    break
+            else:
+                full_assignment[node] = status
+
         # print('full:', full_assignment.keys())
-        output_mat, self.backsub_dict = self.transformer(full_assignment)
+        output_mat, backsub_dict = self.transformer(full_assignment)
 
         # output_mat, backsub_dict = self.transformer(self.assignment)
         lid, lnodes = self.get_layer_nodes()
@@ -213,7 +229,9 @@ class ReLUDomain:
         variables = self.model.getVars()
 
         for node in unassigned_nodes:
-            coeffs = self.backsub_dict[node]
+            if node not in backsub_dict:
+                continue
+            coeffs = backsub_dict[node]
             obj = grb.LinExpr(coeffs[:-1], variables) + coeffs[-1]
             
             self.model.setObjective(obj, grb.GRB.MINIMIZE)

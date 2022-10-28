@@ -102,7 +102,8 @@ class DNNTheoremProverGurobi:
         # self.grads = self.estimate_grads(self.lbs_init, self.ubs_init, steps=3)
         # print(self.grads)
         # exit()
-        self.initial_splits = 1
+        self.initialized = False
+        self.initial_splits = 6
 
 
     def _find_unassigned_nodes(self, assignment):
@@ -203,12 +204,12 @@ class DNNTheoremProverGurobi:
         is_full_assignment = True if unassigned_nodes is None else False
         Timers.toc('Find node')
 
-        # print('\t', self.count, 'full_assignment:', full_assignment)
-        # print(f'\t[{self.count}] full_assignment:', full_assignment)
+        # print('\t', self.count, 'full_assignment:', full_assignment, self.next_iter_implication)
 
-
-        if len(assignment) == 0:
-            # print('first time')
+        if not self.initialized:
+            assert len(full_assignment) == 0
+            # print('first time', assignment)
+            self.initialized = True
 
             # (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(self.lbs_init.unsqueeze(0), self.ubs_init.unsqueeze(0), return_hidden_bounds=True)
             (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(self.lbs_init.unsqueeze(0), self.ubs_init.unsqueeze(0), [assignment], initial_splits=self.initial_splits)
@@ -216,12 +217,14 @@ class DNNTheoremProverGurobi:
             # print(lbs.shape)
             # print(len(hidden_bounds))
             if len(invalid_batch):
+                # print('unsat')
                 return False, cc, None
 
             stat, _ = self.spec.check_output_reachability(lbs[0], ubs[0])
 
             # print('reachable:', stat)
             if not stat: # conflict
+                # print('unsat')
                 return False, cc, None
             # for bound in hidden_bounds:
             #     print(bound.shape)
@@ -238,7 +241,11 @@ class DNNTheoremProverGurobi:
             d.init_optimizer()
             d.valid = False
 
-            self.add_domains([d])
+            # self.add_domains([d])
+            # print('add_domain:', d.assignment)
+
+            self.domains[hash(frozenset(d.assignment.items()))] = d
+
 
             # implication
             for node, (l, u) in bounds_mapping.items():
@@ -295,250 +302,104 @@ class DNNTheoremProverGurobi:
             return False, cc, None
 
 
+        # print(f'\t[{self.count}] assignment:', assignment)
+
+        last_domain = self.domains.get(hash(frozenset(full_assignment.items())), None)
 
         if self.next_iter_implication:
             self.next_iter_implication = False
             # print('implication')
             # todo: haven't known yet
+            if last_domain is not None:
+                # print(f'\t[{self.count}] last literal:', info[0])
+                return True, implications, is_full_assignment
+            else:
+                # conflict dectected by BCP
+                pass
+
+        if last_domain is not None: # BCP
+            if last_domain.unsat:
+                return False, cc, None
             return True, implications, is_full_assignment
 
 
+        last_assignment = {}
+        last_assignment.update(full_assignment)
+        del last_assignment[info[0]]
+        last_domain = self.domains.get(hash(frozenset(last_assignment.items())), None)
 
-
-
-        # print(self.count, info[0])
-        cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
-        # print(self.count, cur_domain.unsat, cur_domain.valid)
-        # if cur_domain is None:
-            # already processed
-
-        # last_assignment = {}
-        # last_assignment.update(full_assignment)
-        # del last_assignment[info[0]]
-        # last_domain = self.domains.get(hash(frozenset(last_assignment.items())), None)
-        # if last_domain is not None:
+        if last_domain is None:
+            print(f'\t[{self.count}] last_assignment:', last_assignment)
+            print(f'\t[{self.count}] assignment:', assignment)
+            print(f'\t[{self.count}] full_assignment:', full_assignment)
+            print(f'\t[{self.count}] last literal:', info[0])
+            print(f'\t[{self.count}] key:', hash(frozenset(last_assignment.items())) in self.domains)
+            raise KeyError
         #     if not last_domain.valid:
         #         # print('delete:', last_assignment)
         #         del self.domains[hash(frozenset(last_assignment.items()))]
-
-        if cur_domain.valid:
-            cur_domain.valid = False
-
-            if cur_domain.unsat:
-                # print('unsat')
-                # del self.domains[hash(frozenset(cur_domain.assignment.items()))]
-                return False, cc, None
-
-            # print(f'\t[{self.count}] unassigned:', [_-1 for _ in unassigned_nodes])
-            # print(f'\t[{self.count}] len(a)={len(full_assignment)}, len(cstrs)={len(cur_domain.model.getConstrs())}')
-
-            # print('\t', self.count, 'unassigned_nodes', [(i-1) % 50 for i in unassigned_nodes])
-
-            ds = self.get_domains(cur_domain, batch=self.batch)
-            # print(len(ds))
-            for d in ds:
-                d.valid = False
-                # print(d)
-            
-            Timers.tic('Optimize input bounds')
-            for idx, d in enumerate(ds):
-                _ = d.optimize_input_bounds()
-            Timers.toc('Optimize input bounds')
-
-
-            Timers.tic('Abstraction')
-
-            batch_bound = torch.stack([d.get_input_bounds() for d in ds])
-            batch_lower = batch_bound[:, 0]
-            batch_upper = batch_bound[:, 1]
-            batch_assignment = [d.assignment for d in ds]
-            assert (batch_lower <= batch_upper).all()
-
-            # print(f'\t[{self.count}] batch_lower:', batch_lower.detach().cpu().numpy().tolist())
-            # print(f'\t[{self.count}] batch_upper:', batch_upper.detach().cpu().numpy().tolist())
-
-            # print(f'\t[{self.count}] batch_delta:', batch_upper - batch_lower)
-
-
-            (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(batch_lower.clone(), batch_upper.clone(), batch_assignment, initial_splits=self.initial_splits)
-
-
-            for i in range(len(ds)):
-                ds[i].update_output_bounds(lbs[i], ubs[i])
-
-            # print(f'\t[{self.count}] output lower 1:', lbs.data)
-            # print(f'\t[{self.count}] output upper 1:', ubs.data)
-
-
-
-            # with torch.no_grad():
-            #     (lbs, ubs), invalid_batch, hidden_bounds = self.deeppoly(batch_lower, batch_upper, assignment=batch_assignment, return_hidden_bounds=True, reset_param=True)
-
-            # print(f'\t[{self.count}] output lower 2:', cur_domain.output_lower.data)
-            # print(f'\t[{self.count}] output upper 2:', cur_domain.output_upper.data)
-
-
-            for bidx in invalid_batch:
-                ds[bidx].unsat = True
-
-
-            ################
-
-            # for hb1, hb2 in zip(hidden_bounds, hidden_bounds2):
-            #     print('shape:', hb1.shape, hb2.shape)
-            #     print('bound:', torch.sum(hb1[:, 0] <= hb2[:, 0]), hb1[:, 0].numel())
-            #     print('bound:', torch.sum(hb1[:, 1] >= hb2[:, 1]), hb1[:, 0].numel())
-
-            
-            # exit()
-
-            # (lbs3, ubs3), invalid_batch3, hidden_bounds3 = self.ga.get_optimized_bounds_from_input(new_batch_lower, new_batch_upper, assignment=new_batch_assignment)
-
-            # print(f'\t[{self.count}] output lower 3:', lbs3.amin(dim=0))
-            # print(f'\t[{self.count}] output upper 3:', ubs3.amax(dim=0))
-            # self.build_temp_model(assignment)
-
-            # Ml, Mu, bl, bu  = self.deeppoly.get_params()
-            # # print(f'\t[{self.count}] model:', len(self.model.getConstrs()))
-            # # print(Ml.shape)
-            # # Timers.tic('Gen constraints')
-            # cur_vars = cur_domain.model.getVars()
-            # lbs_exprs = [grb.LinExpr(wl, cur_vars) + cl for (wl, cl) in zip(Ml[0].detach().cpu().numpy(), bl[0].detach().cpu().numpy())]
-            # ubs_exprs = [grb.LinExpr(wu, cur_vars) + cu for (wu, cu) in zip(Mu[0].detach().cpu().numpy(), bu[0].detach().cpu().numpy())]
-            # # print(lbs_expr[0])
-            # for idx, lcac in enumerate(lbs_exprs):
-            #     cur_domain.model.setObjective(lcac, grb.GRB.MINIMIZE)
-            #     cur_domain.model.optimize()
-            #     print(idx, cur_domain.model.objval)
-            # for idx, ucac in enumerate(ubs_exprs):
-            #     cur_domain.model.setObjective(ucac, grb.GRB.MAXIMIZE)
-            #     cur_domain.model.optimize()
-            #     print(idx, cur_domain.model.objval)
-            # Timers.toc('Gen constraints')
-
-            # Timers.tic('Get output constraints')
-            # dnf_contrs = self.spec.get_output_reachability_constraints(lbs_expr, ubs_expr)
-            # Timers.toc('Get output constraints')
-
-            # flag_sat = False
-            # for cnf, adv_obj in dnf_contrs:
-            #     Timers.tic('Add constraints + Solve')
-            #     ci = [self.model.addLConstr(_) for _ in cnf]
-            #     self.model.setObjective(adv_obj, grb.GRB.MINIMIZE)
-            #     self._optimize()
-            #     self.model.remove(ci)
-            #     Timers.toc('Add constraints + Solve')
-            #     if self.model.status == grb.GRB.OPTIMAL:
-            #         tmp_input = torch.tensor([var.X for var in self.gurobi_vars], dtype=settings.DTYPE, device=self.net.device).view(self.net.input_shape)
-            #         if self.check_solution(tmp_input):
-            #             self.solution = tmp_input
-            #             Timers.toc('Deeppoly optimization reachability')
-            #             # print('ngon')
-            #             return True, {}, None
-            #         self.concrete = self.net.get_concrete(tmp_input)
-
-            #         flag_sat = True
-            #         break
-
-            ################
-
-
-            # (lbs, ubs), invalid_batch, hidden_bounds = self.ga.get_optimized_bounds_from_input(batch_lower, batch_upper, assignment=[d.assignment for d in ds])
-
-            # print(f'\t[{self.count}] output lower 2:', lbs2)
-            # print(f'\t[{self.count}] output upper 2:', ubs2)
-
-            # print(len(hidden_bounds), [len(hb) for hb in hidden_bounds])
-
-            
-
-            for bidx, d in enumerate(ds):
-                if bidx in invalid_batch or d.unsat:
-                    continue
-                stat, _ = self.spec.check_output_reachability(d.output_lower, d.output_upper)
-                # if not stat: 
-                    # print(bidx, 'unsat roi hehe')
-                d.unsat = d.unsat or (not stat)
-
-
-            # print(f'\t[{self.count}] stat:', not cur_domain.unsat)
-
-            Timers.toc('Abstraction')
-
-
-
-            # for bidx, d in enumerate(ds):
-            #     print(len(hidden_bounds), invalid_batch, bidx, d.unsat)                    
-            #     bounds_mapping_i = {}
-
-            #     for idx, (lb, ub) in enumerate(hidden_bounds[bidx]):
-            #         b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
-            #         print(idx, len(b), len(hidden_bounds[bidx]))
-            #         assert len(b) == len(self.layers_mapping[idx])
-            #         if (lb > ub).any():
-            #             print(lb.shape)
-            #             print(lb[lb > ub], ub[lb > ub])
-            #             exit()
-            #         assert (lb <= ub).all()
-            #         bounds_mapping_i.update(dict(zip(self.layers_mapping[idx], b)))
-
-                # d.bounds_mapping.update(bounds_mapping_i)
-
-            Timers.tic('Update hidden bounds')
-
-            batch_bounds_mapping = {b: {} for b in range(len(ds))}
-            for idx, bs in enumerate(hidden_bounds):
-                # print(idx, bs.shape)
-                for bidx in range(len(ds)):
-                    # print(bidx)
-                    if bidx in invalid_batch or ds[bidx].unsat:
-                        continue
-                    b = [(l, u) for l, u in zip(bs[bidx][0], bs[bidx][1])]
-                    assert len(b) == len(self.layers_mapping[idx])
-                    assert all([l < u for l,u in b])
-                    batch_bounds_mapping[bidx].update(dict(zip(self.layers_mapping[idx], b)))
-                
-
-
-            for bidx, d in enumerate(ds):
-                if bidx in invalid_batch or d.unsat:
-                    continue
-                # for node in d.bounds_mapping:
-                #     old_lb, old_ub = d.bounds_mapping[node]
-                #     new_lb, new_ub = batch_bounds_mapping[bidx][node]
-                #     d.bounds_mapping[node] = (max(old_lb, new_lb), min(old_ub, new_ub))
-                d.update_bounds_mapping(batch_bounds_mapping[bidx])
-
-            Timers.toc('Update hidden bounds')
-
-            # for node, status in assignment.items():
-            #     lb, ub = cur_domain.bounds_mapping[node]
-            #     if lb < 0 < ub:
-            #         # print(node, lb, ub)
-            #         if status:
-            #             cur_domain.bounds_mapping[node] = (0.0, ub)
-            #         else:
-            #             cur_domain.bounds_mapping[node] = (lb, 0.0)
-
-            Timers.tic('Optimize hidden bounds')
-            for d in ds:
-                d.optimize_bounds()
-            Timers.toc('Optimize hidden bounds')
-
-            Timers.tic('Add domains')
-            self.add_domains(ds)
-            Timers.toc('Add domains')
-
-            # for d in ds:
-            #     if not d.unsat:
-            #         del self.domains[hash(frozenset(d.assignment.items()))]
-
-        # assert cur_domain.bounds_mapping == ds[0].bounds_mapping
+        cur_domain = last_domain.clone(info[0], assignment[info[0]], assignment)
+        cur_domain.optimize_input_bounds()
+        cur_domain.valid = False
 
         if cur_domain.unsat:
-            # print(self.count, 'unsat')
+            # print('unsat')
             # del self.domains[hash(frozenset(cur_domain.assignment.items()))]
             return False, cc, None
+
+        batch_bound = cur_domain.get_input_bounds().unsqueeze(0)
+        batch_lower = batch_bound[:, 0]
+        batch_upper = batch_bound[:, 1]
+        batch_assignment = [assignment]
+        assert (batch_lower <= batch_upper).all()
+
+        Timers.tic('Abstraction')
+        (lbs, ubs), invalid_batch, hidden_bounds = self.compute_abstraction(batch_lower.clone(), batch_upper.clone(), batch_assignment, initial_splits=self.initial_splits)
+        Timers.toc('Abstraction')
+        if len(invalid_batch) > 0:
+            # del self.domains[hash(frozenset(cur_domain.assignment.items()))]
+            return False, cc, None
+
+        cur_domain.update_output_bounds(lbs[0], ubs[0])
+
+        stat, _ = self.spec.check_output_reachability(cur_domain.output_lower, cur_domain.output_upper)
+        if not stat: 
+            # del self.domains[hash(frozenset(cur_domain.assignment.items()))]
+            return False, cc, None
+
+        # print(lbs)
+        # print(ubs)
+        # print(invalid_batch, len(invalid_batch))
+
+        bounds_mapping = {}
+        for idx, hb in enumerate(hidden_bounds):
+            lb, ub = hb.squeeze(0)
+            b = [(l, u) for l, u in zip(lb.flatten(), ub.flatten())]
+            assert len(b) == len(self.layers_mapping[idx])
+            assert (lb <= ub).all()
+            bounds_mapping.update(dict(zip(self.layers_mapping[idx], b)))
+
+        # print(bounds_mapping)
+        for node, status in assignment.items():
+            l, u = bounds_mapping[node]
+            if l < 0 < u:
+                if status:
+                    bounds_mapping[node] = (max(0, l), u)
+                else:
+                    bounds_mapping[node] = (l, min(0, u))
+            
+        cur_domain.update_bounds_mapping(bounds_mapping)
+        
+        Timers.tic('Optimize hidden bounds')
+        cur_domain.optimize_bounds(assignment)
+        Timers.toc('Optimize hidden bounds')
+
+        if cur_domain.unsat:
+            # del self.domains[hash(frozenset(cur_domain.assignment.items()))]
+            return False, cc, None
+
+        # print(f'\t[{self.count}] add:', cur_domain.assignment)
+        self.domains[hash(frozenset(cur_domain.assignment.items()))] = cur_domain
 
 
         self.decider.update(bounds_mapping=cur_domain.bounds_mapping)
@@ -787,7 +648,7 @@ class DNNTheoremProverGurobi:
 
         return (new_lbs, new_ubs), new_invalid_batch, new_hidden_bounds
 
-    def balancing_num_splits(self, num_splits, max_batch=32):
+    def balancing_num_splits(self, num_splits, max_batch=8):
         # num_add = math.floor(max_batch / math.prod(num_splits))
         # # print(num_add, num_splits)
         # count = 0

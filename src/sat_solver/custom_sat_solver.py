@@ -83,10 +83,14 @@ class CustomSATSolver(Solver):
         dl = len(self._assignment_by_level) - 1
         # if dl == 0:
             # return None, 0, None
+        # print('\t\tlast dl:', dl)
+        # print('\t\t_assignment_by_level:', self._assignment_by_level[dl])
+        # print('\t\t_assignment_by_level:', [(c, self._assignment[c]['is_implied']) for c in self._assignment_by_level[dl]])
+        variable = None
         if len(self._assignment_by_level[dl]):
-            variable = self._assignment_by_level[dl][-1] # index: -1
-        else:
-            variable = None
+            for variable in self._assignment_by_level[dl][::-1]:
+                if not self._assignment[variable]['is_implied']:
+                    return variable, dl, [self._crown_decision_mapping.get(variable, None)]
         return variable, dl, [self._crown_decision_mapping.get(variable, None)]
 
     def _add_clause(self, clause):

@@ -32,25 +32,38 @@ class Worker:
         self.index = index
         self.dataset = dataset
         self.net = net
-        self.initial_splits = initial_splits
+        self.initial_splits = 4
+        self.timeout = 1
+        self.count = 0
 
     def get_instance(self, timeout=0.01):
         try:
             res = self.shared_queue.get(block=True, timeout=timeout)
         except queue.Empty:
             res = None
+
+        if res is not None:
+            self.shared_status.decrease_task()
+
         return res
 
     def put_intance(self, instance):
         # print(f'Thread {self.index} puts:', instance)
         self.shared_queue.put(instance)
+        self.shared_status.increase_task()
 
     def run(self):
         while True:
+            # if self.index == 0:
+            #     print('number of tasks:', self.shared_status.tasks.value)
             # print(list(self.shared_status.threads_in_progress))
             # print(len(set(self.shared_queue)))
             instance = self.get_instance()
             if instance is not None:
+                # self.count += 1
+                # if self.count % 20:
+                #     self.timeout += 0.5
+
                 self.shared_status.update(self.index, True)
                 spec, conflict_clauses = instance
                 
@@ -63,20 +76,51 @@ class Worker:
                 # self.shared_status[self.index] = True
                 # time.sleep(1)
                 # print(f'Thread {self.index}: len(conflict_clauses) =', len(list(solver._solver._generated_conflict_clauses)))
-                status = solver.solve(timeout=2)
+                # print(f'Thread {self.index} starts running')
+                try:
+                    status = solver.solve(timeout=self.timeout)
+                except KeyError as e:
+                    print(f'\t\t\t\tThread {self.index} reset!! =========================================== !!!!! ')
+                    # self.timeout -= 1
+                    # self.put_intance((spec, set([])))
+
+                    # Error
+                    # src/sat_solver/custom_sat_solver.py", line 255, in _conflict_resolution
+                    # conflict_clause.remove(-last_literal)
+
+                #     bounds = spec.get_input_property()
+                #     print(bounds['lbs'])
+                #     print(bounds['ubs'])
+                #     self.shared_status.add_thread_error()
+                #     print(f'error at Thread {self.index}!!')
+                #     return
+                except KeyboardInterrupt as e:
+                    print(e)
+                    self.shared_status.add_thread_error()
+                    return
+
+
                 if status == 'TIMEOUT':
+                    print(f'Thread {self.index} got timeout ({self.timeout}) after:', solver.dnn_theorem_prover.count, 'iterations', len(list(solver._solver.get_conflict_clauses())), 'clauses')
                     bounds = spec.get_input_property()
                     lower = torch.tensor(bounds['lbs'], dtype=settings.DTYPE, device=self.net.device)
                     upper = torch.tensor(bounds['ubs'], dtype=settings.DTYPE, device=self.net.device)
                     multi_bounds = self.split_multi_bounds(lower.clone(), upper.clone(), self.initial_splits)
                     for l, u in multi_bounds:
+                        if torch.allclose(l, u):
+                            print(l)
+                            print(u)
+                            raise
                         s = copy.deepcopy(spec)
                         s.bounds = [(li.item(), ui.item()) for li, ui in zip(l, u)]
                         # self.new_specs.append(s)
                         # print(s.get_input_property())
-                        self.put_intance((s, solver._solver._generated_conflict_clauses))
+                        # self.put_intance((s, []))
+                        self.put_intance((s, solver._solver.get_conflict_clauses()))
+                    # print(f'Thread {self.index} put', len(multi_bounds), 'subtasks')
                 else: 
-                    print(f'Thread {self.index} finished:', status, len(list(solver._solver._generated_conflict_clauses)))
+                    print(f'\t\t\t\tThread {self.index} finished:', status, 'remaining:', self.shared_status.tasks if isinstance(self.shared_status.tasks, int) else self.shared_status.tasks.value)
+                    
                 # self.put_intance([(i+self.index+1) for i in instance])
                 # self.put_intance([(i+self.index+2) for i in instance])
             else:
@@ -88,6 +132,25 @@ class Worker:
             # time.sleep(0.5)
             if sum(list(self.shared_status.threads_in_progress)) == 0 and self.shared_queue.empty():
                 return
+
+            if isinstance(self.shared_status.thread_errors, int):
+                if self.shared_status.thread_errors > 0:
+                    print('quit thoi', self.index)
+                    # if self.index == 0:
+                    #     while True:
+                    #         res = self.get_instance()
+                    #         if res == None:
+                    #             break
+                    return
+            else: 
+                if self.shared_status.thread_errors.value > 0:
+                    print('quit thoi', self.index)
+                    # if self.index == 0:
+                    #     while True:
+                    #         res = self.get_instance()
+                    #         if res == None:
+                    #             break
+                    return
 
     def estimate_grads(self, lower, upper, steps=3):
         # print(lower.device)
@@ -154,14 +217,19 @@ class Worker:
         # num_splits = [5 if i >= 5 else i for i in num_splits]
         # print(f'\t[{self.count}] num_splits 1:', num_splits)
         # exit()
-        num_splits = self.balancing_num_splits(num_splits)
-        print(num_splits)
+        # num_splits = self.balancing_num_splits(num_splits)
+        # print(num_splits)
         assert all([x>0 for x in num_splits])
+        if not any([x>1 for x in num_splits]):
+            num_splits[(upper - lower).argmax()] += 1
+            # print(num_splits)
+        assert any([x>1 for x in num_splits])
+
         return self.split_multi_bound([(lower, upper)], d=num_splits)
 
 
 
-    def balancing_num_splits(self, num_splits, max_batch=8):
+    def balancing_num_splits(self, num_splits, max_batch=4):
         num_splits = np.array(num_splits)
         while True:
             idx = np.argmin(num_splits)
@@ -177,20 +245,62 @@ def worker_func(worker_index, net, shared_queue, shared_status, dataset):
     w = Worker(worker_index, net, shared_queue, shared_status, dataset)
     w.run()
 
-class SharedStatus:
+class SharedStatusMP:
 
     def __init__(self, n_proc):
         # self.status = {i: True for i in range(n_proc)}
         self.mutex = multiprocessing.Lock()
         self.threads_in_progress = multiprocessing.Array('i', [1]*n_proc)
-        print(list(self.threads_in_progress))
-        # self.threads_in_progress.value = 0
+        # print(list(self.threads_in_progress))
+        self.tasks = multiprocessing.Value('i', 1)
+        self.thread_errors = multiprocessing.Value('i', 0)
 
     def update(self, index, value):
         did_lock = self.mutex.acquire()
         self.threads_in_progress[index] = value
         if did_lock:
             self.mutex.release()
+
+
+    def increase_task(self):
+        did_lock = self.mutex.acquire()
+        self.tasks.value += 1
+        if did_lock:
+            self.mutex.release()
+
+    def decrease_task(self):
+        did_lock = self.mutex.acquire()
+        self.tasks.value -= 1
+        if did_lock:
+            self.mutex.release()
+
+    def add_thread_error(self):
+        did_lock = self.mutex.acquire()
+        self.thread_errors.value = 1
+        if did_lock:
+            self.mutex.release()
+
+
+         
+class SharedStatus:
+
+    def __init__(self, n_proc):
+        # self.status = {i: True for i in range(n_proc)}
+        self.threads_in_progress = [1]*n_proc
+        self.tasks = 1
+        self.thread_errors = 0
+
+    def update(self, index, value):
+        self.threads_in_progress[index] = value
+
+    def increase_task(self):
+        self.tasks += 1
+
+    def decrease_task(self):
+        self.tasks -= 1
+
+    def add_thread_error(self):
+        self.thread_errors = 1
 
 
 class DNNSolverMulti:
@@ -233,21 +343,29 @@ class DNNSolverMulti:
 
     def solve(self):
         print('Solve multi demo')
-        # exit()
+        N_PROCS = 32
+
         shared_queue = multiprocessing.Queue()
         shared_queue.put((self.spec, set([])))
-        processes = []
 
-        N_PROCS = 1
-        shared_status = SharedStatus(N_PROCS)
+        if N_PROCS > 1:
+            processes = []
+            
+            shared_status = SharedStatusMP(N_PROCS)
 
-        for index in range(N_PROCS):
-            p = multiprocessing.Process(target=worker_func, args=(index, self.net, shared_queue, shared_status, self.dataset))
-            p.start()
-            processes.append(p)
+            for index in range(N_PROCS):
+                p = multiprocessing.Process(target=worker_func, args=(index, self.net, shared_queue, shared_status, self.dataset))
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
 
-        for p in processes:
-            p.join()
+        else:
+            # shared_queue = 
+            shared_status = SharedStatus(N_PROCS)
+            worker_func(0, self.net, shared_queue, shared_status, self.dataset)
+
+        print('Error:', shared_status.thread_errors)
 
         # print(shared_queue)
 
