@@ -298,7 +298,7 @@ Config = {
     'bab': {
         'get_upper_bound': False,
         'branching': {
-            'reduceop': 'min',
+            'reduceop': 'max',
         }
     }
 }

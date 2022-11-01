@@ -52,8 +52,9 @@ class DNNSolver(TheorySolver):
             self.dnn_theorem_prover = DNNTheoremProverCrown(net, spec=spec, decider=self.decider)
 
         super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
+        self.start_time = time.time()
 
-        torch.set_num_threads(128//32)
+        torch.set_num_threads(1)
 
     def propagate(self):
         if settings.DEBUG:
@@ -84,9 +85,9 @@ class DNNSolver(TheorySolver):
         if 0:
             if time.time() - tic > 0.01 or 1:
                 if hasattr(self.dnn_theorem_prover, 'domains'):
-                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
+                    print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
                 else:
-                    print(self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic, 'SAT' if theory_sat else 'UNSAT')
+                    print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic, 'SAT' if theory_sat else 'UNSAT')
 
         # Timers.print_stats()
         # print()
@@ -102,20 +103,25 @@ class DNNSolver(TheorySolver):
 
         # if self.dnn_theorem_prover.count == 50:
         #     exit()
+        if hasattr(self.dnn_theorem_prover, 'domains'):
+            vd = [d for _, d in self.dnn_theorem_prover.domains.items() if d.valid]
+            if len(vd) == 0 and self.dnn_theorem_prover.batch > 1:
+                self.set_early_stop('UNSAT')
+                return conflict_clause, new_assignments
+
+            if len(vd) > 100000:
+                self.set_early_stop('TIMEOUT')
+                return conflict_clause, new_assignments
+
 
         if not theory_sat:
             self.dnn_theorem_prover.restore_input_bounds()
 
-            
             if hasattr(self.dnn_theorem_prover, 'optimized_layer_bounds'):
                 self.dnn_theorem_prover.optimized_layer_bounds = {}
 
             if hasattr(self.dnn_theorem_prover, 'next_iter_implication'):
                 self.dnn_theorem_prover.next_iter_implication = False
-
-            if hasattr(self.dnn_theorem_prover, 'workers'):
-                for w in self.dnn_theorem_prover.workers:
-                    w.terminate()
 
             conflict_clause  = set(implications)
             if len(conflict_clause):

@@ -103,7 +103,7 @@ class DNNTheoremProverGurobi:
         # print(self.grads)
         # exit()
         self.initialized = False
-        self.initial_splits = 6
+        self.initial_splits = 4
 
 
     def _find_unassigned_nodes(self, assignment):
@@ -239,7 +239,7 @@ class DNNTheoremProverGurobi:
 
             d = domain.ReLUDomain(self.net, self.lbs_init, self.ubs_init, assignment, bounds_mapping)
             d.init_optimizer()
-            d.valid = False
+            # d.valid = False
 
             # self.add_domains([d])
             # print('add_domain:', d.assignment)
@@ -338,9 +338,10 @@ class DNNTheoremProverGurobi:
         #     if not last_domain.valid:
         #         # print('delete:', last_assignment)
         #         del self.domains[hash(frozenset(last_assignment.items()))]
+        last_domain.valid = False
         cur_domain = last_domain.clone(info[0], assignment[info[0]], assignment)
         cur_domain.optimize_input_bounds()
-        cur_domain.valid = False
+        # cur_domain.valid = False
 
         if cur_domain.unsat:
             # print('unsat')

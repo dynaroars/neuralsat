@@ -64,6 +64,7 @@ class DNNTheoremProverCrown:
             self.model.addVar(name=f'x{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) 
             for i in range(self.net.n_input)
         ]
+        self.mvars = grb.MVar(self.gurobi_vars)
         self.transformer = SymbolicNetwork(net)
         self.last_assignment = {}        
         self.backsub_cacher = BacksubCacher(self.layers_mapping, max_caches=10)
@@ -107,7 +108,7 @@ class DNNTheoremProverCrown:
             c[0, 0, target] = -1
 
         print(f'##### True label: {y}, Tested against: {target} ######')
-        # if target != 1:
+        # if target != 9:
         #     self.verified = True
 
         input_shape = net.input_shape
@@ -264,22 +265,59 @@ class DNNTheoremProverCrown:
             return True, implications, is_full_assignment
 
         if is_full_assignment:
+            print('\t\t\tfull assignment')
             Timers.tic('check full assignment')
+            # output_mat, backsub_dict = self.transformer(assignment)
+            # backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
+
+            # if backsub_dict_expr is not None:
+            #     backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
+            # else:
+            #     backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
+
+            # self.backsub_cacher.put(assignment, backsub_dict_expr)
+            # constrs = []
+            # for node, status in assignment.items():
+            #     if status:
+            #         constrs.append(self.model.addLConstr(backsub_dict_expr[node] >= 1e-6))
+            #     else:
+            #         constrs.append(self.model.addLConstr(backsub_dict_expr[node] <= 0))
+            
+            # flag_sat = False
+            # output_constraint = self.spec.get_output_property(
+            #     [self._get_equation(output_mat[i]) for i in range(self.net.n_output)]
+            # )
+            # for cnf in output_constraint:
+            #     ci = [self.model.addLConstr(_) for _ in cnf]
+            #     self._optimize()
+            #     self.model.remove(ci)
+            #     if self.model.status == grb.GRB.OPTIMAL:
+            #         if self.check_solution(self.get_solution()):
+            #             flag_sat = True
+            #             break
+
+            # self.model.remove(constrs)
+
             output_mat, backsub_dict = self.transformer(assignment)
-            backsub_dict_expr = self.backsub_cacher.get_cache(assignment)
+            # print('full assignment')
+            # raise
 
-            if backsub_dict_expr is not None:
-                backsub_dict_expr.update({k: self._get_equation(v) for k, v in backsub_dict.items() if k not in backsub_dict_expr})
-            else:
-                backsub_dict_expr = {k: self._get_equation(v) for k, v in backsub_dict.items()}
-
-            self.backsub_cacher.put(assignment, backsub_dict_expr)
-            constrs = []
-            for node, status in assignment.items():
+            lhs = np.zeros([len(assignment), len(self.gurobi_vars)])
+            rhs = np.zeros(len(assignment))
+            for i, (node, status) in enumerate(assignment.items()):
+                if node not in backsub_dict:
+                    continue
                 if status:
-                    constrs.append(self.model.addLConstr(backsub_dict_expr[node] >= 1e-6))
+                    lhs[i] = -1 * backsub_dict[node][:-1]
+                    rhs[i] = backsub_dict[node][-1] - 1e-6
                 else:
-                    constrs.append(self.model.addLConstr(backsub_dict_expr[node] <= 0))
+                    lhs[i] = backsub_dict[node][:-1]
+                    rhs[i] = -1 * backsub_dict[node][-1]
+
+            self.model.remove(self.model.getConstrs())
+            self.model.addConstr(lhs @ self.mvars <= rhs) 
+            self.model.update()
+
             
             flag_sat = False
             output_constraint = self.spec.get_output_property(
@@ -294,7 +332,6 @@ class DNNTheoremProverCrown:
                         flag_sat = True
                         break
 
-            self.model.remove(constrs)
             Timers.toc('check full assignment')
 
             if flag_sat:
@@ -340,7 +377,7 @@ class DNNTheoremProverCrown:
             history = [sd.history for sd in selected_domains]
 
             if len(selected_domains) > 1:
-                assert cur_domain == selected_domains[0]
+                # assert cur_domain == selected_domains[0]
 
                 branching_decision = choose_node_parallel_kFSB(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, branching_reduceop=self.branching_reduceop, slopes=slopes, betas=betas, history=history)
                 # branching_decision = choose_node_parallel_crown(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, batch=batch, branching_reduceop=self.branching_reduceop)
@@ -350,11 +387,14 @@ class DNNTheoremProverCrown:
                 # print(len(branching_decision))
                 # assert crown_decision[0] in branching_decision
                 # if branching_decision[0] != crown_decision[0]:
-                    # raise
+                #     raise
                 branching_decision[0] = crown_decision[0]
+                for idx, d in enumerate(selected_domains):
+                    d.next_var = self.crown_decision_mapping[tuple(branching_decision[idx])]
 
             else:
                 branching_decision = crown_decision
+                selected_domains[0].next_var = branching_decision[0]
 
             # print('\t --->', self.count, batch, branching_decision)
 
@@ -399,12 +439,56 @@ class DNNTheoremProverCrown:
             # print(len(domain_list), full_assignment == domain_list[0].get_assignment())
             # print(len(domain_list), full_assignment == domain_list[1].get_assignment())
 
-            del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
+            # del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
             # print('\tfull_assignment:', full_assignment)
             cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
 
+        else:
+            mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(None, batch=self.batch)
 
-        # print('\t', 'cur_domain:', cur_domain.history)
+            if len(selected_domains) > 0:
+                for d in selected_domains:
+                    d.valid = False # mark as processed
+
+                batch = len(selected_domains)
+                history = [sd.history for sd in selected_domains]
+
+                branching_decision = choose_node_parallel_kFSB(orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, branching_reduceop=self.branching_reduceop, slopes=slopes, betas=betas, history=history)
+
+                split_history = [sd.split_history for sd in selected_domains]
+                split = {}
+                split["decision"] = [[bd] for bd in branching_decision]
+                split["coeffs"] = [[1.] for i in range(len(branching_decision))]
+                split["diving"] = 0
+
+                Timers.tic('get_lower_bound')
+                ret = self.lirpa.get_lower_bound(orig_lbs, orig_ubs, split, slopes=slopes, history=history, split_history=split_history, layer_set_bound=True, betas=betas, single_node_split=True, intermediate_betas=intermediate_betas)
+                Timers.toc('get_lower_bound')
+
+
+                dom_ub, dom_lb, dom_ub_point, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas, primals = ret
+
+                Timers.tic('add_domain')
+                domain_list = add_domain_parallel(lA=lAs[:2*batch], lb=dom_lb[:2*batch], ub=dom_ub[:2*batch], lb_all=dom_lb_all[:2*batch], up_all=dom_ub_all[:2*batch],
+                                                domains=None, selected_domains=selected_domains[:batch], slope=slopes[:2*batch], beta=betas[:2*batch],
+                                                growth_rate=0, branching_decision=branching_decision, decision_thresh=self.decision_thresh,
+                                                split_history=split_history[:2*batch], intermediate_betas=intermediate_betas[:2*batch],
+                                                check_infeasibility=False, primals=primals[:2*batch] if primals is not None else None)
+                Timers.toc('add_domain')
+
+                Timers.tic('save_domain')
+                for d in domain_list:
+                    key = hash(frozenset(d.get_assignment().items()))
+                    if key not in self.domains:
+                        self.domains[key] = d
+                    else:
+                        if d.history != self.domains[key].history:
+                            # FIXME: 03/10/22: same key, different order of history
+                            pass
+                Timers.toc('save_domain')
+
+        # if len(selected_domains) >= 10:
+        #     self.generate_samples(selected_domains)
 
         mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(cur_domain)
 
@@ -413,6 +497,7 @@ class DNNTheoremProverCrown:
             crown_params = orig_lbs, orig_ubs, mask, self.lirpa, self.pre_relu_indices, lAs, slopes, betas, history
             # print('\t', self.count, 'update crown_params')
             self.decider.update(crown_params=crown_params)
+            self.decider.next_var = cur_domain.next_var
 
         if cur_domain.lower_bound >= self.decision_thresh:
             del self.domains[hash(frozenset(cur_domain.get_assignment().items()))]
@@ -438,6 +523,20 @@ class DNNTheoremProverCrown:
         if len(implications):
             self.next_iter_implication = True
 
+        # # random sample
+        # s_in = (self.ubs_init - self.lbs_init) * torch.rand(10, 784) + self.lbs_init
+        # # assert torch.all(s_in >= l)
+        # # assert torch.all(s_in <= u)
+        # s_out = self.net(s_in)
+        # for prop_mat, prop_rhs in self.spec.mat:
+        #     prop_mat = torch.from_numpy(prop_mat).float()
+        #     prop_rhs = torch.from_numpy(prop_rhs).float()
+        #     vec = prop_mat.matmul(s_out.t())
+        #     sat = torch.all(vec <= prop_rhs.reshape(-1, 1), dim=0)
+        #     if (sat==True).any():
+        #         self.solution = 'FOUNDED'
+
+
         return True, implications, is_full_assignment
 
 
@@ -454,7 +553,7 @@ class DNNTheoremProverCrown:
 
         idx = 0
         # if current_domain.valid is True and current_domain.lower_bound < self.decision_thresh:
-        if 1:
+        if current_domain is not None:
             current_domain.to_device(device, partial=True)
             # current_domain.valid = False  # set False to avoid another pop
             lAs.append(current_domain.lA)
@@ -487,6 +586,9 @@ class DNNTheoremProverCrown:
                 # selected_candidate_domain.valid = False   # set False to avoid another pop
 
         batch = len(selected_candidate_domains)
+        if batch == 0:
+            return None, None, None, None, None, None, None, []
+
 
         lower_bounds = []
         for j in range(len(lower_all[0])):
@@ -518,8 +620,139 @@ class DNNTheoremProverCrown:
         lower_bounds = [t if t.is_contiguous() else t.contiguous() for t in lower_bounds]
         upper_bounds = [t if t.is_contiguous() else t.contiguous() for t in upper_bounds]
         
+        # if batch >= 50:
+        #     self.generate_samples(lower_bounds[0], upper_bounds[0])
+        
         # Recompute the mask on GPU.
         new_masks = []
         for j in range(len(lower_bounds) - 1):  # Exclude the final output layer.
             new_masks.append(torch.logical_and(lower_bounds[j] < 0, upper_bounds[j] > 0).view(lower_bounds[0].size(0), -1).float())
         return new_masks, new_lAs, lower_bounds, upper_bounds, slopes, betas_all, intermediate_betas_all, selected_candidate_domains
+
+
+    @torch.no_grad()
+    def forward_from_1st_hidden_layer(self, x):
+        idx = 0
+        for layer in self.net.layers:
+            if idx > 0:
+                x = layer(x)
+            if isinstance(layer, nn.Linear): # skip input layer, forward from 1st hidden layer
+                idx += 1
+        return x
+
+    def generate_samples(self, lowers, uppers):
+        # return
+        # print(lowers.shape)
+        lbs = self.lbs_init.repeat(500, 1)
+        ubs = self.ubs_init.repeat(500, 1)
+        # print(lbs.shape)
+        # exit()
+        # assert torch.all(lowers <= uppers)
+        # s = (uppers - lowers) * torch.rand(*lowers.shape, dtype=lowers.dtype, device=lowers.device) + lowers
+        s = (ubs - lbs) * torch.rand(*lbs.shape, dtype=lbs.dtype, device=lbs.device) + lbs
+        # assert torch.all(s[0] == s[1])
+        assert torch.all(s >= lbs) and torch.all(s <= ubs)
+        # exit()
+        # x = 
+        # assert torch.all(s >= lowers) and torch.all(s <= uppers)
+        # x = self.forward_from_1st_hidden_layer(s)
+        x = self.net(s)
+        # print(s.shape, x.shape)
+        for prop_mat, prop_rhs in self.spec.mat:
+            prop_mat = torch.tensor(prop_mat, dtype=lowers.dtype, device=lowers.device)
+            prop_rhs = torch.tensor(prop_rhs, dtype=lowers.dtype, device=lowers.device)
+            # print(prop_mat.shape)
+            vec = (prop_mat @ x.transpose(0, 1)).squeeze()
+            # print(vec.data, prop_rhs)
+            if torch.any(vec <= prop_rhs):
+                cex_indices = torch.where(vec <= prop_rhs)
+                # print('cex', cex_indices, vec.data)
+                self.solution = s[0].clone()
+                # for cex_idx in cex_indices[0]:
+                #     self.model.setParam('PoolSolutions', 100)
+                #     self.model.setParam('PoolSearchMode', 2)
+                #     self.model.optimize()
+
+                #     self.model.remove(self.model.getConstrs())
+                #     _, backsub_dict = self.transformer({})
+                #     sample = s[cex_idx].flatten()
+                #     # print(cex_idx, sample.shape)
+                #     for i in range(len(sample)):
+                #         eq = self._get_equation(backsub_dict[i+1])
+                #         self.model.addLConstr( eq >= 1e-6 if sample[i] > 0 else eq <= 0)
+                #         # self.model.addLConstr( eq == sample[i] if sample[i] > 0 else eq <= 0)
+                #     self.model.optimize()
+                #     # self.model.write('gurobi/test.lp')
+
+                #     if self.model.status == grb.GRB.OPTIMAL:
+                #         print('Number of solutions found: ' + str(self.model.SolCount))
+                #         cex = torch.as_tensor([[v.X for v in self.gurobi_vars]], dtype=lowers.dtype, device=lowers.device)
+                #         if self.spec.check_solution(self.net(cex)):
+                #             self.solution = cex.clone()
+                #             return
+                #     #         print('cex')
+                #     #         exit()
+                    # print('spurious cex')
+
+
+                    # print(cex_idx, s[cex_idx], s[cex_idx].shape)
+                    # assignment = {(i+1): True if s[cex_idx][0][i] > 0 else False for i in range(len(s[cex_idx][0]))}
+                    # print(assignment)
+                #     print(self.forward_from_1st_hidden_layer(s[cex_idx]))
+                # for i in range(len(s)):
+                #     print(self.forward_from_1st_hidden_layer(s[i]).detach().cpu().numpy())
+                
+        # self.model.setParam('PoolSolutions', 1)
+                
+                # exit()
+        # tic = time.time()
+        # for d in selected_domains:
+        #     assignment = d.get_assignment()
+        #     # print(assignment)
+        #     full_assignment = {}
+        #     full_assignment.update(assignment)
+        #     for lid, (layer_l, layer_u) in enumerate(zip(d.lower_all[:-1], d.upper_all[:-1])):
+        #         for nid in range(len(layer_l[0])):
+        #             status = None
+        #             if layer_l[0][nid] > -1e-6:
+        #                 status = True
+        #                 # print(lid, nid, self.crown_decision_mapping[(lid, nid)], True)
+        #             elif layer_u[0][nid] < 1e-6:
+        #                 status = False
+        #                 # print(lid, nid, self.crown_decision_mapping[(lid, nid)], False)
+
+        #             if status is not None:
+        #                 node = self.crown_decision_mapping[(lid, nid)]
+        #                 if node in full_assignment:
+        #                     if status != full_assignment[node]:
+        #                         raise
+        #                 full_assignment[node] = status
+        #         # print(layer_l.shape, layer_l[0, :10])
+        #         # print(layer_u.shape, layer_u[0, :10])
+        #     # print(full_assignment)
+        #     output_mat, backsub_dict = self.transformer(full_assignment)
+        #     # lhs = np.zeros([min(len(backsub_dict), len(assignment)), len(self.gurobi_vars)])
+        #     # rhs = np.zeros(min(len(backsub_dict), len(assignment)))
+        #     # for i, (node, status) in enumerate(assignment.items()):
+        #     #     if node not in backsub_dict:
+        #     #         continue
+        #     #     if status:
+        #     #         lhs[i] = -1 * backsub_dict[node][:-1]
+        #     #         rhs[i] = backsub_dict[node][-1] - 1e-6
+        #     #     else:
+        #     #         lhs[i] = backsub_dict[node][:-1]
+        #     #         rhs[i] = -1 * backsub_dict[node][-1]
+
+        #     self.model.remove(self.model.getConstrs())x
+
+        #     for node, status in assignment.items():
+        #         if node not in backsub_dict:
+        #             continue
+        #         if status:
+        #             self.model.addLConstr(self._get_equation(backsub_dict[node]) >= 1e-6)
+        #         else:
+        #             self.model.addLConstr(self._get_equation(backsub_dict[node]) <= 0)
+
+        #     print(assignment, len(assignment), len(self.model.getConstrs()))
+        # print(time.time() - tic)
+        # # exit()

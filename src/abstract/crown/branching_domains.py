@@ -87,6 +87,7 @@ class ReLUDomain:
         self.primals = primals
         self.priority = priority  # Higher priority will be more likely to be selected.
         self.assignment_mapping = assignment_mapping
+        self.next_var = None
 
     def get_assignment(self):
         assignment = {}

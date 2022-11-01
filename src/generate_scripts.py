@@ -37,7 +37,8 @@ BENCHMARKS = ['acasxu', 'mnistfc', 'cifar2020']
 
 def gen_scripts():
     root = os.path.abspath('.')
-    script_dir = 'script'
+    script_dir = 'script_draft'
+    # script_dir = 'script'
     os.makedirs(script_dir, exist_ok=True)
     for benchmark in BENCHMARKS:
         with open(f'{script_dir}/{benchmark}_scripts.sh', 'w') as fp:
@@ -58,7 +59,8 @@ def gen_scripts():
                     device = 'cuda'
                     batch = 100
 
-                cmd = f'python3 main.py --net benchmark/{benchmark}/{nnet} --spec benchmark/{benchmark}/{spec} --dataset {dataset} --file {result_file} --attack --solution --timer --batch {batch} --device {device}\n'
+                cmd = f'python3 test_split.py --net benchmark/{benchmark}/{nnet} --spec benchmark/{benchmark}/{spec} --dataset {dataset} --file {result_file}\n'
+                # cmd = f'python3 main.py --net benchmark/{benchmark}/{nnet} --spec benchmark/{benchmark}/{spec} --dataset {dataset} --file {result_file} --attack --solution --timer --batch {batch} --device {device}\n'
                 fp.write(cmd)
                 # print('dur=$(echo "$(date +%s.%N) - $start" | bc)', file=fp)
                 # print(f'printf "{root}/benchmark/{benchmark}/{nnet} {root}/benchmark/{benchmark}/{spec}: %.6f seconds" $dur', file=fp)

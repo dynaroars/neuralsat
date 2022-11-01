@@ -81,54 +81,54 @@ class GradientAbstractor:
         self.lr = lr
         self.n_iters = n_iters
 
-        self.layer_abstractors = {k: DeepPolyLayerWrapper(v) for k, v in self.abstractor.forward_from_layer.items()}
+        # self.layer_abstractors = {k: DeepPolyLayerWrapper(v) for k, v in self.abstractor.forward_from_layer.items()}
 
 
-    def get_optimized_bounds_from_layer(self, lower, upper, layer_id):
-        Timers.tic('Init Optimize')
-        abstractor = self.layer_abstractors[layer_id]
-        # print('--------run init')
-        abstractor(lower, upper, reset_param=True)
+    # def get_optimized_bounds_from_layer(self, lower, upper, layer_id):
+    #     Timers.tic('Init Optimize')
+    #     abstractor = self.layer_abstractors[layer_id]
+    #     # print('--------run init')
+    #     abstractor(lower, upper, reset_param=True)
 
-        optimizer = torch.optim.Adam(abstractor.parameters(), lr=self.lr)
-        Timers.toc('Init Optimize')
+    #     optimizer = torch.optim.Adam(abstractor.parameters(), lr=self.lr)
+    #     Timers.toc('Init Optimize')
 
-        for it in range(self.n_iters):
-            # print('optimize iter:', it)
-            optimizer.zero_grad()
-            Timers.tic('Abstraction')
-            (lb, ub), hb = abstractor(lower, upper, return_hidden_bounds=True, reset_param=False)
-            Timers.toc('Abstraction')
-            # loss = (uo - lo).sum()
-            sat_mask = self.get_sat_mask(lb, ub)
-            # print(unsat_mask)
+    #     for it in range(self.n_iters):
+    #         # print('optimize iter:', it)
+    #         optimizer.zero_grad()
+    #         Timers.tic('Abstraction')
+    #         (lb, ub), hb = abstractor(lower, upper, return_hidden_bounds=True, reset_param=False)
+    #         Timers.toc('Abstraction')
+    #         # loss = (uo - lo).sum()
+    #         sat_mask = self.get_sat_mask(lb, ub)
+    #         # print(unsat_mask)
 
-            if sat_mask.sum() == 0:
-                # print('all unsat at iter', it)
-                break
-            # print(it, unsat_mask.sum(), len(lb))
-            # idx_sat = torch.where(unsat_mask == True)
-            # print(idx_sat)
-            loss = self.get_loss(lb[sat_mask], ub[sat_mask])
+    #         if sat_mask.sum() == 0:
+    #             # print('all unsat at iter', it)
+    #             break
+    #         # print(it, unsat_mask.sum(), len(lb))
+    #         # idx_sat = torch.where(unsat_mask == True)
+    #         # print(idx_sat)
+    #         loss = self.get_loss(lb[sat_mask], ub[sat_mask])
             
-            # print(it, loss)
-            Timers.tic('Backward Loss')
-            loss.backward()
-            Timers.toc('Backward Loss')
+    #         # print(it, loss)
+    #         Timers.tic('Backward Loss')
+    #         loss.backward()
+    #         Timers.toc('Backward Loss')
 
-            # Timers.tic('Zero Grad')
-            # self.abstractor.apply(self.zero_grader)
-            # Timers.toc('Zero Grad')
+    #         # Timers.tic('Zero Grad')
+    #         # self.abstractor.apply(self.zero_grader)
+    #         # Timers.toc('Zero Grad')
 
-            Timers.tic('Update Beta')
-            optimizer.step()
-            Timers.toc('Update Beta')
+    #         Timers.tic('Update Beta')
+    #         optimizer.step()
+    #         Timers.toc('Update Beta')
 
-            Timers.tic('Clip Beta')
-            abstractor.apply(self.clipper)
-            Timers.toc('Clip Beta')
+    #         Timers.tic('Clip Beta')
+    #         abstractor.apply(self.clipper)
+    #         Timers.toc('Clip Beta')
 
-        return (lb, ub), [], hb
+    #     return (lb, ub), [], hb
 
     def get_sat_mask(self, lower, upper):
         # print(lower.shape)

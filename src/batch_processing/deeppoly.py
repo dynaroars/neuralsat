@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import onnx2pytorch
 
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
@@ -13,7 +14,7 @@ class BatchDeepPoly(nn.Module):
         self.back_sub_steps = back_sub_steps
         self.device = net.device
         self._build_network_transformer()
-        self._build_subnetwork_transformer()
+        # self._build_subnetwork_transformer()
 
     def _build_network_transformer(self):
         last = BatchInputTransformer(self.net.input_shape).to(self.device)
@@ -25,8 +26,11 @@ class BatchDeepPoly(nn.Module):
             elif isinstance(layer, nn.ReLU):
                 last = BatchReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, kwargs=self.net.layers_mapping).to(self.device)
                 idx += 1
+            elif isinstance(layer, nn.Flatten) or isinstance(layer, onnx2pytorch.operations.Flatten):
+                # last = BatchFlattenTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx).to(self.device)
+                continue
             else:
-                print(layer)
+                print(type(layer))
                 raise NotImplementedError
             layers += [last]
             # self._modules[str(last)] = last
@@ -45,6 +49,8 @@ class BatchDeepPoly(nn.Module):
                 elif isinstance(layer, nn.ReLU):
                     last = BatchReLUTransformer(last=last, back_sub_steps=self.back_sub_steps, idx=idx, sub_id=k, kwargs=self.net.layers_mapping).to(self.device)
                     idx += 1
+                elif isinstance(layer, nn.Flatten) or isinstance(layer, onnx2pytorch.operations.Flatten):
+                    continue
                 else:
                     print(layer)
                     raise NotImplementedError

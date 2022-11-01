@@ -22,7 +22,12 @@ class GradientFalsification:
 
         self.get_target()
 
-        self.max_eps = 0.3
+        eps_temp = 0.5 * (self.upper - self.lower)
+        self.max_eps = eps_temp.max().item()
+        # print(self.lower.shape, eps_temp, max_eps)
+        # exit()
+        
+        # self.max_eps = 0.3
         self.attack_iters = 50
         self.num_restarts = 50
 

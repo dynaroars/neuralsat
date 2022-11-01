@@ -30,7 +30,7 @@ class Decider:
         self.target_direction_list = None
         self.device = net.device
         self.dataset = dataset
-
+        self.next_var = None
         if settings.SEED is not None:
             random.seed(settings.SEED)
 
@@ -103,6 +103,10 @@ class Decider:
         #     node = scores[0][0]
         #     l, u = self.bounds_mapping[node]
         #     return node, u.abs() >= l.abs()
+        if (self.next_var is not None) and (self.next_var in unassigned_nodes):
+            node = self.next_var
+            self.next_var = None
+            return node, True
 
         if self.dataset in ['acasxu', 'test']:
         # if settings.DECISION == 'MIN_BOUND':

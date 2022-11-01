@@ -3,7 +3,7 @@ import torch
 import time
 import os
 
-from heuristic.falsification import gradient_falsification
+from heuristic.falsification import gradient_falsification, randomized_falsification
 from utils.read_vnnlib import read_vnnlib_simple
 from dnn_solver.spec import SpecificationVNNLIB
 from dnn_solver.dnn_solver import DNNSolver
@@ -21,14 +21,13 @@ if __name__ == '__main__':
     parser.add_argument('--attack', action='store_true')
     parser.add_argument('--timer', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
-    parser.add_argument('--timeout', type=int, default=3600)
+    parser.add_argument('--timeout', type=int, default=1000)
     parser.add_argument('--batch', type=int, default=1)
     parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
     device = torch.device(args.device)
 
-    tic = time.time()
     net = DNNParser.parse(args.net, args.dataset, args.device)
     spec_list = read_vnnlib_simple(args.spec, net.n_input, net.n_output)
 
@@ -40,6 +39,7 @@ if __name__ == '__main__':
     new_spec_list = []
     attacked = False
     status = 'UNKNOWN'
+    tic = time.time()
     if args.dataset != 'acasxu':
         if args.attack:
             Timers.tic('PGD attack')
@@ -49,18 +49,40 @@ if __name__ == '__main__':
                 status = 'SAT'
                 print(args.net, args.spec, status, time.time() - tic)
             Timers.toc('PGD attack')
+    else:
+        Timers.tic('Random attack')
+        for i, s in enumerate(spec_list):
+            print('attack')
+            spec = SpecificationVNNLIB(s)
+            rf = randomized_falsification.RandomizedFalsification(net, spec)
+            stat, adv = rf.eval(timeout=1)
+            if stat == 'violated':
+                attacked = True
+                status = 'SAT'
+                print(args.net, args.spec, status, time.time() - tic)
+                break
+        Timers.toc('Random attack')
 
+    if args.dataset != 'acasxu':
         bounds = spec_list[0][0]
         for i in spec_list[0][1]:
             new_spec_list.append((bounds, [i]))
         spec_list = new_spec_list
 
     if not attacked:
+        start_time = time.time()
         for i, s in enumerate(spec_list):
             spec = SpecificationVNNLIB(s)
             solver = DNNSolver(net, spec, args.dataset)
-            status = solver.solve(timeout=args.timeout)
-            if status in ['SAT', 'TIMEOUT']:
+            try:
+                status = solver.solve(timeout=args.timeout - int(time.time() - start_time))
+                if status in ['SAT', 'TIMEOUT']:
+                    break
+            except KeyboardInterrupt:
+                exit()
+            except:
+                status = 'ERROR'
+                # raise
                 break
 
         print(args.net, args.spec, status, time.time() - tic)

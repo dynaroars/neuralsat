@@ -159,6 +159,9 @@ class ReLUDomain:
 
     def optimize_input_bounds(self):
         # print([v.lb for v in self.model.getVars()])
+        if len(self.model.getVars()) > 100:
+            return False
+            
         for i, v in enumerate(self.model.getVars()):
             # lower bound
             v.lb = self.input_lower[i]
@@ -171,6 +174,9 @@ class ReLUDomain:
             if self.model.status == grb.GRB.INFEASIBLE:
                 self.unsat = True
                 return False
+            if self.model.status != grb.GRB.OPTIMAL:
+                continue
+                
             v.lb = self.model.objval
             # upper bound
             self.model.setObjective(v, grb.GRB.MAXIMIZE)
@@ -227,6 +233,9 @@ class ReLUDomain:
         # print('unassigned_nodes:', unassigned_nodes)
         # print(len(self.backsub_dict.keys()), self.backsub_dict.keys())
         variables = self.model.getVars()
+
+        if len(unassigned_nodes) > 50:
+            return -1
 
         for node in unassigned_nodes:
             if node not in backsub_dict:
