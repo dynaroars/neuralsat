@@ -16,3 +16,5 @@ HEURISTIC_DEEPPOLY = True
 FALSIFICATION_TIMEOUT = 0.5
 
 BENCHMARKS = ['acasxu', 'cifar2020', 'mnistfc']#, 'oval21', 'nn4sys', 'eran', 'marabou-cifar10']
+
+N_PROCS = 1

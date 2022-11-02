@@ -444,7 +444,7 @@ class DNNSolverMulti:
 
     def solve(self):
         print('Solve multi demo')
-        N_PROCS = 48
+        N_PROCS = settings.N_PROCS
 
         shared_queue = multiprocessing.Queue()
         shared_queue.put((self.spec, set([])))

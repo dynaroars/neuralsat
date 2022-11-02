@@ -54,7 +54,8 @@ class DNNSolver(TheorySolver):
         super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
         self.start_time = time.time()
 
-        torch.set_num_threads(1)
+        if settings.N_PROCS > 1:
+            torch.set_num_threads(1)
 
     def propagate(self):
         if settings.DEBUG:
@@ -82,7 +83,7 @@ class DNNSolver(TheorySolver):
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node(), full_assignment=full_assignment)
         Timers.toc('Theorem deduction')
 
-        if 0:
+        if 1:
             if time.time() - tic > 0.01 or 1:
                 if hasattr(self.dnn_theorem_prover, 'domains'):
                     print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
@@ -103,16 +104,6 @@ class DNNSolver(TheorySolver):
 
         # if self.dnn_theorem_prover.count == 50:
         #     exit()
-        if hasattr(self.dnn_theorem_prover, 'domains'):
-            vd = [d for _, d in self.dnn_theorem_prover.domains.items() if d.valid]
-            if len(vd) == 0 and self.dnn_theorem_prover.batch > 1:
-                self.set_early_stop('UNSAT')
-                return conflict_clause, new_assignments
-
-            if len(vd) > 100000:
-                self.set_early_stop('TIMEOUT')
-                return conflict_clause, new_assignments
-
 
         if not theory_sat:
             self.dnn_theorem_prover.restore_input_bounds()
@@ -149,6 +140,18 @@ class DNNSolver(TheorySolver):
 
         if settings.DEBUG:
             print('    - Check T-SAT: `SAT`')
+
+
+        if hasattr(self.dnn_theorem_prover, 'domains'):
+            vd = [d for _, d in self.dnn_theorem_prover.domains.items() if d.valid]
+            if len(vd) == 0 and self.dnn_theorem_prover.batch > 1:
+                self.set_early_stop('UNSAT')
+                return conflict_clause, new_assignments
+
+            if len(vd) > 100000:
+                self.set_early_stop('TIMEOUT')
+                return conflict_clause, new_assignments
+
 
 
         if is_full_assignment:
