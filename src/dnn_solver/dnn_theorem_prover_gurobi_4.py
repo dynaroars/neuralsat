@@ -18,9 +18,7 @@ import gc
 
 from batch_processing import deeppoly, domain, gradient_abstractor
 from dnn_solver.symbolic_network import SymbolicNetwork
-from dnn_solver.worker import *
 
-from utils.cache import BacksubCacher
 from utils.timer import Timers
 from abstract.crown import arguments
 from utils.misc import MP
@@ -44,7 +42,7 @@ class DNNTheoremProverGurobi:
             self.model = grb.Model()
             self.model.setParam('Threads', 1)
             self.model.setParam('OutputFlag', False)
-            self.model.setParam('FeasibilityTol', 1e-8)
+            # self.model.setParam('FeasibilityTol', 1e-8)
             
 
         # input bounds

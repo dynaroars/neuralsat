@@ -1,4 +1,3 @@
-from pprint import pprint
 import gurobipy as grb
 import torch.nn as nn
 import numpy as np
@@ -10,22 +9,17 @@ import copy
 import re
 import os
 
-from heuristic.falsification import randomized_falsification
-from heuristic.falsification import gradient_falsification
 from dnn_solver.symbolic_network import SymbolicNetwork
-from abstract.eran import deepzono, deeppoly
-from abstract.crown import CrownWrapper
 from dnn_solver.worker import *
 
-from utils.cache import BacksubCacher, AbstractionCacher
-from utils.read_nnet import NetworkNNET
+from utils.cache import BacksubCacher
 from utils.timer import Timers
-from utils.misc import MP
 import settings
 
-from auto_LiRPA import BoundedModule, BoundedTensor, PerturbationLpNorm
+from auto_LiRPA import BoundedTensor, PerturbationLpNorm
 from auto_LiRPA.utils import *
 from abstract.crown import *
+from abstract.crown import arguments
 
 
 class DNNTheoremProverCrown:
@@ -35,6 +29,10 @@ class DNNTheoremProverCrown:
         torch.manual_seed(arguments.Config["general"]["seed"])
         random.seed(arguments.Config["general"]["seed"])
         np.random.seed(arguments.Config["general"]["seed"])
+        
+        if arguments.Config['general']['search_cex']:
+            arguments.Config["general"]["batch"] = 1
+        
         self.batch = arguments.Config["general"]["batch"]
 
         self.net = net
@@ -107,7 +105,10 @@ class DNNTheoremProverCrown:
             c = torch.zeros((1, 1, net.n_output), dtype=settings.DTYPE, device=net.device)  # we only support c with shape of (1, 1, n)
             c[0, 0, target] = -1
 
-        print(f'##### True label: {y}, Tested against: {target} ######')
+
+        if arguments.Config["general"]["verbose"]:
+            print(f'[+] Label: {y}, Test: {target}')
+
         # if target != 9:
         #     self.verified = True
 
@@ -443,7 +444,7 @@ class DNNTheoremProverCrown:
             # print('\tfull_assignment:', full_assignment)
             cur_domain = self.domains[hash(frozenset(full_assignment.items()))]
 
-        else:
+        elif not arguments.Config['general']['search_cex']:
             mask, lAs, orig_lbs, orig_ubs, slopes, betas, intermediate_betas, selected_domains = self.get_domain_params(None, batch=self.batch)
 
             if len(selected_domains) > 0:
@@ -524,17 +525,22 @@ class DNNTheoremProverCrown:
             self.next_iter_implication = True
 
         # # random sample
-        # s_in = (self.ubs_init - self.lbs_init) * torch.rand(10, 784) + self.lbs_init
-        # # assert torch.all(s_in >= l)
-        # # assert torch.all(s_in <= u)
-        # s_out = self.net(s_in)
-        # for prop_mat, prop_rhs in self.spec.mat:
-        #     prop_mat = torch.from_numpy(prop_mat).float()
-        #     prop_rhs = torch.from_numpy(prop_rhs).float()
-        #     vec = prop_mat.matmul(s_out.t())
-        #     sat = torch.all(vec <= prop_rhs.reshape(-1, 1), dim=0)
-        #     if (sat==True).any():
-        #         self.solution = 'FOUNDED'
+        if arguments.Config['general']['search_cex']:
+            s_in = (self.ubs_init - self.lbs_init) * torch.rand((500, 784), device=self.net.device) + self.lbs_init
+            # print('random sample', s_in.shape)
+            # exit()
+            # assert torch.all(s_in >= l)
+            # assert torch.all(s_in <= u)
+            s_out = self.net(s_in)
+            for prop_mat, prop_rhs in self.spec.mat:
+                prop_mat = torch.from_numpy(prop_mat).float().to(self.net.device)
+                prop_rhs = torch.from_numpy(prop_rhs).float().to(self.net.device)
+                vec = prop_mat.matmul(s_out.t())
+                sat = torch.all(vec <= prop_rhs.reshape(-1, 1), dim=0)
+                if (sat==True).any():
+                    self.solution = 'FOUNDED'
+                    print('FOUNDED')
+                    exit()
 
 
         return True, implications, is_full_assignment

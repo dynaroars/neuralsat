@@ -12,6 +12,7 @@ from sat_solver.sat_solver import Solver
 from utils.dnn_parser import DNNParser
 from heuristic.decision import decider
 from utils.timer import Timers
+from abstract.crown import arguments
 import settings
 
 class TheorySolver(Solver):
@@ -45,8 +46,11 @@ class DNNSolver(TheorySolver):
         variables = [v for d in layers_mapping.values() for v in d]
         self.dataset = dataset
 
+        if arguments.Config["general"]["n_procs"] > 1:
+            torch.set_num_threads(1)
+            
         self.decider = decider.Decider(net, dataset)
-        if dataset in ['acasxu', 'test']:
+        if net.n_input <= 50:
             self.dnn_theorem_prover = DNNTheoremProverGurobi(net, spec=spec, decider=self.decider)
         else:
             self.dnn_theorem_prover = DNNTheoremProverCrown(net, spec=spec, decider=self.decider)
@@ -54,8 +58,6 @@ class DNNSolver(TheorySolver):
         super().__init__(variables=variables, layers_mapping=layers_mapping, decider=self.decider)
         self.start_time = time.time()
 
-        if settings.N_PROCS > 1:
-            torch.set_num_threads(1)
 
     def propagate(self):
         if settings.DEBUG:
@@ -83,10 +85,10 @@ class DNNSolver(TheorySolver):
         theory_sat, implications, is_full_assignment = self.dnn_theorem_prover(assignment, info=self._solver.get_current_assigned_node(), full_assignment=full_assignment)
         Timers.toc('Theorem deduction')
 
-        if 1:
+        if arguments.Config["general"]["verbose"]:
             if time.time() - tic > 0.01 or 1:
                 if hasattr(self.dnn_theorem_prover, 'domains'):
-                    print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic)
+                    print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), f'(valid domains={len([d for _, d in self.dnn_theorem_prover.domains.items() if d.valid])}/{len(self.dnn_theorem_prover.domains)})', time.time() - tic, 'SAT' if theory_sat else 'UNSAT')
                 else:
                     print(f'[{time.time()-self.start_time:.02f}]', self.dnn_theorem_prover.count, 'dnn_theorem_prover:', len([v for v, _, is_implied in self._solver.iterable_assignment() if not is_implied]), time.time() - tic, 'SAT' if theory_sat else 'UNSAT')
 

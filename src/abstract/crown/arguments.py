@@ -267,12 +267,15 @@ class ConfigHandler:
 Config = {
     'general': {
         'seed': 0,
-        'batch': 1,
+        'batch': 500,
         'conv_mode': 'patches',
         'deterministic': False,
         'double_fp': False,
         'loss_reduction_func': 'sum',
         'record_bounds': False,
+        'search_cex': False,
+        'n_procs': 1,
+        'verbose': False,
     },
     'data': {
         'num_outputs': 10
