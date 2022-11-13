@@ -23,7 +23,6 @@ if __name__ == '__main__':
     parser.add_argument('--timer', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
     parser.add_argument('--timeout', type=int, default=1000)
-    parser.add_argument('--batch', type=int, default=1)
     parser.add_argument('--file', type=str, default='res.txt')
     args = parser.parse_args()
 
@@ -37,7 +36,6 @@ if __name__ == '__main__':
         Timers.reset()
         Timers.tic('Main')
         
-    arguments.Config["general"]["batch"] = args.batch
     arguments.Config["general"]["verbose"] = args.verbose
 
     attacked = False
