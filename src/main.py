@@ -28,7 +28,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.device = torch.device(args.device) if args.dataset in ['mnist', 'cifar'] else torch.device('cpu')
-    print(args.device)
 
     net = DNNParser.parse(args.net, args.dataset, args.device)
     spec_list = read_vnnlib_simple(args.spec, net.n_input, net.n_output)
