@@ -7,6 +7,18 @@
 
 *NeuralSAT* uses a  DPLL(T)-based algorithm to check unsatisfiability. *NeuralSAT* applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. If conflicts arise, *NeuralSAT* determines the assignment decisions causing the conflicts, backtracks to erase such decisions, and learns clauses to avoid those decisions in the future. *NeuralSAT* repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns **SAT**, or until it no longer can backtrack, in which it returns **UNSAT**.
 
+Content
+====================
+- ```neuralsat\src```
+
+    Containing source code for *NeuralSAT* and some benchmarks taken from [VNNCOMP 21](https://github.com/stanleybak/vnncomp2021).
+
+- ```neuralsat\paper```
+
+
+- ```neuralsat\ref```
+
+
 
 Getting Started
 ====================
