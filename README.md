@@ -9,14 +9,9 @@
 
 Content
 ====================
-- ```neuralsat\src```
+- ```neuralsat```: Containing source code for *NeuralSAT*.
 
-    Containing source code for *NeuralSAT* and some benchmarks taken from [VNNCOMP 21](https://github.com/stanleybak/vnncomp2021).
-
-- ```neuralsat\paper```
-
-
-- ```neuralsat\ref```
+- ```benchmark```: Containing benchmarks taken from [VNNCOMP'21](https://github.com/stanleybak/vnncomp2021).
 
 
 
@@ -32,28 +27,28 @@ Getting Started
 ## Installation
 - Make sure you have CUDA and Gurobi properly installed.
 - Clone this repository.
-- Navigate to ```neuralsat/src```.
+- Navigate to ```neuralsat```.
 - Run ```pip install -r requirements.txt``` to install required pip packages.
-- Follow the instruction from [pytorch.org](https://pytorch.org/get-started/locally/) to install PyTorch(```pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116```).
+- Follow the instruction from [pytorch.org](https://pytorch.org/get-started/locally/) to install PyTorch.
 
 ## Usages
 
 - Navigate to *NeuralSAT* folder.
 
 ```bash
-cd neuralsat/src
+cd neuralsat
 ```
 
 - Minimal command
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH --dataset acasxu/mnist/cifar
+python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 ```
 
 - More options
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH --dataset acasxu/mnist/cifar [--verbose] [--attack] [--device {cpu,cuda}] [--timeout TIMEOUT] [--file OUTPUT_FILE]
+python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--solution]
 ```
 
 
@@ -61,26 +56,23 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH --dataset acasxu/mnist/cifar 
 <!-- - talk about the flags avaliable -->
 Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*. 
 
-- `--attack`: perform either `RandomAttack` or `PGDAttack` before running verification.
-- `--device`: run *NeuralSAT* on `cpu`/`cuda` (*NeuralSAT* only supports running on `cpu` with dataset `acasxu`)
-- `--file`: output file to save the verification result (text format in result file: `[STAT],[RUNTIME]`)
+- `--device`: run *NeuralSAT* on `cpu`/`cuda`
+- `--summary`: output file to save the verification result (text format in result file: `[STAT],[RUNTIME]`)
+- `--solution`: get a solution (counterexample) if *NeuralSAT* returns `SAT`
 
 ## Example
 
 - UNSAT case
 
 ```python
-python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx --spec benchmark/acasxu/spec/prop_1.vnnlib --dataset acasxu --verbose
+python3 main.py --net ../benchmark/mnistfc/nnet/mnist-net_256x2.onnx --spec ../benchmark/mnistfc/spec/prop_0_0.03.vnnlib --device cuda
+# UNSAT,4.603
 ```
 
-- SAT case (with attack)
+- SAT case
 
 ```python
-python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_2_4_batch_2000.onnx --spec benchmark/acasxu/spec/prop_2.vnnlib --dataset acasxu --verbose --attack 
-```
-
-- SAT case (without attack)
-
-```python
-python3 main.py --net benchmark/acasxu/nnet/ACASXU_run2a_2_4_batch_2000.onnx --spec benchmark/acasxu/spec/prop_2.vnnlib --dataset acasxu --verbose
+python3 main.py --net ../benchmark/mnistfc/nnet/mnist-net_256x2.onnx --spec ../benchmark/mnistfc/spec/prop_1_0.05.vnnlib --solution
+# SAT,0.123
+# adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
 ```
