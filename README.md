@@ -56,9 +56,12 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--time
 <!-- - talk about the flags avaliable -->
 Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*. 
 
-- `--device`: run *NeuralSAT* on `cpu`/`cuda`
-- `--summary`: output file to save the verification result (text format in result file: `[STAT],[RUNTIME]`)
-- `--solution`: get a solution (counterexample) if *NeuralSAT* returns `SAT`
+- `--net`: Load pretrained `ONNX` model from this specified path.
+- `--spec`: Path to `VNNLIB` specification file.
+- `--device`: Select device to run *NeuralSAT*, `cpu`/`cuda` (GPU).
+- `--summary`: Path to result file (format in result file: `[STAT],[RUNTIME]`).
+- `--solution`: Get a solution (counterexample) if *NeuralSAT* returns `SAT`.
+- `--timeout`: Timeout (in second) for verifying one instance.
 
 ## Example
 

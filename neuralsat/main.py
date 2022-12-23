@@ -12,12 +12,12 @@ import arguments
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net', type=str, required=True)
-    parser.add_argument('--spec', type=str, required=True)
-    parser.add_argument('--solution', action='store_true')
-    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
-    parser.add_argument('--timeout', type=int, default=1000)
-    parser.add_argument('--summary', type=str)
+    parser.add_argument('--net', type=str, required=True, help="load pretrained ONNX model from this specified path.")
+    parser.add_argument('--spec', type=str, required=True, help="path to VNNLIB specification file.")
+    parser.add_argument('--solution', action='store_true', help='get a solution (counterexample) if verifier returns SAT.')
+    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'], help='select device to run verifier, cpu or cuda (GPU).')
+    parser.add_argument('--timeout', type=int, default=1000, help='timeout (in second) for verifying one instance.')
+    parser.add_argument('--summary', type=str, help='path to result file.')
     args = parser.parse_args()
     args.device = torch.device(args.device)
 
