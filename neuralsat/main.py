@@ -17,7 +17,7 @@ if __name__ == '__main__':
     parser.add_argument('--solution', action='store_true')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
     parser.add_argument('--timeout', type=int, default=1000)
-    parser.add_argument('--summary', type=str, default='res.txt')
+    parser.add_argument('--summary', type=str)
     args = parser.parse_args()
     args.device = torch.device(args.device)
 
@@ -25,15 +25,20 @@ if __name__ == '__main__':
     print(net)
     specs = read_vnnlib(args.spec)
     # print(specs)
-    
+
     start_time = time.perf_counter()
     solver = NeuralSAT(net, specs)
 
     stat = solver.solve(timeout=args.timeout)
 
+    runtime = time.perf_counter() - start_time
 
-    msg = f'{stat:<50} time={time.perf_counter() - start_time:.03f}'
+    msg = f'{stat:<50} time={runtime:.03f}'
     logger.info(msg)
 
     if stat == arguments.ReturnStatus.SAT and args.solution:
         print('adv:', solver.get_assignment().flatten()[:5])
+
+    if args.summary:
+        with open(args.summary, 'w') as fp:
+            print(f'{stat},{runtime:.03f}', file=fp)
