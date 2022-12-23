@@ -9,6 +9,7 @@ from .beta_CROWN_solver import LiRPAConvNet
 
 from core.activation.relu_domain import ReLUDomain, add_domain_parallel
 from util.misc.logger import logger
+
 import arguments
 
 class ABCrownAbstraction:

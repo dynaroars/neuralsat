@@ -17,18 +17,33 @@ import random
 from collections import defaultdict, OrderedDict
 
 import torch
-import arguments
 
-# from abstract.crown import arguments
 from .auto_LiRPA import BoundedModule, BoundedTensor
 from .auto_LiRPA.bound_ops import BoundRelu
 from .auto_LiRPA.perturbations import *
-from .auto_LiRPA.utils import reduction_sum, stop_criterion_sum, stop_criterion_min
+from .auto_LiRPA.utils import (reduction_min, reduction_max, reduction_mean, reduction_sum,
+                               stop_criterion_sum, stop_criterion_min)
 
-from .lp_mip_solver import *
-
+import arguments
 
 total_func_time = total_prepare_time = total_bound_time = total_beta_bound_time = total_transfer_time = total_finalize_time = 0.0
+
+
+
+def reduction_str2func(reduction_func):
+    if type(reduction_func) == str:
+        if reduction_func == 'min':
+            return reduction_min
+        elif reduction_func == 'max':
+            return reduction_max
+        elif reduction_func == 'sum':
+            return reduction_sum
+        elif reduction_func == 'mean':
+            return reduction_mean
+        else:
+            raise NotImplementedError(f'Unknown reduction_func {reduction_func}')
+    else:
+        return reduction_func
 
 
 class LiRPAConvNet:
