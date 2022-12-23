@@ -19,16 +19,15 @@ Getting Started
 ====================
 
 ## Dependencies
-- Python 3.9
-- PyTorch
+- [Python](https://www.python.org/) (3.9)
+- [PyTorch](https://pytorch.org/get-started/locally/)
 - [CUDA](https://developer.nvidia.com/cuda-toolkit) (11.6)
 - [Gurobi](https://www.gurobi.com/): Gurobi requires a license (a free academic license is available).
 
 ## Installation
 - Make sure you have CUDA and Gurobi properly installed.
-- Clone this repository.
-- Navigate to ```neuralsat```.
-- Run ```pip install -r requirements.txt``` to install required pip packages.
+- Navigate to ```neuralsat``` folder.
+- Run ```pip install -r requirements.txt``` to install required python packages.
 - Follow the instruction from [pytorch.org](https://pytorch.org/get-started/locally/) to install PyTorch.
 
 ## Usages
@@ -68,14 +67,14 @@ Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*.
 - UNSAT case
 
 ```python
-python3 main.py --net ../benchmark/mnistfc/nnet/mnist-net_256x2.onnx --spec ../benchmark/mnistfc/spec/prop_0_0.03.vnnlib --device cuda
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
 # UNSAT,4.603
 ```
 
 - SAT case
 
 ```python
-python3 main.py --net ../benchmark/mnistfc/nnet/mnist-net_256x2.onnx --spec ../benchmark/mnistfc/spec/prop_1_0.05.vnnlib --solution
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution
 # SAT,0.123
 # adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
 ```
