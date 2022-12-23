@@ -1,8 +1,0 @@
-(assert (<= X_0 1))
-(assert (>= X_0 0))
-
-(assert (<= X_1 0.5))
-(assert (>= X_1 -0.5))
-
-(assert (>= Y_1 Y_0))
-(assert (>= Y_2 Y_0))
