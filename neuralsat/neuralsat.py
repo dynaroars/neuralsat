@@ -16,15 +16,15 @@ class NeuralSAT:
         self.attacker = Attacker(net, specs)
 
         # create multiple specs from DNF spec
-        if True: #TODO: fixme: not always True
-            self.raw_specs = self._preprocess_spec(self.raw_specs)
+        self.raw_specs = self._preprocess_spec(self.raw_specs)
 
 
     def _preprocess_spec(self, raw_specs):
-        new_raw_specs = []        
-        bounds = raw_specs[0][0]
-        for i in raw_specs[0][1]:
-            new_raw_specs.append((bounds, [i]))
+        new_raw_specs = []
+        for spec in raw_specs:
+            bounds = spec[0]
+            for i in spec[1]:
+                new_raw_specs.append((bounds, [i]))
         return new_raw_specs
 
     def solve(self, timeout=1000):
@@ -32,10 +32,9 @@ class NeuralSAT:
         start_time = time.perf_counter()
         stat = arguments.ReturnStatus.UNKNOWN
 
-        if self.check_adv_pre():
-            return arguments.ReturnStatus.SAT
-
-        # exit()
+        if arguments.Config['attack']:
+            if self.check_adv_pre():
+                return arguments.ReturnStatus.SAT
 
         for idx, spec in enumerate(self.raw_specs):
             vnnlib_spec = SpecVNNLIB(spec)
@@ -46,7 +45,7 @@ class NeuralSAT:
 
             stat = smt_solver.solve(timeout=remain_time)
 
-            msg = f'Spec {idx} ({vnnlib_spec.mat[0][0][0].tolist()}) stat={stat}'
+            msg = f'Spec {idx+1}/{len(self.raw_specs)} ({vnnlib_spec.mat[0][0][0].tolist()}) stat={stat}'
             logger.info(msg)
             if stat in [arguments.ReturnStatus.SAT, arguments.ReturnStatus.UNKNOWN]:
                 return stat

@@ -1,5 +1,5 @@
+import logging
 import torch
-
 
 class ReturnStatus:
 
@@ -16,8 +16,11 @@ class Configuration:
         
         self.seed = 0
         self.dtype = torch.float32
+        self.device = 'cpu'
         
         self.batch = 500
+        self.attack = False
+        self.logging_level = logging.INFO
 
         self.max_branch = 50000 # if exceed, return unknown
 

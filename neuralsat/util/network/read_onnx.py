@@ -166,6 +166,6 @@ class ONNXParser:
             print(f'Notice: this ONNX file has NHWC order. We assume the X in vnnlib is also flattend in in NHWC order {input_shape}')
 
         self.pytorch_model = PyTorchModelWrapper(model)
-        self.pytorch_model.n_input = math.prod(input_shape)
-        self.pytorch_model.n_output = math.prod(output_shape)
+        self.pytorch_model.n_input = np.prod(input_shape)
+        self.pytorch_model.n_output = np.prod(output_shape)
         self.pytorch_model.input_shape = input_shape

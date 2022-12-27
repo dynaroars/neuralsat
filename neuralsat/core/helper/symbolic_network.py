@@ -1,6 +1,7 @@
 import torch.nn.functional as F
 import torch.nn as nn
 import onnx2pytorch
+import numpy as np
 import torch
 import math
 
@@ -89,7 +90,7 @@ class SymbolicReLU:
 
     def __call__(self, x, assignment):
         output = torch.zeros_like(x, dtype=self.dtype, device=self.device)
-        assert math.prod(output.shape[:-1]) == len(self.variables), f'layers_mapping error: {x.shape}'
+        assert np.prod(output.shape[:-1]) == len(self.variables), f'layers_mapping error: {x.shape}'
 
         flag_break = not self.set_variables.issubset(set(assignment.keys()))
         mask = torch.tensor([assignment.get(v, False) for v in self.variables], device=self.device).view(x.shape[:-1])

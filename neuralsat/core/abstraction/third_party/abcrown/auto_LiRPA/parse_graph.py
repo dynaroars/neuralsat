@@ -43,8 +43,8 @@ def parse_graph(graph, inputs, params):
     
     nodesOP = []
     for n in graph.nodes():
-        # attrs = {k: n[k] for k in n.attributeNames()}
-        attrs = {k: torch.onnx.symbolic_helper._node_get(n, k) for k in n.attributeNames()}
+        attrs = {k: n[k] for k in n.attributeNames()}
+        # attrs = {k: torch.onnx.symbolic_helper._node_get(n, k) for k in n.attributeNames()}
         n_inputs = [name_with_scope(i) for i in n.inputs()]
         for i, out in enumerate(list(n.outputs())):
             nodesOP.append(Node(**{'name': name_with_scope(out),
