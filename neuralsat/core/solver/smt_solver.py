@@ -3,6 +3,8 @@ from core.solver.sat_solver.sat_solver import SATSolver
 from core.solver.sat_solver.solver import Solver
 from core.solver.heuristic.decider import Decider
 
+import arguments
+
 class SMTSolver(Solver):
 
     def __init__(self, net, spec):
@@ -32,13 +34,17 @@ class SMTSolver(Solver):
 
         theory_sat = self.theory_solver.propagate(self.sat_solver.get_assignment())
 
+        if arguments.Config['print_progress']:
+            self.theory_solver.print_progress()
+
         # unreachable case
         if not theory_sat:
             # check if there is no more branch
-            early_stop_status = self.theory_solver.get_early_stop_status()
-            if early_stop_status:
-                self.sat_solver.set_early_stop(early_stop_status)
-                return conflict_clause, implied_assignments
+            if arguments.Config['early_stop']:
+                early_stop_status = self.theory_solver.get_early_stop_status()
+                if early_stop_status:
+                    self.sat_solver.set_early_stop(early_stop_status)
+                    return conflict_clause, implied_assignments
 
             # TODO: Fixme: add multiple conflict clauses 
             self.theory_solver.clear_implications()

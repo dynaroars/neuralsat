@@ -24,6 +24,9 @@ class Configuration:
 
         self.max_branch = 50000 # if exceed, return unknown
 
+        self.early_stop = True # stop when all branches are verified
+        self.print_progress = True # print remaining domains
+
     def __getitem__(self, key):
         return self.__dict__[key]
 

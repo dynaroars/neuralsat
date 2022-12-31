@@ -40,7 +40,9 @@ class TheorySolver:
             return arguments.ReturnStatus.UNKNOWN
         return None
 
-
+    def print_progress(self):
+        self.theory.print_progress()
+        
 
 class ReLUTheory:
 
@@ -261,7 +263,6 @@ class ReLUTheory:
 
 
     def propagate(self, assignment):
-        self.print_progress()
         logger.debug('ReLUTheory propagate')
 
         if len(assignment) == 0:
