@@ -1,16 +1,13 @@
-import torch
-import copy
-import gurobipy as grb
+from collections import defaultdict
+import torch.nn as nn
 import numpy as np
 import contextlib
-import multiprocessing
-import torch.nn as nn
-import contextlib
 import random
+import torch
+import copy
 import time
 import re
 import os
-from collections import defaultdict
 
 class ReLUDomain:
     """

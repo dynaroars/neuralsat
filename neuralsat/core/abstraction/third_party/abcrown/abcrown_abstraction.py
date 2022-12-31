@@ -3,9 +3,9 @@ import torch.nn as nn
 import numpy as np
 import torch
 
-from .auto_LiRPA import BoundedTensor, PerturbationLpNorm
 from .auto_LiRPA.utils import stop_criterion_sum, stop_criterion_batch_any
-from .beta_CROWN_solver import LiRPAConvNet
+from .auto_LiRPA import BoundedTensor, PerturbationLpNorm
+from .lirpa import LiRPA
 
 from core.activation.relu_domain import ReLUDomain, add_domain_parallel
 from util.misc.logger import logger
@@ -65,15 +65,15 @@ class ABCrownAbstraction:
         self.x = BoundedTensor(data, ptb).to(self.device)
 
         c, self.decision_threshold, y, pidx = self.spec.extract()
-        self.lirpa = LiRPAConvNet(self.net.layers, 
-                                  y, 
-                                  pidx, 
-                                  device=self.device, 
-                                  in_size=input_shape, 
-                                  deterministic=False, 
-                                  conv_mode='patches', 
-                                  c=c,
-                                  rhs=self.decision_threshold)
+        self.lirpa = LiRPA(model_ori=self.net.layers, 
+                           pred=y, 
+                           test=pidx, 
+                           device=self.device, 
+                           in_size=input_shape, 
+                           deterministic=False, 
+                           conv_mode='patches', 
+                           c=c,
+                           rhs=self.decision_threshold)
 
         self.assignment_mapping = {}
         for lid, lnodes in self.net.layers_mapping.items():

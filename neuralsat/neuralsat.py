@@ -12,6 +12,9 @@ class NeuralSAT:
         self.net = net
         self.raw_specs = specs
 
+        # counter-example
+        self._assignment = None 
+
         # adv attack
         self.attacker = Attacker(net, specs)
 
@@ -39,6 +42,9 @@ class NeuralSAT:
         for idx, spec in enumerate(self.raw_specs):
             spec_start_time = time.perf_counter()
             vnnlib_spec = SpecVNNLIB(spec)
+
+            logger.info(f'Spec {idx+1}/{len(self.raw_specs)} ({vnnlib_spec.mat[0][0][0].tolist()})')
+
             smt_solver = SMTSolver(self.net, vnnlib_spec)
             remain_time = timeout - (time.perf_counter() - start_time)
             if remain_time < 0:
@@ -46,8 +52,8 @@ class NeuralSAT:
 
             stat = smt_solver.solve(timeout=remain_time)
 
-            msg = f'Spec {idx+1}/{len(self.raw_specs)} ({vnnlib_spec.mat[0][0][0].tolist()}) stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}'
-            logger.info(msg)
+            logger.info(f'Spec {idx+1}/{len(self.raw_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')
+
             if stat in [arguments.ReturnStatus.SAT, arguments.ReturnStatus.UNKNOWN]:
                 return stat
         return stat

@@ -1,6 +1,7 @@
 import torch
 
-from core.abstraction.third_party.abcrown.branching_heuristics import choose_node_parallel_kFSB
+from .branching_heuristics import choose_node_parallel_kFSB
+
 from util.misc.logger import logger
 import arguments
 
