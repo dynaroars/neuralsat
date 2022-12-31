@@ -67,6 +67,24 @@ class PyTorchModelWrapper(nn.Module):
         return x
 
 
+def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
+    """
+    Utility function for computing output of convolutions
+    takes a tuple of (h,w) and returns a tuple of (h,w)
+    """
+    if type(h_w) is not tuple:
+        h_w = (h_w, h_w)
+    if type(kernel_size) is not tuple:
+        kernel_size = (kernel_size, kernel_size)
+    if type(stride) is not tuple:
+        stride = (stride, stride)
+    if type(pad) is not tuple:
+        pad = (pad, pad)
+    h = (h_w[0] + (2 * pad[0]) - (dilation * (kernel_size[0] - 1)) - 1) // stride[0] + 1
+    w = (h_w[1] + (2 * pad[1]) - (dilation * (kernel_size[1] - 1)) - 1) // stride[1] + 1
+    return h, w
+
+
 def load_onnx(path):
     if path.endswith('.gz'):
         onnx_model = onnx.load(gzip.GzipFile(path))
@@ -105,19 +123,11 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
         return seq_model, input_shape, output_shape, False
 
 
-    # # Check model input shape.
-    # is_channel_last = False
-    # if onnx_shape != input_shape:
-    #     # Change channel location.
-    #     onnx_shape = onnx_shape[2:] + onnx_shape[:2]
-    #     if onnx_shape == input_shape:
-    #         is_channel_last = True
-    #     else:
-    #         print(f"Unexpected input shape in onnx: {onnx_shape}, given {input_shape}")
-
     # Fixup converted ONNX model. For ResNet we directly return; for other models, we convert them to a Sequential model.
     # We also need to handle NCHW and NHWC formats here.
-    conv_c, conv_h, conv_w = input_shape
+    if len(input_shape) == 4:
+        conv_c, conv_h, conv_w = input_shape[1:]
+
     modules = list(pytorch_model.modules())[1:]
     new_modules = []
     need_permute = False
