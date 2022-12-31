@@ -37,17 +37,6 @@ class ReLUDomain:
         self.unsat = False
         self.next_decision = None
 
-        # self.left = None
-        # self.right = None
-        # self.parent = None
-        # self.split = False
-        # self.depth = depth
-        # self.gnn_decision = gnn_decision
-        # primals {"p": primal values for input, pre_relu, and obj output primals, 
-        #   "z": integer values for each relu layer}
-        # z: stable relus have -1, others all unstable neuron from 0 to 1
-        # self.priority = priority  # Higher priority will be more likely to be selected.
-
     def get_assignment(self):
         assignment = {}
         for lid, (lnodes, lsigns) in enumerate(self.history):
@@ -89,11 +78,6 @@ class ReLUDomain:
         if self.beta is not None:
             self.beta = [b.to(device='cpu', non_blocking=True) for b in self.beta]
         
-        # if self.primals is not None:
-        #     for layer_idx, _ in enumerate(self.primals['p']):
-        #         self.primals['p'][layer_idx] = self.primals['p'][layer_idx].to(device='cpu', non_blocking=True)
-        #     for layer_idx, _ in enumerate(self.primals['z']):
-        #         self.primals['z'][layer_idx] = self.primals['z'][layer_idx].to(device='cpu', non_blocking=True)
         return self
 
     def to_device(self, device, partial=False):
@@ -129,11 +113,7 @@ class ReLUDomain:
                     self.intermediate_betas[split_layer][intermediate_layer]["ub"].to(device, non_blocking=True)
         if self.beta is not None:
             self.beta = [b.to(device, non_blocking=True) for b in self.beta]
-        # if self.primals is not None:
-        #     for layer_idx, _ in enumerate(self.primals['p']):
-        #         self.primals['p'][layer_idx] = self.primals['p'][layer_idx].to(device, non_blocking=True)
-        #     for layer_idx, _ in enumerate(self.primals['z']):
-        #         self.primals['z'][layer_idx] = self.primals['z'][layer_idx].to(device, non_blocking=True)
+
         return self
 
 
@@ -142,8 +122,16 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, bet
                         split_history=None, branching_decision=None, decision_thresh=0,
                         intermediate_betas=None, primals=None, priorities=None):
 
+    # change returned lAs in beta_solver, so that lAs need to be rearranged
+    instance_lAs = [[] for _ in range(len(lb))]
+    for item in lA:
+        for i in range(len(instance_lAs)):
+            instance_lAs[i].append(item[i:i+1])
+
     domain_list = []
     batch = len(selected_domains)
+    decision_thresh_cpu = decision_thresh.to('cpu')
+
     for i in range(batch):
         # first half batch: active neurons
         new_history = copy.deepcopy(selected_domains[i].history)
@@ -158,17 +146,22 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, bet
                 print(branching_decision[i])
                 raise RuntimeError
 
-        left = ReLUDomain(lA[i], lb[i], ub[i], lb_all[i], up_all[i], slope[i], beta[i],
+        left = ReLUDomain(instance_lAs[i], 
+                          lb[i], 
+                          ub[i], 
+                          lb_all[i], 
+                          up_all[i], 
+                          slope[i], 
+                          beta[i],
                           split_history=split_history[i],
                           history=new_history,
                           intermediate_betas=intermediate_betas[i],
                           primals=primals[i] if primals is not None else None,
                           assignment_mapping=selected_domains[i].assignment_mapping)
         
-        if left.lower_bound >= decision_thresh:
+        if (left.lower_bound > decision_thresh_cpu).any():
             left.valid = False
             left.unsat = True
-
         domain_list.append(left)
         
         # second half batch: inactive neurons
@@ -177,14 +170,20 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, bet
             new_history[branching_decision[i][0]][0].append(branching_decision[i][1])  # second half batch: inactive neurons
             new_history[branching_decision[i][0]][1].append(-1.0)  # second half batch: inactive neurons
 
-        right = ReLUDomain(lA[i+batch], lb[i+batch], ub[i+batch], lb_all[i+batch], up_all[i+batch], slope[i+batch],  beta[i+batch], 
+        right = ReLUDomain(instance_lAs[i+batch], 
+                           lb[i+batch], 
+                           ub[i+batch], 
+                           lb_all[i+batch], 
+                           up_all[i+batch], 
+                           slope[i+batch],  
+                           beta[i+batch], 
                            split_history=split_history[i+batch],
                            history=new_history,
                            intermediate_betas=intermediate_betas[i + batch],
                            primals=primals[i + batch] if primals is not None else None,
                            assignment_mapping=selected_domains[i].assignment_mapping)
 
-        if right.lower_bound >= decision_thresh:
+        if (right.lower_bound > decision_thresh_cpu).any():
             right.valid = False
             right.unsat = True
         domain_list.append(right)

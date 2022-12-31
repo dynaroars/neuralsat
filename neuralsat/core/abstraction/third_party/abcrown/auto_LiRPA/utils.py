@@ -49,6 +49,12 @@ def stop_criterion_min(threshold=0):
 def stop_criterion_max(threshold=0):
     return lambda x: (x.max(1, keepdim=True).values > threshold)
 
+def stop_criterion_batch_any(threshold=0):
+    # may unexpected broadcast, pay attention to the shape of threshold
+    # x shape: batch, number_bounds; threshold shape: batch, number_bounds
+    # print('threshold', threshold.shape)
+    return lambda x: (x > threshold).any(dim=1)
+    
 # Create a namedtuple with defaults
 def namedtuple_with_defaults(name, attr, defaults):
     assert sys.version_info.major == 3

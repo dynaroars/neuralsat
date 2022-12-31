@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--timeout', type=int, default=1000, help='timeout (in second) for verifying one instance.')
     parser.add_argument('--summary', type=str, help='path to result file.')
     args = parser.parse_args()
-    args.device = torch.device(args.device)
+    arguments.Config['device'] = args.device
 
     net = NetworkParser.parse(args.net, args.device)
     print(net)

@@ -19,6 +19,53 @@ class SpecVNNLIB:
         self.true_labels = None
         self.target_labels = None
 
+        # self.preprocess()
+
+    # def preprocess(self):
+    #     print('preprocess vnnlib spec')
+    #     print(self.mat)
+    #     prop_mat, prop_rhs = self.mat[0]
+
+    #     assert len(prop_mat) == 1
+    #     n_output = len(prop_mat[0])
+
+    #     y = np.where(prop_mat[0] == 1)[0]
+    #     if len(y) != 0:
+    #         y = int(y)
+    #     else:
+    #         y = None
+    #     target = np.where(prop_mat[0] == -1)[0]  # target label
+    #     target = int(target) if len(target) != 0 else None  # Fix constant specification with no target label.
+    #     if y is not None and target is None:
+    #         y, target = target, y  # Fix vnnlib with >= const property.
+    #     decision_threshold = prop_rhs[0]
+
+
+    #     if y is not None:
+    #         if n_output > 1:
+    #             c = torch.zeros((1, 1, n_output), dtype=self.dtype)  # we only support c with shape of (1, 1, n)
+    #             c[0, 0, y] = 1
+    #             c[0, 0, target] = -1
+    #         else:
+    #             # Binary classifier, only 1 output. Assume negative label means label 0, postive label means label 1.
+    #             c = (float(y) - 0.5) * 2 * torch.ones(size=(1, 1, 1), dtype=self.dtype)
+    #     else:
+    #         # if there is no ture label, we only verify the target output
+    #         c = torch.zeros((1, 1, n_output), dtype=self.dtype)  # we only support c with shape of (1, 1, n)
+    #         c[0, 0, target] = -1
+
+    #     # print(c, decision_threshold)
+
+    #     self.y = y
+    #     self.target = target
+    #     self.c = c
+    #     self.decision_threshold = decision_threshold
+
+    #     print('c:', self.c)
+    #     print('decision_threshold:', self.decision_threshold)
+    #     print('y:', self.y)
+    #     print('pidx:', self.target)
+    #     exit()
 
     def extract(self):
         # print('preprocess vnnlib spec')
@@ -49,13 +96,14 @@ class SpecVNNLIB:
                 else:
                     target_labels.append(None)
 
-            self.true_labels = torch.tensor(true_labels, dtype=self.dtype, device=self.device).unsqueeze(0)
-            self.target_labels = torch.tensor(target_labels, dtype=self.dtype, device=self.device).unsqueeze(0)
+            self.true_labels = np.array([true_labels])
+            self.target_labels = np.array([target_labels])
 
-        # print('c   ', self.prop_mat)
-        # print('rhs ', self.prop_rhs.shape)
-        # print('y   ', self.true_labels)
-        # print('pidx', self.target_labels)
+        print('c   ', self.prop_mat)
+        print('rhs ', self.prop_rhs)
+        print('y   ', self.true_labels)
+        print('pidx', self.target_labels)
+        # exit()
 
         return self.prop_mat, self.prop_rhs, self.true_labels, self.target_labels
 

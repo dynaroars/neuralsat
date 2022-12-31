@@ -820,6 +820,7 @@ class BoundedModule(nn.Module):
                         aux_reference_bounds[model.inputs[0].name] = best_intermediate_bounds[-1]
 
             ret_l, ret_u = ret[0], ret[1]
+            # print('iter:', i, ret_l.data.flatten())
 
             if beta and opt_bias and not single_node_split:
                 ret_l = ret_l + self.beta_bias()
@@ -947,6 +948,8 @@ class BoundedModule(nn.Module):
             scheduler.step()
             last_l = loss.item()
             last_total_loss = total_loss.detach().clone()
+            # print('iter:', i, loss.item())
+            # print()
 
         # if beta and intermediate_beta_enabled and verbose > 0:
         if verbose > 0:

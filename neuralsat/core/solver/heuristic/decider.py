@@ -1,6 +1,7 @@
 import torch
 
 from core.abstraction.third_party.abcrown.branching_heuristics import choose_node_parallel_kFSB
+from util.misc.logger import logger
 import arguments
 
 class Decider:
@@ -23,6 +24,7 @@ class Decider:
         # print('assignment:', self.current_domain.get_assignment())
         # print('cached decision:', self.current_domain.next_decision)
         if self.current_domain.next_decision is not None:
+            logger.debug(f'\t\tdecider_get_one {self.current_domain.next_decision}')
             return self.current_domain.next_decision
 
         # print('batch:', self.batch)
@@ -42,7 +44,7 @@ class Decider:
                                                        betas=betas,
                                                        history=history)
 
-        # print(branching_decision)
+        logger.debug(f'\t\tdecider_get_one {branching_decision}')
         node = self.convert_crown_decision(branching_decision[0])
         self.current_domain.next_decision = node
         return node
@@ -74,6 +76,7 @@ class Decider:
                                                        betas=betas,
                                                        history=history)
                                                        
+        logger.debug(f'\t\tdecider_get_batch (first 5) {branching_decision[:5]}')
         for idx, d in enumerate(selected_domains):
             d.valid = False # mark as processed
             if d.next_decision is None:
@@ -133,7 +136,7 @@ class Decider:
 
         lower_bounds = []
         for j in range(len(lower_all[0])):
-            lower_bounds.append(torch.cat([lower_all[i][j]for i in range(batch)]))
+            lower_bounds.append(torch.cat([lower_all[i][j] for i in range(batch)]))
         lower_bounds = [t.to(device=self.device, non_blocking=True) for t in lower_bounds]
 
         upper_bounds = []

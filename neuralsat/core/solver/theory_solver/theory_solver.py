@@ -160,7 +160,7 @@ class ReLUTheory:
     def print_progress(self):
         self.n_call += 1
         msg = f'Iteration={self.n_call:<5} (remain={len(self.get_valid_domains())}/{len(self.all_domains)})'
-        logger.debug(msg)
+        logger.info(msg)
 
 
     def get_valid_domains(self):
@@ -168,14 +168,14 @@ class ReLUTheory:
 
 
     def process_implied_assignment(self, assignment):
-        # print('process_implied_assignment')
+        logger.debug('\tprocess_implied_assignment')
         # clear implications for next iteration
         self.implications = {}
         return True
 
 
     def process_init_assignment(self):
-        # print('process_init_assignment')
+        logger.debug('\tprocess_init_assignment')
         init_domain = self.abstractor.forward(input_lower=self.lbs_init, input_upper=self.ubs_init, extra_params=None)
         if init_domain.unsat: 
             return False
@@ -200,7 +200,7 @@ class ReLUTheory:
 
 
     def process_new_assignment(self, assignment):
-        # print('process_new_assignment', self.get_non_implied_assignment(assignment))
+        logger.debug('\tprocess_new_assignment')
         last_assignment = self.get_last_assignment(assignment)
         # print('last assignment:', last_assignment)
         last_domain = self.get_domain(last_assignment)
@@ -222,7 +222,7 @@ class ReLUTheory:
 
 
     def process_cached_assignment(self, assignment, current_domain):
-        # print('process_cached_assignment')
+        logger.debug('\tprocess_cached_assignment')
         if current_domain.unsat:
             return False
 
@@ -245,6 +245,7 @@ class ReLUTheory:
         return True
 
     def process_extra_domains(self):
+        logger.debug('\tprocess_extra_domains')
         decisions, selected_domains, extra_params = self.sat_decider.get_batch_decisions(None)
         if selected_domains:
             assert len(decisions) == len(selected_domains), print(f'#decisions={len(decisions)}, #domains={len(selected_domains)}')
@@ -254,15 +255,14 @@ class ReLUTheory:
             self.add_domain(domains)
 
     def process_full_assignment(self, assignment):
-        # print('process_full_assignment')
+        logger.debug('\tprocess_full_assignment')
         raise NotImplementedError
 
 
 
     def propagate(self, assignment):
-        # print('ReLUTheory propagate')
-
         self.print_progress()
+        logger.debug('ReLUTheory propagate')
 
         if len(assignment) == 0:
             return self.process_init_assignment()

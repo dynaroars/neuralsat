@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from .auto_LiRPA import BoundedTensor, PerturbationLpNorm
-from .auto_LiRPA.utils import stop_criterion_sum
+from .auto_LiRPA.utils import stop_criterion_sum, stop_criterion_batch_any
 from .beta_CROWN_solver import LiRPAConvNet
 
 from core.activation.relu_domain import ReLUDomain, add_domain_parallel
@@ -21,7 +21,6 @@ class ABCrownAbstraction:
         self.device = net.device
         self.dtype = arguments.Config['dtype']
 
-        self.preprocess_spec()
         self.init_arguments()
         self.init_crown()
 
@@ -29,19 +28,19 @@ class ABCrownAbstraction:
     def init_arguments(self):
         arguments.Config['solver'] = {}
         arguments.Config['solver']['alpha-crown'] = {}
-        arguments.Config['solver']['alpha-crown']['lr_alpha'] = 0.01
-        arguments.Config['solver']['alpha-crown']['iteration'] = 10
-        arguments.Config['solver']['alpha-crown']['share_slopes'] = True
-        # arguments.Config['solver']['alpha-crown']['no_joint_opt'] = False
+        arguments.Config['solver']['alpha-crown']['lr_alpha'] = 0.1
+        arguments.Config['solver']['alpha-crown']['iteration'] = 50
+        arguments.Config['solver']['alpha-crown']['share_slopes'] = False
+        arguments.Config['solver']['alpha-crown']['no_joint_opt'] = False
 
         arguments.Config['solver']['beta-crown'] = {}
         arguments.Config['solver']['beta-crown']['beta'] = True
         arguments.Config['solver']['beta-crown']['beta_warmup'] = True
         arguments.Config['solver']['beta-crown']['lr_alpha'] = 0.01
-        arguments.Config['solver']['beta-crown']['lr_beta'] = 0.05
+        arguments.Config['solver']['beta-crown']['lr_beta'] = 0.03
         arguments.Config['solver']['beta-crown']['lr_decay'] = 0.98
         arguments.Config['solver']['beta-crown']['optimizer'] = 'adam'
-        arguments.Config['solver']['beta-crown']['iteration'] = 10
+        arguments.Config['solver']['beta-crown']['iteration'] = 20
 
         arguments.Config['general'] = {}
         arguments.Config['general']['loss_reduction_func'] = 'mean'
@@ -55,43 +54,6 @@ class ABCrownAbstraction:
         arguments.Config['bab']['branching']['reduceop'] = 'min'
 
 
-    def preprocess_spec(self):
-        prop_mat, prop_rhs = self.spec.mat[0]
-
-        assert len(prop_mat) == 1
-        y = np.where(prop_mat[0] == 1)[0]
-        if len(y) != 0:
-            y = int(y)
-        else:
-            y = None
-        target = np.where(prop_mat[0] == -1)[0]  # target label
-        target = int(target) if len(target) != 0 else None  # Fix constant specification with no target label.
-        if y is not None and target is None:
-            y, target = target, y  # Fix vnnlib with >= const property.
-        decision_threshold = prop_rhs[0]
-
-
-        if y is not None:
-            if self.net.n_output > 1:
-                c = torch.zeros((1, 1, self.net.n_output), dtype=self.dtype, device=self.device)  # we only support c with shape of (1, 1, n)
-                c[0, 0, y] = 1
-                c[0, 0, target] = -1
-            else:
-                # Binary classifier, only 1 output. Assume negative label means label 0, postive label means label 1.
-                c = (float(y) - 0.5) * 2 * torch.ones(size=(1, 1, 1), dtype=self.dtype, device=self.device)
-        else:
-            # if there is no ture label, we only verify the target output
-            c = torch.zeros((1, 1, self.net.n_output), dtype=self.dtype, device=self.device)  # we only support c with shape of (1, 1, n)
-            c[0, 0, target] = -1
-
-        # print(c, decision_threshold)
-
-        self.y = y
-        self.target = target
-        self.c = c
-        self.decision_threshold = decision_threshold
-
-
     def init_crown(self):
         input_shape = self.net.input_shape
         x_range = torch.tensor(self.spec.bounds, dtype=self.dtype, device=self.device)
@@ -102,15 +64,16 @@ class ABCrownAbstraction:
         ptb = PerturbationLpNorm(norm=np.inf, eps=None, x_L=data_min, x_U=data_max)
         self.x = BoundedTensor(data, ptb).to(self.device)
 
+        c, self.decision_threshold, y, pidx = self.spec.extract()
         self.lirpa = LiRPAConvNet(self.net.layers, 
-                                  self.y, 
-                                  self.target, 
+                                  y, 
+                                  pidx, 
                                   device=self.device, 
                                   in_size=input_shape, 
                                   deterministic=False, 
                                   conv_mode='patches', 
-                                  c=self.c)
-
+                                  c=c,
+                                  rhs=self.decision_threshold)
 
         self.assignment_mapping = {}
         for lid, lnodes in self.net.layers_mapping.items():
@@ -119,12 +82,9 @@ class ABCrownAbstraction:
 
     
     def forward(self, input_lower, input_upper, extra_params=None):
-        # print('ABcrown forward hehe')
+        logger.debug('\t\tabstraction forward')
         if extra_params is None: # initialize
-            output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, pre_relu_indices, slope, history = self.lirpa.build_the_model(None, self.x, stop_criterion_func=stop_criterion_sum(self.decision_threshold))
-
-            # save ReLU node indices
-            self.pre_relu_indices = pre_relu_indices
+            output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.lirpa.build_the_model(None, self.x, stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
 
             # Keep only the alpha for the last layer.
             new_slope = defaultdict(dict)
@@ -143,7 +103,7 @@ class ABCrownAbstraction:
                                      primals=primals, 
                                      assignment_mapping=self.assignment_mapping).to_device(self.net.device, partial=True)
 
-            if output_lb >= self.decision_threshold:
+            if (output_lb > self.decision_threshold).any():
                 init_domain.unsat = True
 
             return init_domain

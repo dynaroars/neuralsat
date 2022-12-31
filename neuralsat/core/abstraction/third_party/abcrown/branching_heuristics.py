@@ -422,15 +422,11 @@ def choose_node_parallel_FSB(lower_bounds, upper_bounds, orig_mask, net, pre_rel
 
     return final_decision
 
-@torch.no_grad()
-def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, branching_candidates=5, branching_reduceop='min', slopes=None, betas=None, history=None, use_beta=False, keep_all_decision=False, prioritize_slopes='none'):
 
-    batch = len(orig_mask[0])
-    # Mask is 1 for unstable neurons. Otherwise it's 0.
-    mask = orig_mask
-    reduce_op = get_branching_op(branching_reduceop)
-    topk = branching_candidates
 
+def branching_scores_kfsb(lower_bounds, upper_bounds, net, pre_relu_indices, lAs, batch,
+                          mask, reduce_op, number_bounds, prioritize_slopes='none'):
+    """Compute branching scores for kfsb."""
     score = []
     intercept_tb = []
     relu_idx = -1
@@ -459,26 +455,29 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
 
     # Compute BaBSR scores, starting from the last layer.
     for layer_i, layer in enumerate(reversed(net.net.relus)):
-        this_layer_mask = mask[relu_idx]
+        this_layer_mask = mask[pre_relu_indices[relu_idx]].unsqueeze(1)
+        # print('lAs[pre_relu_indices[relu_idx]]:', lAs[pre_relu_indices[relu_idx]].shape)
+        # print('this_layer_mask:', this_layer_mask.shape)
         if prioritize_slopes == 'positive':
             # Prioritize splits with only positive lA.
-            normal_score_mask = (lAs[relu_idx] >= 0).view(batch, -1) * this_layer_mask
-            reduced_score_mask = (lAs[relu_idx] < 0).view(batch, -1) * this_layer_mask
+            normal_score_mask = (lAs[pre_relu_indices[relu_idx]] >= 0).view(batch, number_bounds, -1) * this_layer_mask
+            reduced_score_mask = (lAs[pre_relu_indices[relu_idx]] < 0).view(batch, number_bounds, -1) * this_layer_mask
         elif prioritize_slopes == 'negative':
             # Prioritize splits with only positive lA.
-            normal_score_mask = (lAs[relu_idx] <= 0).view(batch, -1) * this_layer_mask
-            reduced_score_mask = (lAs[relu_idx] > 0).view(batch, -1) * this_layer_mask
+            normal_score_mask = (lAs[pre_relu_indices[relu_idx]] <= 0).view(batch, number_bounds, -1) * this_layer_mask
+            reduced_score_mask = (lAs[pre_relu_indices[relu_idx]] > 0).view(batch, number_bounds, -1) * this_layer_mask
         elif prioritize_slopes != 'none':
             raise ValueError(f'Unknown prioritize_slopes parameter {prioritize_slopes}')
 
-        ratio = lAs[relu_idx]
+        ratio = lAs[pre_relu_indices[relu_idx]]
         ratio_temp_0, ratio_temp_1 = compute_ratio(lower_bounds[pre_relu_indices[relu_idx]],
                                                    upper_bounds[pre_relu_indices[relu_idx]])
 
         # Intercept score, used as a backup score in BaBSR. A lower (more negative) score is better.
         intercept_temp = torch.clamp(ratio, max=0)
-        intercept_candidate = intercept_temp * ratio_temp_1
-        reshaped_intercept_candidate = intercept_candidate.view(batch, -1) * this_layer_mask
+        intercept_candidate = intercept_temp * ratio_temp_1.unsqueeze(1)
+        reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
+        reshaped_intercept_candidate = reshaped_intercept_candidate.mean(1)   # mean over number_bounds dim
         if prioritize_slopes != 'none':
             adjusted_intercept_candidate = normalize_scores(reshaped_intercept_candidate, normal_score_mask, reduced_score_mask, larger_is_better=False)
         else:
@@ -511,15 +510,18 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
                         if type(ll) == BoundConv:
                             b_temp += ll.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
         else:
-            b_temp = input_node.inputs[-3].param.detach().unsqueeze(-1).unsqueeze(-1)  # for BN, bias is the -3th inputs
+            # for BN, bias is the -3th inputs
+            b_temp = input_node.inputs[-3].param.detach().view(-1, *([1] * (ratio.ndim - 3)))
 
         b_temp = b_temp * ratio
         # Estimated bounds of the two sides of the bounds.
+        ratio_temp_0 = ratio_temp_0.unsqueeze(1)
         bias_candidate_1 = b_temp * (ratio_temp_0 - 1)
         bias_candidate_2 = b_temp * ratio_temp_0
         bias_candidate = reduce_op(bias_candidate_1, bias_candidate_2)  # max for babsr by default
         score_candidate = bias_candidate + intercept_candidate
-        score_candidate = score_candidate.abs().view(batch, -1) * this_layer_mask
+        score_candidate = score_candidate.abs().view(batch, number_bounds, -1) * this_layer_mask
+        score_candidate = score_candidate.mean(1)  # mean over number_bounds dim
         if prioritize_slopes != 'none':
             adjusted_score_candidate = normalize_scores(score_candidate, normal_score_mask, reduced_score_mask, larger_is_better=True)
             remaining_branches = normal_score_mask.sum(dim=1, dtype=torch.int32)
@@ -531,6 +533,20 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
 
         relu_idx -= 1
 
+    return score, intercept_tb
+
+
+@torch.no_grad()
+def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_relu_indices, lAs, branching_candidates=5, branching_reduceop='min', slopes=None, betas=None, history=None, use_beta=False, keep_all_decision=False, prioritize_slopes='none'):
+
+    batch = len(orig_mask[0])
+    mask = orig_mask # Mask is 1 for unstable neurons. Otherwise it's 0.
+    reduce_op = get_branching_op(branching_reduceop)
+    topk = branching_candidates
+    number_bounds = net.c.shape[1]
+
+    score, intercept_tb = branching_scores_kfsb(lower_bounds, upper_bounds, net, pre_relu_indices, lAs, batch, mask, reduce_op, number_bounds, prioritize_slopes)
+    
     final_decision = []
 
     # real batch = batch * 2, since we have two kinds of scores.
@@ -598,6 +614,8 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
                                                    layer_set_bound=True, shortcut=True)
         # print(f'k {k} decision {k_decision[-1]} bounds {k_ret_lbs.squeeze(-1).cpu()}')
         # No need to set slope next time; we do not optimize the slopes.
+        rhs = net.rhs.repeat(k_ret_lbs.shape[0], 1)
+        k_ret_lbs = (k_ret_lbs - rhs).max(-1).values
         set_slope = False
 
         mask_score = (score_idx.values[:, k] <= 1e-4).float()  # build mask indicates invalid scores (stable neurons), batch wise, 1: invalid

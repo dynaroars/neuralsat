@@ -18,7 +18,7 @@ class Configuration:
         self.dtype = torch.float32
         self.device = 'cpu'
         
-        self.batch = 500
+        self.batch = 1024
         self.attack = False
         self.logging_level = logging.INFO
 

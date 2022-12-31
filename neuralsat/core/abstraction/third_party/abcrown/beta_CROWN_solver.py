@@ -48,7 +48,7 @@ def reduction_str2func(reduction_func):
 
 class LiRPAConvNet:
     def __init__(self, model_ori, pred, test, device='cuda', simplify=False, in_size=(1, 3, 32, 32),
-                 conv_mode='patches', deterministic=False, c=None):
+                 conv_mode='patches', deterministic=False, c=None, rhs=None):
         """
         convert pytorch model to auto_LiRPA module
         """
@@ -56,6 +56,7 @@ class LiRPAConvNet:
         layers = list(net.children())
         self.simplify = False
         self.c = c
+        self.rhs = rhs
         self.pred = pred
         self.layers = layers
         self.input_shape = in_size
@@ -96,38 +97,7 @@ class LiRPAConvNet:
         # if get_upper_bound and single_node_split, primals have p and z values; otherwise None
         lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas, primals = ret
 
-        beta_crown_lbs = [i[-1].item() for i in lower_bounds]
-        beta_time = time.time()-start
-
-        # if lp_test == "LP_intermediate_refine":
-        #     refine_time = time.time()
-        #     for bdi, bd in enumerate(split["decision"]):
-        #         total_batch = len(split["decision"])
-        #         assert 2 * total_batch == len(lower_bounds)
-        #         init_lp_glb0, refined_lp_glb0 = self.update_the_model_lp(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
-        #         init_lp_glb1, refined_lp_glb1 = self.update_the_model_lp(lower_bounds[bdi + total_batch],
-        #                                  upper_bounds[bdi + total_batch], bd[0], choice=0)
-        #         print("############ bound tightness summary ##############")
-        #         print(f"init opt crown: {pre_lbs[-1][-1].item()}")
-        #         print("beta crown for split:", beta_crown_lbs)
-        #         print(f"init lp for split: [{init_lp_glb0}, {init_lp_glb1}]")
-        #         print(f"lp intermediate refined for split: [{refined_lp_glb0}, {refined_lp_glb1}]")
-        #         print("lp_refine time:", time.time() - refine_time, "beta crown time:", beta_time)
-        #         exit()
-
-        # elif lp_test == "MIP_intermediate_refine":
-        #     for bdi, bd in enumerate(split["decision"]):
-        #         total_batch = len(split["decision"])
-        #         assert 2 * total_batch == len(lower_bounds)
-        #         self.update_the_model_mip(lower_bounds[bdi], upper_bounds[bdi], bd[0], choice=1)
-        #         self.update_the_model_mip(lower_bounds[bdi + total_batch],
-        #                                   upper_bounds[bdi + total_batch], bd[0], choice=0)
-
-        end = time.time()
-        # print('batch bounding time: ', end - start)
-
-        return [i[-1].item() for i in upper_bounds], [i[-1].item() for i in lower_bounds], None, lAs, lower_bounds, \
-               upper_bounds, slopes, split_history, betas, best_intermediate_betas, primals
+        return [i[-1] for i in upper_bounds], [i[-1] for i in lower_bounds], None, lAs, lower_bounds, upper_bounds, slopes, split_history, betas, best_intermediate_betas, primals
 
 
     def get_relu(self, model, idx):
@@ -252,16 +222,13 @@ class LiRPAConvNet:
             mask_tmp = torch.logical_and(this_relu.inputs[0].lower < 0, this_relu.inputs[0].upper > 0).float()
             mask.append(mask_tmp.reshape(mask_tmp.size(0), -1))
             if this_relu.lA is not None:
-                lA.append(this_relu.lA.squeeze(0))
+                # lA.append(this_relu.lA.squeeze(0))
+                lA.append(this_relu.lA.transpose(0, 1))
             else:
                 # It might be skipped due to inactive neurons.
                 lA.append(None)
 
-        ret_mask, ret_lA = [], []
-        for i in range(mask[0].size(0)):
-            ret_mask.append([j[i:i+1] for j in mask])
-            ret_lA.append([j[i:i+1] if j is not None else None for j in lA])
-        return ret_mask, ret_lA
+        return mask, lA
 
 
     def get_lA_parallel(self, model):
@@ -270,12 +237,9 @@ class LiRPAConvNet:
         # get lower A matrix of ReLU
         lA = []
         for this_relu in model.relus:
-            lA.append(this_relu.lA.squeeze(0))
-
-        ret_lA = []
-        for i in range(lA[0].size(0)):
-            ret_lA.append([j[i:i+1] for j in lA])
-        return ret_lA
+            # lA.append(this_relu.lA.squeeze(0))
+            lA.append(this_relu.lA.transpose(0, 1))
+        return lA
 
 
     def get_beta(self, model, splits_per_example, diving_batch=0):
@@ -555,10 +519,12 @@ class LiRPAConvNet:
 
         # create new_x here since batch may change
         ptb = PerturbationLpNorm(norm=self.x.ptb.norm, eps=self.x.ptb.eps,
-                                 x_L=self.x.ptb.x_L.repeat(batch * 2 + diving_batch, 1, 1, 1),
-                                 x_U=self.x.ptb.x_U.repeat(batch * 2 + diving_batch, 1, 1, 1))
-        new_x = BoundedTensor(self.x.data.repeat(batch * 2 + diving_batch, 1, 1, 1), ptb)
-        c = None if self.c is None else self.c.repeat(new_x.shape[0], 1, 1)
+                                 x_L=self.x.ptb.x_L[0].expand(batch * 2 + diving_batch, *[-1]*(self.x.ptb.x_L.ndim-1)),
+                                 x_U=self.x.ptb.x_U[0].expand(batch * 2 + diving_batch, *[-1]*(self.x.ptb.x_L.ndim-1)))
+        new_x = BoundedTensor(self.x.data.expand(batch * 2 + diving_batch, *[-1]*(self.x.data.ndim-1)), ptb)
+
+        # c = None if self.c is None else self.c.repeat(new_x.shape[0], 1, 1)
+        c = None if self.c is None else self.c.expand(new_x.shape[0], -1, -1)
         # self.net(new_x)  # batch may change, so we need to do forward to set some shapes here
 
         if len(slopes) > 0:
@@ -1533,7 +1499,8 @@ class LiRPAConvNet:
 
         if not self.simplify or stop_criterion_func(lb[-1]):
             history = [[[], []] for _ in range(len(self.net.relus))]
-            return ub[-1], lb[-1], mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
+            return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
+            # return ub[-1], lb[-1], mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
 
         # for each pre-relu layer, we initial 2 lists for active and inactive split
         history = [[[], []] for _ in range(len(self.net.relus))]
@@ -1542,7 +1509,8 @@ class LiRPAConvNet:
             self.needed_A_dict = defaultdict(set)
             self.needed_A_dict[self.net.output_name[0]].add(self.net.input_name[0])
 
-        return ub[-1].item(), lb[-1].item(), mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
+        return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
+        # return ub[-1].item(), lb[-1].item(), mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
 
     def build_the_model_with_refined_bounds(self, input_domain, x, refined_lower_bounds, refined_upper_bounds,
                                             stop_criterion_func=stop_criterion_sum(0), reference_slopes=None):
