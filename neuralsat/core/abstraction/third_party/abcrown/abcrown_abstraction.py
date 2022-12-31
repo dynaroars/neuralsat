@@ -132,7 +132,7 @@ class ABCrownAbstraction:
             
             dom_ub, dom_lb, dom_ub_point, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas, primals = ret
             batch = len(selected_domains)
-            domain_list = add_domain_parallel(lA=lAs[:2*batch], 
+            domain_list = add_domain_parallel(lA=lAs, 
                                               lb=dom_lb[:2*batch], 
                                               ub=dom_ub[:2*batch], 
                                               lb_all=dom_lb_all[:2*batch], 
