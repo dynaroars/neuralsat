@@ -82,7 +82,6 @@ class LiRPA:
                                               history=history,
                                               layer_set_bound=layer_set_bound)
 
-        # if get_upper_bound and single_node_split, primals have p and z values; otherwise None
         lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas, primals = ret
 
         return [i[-1] for i in upper_bounds], [i[-1] for i in lower_bounds], None, lAs, lower_bounds, upper_bounds, slopes, split_history, betas, best_intermediate_betas, primals
@@ -360,9 +359,6 @@ class LiRPA:
         iteration = arguments.Config["solver"]["beta-crown"]["iteration"]
         lr_alpha = arguments.Config["solver"]["beta-crown"]["lr_alpha"]
         lr_beta = arguments.Config["solver"]["beta-crown"]["lr_beta"]
-        get_upper_bound = arguments.Config["bab"]["get_upper_bound"]
-
-        assert not get_upper_bound
 
         if type(split) == list:
             decision = np.array(split)
@@ -487,7 +483,7 @@ class LiRPA:
                                                  return_A=False)
             return lb
 
-        return_A = True if get_upper_bound else False  # we need A matrix to consturct adv example
+        return_A = False  # we need A matrix to consturct adv example
         if layer_set_bound:
             self.net.set_bound_opts({'optimize_bound_args':
                                          {'ob_beta': beta, 'ob_single_node_split': True,
@@ -517,15 +513,9 @@ class LiRPA:
                                               bound_upper=False, 
                                               needed_A_dict=self.needed_A_dict)
 
-        if get_upper_bound:
-            raise NotImplementedError
-            # lb, _, A = tmp_ret
-            # primal_x, ub = self.get_primal_upper_bound(A)
-        else:
-            lb, _ = tmp_ret
-            ub = lb + 99  # dummy upper bound
-            primal_x = None
-
+        lb, _ = tmp_ret
+        ub = lb + 99  # dummy upper bound
+        primal_x = None
 
         with torch.no_grad():
             # Move tensors to CPU for all elements in this batch.
@@ -541,11 +531,10 @@ class LiRPA:
 
             # Reorganize tensors.
             lower_bounds_new, upper_bounds_new = self.get_candidate_parallel(transfer_net, lb, ub, batch * 2)
-
             lower_bounds_new[-1] = torch.max(lower_bounds_new[-1], pre_lb_last.cpu())
-            if not get_upper_bound:
-                # Do not set to min so the primal is always corresponding to the upper bound.
-                upper_bounds_new[-1] = torch.min(upper_bounds_new[-1], pre_ub_last.cpu())
+            # Do not set to min so the primal is always corresponding to the upper bound.
+            upper_bounds_new[-1] = torch.min(upper_bounds_new[-1], pre_ub_last.cpu())
+
             # reshape the results based on batch.
             for i in range(batch):
                 ret_l[i] = [j[i:i + 1] for j in lower_bounds_new]
@@ -556,18 +545,6 @@ class LiRPA:
             for i in range(2 * batch, 2 * batch):
                 ret_l[i] = [j[i:i + 1] for j in lower_bounds_new]
                 ret_u[i] = [j[i:i + 1] for j in upper_bounds_new]
-
-
-        ret_p, primals = None, None
-        if get_upper_bound:
-            raise NotImplementedError
-            # print("opt crown:", lb)
-            # primal_values, integer_primals = self.get_neuron_primal(primal_x, lb=lower_bounds_new, ub=upper_bounds_new)
-            # correct intermediate primal should produce the correct primal output lb
-            # print("primal lb with beta:", primal_values[-1])
-            # print("### Extracting primal values and mixed integers with beta for intermeidate nodes done ###")
-            # exit()
-            # primals = {"p": primal_values, "z": integer_primals}
 
         return ret_l, ret_u, lAs, ret_s, ret_b, new_split_history, best_intermediate_betas, primal_x
 
@@ -580,9 +557,6 @@ class LiRPA:
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
         loss_reduction_func = arguments.Config["general"]["loss_reduction_func"]
-        get_upper_bound = arguments.Config["bab"]["get_upper_bound"]
-
-        assert not get_upper_bound
         
         self.x = x
         self.input_domain = input_domain
@@ -638,11 +612,6 @@ class LiRPA:
         # for each pre-relu layer, we initial 2 lists for active and inactive split
         history = [[[], []] for _ in range(len(self.net.relus))]
 
-        if get_upper_bound:
-            raise NotImplementedError
-            # self.needed_A_dict = defaultdict(set)
-            # self.needed_A_dict[self.net.output_name[0]].add(self.net.input_name[0])
-
         return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
         # return ub[-1].item(), lb[-1].item(), mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
 
@@ -656,9 +625,6 @@ class LiRPA:
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
         loss_reduction_func = arguments.Config["general"]["loss_reduction_func"]
-        get_upper_bound = arguments.Config["bab"]["get_upper_bound"]
-
-        assert not get_upper_bound
 
         self.x = x
         self.input_domain = input_domain
@@ -669,13 +635,9 @@ class LiRPA:
         if not no_joint_opt:
             ######## using bab_verification_mip_refine.py ########
             lb, ub = refined_lower_bounds, refined_upper_bounds
+        
         primals, duals, mini_inp = None, None, None
-
-        return_A = True if get_upper_bound else False
-        if get_upper_bound:
-            raise NotImplementedError
-            # self.needed_A_dict = defaultdict(set)
-            # self.needed_A_dict[self.net.output_name[0]].add(self.net.input_name[0])
+        return_A = False
 
         # first get CROWN bounds
         self.net.init_slope((self.x,), share_slopes=share_slopes, c=self.c)
@@ -747,18 +709,5 @@ class LiRPA:
         mask, lA = self.get_mask_lA_parallel(self.net)
         history = [[[], []] for _ in range(len(self.net.relus))]
 
-        if get_upper_bound:
-            raise NotImplementedError
-            # print("opt crown:", lb[-1])
-            # primal_x, ub_x = self.get_primal_upper_bound(A)
-            # print("### Extracting primal values for inputs done ###")
-
-            # # get the primal values for intermediate layers
-            # primal_values, integer_primals = self.get_neuron_primal(primal_x, lb, ub)
-            # # correct intermediate primal should produce the correct primal output lb
-            # print("primal lb:", primal_values[-1])
-            # print("### Extracting primal values and mixed integers for intermeidate nodes done ###")
-        
-            # primals = {"p": primal_values, "z": integer_primals}
         return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
 
