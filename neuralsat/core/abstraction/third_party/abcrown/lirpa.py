@@ -364,7 +364,6 @@ class LiRPA:
 
         assert not get_upper_bound
 
-        diving_batch = 0
         if type(split) == list:
             decision = np.array(split)
         else:
@@ -374,12 +373,13 @@ class LiRPA:
         batch = len(decision)
 
         # initial results with empty list
-        ret_l = [[] for _ in range(batch * 2 + diving_batch)]
-        ret_u = [[] for _ in range(batch * 2 + diving_batch)]
-        ret_s = [[] for _ in range(batch * 2 + diving_batch)]
-        ret_b = [[] for _ in range(batch * 2 + diving_batch)]
-        new_split_history = [{} for _ in range(batch * 2 + diving_batch)]
-        best_intermediate_betas = [defaultdict(dict) for _ in range(batch * 2 + diving_batch)] # Each key is corresponding to a pre-relu layer, and each value intermediate beta values for neurons in that layer.
+        ret_l = [[] for _ in range(batch * 2)]
+        ret_u = [[] for _ in range(batch * 2)]
+        ret_s = [[] for _ in range(batch * 2)]
+        ret_b = [[] for _ in range(batch * 2)]
+        new_split_history = [{} for _ in range(batch * 2)]
+        # Each key is corresponding to a pre-relu layer, and each value intermediate beta values for neurons in that layer.
+        best_intermediate_betas = [defaultdict(dict) for _ in range(batch * 2)] 
 
         # iteratively change upper and lower bound from former to later layer
         if beta:
@@ -393,24 +393,11 @@ class LiRPA:
             if batch > 0: 
                 max_splits_per_layer = splits_per_example.max(dim=0)[0]
 
-            if diving_batch != 0:
-                diving_splits_per_example = torch.zeros(size=(diving_batch, len(self.net.relus)), dtype=torch.int64, device='cpu', requires_grad=False)
-                for dbi in range(diving_batch):
-                    # diving batch does not have decision splits but only have history splits
-                    for mi, diving_layer_splits in enumerate(history[dbi + batch]):
-                        diving_splits_per_example[dbi, mi] = len(diving_layer_splits[0])  # First element of layer_splits is a list of split neuron IDs.
-
-                # import pdb; pdb.set_trace()
-                splits_per_example = torch.cat([splits_per_example, diving_splits_per_example], dim=0)
-                max_splits_per_layer = splits_per_example.max(dim=0)[0]
-                del diving_splits_per_example
-
             # Create and load warmup beta.
             self.reset_beta(self.net, 
                             batch, 
                             betas=betas, 
-                            max_splits_per_layer=max_splits_per_layer, 
-                            diving_batch=diving_batch)  # warm start beta
+                            max_splits_per_layer=max_splits_per_layer)  # warm start beta
 
             for bi in range(batch):
                 # Add history splits.
@@ -438,21 +425,6 @@ class LiRPA:
             for m in self.net.relus:
                 m.sparse_beta_sign = m.sparse_beta_sign.to(device=self.net.device, non_blocking=True)
 
-            if diving_batch > 0:
-                # add diving domains history splits, no decision in diving domains
-                for dbi in range(diving_batch):
-                    for mi, (split_locs, split_coeffs) in enumerate(history[dbi + batch]):
-                        split_len = len(split_locs)
-                        self.net.relus[mi].diving_sparse_beta_sign[dbi, :split_len] = torch.as_tensor(split_coeffs, device='cpu', dtype=torch.get_default_dtype())
-                        self.net.relus[mi].diving_sparse_beta_loc[dbi, :split_len] = torch.as_tensor(split_locs, device='cpu', dtype=torch.int64)
-                for m in self.net.relus:
-                    # cat beta loc and sign to have the correct shape
-                    m.diving_sparse_beta_loc = m.diving_sparse_beta_loc.to(device=self.net.device, non_blocking=True)
-                    m.diving_sparse_beta_sign = m.diving_sparse_beta_sign.to(device=self.net.device, non_blocking=True)
-                    m.sparse_beta_loc = torch.cat([m.sparse_beta_loc, m.diving_sparse_beta_loc], dim=0).detach()
-                    m.sparse_beta_sign = torch.cat([m.sparse_beta_sign, m.diving_sparse_beta_sign], dim=0).detach()
-                    # do no need to store the diving beta params any more
-                    del m.diving_sparse_beta_loc, m.diving_sparse_beta_sign
         else:
             for m in self.net.relus:
                 m.beta = None
@@ -470,7 +442,7 @@ class LiRPA:
             zero_indices_batch = [torch.as_tensor(t).to(device=self.net.device, non_blocking=True) for t in zero_indices_batch]
             zero_indices_neuron = [torch.as_tensor(t).to(device=self.net.device, non_blocking=True) for t in zero_indices_neuron]
 
-            # 2 * batch + diving_batch
+            # 2 * batch
             upper_bounds = [torch.cat([i[:batch], i[:batch], i[batch:]], dim=0) for i in pre_ub_all[:-1]]
             lower_bounds = [torch.cat([i[:batch], i[:batch], i[batch:]], dim=0) for i in pre_lb_all[:-1]]
 
@@ -490,9 +462,9 @@ class LiRPA:
         # create new_x here since batch may change
         ptb = PerturbationLpNorm(norm=self.x.ptb.norm, 
                                  eps=self.x.ptb.eps,
-                                 x_L=self.x.ptb.x_L[0].expand(batch * 2 + diving_batch, *[-1]*(self.x.ptb.x_L.ndim-1)),
-                                 x_U=self.x.ptb.x_U[0].expand(batch * 2 + diving_batch, *[-1]*(self.x.ptb.x_L.ndim-1)))
-        new_x = BoundedTensor(self.x.data.expand(batch * 2 + diving_batch, *[-1]*(self.x.data.ndim-1)), ptb)
+                                 x_L=self.x.ptb.x_L[0].expand(batch * 2, *[-1]*(self.x.ptb.x_L.ndim-1)),
+                                 x_U=self.x.ptb.x_U[0].expand(batch * 2, *[-1]*(self.x.ptb.x_L.ndim-1)))
+        new_x = BoundedTensor(self.x.data.expand(batch * 2, *[-1]*(self.x.data.ndim-1)), ptb)
 
         # c = None if self.c is None else self.c.repeat(new_x.shape[0], 1, 1)
         c = None if self.c is None else self.c.expand(new_x.shape[0], -1, -1)
@@ -500,7 +472,7 @@ class LiRPA:
 
         if len(slopes) > 0:
             # set slope here again
-            self.set_slope(self.net, slopes, diving_batch=diving_batch)
+            self.set_slope(self.net, slopes)
 
         if shortcut:
             self.net.set_bound_opts({'optimize_bound_args': {'ob_beta': beta, 'ob_single_node_split': True,
@@ -522,7 +494,6 @@ class LiRPA:
                                           'ob_update_by_layer': layer_set_bound, 'ob_iteration': iteration,
                                           'ob_lr': arguments.Config['solver']['beta-crown']['lr_alpha'],
                                           'ob_lr_beta': lr_beta, 'ob_optimizer': optimizer}})
-            # if diving_batch != 0: import pdb; pdb.set_trace()
             tmp_ret = self.net.compute_bounds(x=(new_x,), 
                                               IBP=False, 
                                               C=c, 
@@ -566,16 +537,10 @@ class LiRPA:
                 ret_s = self.get_slope(transfer_net)
 
             if beta:
-                ret_b = self.get_beta(transfer_net, 
-                                      splits_per_example, 
-                                      diving_batch=diving_batch)
+                ret_b = self.get_beta(transfer_net, splits_per_example)
 
             # Reorganize tensors.
-            lower_bounds_new, upper_bounds_new = self.get_candidate_parallel(transfer_net, 
-                                                                             lb, 
-                                                                             ub, 
-                                                                             batch * 2, 
-                                                                             diving_batch=diving_batch)
+            lower_bounds_new, upper_bounds_new = self.get_candidate_parallel(transfer_net, lb, ub, batch * 2)
 
             lower_bounds_new[-1] = torch.max(lower_bounds_new[-1], pre_lb_last.cpu())
             if not get_upper_bound:
@@ -588,7 +553,7 @@ class LiRPA:
 
                 ret_u[i] = [j[i:i + 1] for j in upper_bounds_new]
                 ret_u[i + batch] = [j[i + batch:i + batch + 1] for j in upper_bounds_new]
-            for i in range(2 * batch, 2 * batch + diving_batch):
+            for i in range(2 * batch, 2 * batch):
                 ret_l[i] = [j[i:i + 1] for j in lower_bounds_new]
                 ret_u[i] = [j[i:i + 1] for j in upper_bounds_new]
 
