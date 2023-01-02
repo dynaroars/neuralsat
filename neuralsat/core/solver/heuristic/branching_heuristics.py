@@ -8,7 +8,7 @@ from torch import nn
 import numpy as np
 import torch
 
-from core.abstraction.third_party.abcrown.auto_LiRPA.bound_ops import BoundRelu, BoundLinear, BoundConv, BoundBatchNormalization, BoundAdd
+from core.abstraction.third_party import BoundRelu, BoundLinear, BoundConv, BoundBatchNormalization, BoundAdd
 
 
 Icp_score_counter = 0

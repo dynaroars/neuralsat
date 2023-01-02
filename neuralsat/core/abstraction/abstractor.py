@@ -1,4 +1,4 @@
-from core.abstraction.third_party.abcrown.abcrown_abstraction import ABCrownAbstraction
+from .third_party import ABCrownAbstraction
 
 class Abstractor:
 
