@@ -3,15 +3,16 @@
 '''
 
 from collections import defaultdict, OrderedDict
+import numpy as np
 import random
 import torch
 import copy
 import time
 
 from .auto_LiRPA.utils import reduction_min, reduction_max, reduction_mean, reduction_sum, stop_criterion_sum, stop_criterion_min
+from .auto_LiRPA.perturbations import PerturbationLpNorm
 from .auto_LiRPA import BoundedModule, BoundedTensor
 from .auto_LiRPA.bound_ops import BoundRelu
-from .auto_LiRPA.perturbations import *
 
 import arguments
 
@@ -34,26 +35,25 @@ def reduction_str2func(reduction_func):
 
 class LiRPA:
 
-    def __init__(self, model_ori, pred, test, device='cuda', simplify=False, in_size=(1, 3, 32, 32),
-                 conv_mode='patches', deterministic=False, c=None, rhs=None):
+    def __init__(self, model_ori, input_shape, device='cuda', conv_mode='patches', c=None, rhs=None):
         """
         convert pytorch model to auto_LiRPA module
         """
         net = copy.deepcopy(model_ori)
         layers = list(net.children())
-        self.simplify = False
         self.c = c
         self.rhs = rhs
-        self.pred = pred
         self.layers = layers
-        self.input_shape = in_size
-        self.net = BoundedModule(net, torch.zeros(in_size, device=device), bound_opts={'relu': 'adaptive', 'deterministic': deterministic, 'conv_mode': conv_mode},
+        self.input_shape = input_shape
+        self.net = BoundedModule(net, 
+                                 torch.zeros(input_shape, device=device), 
+                                 bound_opts={
+                                    'relu': 'adaptive', 
+                                    'deterministic': False, 
+                                    'conv_mode': conv_mode},
                                  device=device)
         self.net.eval()
         self.needed_A_dict = None
-        self.pool = None   # For multi-process.
-        self.pool_result = None
-        self.pool_termination_flag = None
 
     
     def get_lower_bound(self, pre_lbs, pre_ubs, split, slopes=None, betas=None, history=None, layer_set_bound=True, 
@@ -70,17 +70,14 @@ class LiRPA:
         if history is None:
             history = []
 
-        # lp_test = arguments.Config["debug"]["lp_test"]
-        assert single_node_split
-        if single_node_split:
-            ret = self.update_bounds_parallel(pre_lbs, 
-                                              pre_ubs, 
-                                              split, 
-                                              slopes, 
-                                              betas=betas, 
-                                              early_stop=False, 
-                                              history=history,
-                                              layer_set_bound=layer_set_bound)
+        ret = self.update_bounds_parallel(pre_lbs, 
+                                          pre_ubs, 
+                                          split, 
+                                          slopes, 
+                                          betas=betas, 
+                                          early_stop=False, 
+                                          history=history,
+                                          layer_set_bound=layer_set_bound)
 
         lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas, primals = ret
 
@@ -350,7 +347,7 @@ class LiRPA:
 
     """Main function for computing bounds after branch and bound in Beta-CROWN."""
     def update_bounds_parallel(self, pre_lb_all=None, pre_ub_all=None, split=None, slopes=None, beta=None, betas=None,
-                        early_stop=True, history=None, layer_set_bound=True, shortcut=False):
+            early_stop=True, history=None, layer_set_bound=True, shortcut=False):
         # update optimize-CROWN bounds in a parallel
 
         if beta is None:
@@ -604,7 +601,7 @@ class LiRPA:
         lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + 99)  # primals are better upper bounds
         mask, lA = self.get_mask_lA_parallel(self.net)
 
-        if not self.simplify or stop_criterion_func(lb[-1]):
+        if stop_criterion_func(lb[-1]):
             history = [[[], []] for _ in range(len(self.net.relus))]
             return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
             # return ub[-1], lb[-1], mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history

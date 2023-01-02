@@ -31,7 +31,6 @@ class ABCrownAbstraction:
         arguments.Config['solver']['alpha-crown']['lr_alpha'] = 0.1
         arguments.Config['solver']['alpha-crown']['iteration'] = 50
         arguments.Config['solver']['alpha-crown']['share_slopes'] = False
-        arguments.Config['solver']['alpha-crown']['no_joint_opt'] = False
 
         arguments.Config['solver']['beta-crown'] = {}
         arguments.Config['solver']['beta-crown']['beta'] = True
@@ -43,13 +42,9 @@ class ABCrownAbstraction:
         arguments.Config['solver']['beta-crown']['iteration'] = 20
 
         arguments.Config['general'] = {}
-        arguments.Config['general']['loss_reduction_func'] = 'mean'
-        # arguments.Config['general']['deterministic'] = False
-        # arguments.Config['general']['double_fp'] = False
+        arguments.Config['general']['loss_reduction_func'] = 'sum'
 
         arguments.Config['bab'] = {}
-        arguments.Config['bab']['get_upper_bound'] = False
-
         arguments.Config['bab']['branching'] = {}
         arguments.Config['bab']['branching']['reduceop'] = 'min'
 
@@ -66,12 +61,8 @@ class ABCrownAbstraction:
 
         c, self.decision_threshold, y, pidx = self.spec.extract()
         self.lirpa = LiRPA(model_ori=self.net.layers, 
-                           pred=y, 
-                           test=pidx, 
+                           input_shape=input_shape, 
                            device=self.device, 
-                           in_size=input_shape, 
-                           deterministic=False, 
-                           conv_mode='patches', 
                            c=c,
                            rhs=self.decision_threshold)
 

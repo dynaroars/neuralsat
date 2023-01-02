@@ -1,3 +1,4 @@
+test*.py
 ref/
 *.compiled
 *.DS_Store
