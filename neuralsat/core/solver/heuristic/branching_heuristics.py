@@ -473,11 +473,9 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
 
         # only save the best lower bounds of the two splits
         if use_beta:
-            k_ret_lbs = net.update_bounds_parallel(lbs, ups, k_decision[-1], sps if set_slope else [], early_stop=False, betas=bs,
-                                                   layer_set_bound=True, shortcut=True, history=history)
+            k_ret_lbs = net.update_bounds_parallel(lbs, ups, k_decision[-1], sps if set_slope else [], early_stop=False, betas=bs, shortcut=True, history=history)
         else:
-            k_ret_lbs = net.update_bounds_parallel(lbs, ups, k_decision[-1], sps if set_slope else [], early_stop=False, beta=False,
-                                                   layer_set_bound=True, shortcut=True)
+            k_ret_lbs = net.update_bounds_parallel(lbs, ups, k_decision[-1], sps if set_slope else [], early_stop=False, beta=False, shortcut=True)
         # print(f'k {k} decision {k_decision[-1]} bounds {k_ret_lbs.squeeze(-1).cpu()}')
         # No need to set slope next time; we do not optimize the slopes.
         rhs = net.rhs.repeat(k_ret_lbs.shape[0], 1)

@@ -76,8 +76,7 @@ class LiRPA:
                                           slopes, 
                                           betas=betas, 
                                           early_stop=False, 
-                                          history=history,
-                                          layer_set_bound=layer_set_bound)
+                                          history=history)
 
         lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas, primals = ret
 
@@ -347,7 +346,7 @@ class LiRPA:
 
     """Main function for computing bounds after branch and bound in Beta-CROWN."""
     def update_bounds_parallel(self, pre_lb_all=None, pre_ub_all=None, split=None, slopes=None, beta=None, betas=None,
-            early_stop=True, history=None, layer_set_bound=True, shortcut=False):
+            early_stop=True, history=None, shortcut=False):
         # update optimize-CROWN bounds in a parallel
 
         if beta is None:
@@ -468,8 +467,11 @@ class LiRPA:
             self.set_slope(self.net, slopes)
 
         if shortcut:
-            self.net.set_bound_opts({'optimize_bound_args': {'ob_beta': beta, 'ob_single_node_split': True,
-                'ob_update_by_layer': layer_set_bound, 'ob_optimizer':optimizer}})
+            self.net.set_bound_opts({'optimize_bound_args': {
+                                        'ob_beta': beta, 
+                                        'ob_single_node_split': True,
+                                        'ob_update_by_layer': True, 
+                                        'ob_optimizer':optimizer}})
             with torch.no_grad():
                 lb, _, = self.net.compute_bounds(x=(new_x,), 
                                                  IBP=False, 
@@ -480,37 +482,24 @@ class LiRPA:
                                                  return_A=False)
             return lb
 
-        return_A = False  # we need A matrix to consturct adv example
-        if layer_set_bound:
-            self.net.set_bound_opts({'optimize_bound_args':
-                                         {'ob_beta': beta, 'ob_single_node_split': True,
-                                          'ob_update_by_layer': layer_set_bound, 'ob_iteration': iteration,
-                                          'ob_lr': arguments.Config['solver']['beta-crown']['lr_alpha'],
-                                          'ob_lr_beta': lr_beta, 'ob_optimizer': optimizer}})
-            tmp_ret = self.net.compute_bounds(x=(new_x,), 
-                                              IBP=False, 
-                                              C=c, 
-                                              method='CROWN-Optimized',
-                                              new_interval=new_candidate, 
-                                              return_A=return_A, 
-                                              bound_upper=False, 
-                                              needed_A_dict=self.needed_A_dict)
-        else:
-            # all intermediate bounds are re-calculated by optimized CROWN
-            self.net.set_bound_opts(
-                {'optimize_bound_args': {'ob_beta': beta, 'ob_update_by_layer': layer_set_bound,
-                    'ob_iteration': iteration, 'ob_lr': arguments.Config['solver']['beta-crown']['lr_alpha'],
-                    'ob_lr_beta': lr_beta, 'ob_optimizer': optimizer}})
-            tmp_ret = self.net.compute_bounds(x=(new_x,), 
-                                              IBP=False, 
-                                              C=c, 
-                                              method='CROWN-Optimized',
-                                              new_interval=new_candidate, 
-                                              return_A=return_A, 
-                                              bound_upper=False, 
-                                              needed_A_dict=self.needed_A_dict)
+        self.net.set_bound_opts({'optimize_bound_args': {
+                                    'ob_beta': beta, 
+                                    'ob_single_node_split': True,
+                                    'ob_update_by_layer': True, 
+                                    'ob_iteration': iteration,
+                                    'ob_lr': lr_alpha,
+                                    'ob_lr_beta': lr_beta, 
+                                    'ob_optimizer': optimizer}})
 
-        lb, _ = tmp_ret
+        lb, _ = self.net.compute_bounds(x=(new_x,), 
+                                            IBP=False, 
+                                            C=c, 
+                                            method='CROWN-Optimized',
+                                            new_interval=new_candidate, 
+                                            return_A=False, 
+                                            bound_upper=False, 
+                                            needed_A_dict=self.needed_A_dict)
+
         ub = lb + 99  # dummy upper bound
         primal_x = None
 
@@ -553,19 +542,13 @@ class LiRPA:
         share_slopes = arguments.Config["solver"]["alpha-crown"]["share_slopes"]
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
-        loss_reduction_func = arguments.Config["general"]["loss_reduction_func"]
+        loss_reduction_func = reduction_str2func(arguments.Config["general"]["loss_reduction_func"])
         
         self.x = x
-        self.input_domain = input_domain
-
-        slope_opt = None
-
-        loss_reduction_func = reduction_str2func(loss_reduction_func)
 
         # first get CROWN bounds
         # Reference bounds are intermediate layer bounds from initial CROWN bounds.
         lb, ub, aux_reference_bounds = self.net.init_slope((self.x,), share_slopes=share_slopes, c=self.c, bound_upper=False)
-        # print('initial CROWN bounds:', lb, ub)
         if stop_criterion_func(lb).all().item():
             return None, lb[-1], None, None, None, None, None, None, None, None, None, None
         
@@ -596,7 +579,6 @@ class LiRPA:
         slope_opt = self.get_slope(self.net)[0]  # initial with one node only
 
         # update bounds
-        # print('initial alpha-CROWN bounds:', lb, ub)
         primals, duals, mini_inp = None, None, None
         lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + 99)  # primals are better upper bounds
         mask, lA = self.get_mask_lA_parallel(self.net)

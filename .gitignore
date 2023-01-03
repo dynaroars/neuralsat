@@ -1,5 +1,6 @@
 test*.py
 ref/
+rac/
 *.compiled
 *.DS_Store
 # ref/
