@@ -125,15 +125,14 @@ class ReLUTheory:
     def get_non_implied_assignment(self, assignment):
         if len(assignment) == 0:
             return {}
-        # if hasattr(assignment.values())
         for key, value in assignment.items():
             if isinstance(value, dict):
-                return {k: v['value'] for k, v in assignment.items() if not v['is_implied']}
+                return {k: v['value'] for k, v in assignment.items() if v['description'] != 'tcp'}
             return assignment
 
 
     def get_last_assignment(self, assignment):
-        non_implied_assignment_full_info = {k: v for k, v in assignment.items() if not v['is_implied']}
+        non_implied_assignment_full_info = {k: v for k, v in assignment.items() if v['description'] != 'tcp'}
         if len(non_implied_assignment_full_info) == 1:
             return {}
 
@@ -200,13 +199,18 @@ class ReLUTheory:
         return True
         
 
+    def process_extra_assignment(self, assignment):
+        raise
+
 
     def process_new_assignment(self, assignment):
         logger.debug('\tprocess_new_assignment')
         last_assignment = self.get_last_assignment(assignment)
         # print('last assignment:', last_assignment)
         last_domain = self.get_domain(last_assignment)
-        assert last_domain is not None
+        if last_domain is None:
+            # there exists 'bcp' (extra) assignments
+            self.process_extra_assignment(assignment)
         
         # get decisions for a batch
         decisions, selected_domains, extra_params = self.sat_decider.get_batch_decisions(last_domain)
@@ -246,6 +250,7 @@ class ReLUTheory:
         self.sat_decider.current_domain = current_domain
         return True
 
+
     def process_extra_domains(self):
         logger.debug('\tprocess_extra_domains')
         decisions, selected_domains, extra_params = self.sat_decider.get_batch_decisions(None)
@@ -255,6 +260,7 @@ class ReLUTheory:
                 domain.next_decision = var
             domains = self.abstractor.forward(input_lower=self.lbs_init, input_upper=self.ubs_init, extra_params=extra_params)
             self.add_domain(domains)
+
 
     def process_full_assignment(self, assignment):
         logger.debug('\tprocess_full_assignment')
@@ -269,9 +275,9 @@ class ReLUTheory:
             return self.process_init_assignment()
 
         unassigned_nodes = self.get_unassigned_nodes(assignment)
-        is_full_assignment = unassigned_nodes is None
 
-        if is_full_assignment:
+        # full assignment
+        if unassigned_nodes is None:
             return self.process_full_assignment(assignment)
 
         if len(self.implications) > 0:
@@ -281,7 +287,6 @@ class ReLUTheory:
         if current_domain is None:
             current_domain = self.process_new_assignment(assignment)
         else:
-            # TODO: process unassigned node
             self.process_extra_domains()
 
         return self.process_cached_assignment(assignment, current_domain)

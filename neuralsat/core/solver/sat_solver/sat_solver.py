@@ -51,16 +51,8 @@ class SATSolver(Solver):
         self._early_stop = False
         self._early_return_status = None
 
-        # self._crown_decision_mapping = {}
-        # for lid, lnodes in self._layers_mapping.items():
-        #     for jj, node in enumerate(lnodes):
-        #         self._crown_decision_mapping[node] = [lid, jj]
-
         self._generated_conflict_clauses = set([])
 
-        # print(self._formula, len(list(self._formula)))
-        # print(self._all_vars)
-        self._iteration = 0
 
     def get_conflict_clauses(self):
         return self._generated_conflict_clauses
@@ -70,15 +62,6 @@ class SATSolver(Solver):
         self._early_stop = True
         self._early_return_status = status
 
-    # def get_current_assigned_node(self):
-    #     # print('_assignment_by_level', self._assignment_by_level)
-    #     dl = len(self._assignment_by_level) - 1
-    #     variable = None
-    #     if len(self._assignment_by_level[dl]):
-    #         for variable in self._assignment_by_level[dl][::-1]:
-    #             if not self._assignment[variable]['is_implied']:
-    #                 return variable, dl, [self._crown_decision_mapping.get(variable, None)]
-    #     return variable, dl, [self._crown_decision_mapping.get(variable, None)]
 
     def add_clause(self, clause):
         """
@@ -97,7 +80,7 @@ class SATSolver(Solver):
                 self._variable_to_watched_clause[variable].add(clause)
 
 
-    def _assign(self, clause, literal: int, is_implied=False):
+    def _assign(self, clause, literal: int, description: str):
         """
         Assigns a satisfying value to the given literal.
         """
@@ -107,8 +90,7 @@ class SATSolver(Solver):
             "clause": clause,                               # The clause which caused the assignment
             "level": len(self._assignment_by_level) - 1,    # The decision level of the assignment
             "idx": len(self._assignment_by_level[-1]),      # Defines an assignment order in the same level
-            "is_implied": is_implied,
-            "iteration": self._iteration
+            "description": description,
         }
 
         self._all_vars.discard(variable)
@@ -123,8 +105,6 @@ class SATSolver(Solver):
         self._assignment_by_level[-1].append(variable)
         self._last_assigned_literals.append(literal)
 
-        self._iteration += 1
-
 
     def _unassign(self, variable: int):
         """
@@ -136,17 +116,13 @@ class SATSolver(Solver):
 
     def get_assignment(self) -> dict:
         return self._assignment
-        # return {var: val for var, val in self.iterable_assignment()}
 
     def get_variable_assignment(self, variable) -> bool:
         return self._assignment.get(variable, {"value": None})["value"]
 
     def iterable_assignment(self):
-        """
-        :return: a (variable: int, value: bool) tuple for every assigned variable.
-        """
         for var in self._assignment:
-            yield var, self._assignment[var]["value"], self._assignment[var]["is_implied"]
+            yield var, self._assignment[var]["value"], self._assignment[var]['description'] == 'tcp'
 
     def _find_last_literal(self, clause, removed_vars=[]):
         """
@@ -157,7 +133,6 @@ class SATSolver(Solver):
         for literal in clause:
             variable = abs(literal)
 
-            # what??
             if (variable in removed_vars) or (variable not in self._assignment):
                 continue
 
@@ -174,16 +149,13 @@ class SATSolver(Solver):
 
         if (prev_max_level == -1) and (max_level != -1):
             prev_max_level = max_level - 1
-        # print('- [Find]:', last_literal, prev_max_level, max_level, max_level_count)
         return last_literal, prev_max_level, max_level, max_level_count
 
     def _conflict_resolution(self, conflict_clause):
         """
         Learns conflict clauses using implication graphs, with the Unique Implication Point heuristic.
         """
-        # print('--------------_conflict_resolution--------------')
         conflict_clause = set(conflict_clause)
-        # print('conflict_clause:', conflict_clause)
         # if frozenset(conflict_clause) not in self._generated_conflict_clauses:
         #     self._add_conflict_clause(frozenset(conflict_clause))
         self._generated_conflict_clauses.add(frozenset(conflict_clause))
@@ -194,15 +166,11 @@ class SATSolver(Solver):
             if last_literal is None:
                 return None, None, -1
             clause_on_incoming_edge = self._assignment[abs(last_literal)]["clause"]
-            # print(last_literal, prev_max_level, max_level, max_level_count, clause_on_incoming_edge)
             if (max_level_count == 1) or (clause_on_incoming_edge is None):
                 if max_level_count != 1:
                     # If the last literal was assigned because of the theory, there is no incoming edge
                     # The literal to reassign should be the decision literal of the same level
-                    # print('    - last_literal before:', last_literal)
                     last_literal = self._assignment_by_level[max_level][0]
-                    # print(self._assignment_by_level[max_level], conflict_clause)
-                    # print('    - last_literal after:', last_literal)
                     if self._assignment[last_literal]["value"]:
                         last_literal = -last_literal
                     conflict_clause.add(last_literal)
@@ -214,9 +182,7 @@ class SATSolver(Solver):
             # Resolve the conflict clause with the clause on the incoming edge
             # Might be the case that the last literal was assigned because of the
             # theory, and in that case it is impossible to do resolution
-            # print('conflict_clause:', conflict_clause, 'last_literal:', last_literal)
             conflict_clause |= clause_on_incoming_edge
-            # print()
             conflict_clause.remove(last_literal)
             conflict_clause.remove(-last_literal)
             removed_vars.append(abs(last_literal))
@@ -229,7 +195,6 @@ class SATSolver(Solver):
         """
         while self._last_assigned_literals:
             watch_literal = self._last_assigned_literals.popleft()
-            # print('watch_literal:', watch_literal)
             for clause in self._variable_to_watched_clause[abs(watch_literal)].copy():
                 if clause not in self._satisfied_clauses:
                     conflict_clause = self._replace_watch_literal(clause, watch_literal)
@@ -272,8 +237,7 @@ class SATSolver(Solver):
             # and was also added to self._last_assigned_literals, we will later on
             # check if the assignment causes a conflict
             literal = unassigned_literals.pop()
-            self._assign(clause, literal, is_implied=True)
-            # print(f'\t- [c] {clause}, {literal}')
+            self._assign(clause, literal, description='bcp')
         return None
 
     def _add_conflict_clause(self, conflict_clause):
@@ -291,7 +255,6 @@ class SATSolver(Solver):
                 self._variable_to_watched_clause[abs(literal)].discard(clause_to_remove)
 
         self._new_clauses.append(conflict_clause)
-        # print(f'\t- [add] {conflict_clause}')
         self.add_clause(conflict_clause)
         self._generated_conflict_clauses.add(conflict_clause)
 
@@ -301,22 +264,15 @@ class SATSolver(Solver):
         Performs constraint propagation using the given function
         until exhaustion, returns False iff formula is UNSAT.
         """
-        # print('- [BCP + TCP]', propagation_func)
         conflict_clause = propagation_func()
         while conflict_clause is not None:
             conflict_clause, watch_literal, level_to_jump_to = self._conflict_resolution(conflict_clause)
-            # print('watch_literal:', watch_literal, '\nlen:', len(list(conflict_clause)), '\nconflict_clause:', conflict_clause)
-            # print(len(list(conflict_clause)), conflict_clause)
-            # print()
             if level_to_jump_to == -1:
                 # An assignment that satisfies the formula's unit clauses causes a conflict, so the formula is UNSAT
                 return False
             self.backtrack(level_to_jump_to)
             self._add_conflict_clause(conflict_clause)
-            self._assign(conflict_clause, watch_literal)
-            # print(f'- [Conflict] {abs(watch_literal)}={watch_literal}, dl={level_to_jump_to}')
-            # print(f'\t- [cc] {conflict_clause}, {watch_literal}')
-
+            self._assign(conflict_clause, watch_literal, description='conflict')
             conflict_clause = propagation_func()
         return True
 
@@ -328,7 +284,7 @@ class SATSolver(Solver):
         if conflict_clause is not None:
             return conflict_clause
         for literal in new_assignments:
-            self._assign(None, literal, is_implied=True)
+            self._assign(None, literal, description='tcp')
         return None
 
     def propagate(self) -> bool:
@@ -355,30 +311,14 @@ class SATSolver(Solver):
         if self._theory_solver:
             self._theory_solver.backtrack(level)
 
-    # def _increment_step(self):
-    #     """
-    #     Maintain data structures related to VSIDS
-    #     """
-    #     self._step_counter += 1
-    #     if self._step_counter >= self._halving_period:
-    #         self._step_counter = 0
-    #         for literal in self._unassigned_vsids_count:
-    #             self._unassigned_vsids_count[literal] /= 2
-    #         for literal in self._assigned_vsids_count:
-    #             self._assigned_vsids_count[literal] /= 2
-
     
     def _decide(self):
-        # if self._theory_solver.dataset == 'acasxu':
-        #     unassigned_variables = self._layers_mapping[self._reversed_layers_mapping[self._all_vars[0]]]
-        # else:
         unassigned_variables = list(self._all_vars)
         variable = self.decider.get(unassigned_variables)
         assert variable not in self._assignment
         self.create_new_decision_level()
-        # always decide True
-        self._assign(None, variable)
-        # self._assign(None, variable if value else -variable)
+        # always decide True first
+        self._assign(None, variable, description='decide')
 
 
     def create_new_decision_level(self):
@@ -389,18 +329,17 @@ class SATSolver(Solver):
 
     def _satisfy_unit_clauses(self):
         self.create_new_decision_level()
-    #     for clause in self._formula:
-    #         if len(clause) == 1:
-    #             for literal in clause:
-    #                 if abs(literal) not in self._assignment:
-    #                     self._assign(clause, literal, is_implied=True)
+        for clause in self._formula:
+            if len(clause) == 1:
+                for literal in clause:
+                    if abs(literal) not in self._assignment:
+                        self._assign(clause, literal, description='unit')
 
     def _is_sat(self) -> bool:
         return self._formula.issubset(self._satisfied_clauses)
 
     def solve(self, timeout=None) -> bool:
-        self.create_new_decision_level()
-        # self._satisfy_unit_clauses()
+        self._satisfy_unit_clauses()
         start = time.perf_counter()
         while True:
             if timeout is not None:
