@@ -122,7 +122,7 @@ class SATSolver(Solver):
 
     def iterable_assignment(self):
         for var in self._assignment:
-            yield var, self._assignment[var]["value"], self._assignment[var]['description'] == 'tcp'
+            yield var, self._assignment[var]["value"], self._assignment[var]['description'] != 'decide'
 
     def _find_last_literal(self, clause, removed_vars=[]):
         """
