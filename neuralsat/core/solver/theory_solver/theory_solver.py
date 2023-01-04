@@ -36,7 +36,7 @@ class TheorySolver:
         valid_domains = self.theory.get_valid_domains()
         if len(valid_domains) == 0:
             return arguments.ReturnStatus.UNSAT
-        if len(valid_domains) > arguments.Config['max_branch']:
+        if len(valid_domains) > arguments.Config['max_hidden_branch']:
             return arguments.ReturnStatus.UNKNOWN
         return None
 

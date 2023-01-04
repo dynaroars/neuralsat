@@ -58,6 +58,10 @@ class NeuralSAT:
                     logger.info(f'Spec {idx+1}/{len(self.raw_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')
                     continue
 
+                if stat == arguments.ReturnStatus.UNKNOWN:
+                    # do something, e.g., skip input splitting, do hidden splitting
+                    return stat
+
             # try hidden splitting
             smt_solver = SMTSolver(self.net, vnnlib_spec)
             remain_time = timeout - (time.perf_counter() - start_time)

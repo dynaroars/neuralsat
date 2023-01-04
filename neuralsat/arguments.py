@@ -22,10 +22,11 @@ class Configuration:
         self.attack = False
         self.logging_level = logging.INFO
 
-        self.max_branch = 50000 # if exceed, return unknown
+        self.max_hidden_branch = 50000 # if exceed, return unknown
+        self.max_input_branch  = 50000 # if exceed, return unknown
 
-        self.early_stop = True # stop when all branches are verified
-        self.print_progress = True # print remaining domains
+        self.early_stop = True # stop when all branches are verified (for hidden splitting)
+        self.print_progress = True # print remaining unverified branches
 
     def __getitem__(self, key):
         return self.__dict__[key]

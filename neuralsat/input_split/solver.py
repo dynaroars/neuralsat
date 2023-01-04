@@ -84,30 +84,28 @@ class Solver:
         # step 5: add domains
         self.add_domains(new_dm_l_all.detach(), new_dm_u_all.detach(), output_lb, output_ub, split_idx)
 
-        logger.info(f'Process batch (iteration={self.iteration}) \t domains={len(self.domains)}/{self.total_domains}')
+        if arguments.Config['print_progress']:
+            logger.info(f'Process batch (iteration={self.iteration}) \t domains={len(self.domains)}/{self.total_domains}')
 
 
     def solve(self):
         logger.info('Input splitting')
         
-        early_stop = False
-
         self.process_init()
 
         while len(self.domains) > 0:
             self.iteration += 1
 
             # step 1: check adv
-            if len(self.domains) > 20:
-                is_attacked, self.assignment = self.attack(topk=5)
-                if is_attacked:
-                    return arguments.ReturnStatus.SAT
+            is_attacked, self.assignment = self.attack(topk=20)
+            if is_attacked:
+                return arguments.ReturnStatus.SAT
 
             # step 2: process one batch
             self.process_batch()
 
             # step 3: check early stopping
-            if early_stop:
+            if len(self.domains) > arguments.Config['max_input_branch']:
                 return arguments.ReturnStatus.UNKNOWN
 
         return arguments.ReturnStatus.UNSAT
@@ -178,29 +176,27 @@ class Solver:
 
     def attack(self, topk=10):
         worst_indices = self.domains.get_topk_indices(k=topk)
-        best_indices = self.domains.get_topk_indices(k=topk, largest=True)
+        best_indices = self.domains.get_topk_indices(k=1, largest=True)
         indices = worst_indices.numpy().tolist() + best_indices.numpy().tolist()
 
-        dm_l, dm_u, c, threshold = [], [], [], []
+        dm_l, dm_u = [], []
         for idx in indices:
             val = self.domains[idx]
             dm_l.append(val[0][None].detach().cpu())
             dm_u.append(val[1][None].detach().cpu())
-            
+
         adv_example = torch.cat([torch.cat([dm_l[i], dm_u[i]]) for i in range(len(indices))])
         adv_example = adv_example.unsqueeze(0).to(self.device, non_blocking=True)
 
         prop_mat = self.c.repeat_interleave(len(indices) * 2, dim=0).unsqueeze(1)
         prop_rhs = self.rhs.repeat_interleave(len(indices) * 2, dim=0)
 
-
         cond_mat = [[prop_mat.shape[1] for i in range(prop_mat.shape[0])]]
         # [1, num_or, input_shape]
         prop_mat = prop_mat.view(1, -1, prop_mat.shape[-1]).to(self.device, non_blocking=True)
         # [1, num_spec, output_dim]
-        prop_rhs = prop_rhs.view(1, -1).to(self.device, non_blocking=True)
+        prop_rhs = prop_rhs.view(1, -1).to(self.device, non_blocking=True).to(self.device, non_blocking=True)
         # [1, num_spec]
-        
 
         data_max = torch.cat([torch.cat([dm_u[i], dm_u[i]]) for i in range(len(indices))])
         data_max = data_max.unsqueeze(0).to(self.device, non_blocking=True)
@@ -219,8 +215,8 @@ class Solver:
                                                    cond_mat=cond_mat, 
                                                    same_number_const=True, 
                                                    alpha=alpha, 
-                                                   attack_iters=100, 
-                                                   num_restarts=10, 
+                                                   attack_iters=5, 
+                                                   num_restarts=30, 
                                                    only_replicate_restarts=True)
 
         attack_image = best_deltas + adv_example.squeeze(1)
@@ -228,12 +224,19 @@ class Solver:
 
         attack_output = self.net(attack_image.view(-1, *attack_image.shape[2:])).view(*attack_image.shape[:2], -1)                                                  
         
-        if test_conditions(attack_image.unsqueeze(1), attack_output.unsqueeze(1), prop_mat.unsqueeze(1), prop_rhs, cond_mat, True, data_max, data_min).all():
+        if test_conditions(attack_image.unsqueeze(1), 
+                           attack_output.unsqueeze(1), 
+                           prop_mat.unsqueeze(1), 
+                           prop_rhs, 
+                           cond_mat, 
+                           True, 
+                           data_max, 
+                           data_min).all():
             attack_image = attack_image.squeeze(0)
             for i in range(len(attack_image)):
                 adv = attack_image[i]
                 if (adv <= self.input_ub).all() and (adv >= self.input_lb).all():
-                    if self.spec.check_solution(self.net(attack_image[i])):
+                    if self.spec.check_solution(self.net(adv)):
                         return True, adv
 
         return False, None
