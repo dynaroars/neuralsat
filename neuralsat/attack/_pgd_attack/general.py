@@ -115,7 +115,7 @@ def attack(model, x, data_min, data_max, list_target_label_arrays, initializatio
 
 def attack_with_general_specs(model, X, data_min, data_max, C_mat, rhs_mat, cond_mat, same_number_const, alpha, 
                               use_adam=True, normalize=lambda x: x, initialization='uniform', GAMA_loss=False, 
-                              num_restarts=10, attack_iters=100):
+                              num_restarts=10, attack_iters=100, only_replicate_restarts=False):
 
     r''' the functional function for pgd attack
 
@@ -139,8 +139,7 @@ def attack_with_general_specs(model, X, data_min, data_max, C_mat, rhs_mat, cond
         alpha (float): alpha for pgd attack
     '''
     device = X.device
-
-    only_replicate_restarts=False
+    
     lr_decay = 0.99
     early_stop = True
     gama_lambda = 10

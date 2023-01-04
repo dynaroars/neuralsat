@@ -1,7 +1,8 @@
+from input_split.solver import Solver as InputSplitSolver
 from util.spec.spec_vnnlib import SpecVNNLIB
 from core.solver.smt_solver import SMTSolver
-from attack.attack import Attacker
 from util.misc.logger import logger
+from attack.attack import Attacker
 import arguments
 
 import time
@@ -43,8 +44,21 @@ class NeuralSAT:
             spec_start_time = time.perf_counter()
             vnnlib_spec = SpecVNNLIB(spec)
 
-            logger.info(f'Spec {idx+1}/{len(self.raw_specs)} ({vnnlib_spec.mat[0][0][0].tolist()})')
+            logger.info(f'Spec {idx+1}/{len(self.raw_specs)} ({vnnlib_spec.mat[0][0].tolist()})')
 
+            # try input splitting
+            input_split_solver = InputSplitSolver(self.net, vnnlib_spec)
+            stat= input_split_solver.solve()
+            if stat == arguments.ReturnStatus.SAT: 
+                self._assignment = input_split_solver.get_assignment()
+                return stat
+            
+            if stat == arguments.ReturnStatus.UNSAT:
+                logger.info(f'Spec {idx+1}/{len(self.raw_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')
+                continue
+            
+
+            # try hidden splitting
             smt_solver = SMTSolver(self.net, vnnlib_spec)
             remain_time = timeout - (time.perf_counter() - start_time)
             if remain_time < 0:

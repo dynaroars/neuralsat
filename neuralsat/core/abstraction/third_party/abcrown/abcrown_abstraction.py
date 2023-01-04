@@ -29,7 +29,8 @@ class ABCrownAbstraction:
         arguments.Config['solver'] = {}
         arguments.Config['solver']['alpha-crown'] = {}
         arguments.Config['solver']['alpha-crown']['lr_alpha'] = 0.1
-        arguments.Config['solver']['alpha-crown']['iteration'] = 50
+        arguments.Config['solver']['alpha-crown']['lr_decay'] = 0.98
+        arguments.Config['solver']['alpha-crown']['iteration'] = 10
         arguments.Config['solver']['alpha-crown']['share_slopes'] = False
 
         arguments.Config['solver']['beta-crown'] = {}
@@ -72,10 +73,14 @@ class ABCrownAbstraction:
                 self.assignment_mapping[(lid, jj)] = node
 
     
+    def build_the_model(self):
+        return self.lirpa.build_the_model(None, self.x, stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
+    
+
     def forward(self, input_lower, input_upper, extra_params=None):
         logger.debug('\t\tabstraction forward')
         if extra_params is None: # initialize
-            output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.lirpa.build_the_model(None, self.x, stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
+            output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.build_the_model()
 
             # Keep only the alpha for the last layer.
             new_slope = defaultdict(dict)
