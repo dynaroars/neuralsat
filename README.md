@@ -55,7 +55,6 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--time
 
 
 ## Options
-<!-- - talk about the flags avaliable -->
 Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*. 
 
 - `--net`: Load pretrained `ONNX` model from this specified path.
@@ -64,9 +63,9 @@ Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*.
 - `--summary`: Path to result file (format in result file: `[STAT],[RUNTIME]`).
 - `--solution`: Get a solution (counterexample) if *NeuralSAT* returns `SAT`.
 - `--timeout`: Timeout (in second) for verifying one instance.
-- `--batch`: the maximum number of parallel splits in bound abstraction.
+- `--batch`: Maximum number of parallel splits in bound abstraction.
 
-## Example
+## Examples
 
 - UNSAT case
 
