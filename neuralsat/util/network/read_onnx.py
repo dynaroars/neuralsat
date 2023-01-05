@@ -2,9 +2,10 @@ import torch.nn as nn
 import numpy as np
 import torch
 import math
-import onnx2pytorch
 import onnx
 import gzip
+
+from .onnx2pytorch import ConvertModel, operations
 
 
 class PyTorchModelWrapper(nn.Module):
@@ -93,7 +94,6 @@ def load_onnx(path):
     return onnx_model
 
 def load_model_onnx(path, is_channel_last=False, force_convert=False):
-    # pip install onnx2pytorch
     onnx_model = load_onnx(path)
 
     onnx_input_dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
@@ -101,7 +101,7 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
     input_shape = tuple(d.dim_value for d in onnx_input_dims) if len(onnx_input_dims) > 1 else (1, onnx_input_dims[0].dim_value)
     output_shape = tuple(d.dim_value for d in onnx_output_dims) if len(onnx_output_dims) > 1 else (1, onnx_output_dims[0].dim_value)
     # input_shape = tuple(input_shape)
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model)
+    pytorch_model = ConvertModel(onnx_model)
 
     if force_convert or len(input_shape) <= 2:
         new_modules = []
@@ -114,7 +114,7 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
                 new_modules.append(new_m)
             elif isinstance(m, torch.nn.ReLU):
                 new_modules.append(torch.nn.ReLU())
-            elif isinstance(m, onnx2pytorch.operations.flatten.Flatten):
+            elif isinstance(m, operations.flatten.Flatten):
                 new_modules.append(torch.nn.Flatten())
             else:
                 raise NotImplementedError
@@ -132,14 +132,14 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
     new_modules = []
     need_permute = False
     for mi, m in enumerate(modules):
-        if isinstance(m, onnx2pytorch.operations.add.Add):
+        if isinstance(m, operations.add.Add):
             # ResNet model. No need to convert to sequential.
             return pytorch_model, is_channel_last
         if isinstance(m, torch.nn.Conv2d):
             # Infer the output size of conv.
             conv_h, conv_w = conv_output_shape((conv_h, conv_w), m.kernel_size, m.stride, m.padding)
             conv_c = m.weight.size(0)
-        if isinstance(m, onnx2pytorch.operations.reshape.Reshape):
+        if isinstance(m, operations.reshape.Reshape):
             # Replace reshape with flatten.
             new_modules.append(nn.Flatten())
             # May need to permute the next linear layer if the model was in NHWC format.

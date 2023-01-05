@@ -1,7 +1,6 @@
 from pprint import pprint
 import sortedcontainers
 import torch.nn as nn
-import onnx2pytorch
 import numpy as np
 import torch
 import math
