@@ -23,12 +23,8 @@ class SMTSolver(Solver):
         variables = [v for d in layers_mapping.values() for v in d]
         self.sat_solver = SATSolver(variables=variables, layers_mapping=layers_mapping, decider=decider, theory_solver=self)
 
-        # torch.set_num_threads(1)
-
 
     def propagate(self):
-        # print('SMT propagate')
-
         conflict_clause = None
         implied_assignments = []
 
@@ -37,17 +33,21 @@ class SMTSolver(Solver):
         if arguments.Config['print_progress']:
             self.theory_solver.print_progress()
 
+        # get conflict clauses from parallel branches
+        extra_conflict_clauses = self.theory_solver.get_extra_conflict_clause()
+        self.theory_solver.clear_extra_conflict_clause()
+        # TODO: add multiple conflict clauses 
+
         # unreachable case
         if not theory_sat:
+            self.theory_solver.clear_implications()
+
             # check if there is no more branch
             if arguments.Config['early_stop']:
                 early_stop_status = self.theory_solver.get_early_stop_status()
                 if early_stop_status:
                     self.sat_solver.set_early_stop(early_stop_status)
                     return conflict_clause, implied_assignments
-
-            # TODO: Fixme: add multiple conflict clauses 
-            self.theory_solver.clear_implications()
 
             conflict_clause = set()
             for variable, value, is_implied in self.sat_solver.iterable_assignment():

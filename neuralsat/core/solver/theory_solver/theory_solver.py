@@ -40,6 +40,17 @@ class TheorySolver:
             return arguments.ReturnStatus.UNKNOWN
         return None
 
+
+    def get_extra_conflict_clause(self):
+        return self.theory.extra_conflict_clauses
+
+
+    def clear_extra_conflict_clause(self):
+        self.theory.extra_conflict_clauses = []
+
+    
+    
+
     def print_progress(self):
         self.theory.print_progress()
         
@@ -72,6 +83,9 @@ class ReLUTheory:
 
         # all domains
         self.all_domains = {}
+
+        # extra conflict clauses
+        self.extra_conflict_clauses = []
 
 
         # SATSolver decider
@@ -107,9 +121,18 @@ class ReLUTheory:
         self.lp_solver.update()
 
 
+    def assignment_to_conflict_clause(self, assignment):
+        conflict_clause = set()
+        for variable, value in assignment.items():
+            conflict_clause.add(-variable if value else variable)
+        return conflict_clause
+
+
     def add_domain(self, domains):
+        # FIXME: check if key existed
         for d in domains:
-            # FIXME: check if key existed
+            if d.unsat:
+                self.extra_conflict_clauses.append(self.assignment_to_conflict_clause(d.get_assignment()))
             self.all_domains[self.get_hash_assignment(d.get_assignment())] = d
 
 
@@ -200,7 +223,8 @@ class ReLUTheory:
         
 
     def process_extra_assignment(self, assignment):
-        raise
+        logger.debug('\tprocess_extra_assignment')
+        raise NotImplementedError
 
 
     def process_new_assignment(self, assignment):
