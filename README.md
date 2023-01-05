@@ -19,18 +19,21 @@ Getting Started
 ====================
 
 ## Dependencies
-- [Python](https://www.python.org/) (3.9)
-- [PyTorch](https://pytorch.org/get-started/locally/)
-- [CUDA](https://developer.nvidia.com/cuda-toolkit) (11.6)
+- [Anaconda](https://www.anaconda.com/)
 - [Gurobi](https://www.gurobi.com/): Gurobi requires a license (a free academic license is available).
 
 ## Installation
-- Make sure you have CUDA and Gurobi properly installed.
-- Navigate to ```neuralsat``` folder.
-- Run ```pip install -r requirements.txt``` to install required python packages.
-- Follow the instruction from [pytorch.org](https://pytorch.org/get-started/locally/) to install PyTorch.
+- Make sure you have `Anaconda` and `Gurobi` properly installed.
+- Navigate to `neuralsat` folder.
+- Run `conda env create -f env.yaml` to install required packages.
 
 ## Usages
+
+- Activate `conda` environment
+
+```bash
+conda activate neuralsat
+```
 
 - Navigate to *NeuralSAT* folder.
 
@@ -47,7 +50,7 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 - More options
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--solution]
+python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] [--solution]
 ```
 
 
@@ -61,6 +64,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into *NeuralSAT*.
 - `--summary`: Path to result file (format in result file: `[STAT],[RUNTIME]`).
 - `--solution`: Get a solution (counterexample) if *NeuralSAT* returns `SAT`.
 - `--timeout`: Timeout (in second) for verifying one instance.
+- `--batch`: the maximum number of parallel splits in bound abstraction.
 
 ## Example
 
