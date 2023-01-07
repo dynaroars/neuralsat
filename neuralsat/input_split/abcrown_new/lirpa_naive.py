@@ -1,4 +1,5 @@
 from collections import defaultdict
+import gurobipy as grb
 import torch.nn as nn
 import numpy as np
 import torch
@@ -9,6 +10,15 @@ import time
 from .auto_LiRPA import BoundedModule, BoundedTensor
 from .auto_LiRPA.perturbations import *
 from .auto_LiRPA.utils import *
+
+
+def copy_model(model):
+    """
+    deep copy a gurobi model together with variable historical results
+    """
+    model_split = model.copy()
+    model_split.update()
+    return model_split
 
 
 def reduction_str2func(reduction_func):
@@ -81,4 +91,97 @@ class LiRPANaive:
 
         return (lb, ub), None
 
-    
+
+
+    def build_solver_model(self, timeout):
+        """
+        m is the instance of LiRPAConvNet
+        model_type ["mip", "lp", "lp_integer"]: three different types of guorbi solvers
+        lp_integer using mip formulation but continuous integer variable from 0 to 1 instead of
+        binary variable as mip; lp_integer should have the same results as lp but allowing us to
+        estimate integer variables.
+        NOTE: we build lp/mip solver from computer graph
+        """
+        self.net.model = grb.Model()
+        self.net.model.setParam('OutputFlag', False)
+        # m.net.model.setParam('Threads', mip_threads)
+        self.net.model.setParam("FeasibilityTol", 1e-7)
+        # m.net.model.setParam('TimeLimit', timeout)
+
+        # build model in auto_LiRPA
+        out_vars = self.net.build_solver_module(C=self.c, final_node_name=self.net.final_name, model_type='lp')
+        self.net.model.update()
+        return out_vars
+
+
+
+    def lp_solve_all_node_split(self, lower_bounds, upper_bounds, rhs):
+        all_node_model = copy_model(self.net.model)
+        pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
+        relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
+        # print(pre_relu_layer_names)
+        # print(relu_layer_names)
+
+        for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
+            # print(relu_idx, pre_relu_name, relu_name)
+            lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
+            # print(lbs.shape)
+            for neuron_idx in range(lbs.shape[0]):
+                pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+                pre_var.lb = pre_lb = lbs[neuron_idx]
+                pre_var.ub = pre_ub = ubs[neuron_idx]
+                var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
+                # print(pre_var, var)
+                # var is None if originally stable
+                if var is not None:
+                    if pre_lb >= 0 and pre_ub >= 0:
+                        # ReLU is always passing
+                        var.lb = pre_lb
+                        var.ub = pre_ub
+                        all_node_model.addConstr(pre_var == var)
+                    elif pre_lb <= 0 and pre_ub <= 0:
+                        var.lb = 0
+                        var.ub = 0
+                    else:
+                        continue
+                        raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
+
+        all_node_model.update()
+        
+        feasible = True
+        adv = [1, 2, 3]
+        
+        orig_out_vars = self.net.final_node().solver_vars
+        # print(orig_out_vars)
+        # print(rhs)
+        assert len(orig_out_vars) == len(rhs), f"out shape not matching! {len(orig_out_vars)} {len(rhs)}"
+        for out_idx in range(len(orig_out_vars)):
+            objVar = all_node_model.getVarByName(orig_out_vars[out_idx].VarName)
+            decision_threshold = rhs[out_idx]
+            all_node_model.setObjective(objVar, grb.GRB.MINIMIZE)
+            all_node_model.update()
+            all_node_model.optimize()
+
+            if all_node_model.status == 2:
+                glb = objVar.X
+            elif all_node_model.status == 3:
+                print("gurobi all node split lp model infeasible!")
+                glb = float('inf')
+            else:
+                print(f"Warning: model status {m.all_node_model.status}!")
+                glb = float('inf')
+
+            # print(glb)
+
+            if glb > decision_threshold:
+                feasible = False
+                adv = None
+                break
+                
+            if all_node_model.status == 2:
+                input_vars = [all_node_model.getVarByName(var.VarName) for var in self.net.input_vars]
+                adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+
+        del all_node_model
+        # print(lp_status, glb)
+        return feasible, adv

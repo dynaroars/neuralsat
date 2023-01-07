@@ -78,6 +78,7 @@ class Decider:
                                                        history=history)
                                                        
         logger.debug(f'\t\tdecider_get_batch (first 5) {branching_decision[:5]}')
+        assert len(selected_domains) == len(branching_decision), print(len(selected_domains), len(branching_decision))
         for idx, d in enumerate(selected_domains):
             d.valid = False # mark as processed
             if d.next_decision is None:
@@ -110,7 +111,7 @@ class Decider:
 
         if self.batch > idx:
             for k, selected_candidate_domain in self.all_domains.items():
-                if (not selected_candidate_domain.unsat) and selected_candidate_domain.valid and (selected_candidate_domain.get_assignment() not in selected_domain_hashes):
+                if (not selected_candidate_domain.unsat) and selected_candidate_domain.valid and (selected_candidate_domain.get_assignment() not in selected_domain_hashes) and (not selected_candidate_domain.full):
                     # print('--------> select:', selected_candidate_domain.get_assignment())
                     selected_candidate_domain.to_device(self.device, partial=True)
                     # selected_candidate_domain.valid = False  # set False to avoid another pop

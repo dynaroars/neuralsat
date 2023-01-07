@@ -22,8 +22,8 @@ class Configuration:
         self.attack = False
         self.logging_level = logging.INFO
 
-        self.max_hidden_branch = 50000 # if exceed, return unknown
-        self.max_input_branch  = 50000 # if exceed, return unknown
+        self.max_hidden_branch = 100000 # if exceed, return unknown
+        self.max_input_branch  = 100000 # if exceed, return unknown
 
         self.early_stop = True # stop when all branches are verified (for hidden splitting)
         self.print_progress = True # print remaining unverified branches

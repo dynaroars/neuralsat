@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from core.abstraction.third_party import BoundRelu, BoundLinear, BoundConv, BoundBatchNormalization, BoundAdd
+from util.misc.logger import logger
 
 
 Icp_score_counter = 0
@@ -508,13 +509,15 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
                 # No valid scores, have to choose a neuron randomly.
                 random_decision_list.append(b)
                 mask_item = [m[b] for m in mask]
+                random_decision = [None, None]
                 for preferred_layer in np.random.choice(len(pre_relu_indices), len(pre_relu_indices), replace=False):
                     if len(mask_item[preferred_layer].nonzero(as_tuple=False)) != 0:
-                        final_decision.append(
-                            [preferred_layer, mask_item[preferred_layer].nonzero(as_tuple=False)[0].item()])
+                        random_decision = [preferred_layer, mask_item[preferred_layer].nonzero(as_tuple=False)[0].item()]
                         break
+                assert random_decision[0] is not None
+                final_decision.append(random_decision)
         if len(random_decision_list):
-            print(f'Random branching decision used for example {random_decision_list}')
+            logger.info(f'Random branching decision used for {len(random_decision_list)} domain(s)')
         return final_decision
     else:
         # keep all the k decisions
@@ -550,6 +553,6 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
             assert len(final_decision[b]) <= topk, f"{len(final_decision[b])} <= {topk}"
             # del mask_item
         if random_decision_dict:
-            print(f'Random branching decision used for {{example_idx:n_random}}: {random_decision_dict}')
+            logger.info(f'Random branching decision used for {len(random_decision_dict)} domain(s)')
         return final_decision
 

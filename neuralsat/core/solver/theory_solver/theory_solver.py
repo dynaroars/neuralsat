@@ -6,6 +6,8 @@ from core.abstraction.abstractor import Abstractor
 from util.misc.logger import logger
 import arguments
 
+from input_split.abcrown_new.lirpa_naive import LiRPANaive
+
 class TheorySolver:
 
     "Interface class for theory solver"
@@ -19,6 +21,8 @@ class TheorySolver:
 
 
     def propagate(self, assignment):
+        if self.get_assignment() is not None:
+            return True
         return self.theory.propagate(assignment)
 
 
@@ -183,12 +187,20 @@ class ReLUTheory:
 
     def print_progress(self):
         self.n_call += 1
-        msg = f'Iteration={self.n_call:<5} (remain={len(self.get_valid_domains())}/{len(self.all_domains)})'
+        n_full_domains = len(self.get_full_domains())
+        if n_full_domains:
+            msg = f'Iteration={self.n_call:<5} (#remain={len(self.get_valid_domains()):<5} #full={n_full_domains:<5} #total={len(self.all_domains)})'
+        else:
+            msg = f'Iteration={self.n_call:<5} (#remain={len(self.get_valid_domains()):<5} #total={len(self.all_domains)})'
         logger.info(msg)
 
 
     def get_valid_domains(self):
         return [d for _, d in self.all_domains.items() if (d.valid and not d.unsat)]
+
+
+    def get_full_domains(self):
+        return [d for _, d in self.all_domains.items() if (d.full and not d.unsat)]
 
 
     def process_implied_assignment(self, assignment):
@@ -285,6 +297,44 @@ class ReLUTheory:
             domains = self.abstractor.forward(input_lower=self.lbs_init, input_upper=self.ubs_init, extra_params=extra_params)
             self.add_domain(domains)
 
+        if len(self.get_full_domains()):
+            self.process_extra_full_domains()
+
+
+    def process_extra_full_domains(self):
+        logger.info('\tprocess_extra_full_domains')
+        
+        # TODO: use lirpa for now
+        c, rhs, _, _ = self.spec.extract()
+        model = LiRPANaive(model_ori=self.net.layers, input_shape=self.net.input_shape, device=self.device, c=c, rhs=rhs)
+
+        # set shape
+        x_range = torch.tensor(self.spec.bounds, dtype=self.dtype, device=self.device)
+        input_lb = x_range[:, 0].reshape(self.net.input_shape)
+        input_ub = x_range[:, 1].reshape(self.net.input_shape)
+        model(input_lb, input_ub)
+
+        # build lp_solver
+        model.build_solver_model(timeout=100)
+
+        # for idx, d in enumerate(self.all_domains.values()): # debug only
+        for idx, d in enumerate(self.get_full_domains()):
+            d.to_cpu()
+            # print('Solving full domain', idx)
+            lower_bounds, upper_bounds = d.lower_all[:-1], d.upper_all[:-1]
+            feasible, adv = model.lp_solve_all_node_split(lower_bounds=lower_bounds, upper_bounds=upper_bounds, rhs=rhs[0])
+            # print(feasible)
+            if not feasible:
+                d.unsat = True
+                d.valid = False
+            else:
+                if self.spec.check_solution(self.net(adv)):
+                    self.assignment = adv
+                else:
+                    # invalid adv, but still feasible, set assignment for dummy array
+                    self.assignment = torch.tensor([1, 2, 3], dtype=self.dtype, device=self.device)
+                break
+
 
     def process_full_assignment(self, assignment):
         logger.debug('\tprocess_full_assignment')
@@ -310,8 +360,8 @@ class ReLUTheory:
         current_domain = self.get_domain(assignment)
         if current_domain is None:
             current_domain = self.process_new_assignment(assignment)
-        else:
-            self.process_extra_domains()
+
+        self.process_extra_domains()
 
         return self.process_cached_assignment(assignment, current_domain)
 

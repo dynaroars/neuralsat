@@ -3,7 +3,7 @@ import time
 
 from .util import *
 
-def attack(model, x, data_min, data_max, list_target_label_arrays, initialization="uniform", GAMA_loss=False):
+def attack(model, x, data_min, data_max, list_target_label_arrays, initialization="uniform", GAMA_loss=False, attack_iters=100, num_restarts=10):
     r""" Interface to PGD attack.
 
     Args:
@@ -77,8 +77,8 @@ def attack(model, x, data_min, data_max, list_target_label_arrays, initializatio
                                                          cond_mat, 
                                                          same_number_const, 
                                                          alpha, 
-                                                         attack_iters=100, 
-                                                         num_restarts=10, 
+                                                         attack_iters=attack_iters, 
+                                                         num_restarts=num_restarts, 
                                                          initialization=initialization, 
                                                          GAMA_loss=GAMA_loss)
 

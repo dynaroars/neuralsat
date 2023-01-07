@@ -33,6 +33,10 @@ class SMTSolver(Solver):
         if arguments.Config['print_progress']:
             self.theory_solver.print_progress()
 
+        if self.get_assignment() is not None:
+            self.set_early_stop(arguments.ReturnStatus.SAT)
+            return conflict_clause, implied_assignments
+
         # get conflict clauses from parallel branches
         extra_conflict_clauses = self.theory_solver.get_extra_conflict_clause()
         self.theory_solver.clear_extra_conflict_clause()
@@ -46,7 +50,7 @@ class SMTSolver(Solver):
             if arguments.Config['early_stop']:
                 early_stop_status = self.theory_solver.get_early_stop_status()
                 if early_stop_status:
-                    self.sat_solver.set_early_stop(early_stop_status)
+                    self.set_early_stop(early_stop_status)
                     return conflict_clause, implied_assignments
 
             conflict_clause = set()

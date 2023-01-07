@@ -97,6 +97,10 @@ def _build_solver_input(self, node):
     x_L = x_L.squeeze(0)
     x_U = x_U.squeeze(0)
     # x_L, x_U = node.lower.squeeze(0), node.upper.squeeze(0)
+    
+    if x_L.ndim == 2:
+        x_L = x_L.squeeze()
+        x_U = x_U.squeeze()
 
     if x_L.ndim == 1:
         # This is a linear input.
@@ -106,7 +110,7 @@ def _build_solver_input(self, node):
                                     name=f'inp_{dim}')
             inp_gurobi_vars.append(v)
     else:
-        assert x_L.ndim == 3, f"x_L ndim  {x_L.ndim}"
+        assert x_L.ndim == 3, f"x_L ndim  {x_L.ndim} {x_L.shape}"
         dim = 0
         for chan in range(x_L.shape[0]):
             chan_vars = []
