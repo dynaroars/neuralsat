@@ -1,4 +1,4 @@
-from input_split.solver import Solver as InputSplitSolver
+from core.input_solver.input_solver import InputSolver
 from util.spec.spec_vnnlib import SpecVNNLIB
 from core.solver.smt_solver import SMTSolver
 from util.misc.logger import logger
@@ -57,7 +57,7 @@ class NeuralSAT:
 
             # try input splitting
             if self.net.n_input < 10:
-                input_split_solver = InputSplitSolver(self.net, vnnlib_spec)
+                input_split_solver = InputSolver(self.net, vnnlib_spec)
                 stat = input_split_solver.solve()
 
                 logger.info(f'Spec {idx+1}/{len(self.processed_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')

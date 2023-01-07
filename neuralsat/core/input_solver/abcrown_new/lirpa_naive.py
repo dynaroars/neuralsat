@@ -69,6 +69,9 @@ class LiRPANaive:
         )
         self.net.eval()
 
+        # lp solver
+        self.net.model = None
+
         # check conversion correctness
         dummy = torch.randn(input_shape, device=self.device)
         try:
@@ -102,6 +105,7 @@ class LiRPANaive:
         estimate integer variables.
         NOTE: we build lp/mip solver from computer graph
         """
+
         self.net.model = grb.Model()
         self.net.model.setParam('OutputFlag', False)
         # m.net.model.setParam('Threads', mip_threads)

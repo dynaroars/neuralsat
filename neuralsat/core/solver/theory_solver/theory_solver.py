@@ -3,10 +3,10 @@ import torch
 
 from core.helper.symbolic_network import SymbolicNetwork
 from core.abstraction.abstractor import Abstractor
+from core.lp_solver.lp_solver import LPSolver
 from util.misc.logger import logger
 import arguments
 
-from input_split.abcrown_new.lirpa_naive import LiRPANaive
 
 class TheorySolver:
 
@@ -79,9 +79,6 @@ class ReLUTheory:
         # Abstraction (over-approximation)
         self.abstractor = Abstractor(net, spec)
 
-        # LP solver
-        # self.init_lp_solver()
-
         # implied nodes
         self.implications = {}
 
@@ -112,17 +109,17 @@ class ReLUTheory:
         assert len(self.ubs_init.flatten()) == len(self.lbs_init.flatten()) == self.net.n_input
 
 
-    def init_lp_solver(self):
-        self.lp_solver = grb.Model()
-        self.lp_solver.setParam('Threads', 1)
-        self.lp_solver.setParam('OutputFlag', False)
-        self.lp_solver.setParam('FeasibilityTol', 1e-8)
+    # def init_lp_solver(self):
+    #     self.lp_solver = grb.Model()
+    #     self.lp_solver.setParam('Threads', 1)
+    #     self.lp_solver.setParam('OutputFlag', False)
+    #     self.lp_solver.setParam('FeasibilityTol', 1e-8)
 
-        # variables in normal form
-        self.lp_vars = [self.lp_solver.addVar(name=f'i{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) for i in range(self.net.n_input)]
-        # variables in matrix form
-        self.lp_mvars = grb.MVar(self.lp_vars)
-        self.lp_solver.update()
+    #     # variables in normal form
+    #     self.lp_vars = [self.lp_solver.addVar(name=f'i{i}', lb=self.lbs_init[i], ub=self.ubs_init[i]) for i in range(self.net.n_input)]
+    #     # variables in matrix form
+    #     self.lp_mvars = grb.MVar(self.lp_vars)
+    #     self.lp_solver.update()
 
 
     def assignment_to_conflict_clause(self, assignment):
@@ -304,25 +301,13 @@ class ReLUTheory:
     def process_extra_full_domains(self):
         logger.info('\tprocess_extra_full_domains')
         
-        # TODO: use lirpa for now
-        c, rhs, _, _ = self.spec.extract()
-        model = LiRPANaive(model_ori=self.net.layers, input_shape=self.net.input_shape, device=self.device, c=c, rhs=rhs)
-
-        # set shape
-        x_range = torch.tensor(self.spec.bounds, dtype=self.dtype, device=self.device)
-        input_lb = x_range[:, 0].reshape(self.net.input_shape)
-        input_ub = x_range[:, 1].reshape(self.net.input_shape)
-        model(input_lb, input_ub)
-
-        # build lp_solver
-        model.build_solver_model(timeout=100)
+        # create LP solver instance
+        model = LPSolver(self.net, self.spec)
 
         # for idx, d in enumerate(self.all_domains.values()): # debug only
         for idx, d in enumerate(self.get_full_domains()):
             d.to_cpu()
-            # print('Solving full domain', idx)
-            lower_bounds, upper_bounds = d.lower_all[:-1], d.upper_all[:-1]
-            feasible, adv = model.lp_solve_all_node_split(lower_bounds=lower_bounds, upper_bounds=upper_bounds, rhs=rhs[0])
+            feasible, adv = model.solve(lower_bounds=d.lower_all[:-1], upper_bounds=d.upper_all[:-1])
             # print(feasible)
             if not feasible:
                 d.unsat = True
@@ -334,7 +319,6 @@ class ReLUTheory:
                     # invalid adv, but still feasible, set assignment for dummy array
                     self.assignment = torch.tensor([1, 2, 3], dtype=self.dtype, device=self.device)
                 break
-
 
     def process_full_assignment(self, assignment):
         logger.debug('\tprocess_full_assignment')

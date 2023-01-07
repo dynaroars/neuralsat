@@ -18,7 +18,7 @@ def stop_criterion_batch_any(threshold=0):
     return lambda x: (x > threshold).any(dim=1)
 
 
-class Solver:
+class InputSolver:
 
     def __init__(self, net, spec):
         self.net = net
