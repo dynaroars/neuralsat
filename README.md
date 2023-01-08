@@ -24,7 +24,6 @@ Getting Started
 
 ## Installation
 - Make sure you have `Anaconda` and `Gurobi` properly installed.
-- Navigate to `neuralsat` folder.
 - Run `conda env create -f env.yaml` to install required packages.
 
 ## Usages
