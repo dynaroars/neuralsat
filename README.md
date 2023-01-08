@@ -59,8 +59,8 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - `--net`: Load pretrained `ONNX` model from this specified path.
 - `--spec`: Path to `VNNLIB` specification file.
 - `--device`: Select device to run **NeuralSAT**.
-- `--summary`: Path to result file (format in result file: `[STAT],[RUNTIME]`).
-- `--solution`: Get a solution (counterexample) if **NeuralSAT** returns `SAT`.
+- `--summary`: Path to result file (format `[STAT],[RUNTIME]`).
+- `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
 - `--timeout`: Timeout (in second) for verifying one instance.
 - `--batch`: Maximum number of parallel splits in bound abstraction.
 
