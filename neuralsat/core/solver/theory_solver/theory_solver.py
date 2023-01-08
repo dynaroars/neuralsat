@@ -299,7 +299,7 @@ class ReLUTheory:
 
 
     def process_extra_full_domains(self):
-        logger.info('\tprocess_extra_full_domains')
+        logger.debug('\tprocess_extra_full_domains')
         
         # create LP solver instance
         model = LPSolver(self.net, self.spec)

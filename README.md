@@ -1,7 +1,7 @@
 **NeuralSAT**: A DPLL(T)-based Constraint Solving Approach to Verifying Deep Neural Networks
 ====================
 
-**NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T) and CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development and has not released any official versions, though periodically we evaluate the tool on existing standard benchmarks such as ACAS Xu, MNIST, CIFAR and compare the performance of the prototype to other state-of-the-art DNN verifiers.
+**NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T) and CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development and has not released any official versions, though periodically we evaluate the tool on existing standard benchmarks such as `ACAS Xu`, `MNISTFC`, `CIFAR2020` and compare the performance of the prototype to other state-of-the-art DNN verifiers.
 
 **NeuralSAT** takes as input the formula $\alpha$ representing the DNN $N$ (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *UNSAT* if the formula is not satisfiable, indicating  $N$ satisfies $\phi$, and *SAT* if the formula is satisfiable, indicating the $N$ does not satisfy $\phi$.
 
@@ -66,17 +66,33 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 ## Examples
 
-- UNSAT case
+- UNSAT cases:
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
 # UNSAT,4.603
+
+python3 main.py --net "../benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx" --spec "../benchmark/cifar2020/spec/cifar10_spec_idx_76_eps_0.03137_n1.vnnlib"  --device cuda
+# UNSAT,19.003
+
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cuda
+# UNSAT,5.186
+
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cpu
+# UNSAT,7.799
 ```
 
-- SAT case
+
+- SAT cases:
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
 # SAT,0.123
 # adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
+
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --device cuda
+# SAT,0.817
+
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --device cuda
+# SAT,134.844
 ```
