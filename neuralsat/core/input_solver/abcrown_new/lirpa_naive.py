@@ -108,7 +108,6 @@ class LiRPANaive:
 
         self.net.model = grb.Model()
         self.net.model.setParam('OutputFlag', False)
-        # m.net.model.setParam('Threads', mip_threads)
         self.net.model.setParam("FeasibilityTol", 1e-7)
         # m.net.model.setParam('TimeLimit', timeout)
 
@@ -123,19 +122,14 @@ class LiRPANaive:
         all_node_model = copy_model(self.net.model)
         pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
         relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
-        # print(pre_relu_layer_names)
-        # print(relu_layer_names)
 
         for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
-            # print(relu_idx, pre_relu_name, relu_name)
             lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
-            # print(lbs.shape)
             for neuron_idx in range(lbs.shape[0]):
                 pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
                 pre_var.lb = pre_lb = lbs[neuron_idx]
                 pre_var.ub = pre_ub = ubs[neuron_idx]
                 var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
-                # print(pre_var, var)
                 # var is None if originally stable
                 if var is not None:
                     if pre_lb >= 0 and pre_ub >= 0:
@@ -156,8 +150,6 @@ class LiRPANaive:
         adv = [1, 2, 3]
         
         orig_out_vars = self.net.final_node().solver_vars
-        # print(orig_out_vars)
-        # print(rhs)
         assert len(orig_out_vars) == len(rhs), f"out shape not matching! {len(orig_out_vars)} {len(rhs)}"
         for out_idx in range(len(orig_out_vars)):
             objVar = all_node_model.getVarByName(orig_out_vars[out_idx].VarName)
@@ -174,8 +166,6 @@ class LiRPANaive:
             else:
                 print(f"Warning: model status {m.all_node_model.status}!")
                 glb = float('inf')
-
-            # print(glb)
 
             if glb > decision_threshold:
                 feasible = False
