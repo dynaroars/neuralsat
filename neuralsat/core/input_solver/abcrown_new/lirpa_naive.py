@@ -147,7 +147,7 @@ class LiRPANaive:
         all_node_model.update()
         
         feasible = True
-        adv = [1, 2, 3]
+        adv = None
         
         orig_out_vars = self.net.final_node().solver_vars
         assert len(orig_out_vars) == len(rhs), f"out shape not matching! {len(orig_out_vars)} {len(rhs)}"
