@@ -34,22 +34,8 @@ class ReLUDomain:
         self.unsat = False
         self.next_decision = None
 
+        self.full = sum([((l < 0) * (u > 0)).sum() for l, u in zip(lb_all[:-1], up_all[:-1])]) == 0 if lb_all is not None else False
 
-        # print([_.shape for _ in lb_all])
-        self.full = sum([((l < 0) * (u > 0)).sum() for l, u in zip(lb_all[:-1], up_all[:-1])]) == 0
-        # assert not self.full
-
-        # for mi, (split_locs, split_coeffs) in enumerate(self.history):
-        #     # print(mi, split_locs, split_coeffs)
-        #     for sl, sc in zip(split_locs, split_coeffs):
-        #         # print('loc:', sl, 'coeff', sc)
-        #         if sc > 0:
-        #             assert self.lower_all[mi][0][sl] >= 0
-        #         else:
-        #             assert self.upper_all[mi][0][sl] <= 0
-                # print('lower:', )
-                # print('upper:', )
-                # print()
 
     def get_assignment(self):
         assignment = {}

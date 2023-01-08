@@ -19,7 +19,6 @@ class Configuration:
         self.device = 'cpu'
         
         self.batch = 1024
-        self.attack = False
         self.logging_level = logging.INFO
 
         self.max_hidden_branch = 100000 # if exceed, return unknown
@@ -27,6 +26,7 @@ class Configuration:
 
         self.early_stop = True # stop when all branches are verified (for hidden splitting)
         self.print_progress = True # print remaining unverified branches
+        self.attack = True
 
     def __getitem__(self, key):
         return self.__dict__[key]

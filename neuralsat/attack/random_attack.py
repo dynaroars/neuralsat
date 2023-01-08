@@ -7,7 +7,7 @@ import arguments
 
 class RandomAttack:
 
-    def __init__(self, net, spec, timeout=0.5, seed=None):
+    def __init__(self, net, spec, timeout=0.2, seed=None):
 
         self.bounds = spec.bounds
         self.mat = spec.mat
