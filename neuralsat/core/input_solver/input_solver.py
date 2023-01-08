@@ -1,5 +1,4 @@
 from attack import attack_with_general_specs, test_conditions
-from core.abstraction.polytope import PolytopeAbstraction
 from .abcrown_new.lirpa_naive import LiRPANaive
 from .input_domain import InputDomainList
 
