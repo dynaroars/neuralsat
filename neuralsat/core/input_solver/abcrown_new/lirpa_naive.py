@@ -169,12 +169,10 @@ class LiRPANaive:
 
             if glb > decision_threshold:
                 feasible = False
-                adv = None
                 break
-                
-            if all_node_model.status == 2:
-                input_vars = [all_node_model.getVarByName(var.VarName) for var in self.net.input_vars]
-                adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+
+            input_vars = [all_node_model.getVarByName(var.VarName) for var in self.net.input_vars]
+            adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
 
         del all_node_model
         # print(lp_status, glb)

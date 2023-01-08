@@ -3,9 +3,9 @@
 
 **NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T) and CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development and has not released any official versions, though periodically we evaluate the tool on existing standard benchmarks such as `ACAS Xu`, `MNISTFC`, `CIFAR2020` and compare the performance of the prototype to other state-of-the-art DNN verifiers.
 
-**NeuralSAT** takes as input the formula $\alpha$ representing the DNN $N$ (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *UNSAT* if the formula is not satisfiable, indicating  $N$ satisfies $\phi$, and *SAT* if the formula is satisfiable, indicating the $N$ does not satisfy $\phi$.
+**NeuralSAT** takes as input the formula $\alpha$ representing the DNN `N` (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *`UNSAT`* if the formula is not satisfiable, indicating  `N` satisfies $\phi$, and *`SAT`* if the formula is satisfiable, indicating the `N` does not satisfy $\phi$.
 
-**NeuralSAT** uses a  DPLL(T)-based algorithm to check unsatisfiability. **NeuralSAT** applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts, backtracks to erase such decisions, and learns clauses to avoid those decisions in the future. **NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *SAT*, or until it no longer can backtrack, in which it returns *UNSAT*.
+**NeuralSAT** uses a  DPLL(T)-based algorithm to check unsatisfiability. **NeuralSAT** applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts, backtracks to erase such decisions, and learns clauses to avoid those decisions in the future. **NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can backtrack, in which it returns *`UNSAT`*.
 
 Content
 ====================
@@ -71,13 +71,19 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
 # UNSAT,4.603
+```
 
+```python
 python3 main.py --net "../benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx" --spec "../benchmark/cifar2020/spec/cifar10_spec_idx_76_eps_0.03137_n1.vnnlib"  --device cuda
 # UNSAT,19.003
+```
 
+```python
 python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cuda
 # UNSAT,5.186
+```
 
+```python
 python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cpu
 # UNSAT,7.799
 ```
@@ -89,10 +95,14 @@ python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
 # SAT,0.123
 # adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
+```
 
+```python
 python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --device cuda
 # SAT,0.817
+```
 
+```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --device cuda
 # SAT,134.844
 ```
