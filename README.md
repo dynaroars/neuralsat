@@ -19,7 +19,7 @@ Getting Started
 ====================
 
 ## Dependencies
-- [Anaconda](https://www.anaconda.com/)
+- [Anaconda or Miniconda](https://www.anaconda.com/)
 - [Gurobi](https://www.gurobi.com/): Gurobi requires a license (a free academic license is available).
 
 ## Installation
