@@ -1,14 +1,13 @@
 import logging
 import torch
 
+
 class ReturnStatus:
 
     UNSAT   = 'UNSAT'
     SAT     = 'SAT'
     UNKNOWN = 'UNKNOWN'
     TIMEOUT = 'TIMEOUT'
-
-
 
 class Configuration:
 

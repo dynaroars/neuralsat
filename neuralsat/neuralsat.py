@@ -5,11 +5,15 @@ from util.misc.logger import logger
 from attack.attack import Attacker, ShrinkAttacker
 import arguments
 
+import util.network.read_onnx
 import time
+from beartype import beartype
 
 class NeuralSAT:
-
-    def __init__(self, net, raw_specs):
+    
+    @beartype
+    def __init__(self, net: util.network.read_onnx.PyTorchModelWrapper, 
+                 raw_specs: list) -> None:
         self.net = net
         self.raw_specs = raw_specs
         # create multiple specs from DNF spec
@@ -21,8 +25,7 @@ class NeuralSAT:
         # counter-example
         self._assignment = None 
 
-
-    def _preprocess_spec(self, raw_specs):
+    def _preprocess_spec(self, raw_specs: list) -> list:
         processed_specs = []
         for spec in raw_specs:
             bounds = spec[0]
@@ -30,7 +33,7 @@ class NeuralSAT:
                 processed_specs.append((bounds, [i]))
         return processed_specs
 
-    def solve(self, timeout=1000):
+    def solve(self, timeout:int=1000) -> arguments.ReturnStatus:
         start_time = time.perf_counter()
         return_status = []
 
@@ -100,20 +103,18 @@ class NeuralSAT:
 
         if arguments.ReturnStatus.UNKNOWN in return_status:
             return arguments.ReturnStatus.UNKNOWN
+        
         return arguments.ReturnStatus.UNSAT
 
-
-    def get_assignment(self):
+    def get_assignment(self):  #  -> dict | None:
         return self._assignment
 
-
-    def check_adv_pre(self):
+    def check_adv_pre(self) -> bool:
         is_attacked, self._assignment = self.attacker.run()
         logger.info(f"Pre-verifying attack {'successfully' if is_attacked else 'failed'}")
         return is_attacked
 
-
-    def shrink_attack(self, spec, timeout=None):
+    def shrink_attack(self, spec: int, timeout=None) -> bool:
         shrink_attacker = ShrinkAttacker(self.net, spec)
         is_attacked, self._assignment = shrink_attacker.run(timeout)
         logger.info(f"Post-verifying attack {'successfully' if is_attacked else 'failed'}")
