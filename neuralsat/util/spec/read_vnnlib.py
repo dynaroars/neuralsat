@@ -262,7 +262,7 @@ def read_vnnlib_simple(vnnlib_filename, num_inputs, num_outputs, regression=Fals
 
 
 
-def read_vnnlib(vnnlib_filename, regression=False, precompiled=False):
+def read_vnnlib(vnnlib_filename, regression=False):
     '''process in a vnnlib file
 
     this is not a general parser, and assumes files are provided in a 'nice' format. Only a single disjunction
@@ -280,27 +280,6 @@ def read_vnnlib(vnnlib_filename, regression=False, precompiled=False):
         2. For the later loading, it will check *.compiled and see if the stored md5 matches the original one. If not, regeneration is needed for vnnlib changing cases. Otherwise return the cache file.
     '''
 
-    if precompiled:
-        compiled_vnnlib_suffix = ".compiled"
-        compiled_vnnlib_filename = vnnlib_filename + compiled_vnnlib_suffix
-        with open(vnnlib_filename, "rb") as file:
-            curfile_md5 = hashlib.md5(file.read()).hexdigest()
-        if (os.path.exists(compiled_vnnlib_filename)):
-            read_error = False
-            try:
-                with open(compiled_vnnlib_filename, "rb") as extf:
-                    final_rv, old_file_md5 = pickle.load(extf)
-            except (pickle.PickleError, ValueError, EOFError):
-                print("Cannot read compiled vnnlib file. Regenerating...")
-                read_error = True
-            
-            if (read_error == False):
-                if (curfile_md5 == old_file_md5):
-                    print(f"Precompiled vnnlib file found at {compiled_vnnlib_filename}")
-                    return final_rv
-                else:
-                    print(f"{compiled_vnnlib_suffix} file md5: {old_file_md5} does not match the current vnnlib md5: {curfile_md5}. Regenerating...")
-    
     # example: "(declare-const X_0 Real)"
     regex_declare = re.compile(r"^\(declare-const (X|Y)_(\S+) Real\)$")
 
@@ -433,14 +412,9 @@ def read_vnnlib(vnnlib_filename, regression=False, precompiled=False):
             mat = np.array(matrhs[0], dtype=float)
             rhs = np.array(matrhs[1], dtype=float)
             spec_list.append((mat, rhs))
-            # final_spec.append(mat)
-            # final_rhs.append(rhs)
 
         final_rv.append((box, spec_list))
 
-    if precompiled:
-        with open(compiled_vnnlib_filename, "wb") as extf:
-            pickle.dump((final_rv, curfile_md5), extf, protocol=pickle.HIGHEST_PROTOCOL)
     return final_rv
 
 
