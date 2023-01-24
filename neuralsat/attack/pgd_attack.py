@@ -8,7 +8,7 @@ from util.spec.spec_vnnlib import SpecVNNLIB
 from attack.error import AttackTimeoutError
 import arguments
 
-from ._pgd_attack.general import attack, _pgd_whitebox
+from ._pgd_attack.general import attack, pgd_whitebox
 from ._pgd_attack.util import preprocess_spec
 
 class PGDAttack:
@@ -120,9 +120,6 @@ class PGDWhiteBox:
 
 
     def run(self):
-        restarts = 5
-        ODI_num_steps = 10
-
         x_range = torch.tensor(self.spec.bounds, dtype=self.dtype)
         data_min = x_range[:, 0].view(self.net.input_shape)
         data_max = x_range[:, 1].view(self.net.input_shape)
@@ -155,30 +152,24 @@ class PGDWhiteBox:
         data_min = data_min.to(self.device)
         data_max = data_max.to(self.device)
 
-        adex, worst_x = _pgd_whitebox(
+        adex, worst_x = pgd_whitebox(
             self.net,
             X,
             constraints,
             data_min,
             data_max,
             self.device,
-            lossFunc="GAMA",
-            restarts=restarts,
-            ODI_num_steps=ODI_num_steps,
-            stop_early=True,
+            loss_func="GAMA",
         )
         if adex is None:
-            adex, _ = _pgd_whitebox(
+            adex, _ = pgd_whitebox(
                 self.net,
                 X,
                 constraints,
                 data_min,
                 data_max,
                 self.device,
-                lossFunc="margin",
-                restarts=restarts,
-                ODI_num_steps=ODI_num_steps,
-                stop_early=True,
+                loss_func="margin",
             )
 
         if adex is not None:

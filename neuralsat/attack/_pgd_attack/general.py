@@ -266,9 +266,9 @@ def attack_with_general_specs(model, X, data_min, data_max, C_mat, rhs_mat, cond
 
 
 
-def _pgd_whitebox(model, X, constraints, specLB, specUB, device, 
-                  num_steps=50, step_size=0.2, ODI_num_steps=10, ODI_step_size=1.0, 
-                  batch_size=50, lossFunc="margin", restarts=1, stop_early=True):
+def pgd_whitebox(model, X, constraints, data_min, data_max, device, 
+                  num_steps=30, step_size=0.2, ODI_num_steps=10, ODI_step_size=1.0, 
+                  batch_size=50, loss_func="margin", restarts=1, stop_early=True):
     out_X = model(X).detach()
     adex = None
     worst_x = None
@@ -281,10 +281,10 @@ def _pgd_whitebox(model, X, constraints, specLB, specUB, device,
             break
         X_pgd = torch.autograd.Variable(X.data.repeat((batch_size,) + (1,) * (X.dim() - 1)), requires_grad=True).to(device)
         randVector_ = torch.ones_like(model(X_pgd)).uniform_(-1, 1)
-        random_noise = torch.ones_like(X_pgd).uniform_(-0.5, 0.5) * (specUB - specLB)
-        X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + random_noise, specLB), specUB), requires_grad=True,)
+        random_noise = torch.ones_like(X_pgd).uniform_(-0.5, 0.5) * (data_max - data_min)
+        X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + random_noise, data_min), data_max), requires_grad=True,)
 
-        lr_scale = (specUB - specLB) / 2
+        lr_scale = (data_max - data_min) / 2
         lr_scheduler = step_lr_scheduler(
             step_size, 
             gamma=0.1,
@@ -322,13 +322,13 @@ def _pgd_whitebox(model, X, constraints, specLB, specUB, device,
 
                 if i < ODI_num_steps:
                     loss = (out * randVector_).sum()
-                elif lossFunc == "xent":
+                elif loss_func == "xent":
                     loss = nn.CrossEntropyLoss()(out, torch.tensor([y] * out.shape[0], dtype=torch.long))
-                elif lossFunc == "margin":
+                elif loss_func == "margin":
                     and_idx = np.arange(len(constraints)).repeat(np.floor(batch_size / len(constraints)))
                     and_idx = torch.tensor(np.concatenate([and_idx, np.arange(batch_size - len(and_idx))], axis=0)).to(device)
                     loss = constraint_loss(out, constraints, and_idx=and_idx).sum()
-                elif lossFunc == "GAMA":
+                elif loss_func == "GAMA":
                     and_idx = np.arange(len(constraints)).repeat(np.floor(batch_size / len(constraints)))
                     and_idx = torch.tensor(np.concatenate([and_idx, np.arange(batch_size - len(and_idx))], axis=0)).to(device)
                     out = torch.softmax(out, 1)
@@ -346,5 +346,5 @@ def _pgd_whitebox(model, X, constraints, specLB, specUB, device,
             else:
                 eta = lr_scheduler.get_lr() * lr_scale * X_pgd.grad.data.sign()
                 lr_scheduler.step()
-            X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + eta, specLB), specUB), requires_grad=True)
+            X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + eta, data_min), data_max), requires_grad=True)
     return adex, worst_x
