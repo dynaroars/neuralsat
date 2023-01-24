@@ -326,7 +326,7 @@ def constraint_loss(logits, constraints, and_idx=None):
 
 
 
-class step_lr_scheduler:
+class StepLrScheduler:
 
     def __init__(self, initial_step_size, gamma=0.1, interval=10):
         self.initial_step_size = initial_step_size

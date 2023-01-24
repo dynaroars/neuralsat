@@ -280,12 +280,12 @@ def pgd_whitebox(model, X, constraints, data_min, data_max, device,
         if adex is not None:
             break
         X_pgd = torch.autograd.Variable(X.data.repeat((batch_size,) + (1,) * (X.dim() - 1)), requires_grad=True).to(device)
-        randVector_ = torch.ones_like(model(X_pgd)).uniform_(-1, 1)
+        random_vector = torch.ones_like(model(X_pgd)).uniform_(-1, 1)
         random_noise = torch.ones_like(X_pgd).uniform_(-0.5, 0.5) * (data_max - data_min)
         X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + random_noise, data_min), data_max), requires_grad=True,)
 
         lr_scale = (data_max - data_min) / 2
-        lr_scheduler = step_lr_scheduler(
+        lr_scheduler = StepLrScheduler(
             step_size, 
             gamma=0.1,
             interval=[
@@ -321,7 +321,7 @@ def pgd_whitebox(model, X, constraints, data_min, data_max, device,
                     break
 
                 if i < ODI_num_steps:
-                    loss = (out * randVector_).sum()
+                    loss = (out * random_vector).sum()
                 elif loss_func == "xent":
                     loss = nn.CrossEntropyLoss()(out, torch.tensor([y] * out.shape[0], dtype=torch.long))
                 elif loss_func == "margin":
