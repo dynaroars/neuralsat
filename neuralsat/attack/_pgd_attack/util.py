@@ -251,3 +251,94 @@ def gen_adv_example(model_ori, x, best_deltas, data_max, data_min, C_mat, rhs_ma
 
     return attack_image, attack_output, attack_margin
 
+
+
+
+def translate_constraints_to_label(GT_specs):
+    labels = []
+    for and_list in GT_specs:
+        label = None
+        for or_list in and_list:
+            if len(or_list) > 1:
+                label = None
+                break
+            if label is None:
+                label = or_list[0][0]
+            elif label != or_list[0][0]:
+                label = None
+                break
+        labels.append(label)
+    return labels
+
+
+
+def evaluate_cstr(constraints, net_out, torch_input=False):
+    if len(net_out.shape) <= 1:
+        net_out = net_out.reshape(1, -1)
+
+    n_samp = net_out.shape[0]
+
+    and_holds = (
+        torch.ones(n_samp, dtype=bool, device=net_out.device)
+        if torch_input
+        else np.ones(n_samp, dtype=np.bool)
+    )
+    for or_list in constraints:
+        or_holds = (
+            torch.zeros(n_samp, dtype=bool, device=net_out.device)
+            if torch_input
+            else np.zeros(n_samp, dtype=np.bool)
+        )
+        for cstr in or_list:
+            if cstr[0] == -1:
+                or_holds = or_holds.__or__(cstr[2] > net_out[:, cstr[1]])
+            elif cstr[1] == -1:
+                or_holds = or_holds.__or__(net_out[:, cstr[0]] > cstr[2])
+            else:
+                or_holds = or_holds.__or__(
+                    net_out[:, cstr[0]] - net_out[:, cstr[1]] > cstr[2]
+                )
+            if or_holds.all():
+                break
+        and_holds = and_holds.__and__(or_holds)
+        if not and_holds.any():
+            break
+    return and_holds
+
+
+
+def constraint_loss(logits, constraints, and_idx=None):
+    loss = 0
+    for i, or_list in enumerate(constraints):
+        or_loss = 0
+        for cstr in or_list:
+            if cstr[0] == -1:
+                or_loss += -logits[:, cstr[1]]
+            elif cstr[1] == -1:
+                or_loss += logits[:, cstr[0]]
+            else:
+                or_loss += logits[:, cstr[0]] - logits[:, cstr[1]]
+        if and_idx is not None:
+            loss += torch.where(and_idx == i, or_loss, torch.zeros_like(or_loss))
+        else:
+            loss += or_loss
+    return -loss
+
+
+
+class step_lr_scheduler:
+
+    def __init__(self, initial_step_size, gamma=0.1, interval=10):
+        self.initial_step_size = initial_step_size
+        self.gamma = gamma
+        self.interval = interval
+        self.current_step = 0
+
+    def step(self, k=1):
+        self.current_step += k
+
+    def get_lr(self):
+        if isinstance(self.interval, int):
+            return self.initial_step_size * self.gamma ** (np.floor(self.current_step / self.interval))
+        phase = len([x for x in self.interval if self.current_step >= x])
+        return self.initial_step_size * self.gamma ** (phase)

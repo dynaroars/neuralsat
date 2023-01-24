@@ -1,5 +1,5 @@
+from attack.pgd_attack import PGDAttack, PGDWhiteBox
 from attack.random_attack import RandomAttack
-from attack.pgd_attack import PGDAttack
 from util.spec.spec_vnnlib import SpecVNNLIB
 from util.misc.logger import logger
 
@@ -11,11 +11,11 @@ class Attacker:
         self.net = net
         self.raw_specs = raw_specs
         
-        self.random_attackers = [RandomAttack(net, SpecVNNLIB(s)) for s in raw_specs]
-        self.pgd_attackers = [PGDAttack(net, s, mode=m) for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
+        self.attackers = []
+        self.attackers += [PGDAttack(net, s, mode=m) for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
+        self.attackers += [PGDWhiteBox(net, SpecVNNLIB(s)) for s in raw_specs]
+        self.attackers += [RandomAttack(net, SpecVNNLIB(s)) for s in raw_specs]
  
-        self.attackers = self.pgd_attackers + self.random_attackers
-
 
     def run(self):
         return self._attack()

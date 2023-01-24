@@ -8,8 +8,8 @@ from util.spec.spec_vnnlib import SpecVNNLIB
 from attack.error import AttackTimeoutError
 import arguments
 
+from ._pgd_attack.general import attack, _pgd_whitebox
 from ._pgd_attack.util import preprocess_spec
-from ._pgd_attack.general import attack
 
 class PGDAttack:
 
@@ -100,3 +100,94 @@ class PGDAttack:
     
     def __str__(self):
         return f'PGDAttack(mode={self.mode}, seed={self.seed})'
+
+
+class PGDWhiteBox:
+
+    def __init__(self, net, spec, timeout=0.5):
+        self.net = net
+        self.spec = spec
+        self.timeout = timeout
+        self.dtype = arguments.Config['dtype']
+        self.device = arguments.Config['device']
+        self.seed = None
+
+
+    def manual_seed(self, seed):
+        self.seed = seed
+        random.seed(self.seed)
+        torch.manual_seed(self.seed)
+
+
+    def run(self):
+        restarts = 5
+        ODI_num_steps = 10
+
+        x_range = torch.tensor(self.spec.bounds, dtype=self.dtype)
+        data_min = x_range[:, 0].view(self.net.input_shape)
+        data_max = x_range[:, 1].view(self.net.input_shape)
+        
+        data_lb = data_min.amin()
+        data_ub = data_min.amax()
+        eps = (data_max - data_min).amax() / 2
+
+        sample = []
+        for lb, ub in zip(data_min.flatten(), data_max.flatten()):
+            s = np.where(lb == data_lb, ub - eps, np.where(ub == data_ub, lb + eps, (ub + lb) / 2))
+            sample.append(np.clip(s, lb, ub))
+        sample = torch.tensor(sample).view(self.net.input_shape).to(self.device)
+
+        # assert torch.all(sample >= data_min)
+        # assert torch.all(sample <= data_max)
+
+        constraints = []
+        for lhs, rhs in self.spec.mat:
+            true_label = np.where(lhs[0] == 1)[-1]
+            target_label = np.where(lhs[0] == -1)[-1]
+            if len(true_label) and len(target_label):
+                constraints.append([(true_label[0], target_label[0], rhs[0])])
+
+        if not len(constraints):
+            return False, None
+
+        # print(constraints)
+        X = torch.autograd.Variable(sample, requires_grad=True).to(self.device)
+        data_min = data_min.to(self.device)
+        data_max = data_max.to(self.device)
+
+        adex, worst_x = _pgd_whitebox(
+            self.net,
+            X,
+            constraints,
+            data_min,
+            data_max,
+            self.device,
+            lossFunc="GAMA",
+            restarts=restarts,
+            ODI_num_steps=ODI_num_steps,
+            stop_early=True,
+        )
+        if adex is None:
+            adex, _ = _pgd_whitebox(
+                self.net,
+                X,
+                constraints,
+                data_min,
+                data_max,
+                self.device,
+                lossFunc="margin",
+                restarts=restarts,
+                ODI_num_steps=ODI_num_steps,
+                stop_early=True,
+            )
+
+        if adex is not None:
+            adex = torch.from_numpy(np.array(adex)).view(self.net.input_shape).to(self.device)
+            if self.spec.check_solution(self.net(adex)):
+                return True, adex
+        
+        return False, None
+
+
+    def __str__(self):
+        return f'PGDWhiteBox(seed={self.seed})'
