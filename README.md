@@ -67,7 +67,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 ## Examples
 
-- UNSAT cases:
+- Examples showing NeuralSat verifies properties (i.e., UNSAT results):
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
@@ -90,7 +90,7 @@ python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx
 ```
 
 
-- SAT cases:
+- Examples showing NeuralSAT disproving properties (i.e., SAT results):
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
