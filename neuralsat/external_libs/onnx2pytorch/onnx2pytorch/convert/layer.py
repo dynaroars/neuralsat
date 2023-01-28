@@ -71,8 +71,11 @@ def convert_layer(node, layer_type, params=None):
         load_params(layer, weight, bias)
     else:
         # initialize operations without parameters (MaxPool, AvgPool, etc.)
-        if layer_type == "MaxPool":
-            kwargs["return_indices"] = True
+
+        # NOTE The default value should be False. It is unclear why 
+        # ToriML/onnx2pytorch set it to True.
+        # if layer_type == "MaxPool":
+        #     kwargs["return_indices"] = True
 
         # if padding is a layer, remove from kwargs and prepend later
         if "padding" in kwargs and isinstance(kwargs["padding"], nn.Module):

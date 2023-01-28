@@ -12,7 +12,7 @@ from onnx2pytorch.operations import (
 
 
 COMPOSITE_LAYERS = (nn.Sequential,)
-MULTIOUTPUT_LAYERS = (_MaxPoolNd, Loop, LSTMWrapper, Split, TopK)
+MULTIOUTPUT_LAYERS = (Loop, LSTMWrapper, Split, TopK)
 STANDARD_LAYERS = (
     _ConvNd,
     BatchNormWrapper,
