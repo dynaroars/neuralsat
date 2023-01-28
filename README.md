@@ -24,6 +24,7 @@ Getting Started
 
 ## Installation
 - Make sure you have `Anaconda` and `Gurobi` properly installed.
+- (Optional) Run `conda deactivate; conda env remove --name neuralsat` to remove installed environment
 - Run `conda env create -f env.yaml` to install required packages.
 
 ## Usages
@@ -31,7 +32,6 @@ Getting Started
 - Activate `conda` environment
 
 ```bash
-conda deactivate; conda env remove --name neuralsat
 conda activate neuralsat
 ```
 
