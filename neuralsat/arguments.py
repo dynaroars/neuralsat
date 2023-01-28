@@ -7,6 +7,7 @@ class ReturnStatus:
     SAT     = 'SAT'
     UNKNOWN = 'UNKNOWN'
     TIMEOUT = 'TIMEOUT'
+    RESTART = 'RESTART'
 
 
 

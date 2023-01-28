@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import sys
-import appdirs
+# import appdirs
 from collections import defaultdict, namedtuple
 from collections.abc import Sequence
 from functools import reduce
@@ -85,12 +85,12 @@ def stop_criterion_batch_topk(threshold=0, k=1314):
     # print('threshold', threshold.shape)
     return lambda x: (torch.kthvalue(x, k, dim=-1, keepdim=True).values > threshold).any(dim=1)
 
-user_data_dir = appdirs.user_data_dir('auto_LiRPA')
-if not os.path.exists(user_data_dir):
-    try:
-        os.makedirs(user_data_dir)
-    except:
-        logger.error('Failed to create directory {}'.format(user_data_dir))
+# user_data_dir = appdirs.user_data_dir('auto_LiRPA')
+# if not os.path.exists(user_data_dir):
+#     try:
+#         os.makedirs(user_data_dir)
+#     except:
+#         logger.error('Failed to create directory {}'.format(user_data_dir))
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

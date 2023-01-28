@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import os
 import sys
-import appdirs
+# import appdirs
 from collections import defaultdict, namedtuple
 from collections.abc import Sequence
 
@@ -84,12 +84,12 @@ if False:
     logger.addHandler(file_handler)
     logger.setLevel(logging.DEBUG)
 
-user_data_dir = appdirs.user_data_dir('auto_LiRPA')
-if not os.path.exists(user_data_dir):
-    try:
-        os.makedirs(user_data_dir)
-    except:
-        logger.error('Failed to create directory {}'.format(user_data_dir))
+# user_data_dir = appdirs.user_data_dir('auto_LiRPA')
+# if not os.path.exists(user_data_dir):
+#     try:
+#         os.makedirs(user_data_dir)
+#     except:
+#         logger.error('Failed to create directory {}'.format(user_data_dir))
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

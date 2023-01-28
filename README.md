@@ -31,6 +31,7 @@ Getting Started
 - Activate `conda` environment
 
 ```bash
+conda deactivate; conda env remove --name neuralsat
 conda activate neuralsat
 ```
 
