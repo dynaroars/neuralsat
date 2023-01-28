@@ -92,7 +92,7 @@ def load_onnx(path):
         onnx_model = onnx.load(path)
     return onnx_model
 
-def load_model_onnx(path, is_channel_last=False, force_convert=False):
+def load_model_onnx(path):
     onnx_model = load_onnx(path)
 
     onnx_input_dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
@@ -102,48 +102,31 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
     # input_shape = tuple(input_shape)
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model)
 
-    if force_convert or len(input_shape) <= 2:
-        new_modules = []
-        modules = list(pytorch_model.modules())[1:]
-        for mi, m in enumerate(modules):
-            if isinstance(m, torch.nn.Linear):
-                new_m = nn.Linear(in_features=m.in_features, out_features=m.out_features, bias=m.bias is not None)
-                new_m.weight.data.copy_(m.weight.data)
-                new_m.bias.data.copy_(m.bias)
-                new_modules.append(new_m)
-            elif isinstance(m, torch.nn.ReLU):
-                new_modules.append(torch.nn.ReLU())
-            elif isinstance(m, operations.flatten.Flatten):
-                new_modules.append(torch.nn.Flatten())
-            else:
-                raise NotImplementedError
+    # if force_convert or len(input_shape) <= 2:
+    #     new_modules = []
+    #     modules = list(pytorch_model.modules())[1:]
+    #     for mi, m in enumerate(modules):
+    #         if isinstance(m, torch.nn.Linear):
+    #             new_m = nn.Linear(in_features=m.in_features, out_features=m.out_features, bias=m.bias is not None)
+    #             new_m.weight.data.copy_(m.weight.data)
+    #             new_m.bias.data.copy_(m.bias)
+    #             new_modules.append(new_m)
+    #         elif isinstance(m, torch.nn.ReLU):
+    #             new_modules.append(torch.nn.ReLU())
+    #         elif isinstance(m, operations.flatten.Flatten):
+    #             new_modules.append(torch.nn.Flatten())
+    #         else:
+    #             raise NotImplementedError
 
-        seq_model = nn.Sequential(*new_modules)
-        return seq_model, input_shape, output_shape, False
-
-
-    # Fixup converted ONNX model. For ResNet we directly return; for other models, we convert them to a Sequential model.
-    # We also need to handle NCHW and NHWC formats here.
-    if len(input_shape) == 4:
-        conv_c, conv_h, conv_w = input_shape[1:]
+    #     seq_model = nn.Sequential(*new_modules)
+    #     return seq_model, input_shape, output_shape, False
 
     modules = list(pytorch_model.modules())[1:]
     new_modules = []
-    need_permute = False
     for mi, m in enumerate(modules):
-        if isinstance(m, onnx2pytorch.operations.add.Add):
-            # ResNet model. No need to convert to sequential.
-            return pytorch_model, is_channel_last
-        if isinstance(m, torch.nn.Conv2d):
-            # Infer the output size of conv.
-            conv_h, conv_w = conv_output_shape((conv_h, conv_w), m.kernel_size, m.stride, m.padding)
-            conv_c = m.weight.size(0)
         if isinstance(m, onnx2pytorch.operations.reshape.Reshape):
             # Replace reshape with flatten.
             new_modules.append(nn.Flatten())
-        elif isinstance(m, torch.nn.ReLU) and mi == (len(modules)-1):
-            # not add relu if last layer is relu
-            pass
         elif isinstance(m, onnx2pytorch.operations.constant.Constant):
             pass
         else:
@@ -151,22 +134,15 @@ def load_model_onnx(path, is_channel_last=False, force_convert=False):
             new_modules.append(m)
 
     seq_model = nn.Sequential(*new_modules)
-
-    return seq_model, input_shape, output_shape, is_channel_last
+    seq_model.eval()
+    return seq_model, input_shape, output_shape
 
 
 class ONNXParser:
 
-    def __init__(self, filename, force_convert=False, is_channel_last=False):
+    def __init__(self, filename):
 
-        model, input_shape, output_shape, is_channel_last = load_model_onnx(filename, force_convert=force_convert, is_channel_last=is_channel_last)
-        model = model.eval()
-
-        # TODO: create input to check flag `is_channel_last`
- 
-        if is_channel_last:
-            input_shape = input_shape[:1] + input_shape[2:] + input_shape[1:2]
-            print(f'Notice: this ONNX file has NHWC order. We assume the X in vnnlib is also flattend in in NHWC order {input_shape}')
+        model, input_shape, output_shape = load_model_onnx(filename)
 
         self.pytorch_model = PyTorchModelWrapper(model)
         self.pytorch_model.n_input = np.prod(input_shape)

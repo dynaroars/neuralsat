@@ -48,7 +48,10 @@ class NetworkParser:
                 layers_mapping[idx] = sortedcontainers.SortedList(range(count, count+x.numel()))
                 idx += 1
                 count += x.numel()
-            x = layer(x)
+            try:
+                x = layer(x)
+            except:
+                pass
 
         model.layers_mapping = layers_mapping
         return model

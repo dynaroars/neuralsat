@@ -1,3 +1,6 @@
+import torch.optim as optim
+import torch.nn as nn
+import numpy as np
 import torch
 import time
 
@@ -261,3 +264,87 @@ def attack_with_general_specs(model, X, data_min, data_max, C_mat, rhs_mat, cond
     return best_delta, delta
     
 
+
+
+def pgd_whitebox(model, X, constraints, data_min, data_max, device, 
+                  num_steps=30, step_size=0.2, ODI_num_steps=10, ODI_step_size=1.0, 
+                  batch_size=50, loss_func="margin", restarts=1, stop_early=True):
+    out_X = model(X).detach()
+    adex = None
+    worst_x = None
+    best_loss = torch.tensor(-np.inf)
+
+    y = translate_constraints_to_label([constraints])[0]
+
+    for _ in range(restarts):
+        if adex is not None:
+            break
+        X_pgd = torch.autograd.Variable(X.data.repeat((batch_size,) + (1,) * (X.dim() - 1)), requires_grad=True).to(device)
+        random_vector = torch.ones_like(model(X_pgd)).uniform_(-1, 1)
+        random_noise = torch.ones_like(X_pgd).uniform_(-0.5, 0.5) * (data_max - data_min)
+        X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + random_noise, data_min), data_max), requires_grad=True,)
+
+        lr_scale = (data_max - data_min) / 2
+        lr_scheduler = StepLrScheduler(
+            step_size, 
+            gamma=0.1,
+            interval=[
+                np.ceil(0.5 * num_steps),
+                np.ceil(0.8 * num_steps),
+                np.ceil(0.9 * num_steps),
+            ],
+        )
+        gama_lambda = 10
+        y_target = constraints[0][0][-1]
+        regression = (
+            len(constraints) == 2
+            and ([(-1, 0, y_target)] in constraints)
+            and ([(0, -1, y_target)] in constraints)
+        )
+
+        for i in range(ODI_num_steps + num_steps + 1):
+            # print('restart', _, 'iter', i)
+            opt = optim.SGD([X_pgd], lr=1e-3)
+            opt.zero_grad()
+
+            with torch.enable_grad():
+                out = model(X_pgd)
+
+                cstrs_hold = evaluate_cstr(constraints, out.detach(), torch_input=True)
+                if (not regression) and (not cstrs_hold.all()) and (stop_early):
+                    adv_idx = (~cstrs_hold.cpu()).nonzero(as_tuple=False)[0].item()
+                    adex = X_pgd[adv_idx : adv_idx + 1]
+                    assert not evaluate_cstr(constraints, model(adex), torch_input=True)[0], f"{model(adex)},{constraints}"
+                    return [adex.detach().cpu().numpy()], None
+                if i == ODI_num_steps + num_steps:
+                    adex = None
+                    break
+
+                if i < ODI_num_steps:
+                    loss = (out * random_vector).sum()
+                elif loss_func == "xent":
+                    loss = nn.CrossEntropyLoss()(out, torch.tensor([y] * out.shape[0], dtype=torch.long))
+                elif loss_func == "margin":
+                    and_idx = np.arange(len(constraints)).repeat(np.floor(batch_size / len(constraints)))
+                    and_idx = torch.tensor(np.concatenate([and_idx, np.arange(batch_size - len(and_idx))], axis=0)).to(device)
+                    loss = constraint_loss(out, constraints, and_idx=and_idx).sum()
+                elif loss_func == "GAMA":
+                    and_idx = np.arange(len(constraints)).repeat(np.floor(batch_size / len(constraints)))
+                    and_idx = torch.tensor(np.concatenate([and_idx, np.arange(batch_size - len(and_idx))], axis=0)).to(device)
+                    out = torch.softmax(out, 1)
+                    loss = (constraint_loss(out, constraints, and_idx=and_idx) + (gama_lambda * (out_X - out) ** 2).sum(dim=1)).sum()
+                    gama_lambda *= 0.9
+
+            max_loss = torch.max(loss).item()
+            if max_loss > best_loss:
+                best_loss = max_loss
+                worst_x = X_pgd[torch.argmax(loss)].detach().cpu().numpy()
+
+            loss.backward()
+            if i < ODI_num_steps:
+                eta = ODI_step_size * lr_scale * X_pgd.grad.data.sign()
+            else:
+                eta = lr_scheduler.get_lr() * lr_scale * X_pgd.grad.data.sign()
+                lr_scheduler.step()
+            X_pgd = torch.autograd.Variable(torch.minimum(torch.maximum(X_pgd.data + eta, data_min), data_max), requires_grad=True)
+    return adex, worst_x
