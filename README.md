@@ -1,7 +1,7 @@
 **NeuralSAT**: A DPLL(T)-based Constraint Solving Approach to Verifying Deep Neural Networks
 ====================
 
-**NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T) and CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development and has not released any official versions, though periodically we evaluate the tool on existing standard benchmarks such as `ACAS Xu`, `MNISTFC`, `CIFAR2020` and compare the performance of the prototype to other state-of-the-art DNN verifiers.
+**NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T)/CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development, and periodically we evaluate the tool on existing standard benchmarks such as `ACAS Xu`, `MNISTFC`, `CIFAR2020` and compare the performance of the prototype to other state-of-the-art DNN verifiers.
 
 **NeuralSAT** takes as input the formula $\alpha$ representing the DNN `N` (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *`UNSAT`* if the formula is not satisfiable, indicating  `N` satisfies $\phi$, and *`SAT`* if the formula is satisfiable, indicating the `N` does not satisfy $\phi$.
 
@@ -67,7 +67,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 ## Examples
 
-- UNSAT cases:
+- Examples showing NeuralSat verifies properties (i.e., UNSAT results):
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
@@ -90,7 +90,7 @@ python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx
 ```
 
 
-- SAT cases (use flag `--solution` to print out the solution (first 5 values)):
+- Examples showing NeuralSAT disproving properties (i.e., SAT results):
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
