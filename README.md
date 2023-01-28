@@ -90,7 +90,7 @@ python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx
 ```
 
 
-- SAT cases:
+- SAT cases (use flag `--solution` to print out the solution (first 5 values)):
 
 ```python
 python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
@@ -99,11 +99,13 @@ python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec ".
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --device cuda
-# SAT,0.817
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --solution --device cuda
+# SAT,3.321
+# adv (first 5): tensor([-0.3284,  0.5000,  0.5000,  0.0000,  0.5000])
 ```
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --device cuda
-# SAT,1.570
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --solution --device cuda
+# SAT,1.526
+# adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
 ```

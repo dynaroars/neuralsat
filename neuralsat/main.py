@@ -40,7 +40,7 @@ if __name__ == '__main__':
     print(f'{stat},{runtime:.03f}')
 
     if stat == arguments.ReturnStatus.SAT and args.solution:
-        print('adv (first 5):', solver.get_assignment().flatten()[:5])
+        print('adv (first 5):', solver.get_assignment().flatten().detach().cpu()[:5])
 
     if args.summary:
         with open(args.summary, 'w') as fp:
