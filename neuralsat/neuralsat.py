@@ -109,7 +109,7 @@ class NeuralSAT:
         
         return arguments.ReturnStatus.UNSAT
 
-    def get_assignment(self):  #  -> dict | None:
+    def get_assignment(self) -> dict:
         return self._assignment
 
     def check_adv_pre(self) -> bool:

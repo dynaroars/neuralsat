@@ -25,7 +25,7 @@ class Attacker:
         self.attackers += [RandomAttack(net, SpecVNNLIB(s)) for s in raw_specs]
  
     @beartype
-    def run(self) -> # (bool, list|None))
+    def run(self):
         return self._attack()
 
     def _attack(self):
