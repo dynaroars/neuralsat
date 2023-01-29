@@ -95,17 +95,7 @@ class LiRPANaive:
         return (lb, ub), None
 
 
-
     def build_solver_model(self, timeout):
-        """
-        m is the instance of LiRPAConvNet
-        model_type ["mip", "lp", "lp_integer"]: three different types of guorbi solvers
-        lp_integer using mip formulation but continuous integer variable from 0 to 1 instead of
-        binary variable as mip; lp_integer should have the same results as lp but allowing us to
-        estimate integer variables.
-        NOTE: we build lp/mip solver from computer graph
-        """
-
         self.net.model = grb.Model()
         self.net.model.setParam('OutputFlag', False)
         self.net.model.setParam("FeasibilityTol", 1e-7)
@@ -115,7 +105,6 @@ class LiRPANaive:
         out_vars = self.net.build_solver_module(C=self.c, final_node_name=self.net.final_name, model_type='lp')
         self.net.model.update()
         return out_vars
-
 
 
     def lp_solve_all_node_split(self, lower_bounds, upper_bounds, rhs):
@@ -177,3 +166,7 @@ class LiRPANaive:
         del all_node_model
         # print(lp_status, glb)
         return feasible, adv
+
+
+    def build_solver_mip(self, timeout):
+        return
