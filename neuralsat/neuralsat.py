@@ -7,6 +7,9 @@ import arguments
 
 import util.network.read_onnx
 import time
+import pdb
+DBG = pdb.set_trace
+
 from beartype import beartype
 
 class NeuralSAT:
@@ -33,7 +36,7 @@ class NeuralSAT:
                 processed_specs.append((bounds, [i]))
         return processed_specs
 
-    def solve(self, timeout:int=1000) -> arguments.ReturnStatus:
+    def solve(self, timeout: float = 1000) -> arguments.ReturnStatus:
         start_time = time.perf_counter()
         return_status = []
 
@@ -97,7 +100,7 @@ class NeuralSAT:
             # post-verifying attack
             if return_status[-1] == arguments.ReturnStatus.UNKNOWN:
                 logger.info(f'Spec {idx+1}/{len(self.processed_specs)} Post-verifying attack remain={timeout - (time.perf_counter() - start_time):.02f}')
-                shrink_attack_timeout = None
+                # shrink_attack_timeout = None
                 if self.shrink_attack([spec]):
                     return arguments.ReturnStatus.SAT
 
@@ -114,7 +117,7 @@ class NeuralSAT:
         logger.info(f"Pre-verifying attack {'successfully' if is_attacked else 'failed'}")
         return is_attacked
 
-    def shrink_attack(self, spec: int, timeout=None) -> bool:
+    def shrink_attack(self, spec, timeout=None) -> bool:
         shrink_attacker = ShrinkAttacker(self.net, spec)
         is_attacked, self._assignment = shrink_attacker.run(timeout)
         logger.info(f"Post-verifying attack {'successfully' if is_attacked else 'failed'}")
