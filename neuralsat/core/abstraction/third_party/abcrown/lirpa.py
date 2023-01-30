@@ -492,15 +492,15 @@ class LiRPA:
                                     'ob_optimizer': optimizer}})
 
         lb, _ = self.net.compute_bounds(x=(new_x,), 
-                                            IBP=False, 
-                                            C=c, 
-                                            method='CROWN-Optimized',
-                                            new_interval=new_candidate, 
-                                            return_A=False, 
-                                            bound_upper=False, 
-                                            needed_A_dict=self.needed_A_dict)
+                                        IBP=False, 
+                                        C=c, 
+                                        method='CROWN-Optimized',
+                                        new_interval=new_candidate, 
+                                        return_A=False, 
+                                        bound_upper=False, 
+                                        needed_A_dict=self.needed_A_dict)
 
-        ub = lb + 99  # dummy upper bound
+        ub = float('inf')  # dummy upper bound
         primal_x = None
 
         with torch.no_grad():
@@ -580,7 +580,7 @@ class LiRPA:
 
         # update bounds
         primals, duals, mini_inp = None, None, None
-        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + 99)  # primals are better upper bounds
+        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf'))  # primals are better upper bounds
         mask, lA = self.get_mask_lA_parallel(self.net)
 
         if stop_criterion_func(lb[-1]):
@@ -600,10 +600,10 @@ class LiRPA:
         lr_init_alpha = arguments.Config["solver"]["alpha-crown"]["lr_alpha"]
         init_iteration = arguments.Config["solver"]["alpha-crown"]["iteration"]
         share_slopes = arguments.Config["solver"]["alpha-crown"]["share_slopes"]
-        no_joint_opt = arguments.Config["solver"]["alpha-crown"]["no_joint_opt"]
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
         loss_reduction_func = arguments.Config["general"]["loss_reduction_func"]
+        no_joint_opt = False
 
         self.x = x
         self.input_domain = input_domain
@@ -683,7 +683,7 @@ class LiRPA:
 
         # print("alpha-CROWN with fixed intermediate bounds:", lb, ub)
         slope_opt = self.get_slope(self.net)[0]
-        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + 99)  # primals are better upper bounds
+        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf'))  # primals are better upper bounds
 
         mask, lA = self.get_mask_lA_parallel(self.net)
         history = [[[], []] for _ in range(len(self.net.relus))]

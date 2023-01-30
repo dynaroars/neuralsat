@@ -8,6 +8,7 @@ from .auto_LiRPA import BoundedTensor, PerturbationLpNorm
 from .lirpa import LiRPA
 
 from core.activation.relu_domain import ReLUDomain, add_domain_parallel
+from core.lp_solver.mip_solver import MIPSolver
 from util.misc.logger import logger
 
 import arguments
@@ -24,6 +25,7 @@ class ABCrownAbstraction:
         self.init_arguments()
         self.init_crown()
 
+        self.mip_solver = MIPSolver(net, spec)
 
     def init_arguments(self):
         arguments.Config['solver'] = {}
@@ -73,9 +75,25 @@ class ABCrownAbstraction:
                 self.assignment_mapping[(lid, jj)] = node
 
     
-    def build_the_model(self):
-        return self.lirpa.build_the_model(None, self.x, stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
-    
+    def build_the_model(self, refined_bounds=None):
+        if refined_bounds is None:
+            return self.lirpa.build_the_model(None, 
+                                             self.x, 
+                                             stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
+
+        return self.lirpa.build_the_model_with_refined_bounds(None, 
+                                                              self.x, 
+                                                              refined_lower_bounds=refined_bounds[0], 
+                                                              refined_upper_bounds=refined_bounds[1],
+                                                              stop_criterion_func=stop_criterion_batch_any(self.decision_threshold))
+
+
+    def get_num_unstable_neurons(self, all_lowers, all_uppers):
+        num = 0
+        for lbs, ubs in zip(all_lowers[:-1], all_uppers[:-1]):
+            num += torch.sum((lbs < 0) * (ubs > 0))    
+        return num.item()
+
 
     def forward(self, input_lower, input_upper, extra_params=None):
         logger.debug('\t\tabstraction forward')
@@ -101,6 +119,24 @@ class ABCrownAbstraction:
 
             if (output_lb > self.decision_threshold).any():
                 init_domain.unsat = True
+            else:
+                refined_bounds = self.mip_solver.build_solver_model(all_lowers, all_uppers)
+                assert refined_bounds is not None
+
+                output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.build_the_model(refined_bounds)
+
+                init_domain = ReLUDomain(lA, 
+                                         output_lb, 
+                                         output_ub, 
+                                         all_lowers, 
+                                         all_uppers, 
+                                         new_slope, 
+                                         history=history, 
+                                         primals=primals, 
+                                         assignment_mapping=self.assignment_mapping).to_device(self.net.device, partial=True)
+
+                if (output_lb > self.decision_threshold).any():
+                    init_domain.unsat = True
 
             return init_domain
 

@@ -13,9 +13,6 @@ from .auto_LiRPA.utils import *
 
 
 def copy_model(model):
-    """
-    deep copy a gurobi model together with variable historical results
-    """
     model_split = model.copy()
     model_split.update()
     return model_split
@@ -130,7 +127,6 @@ class LiRPANaive:
                         var.lb = 0
                         var.ub = 0
                     else:
-                        continue
                         raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
 
         all_node_model.update()
@@ -168,5 +164,4 @@ class LiRPANaive:
         return feasible, adv
 
 
-    def build_solver_mip(self, timeout):
-        return
+    from core.lp_solver.solver_util import build_solver_mip

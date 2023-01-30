@@ -1,5 +1,4 @@
 from core.abstraction.abstractor import Abstractor
-from core.lp_solver.mip_solver import MIPSolver
 from core.lp_solver.lp_solver import LPSolver
 from util.misc.logger import logger
 import arguments
