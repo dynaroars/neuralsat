@@ -3,25 +3,35 @@ from attack.random_attack import RandomAttack
 from util.spec.spec_vnnlib import SpecVNNLIB
 from util.misc.logger import logger
 
+import torch
+import util.network.read_onnx
 import random
+from beartype import beartype
+import pdb
+DBG = pdb.set_trace
 
 class Attacker:
+    
+    @beartype
+    def __init__(self, net: util.network.read_onnx.PyTorchModelWrapper, 
+                 raw_specs: list) -> None:
 
-    def __init__(self, net, raw_specs):
         self.net = net
         self.raw_specs = raw_specs
         
         self.attackers = []
-        self.attackers += [PGDAttack(net, s, mode=m) for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
+        self.attackers += [PGDAttack(net, s, mode=m) 
+                           for s in raw_specs for m in 
+                           ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
         self.attackers += [PGDWhiteBox(net, SpecVNNLIB(s)) for s in raw_specs]
         self.attackers += [RandomAttack(net, SpecVNNLIB(s)) for s in raw_specs]
  
-
+    @beartype
     def run(self):
         return self._attack()
 
-
-    def _attack(self):
+    @beartype
+    def _attack(self) -> tuple[bool, None | torch.Tensor]:
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
@@ -33,15 +43,18 @@ class Attacker:
 
             if is_attacked:
                 return is_attacked, adv
+            
         return False, None
 
 
 
 class ShrinkAttacker:
 
-    def __init__(self, net, raw_specs):
+    def __init__(self, net:util.network.read_onnx.PyTorchModelWrapper,
+                 raw_specs: list):
 
-        self.attackers = [PGDAttack(net, s, mode=m) for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
+        self.attackers = [PGDAttack(net, s, mode=m)
+                          for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]
 
 
     def run(self, timeout):

@@ -1,6 +1,7 @@
 import logging
 import torch
 
+
 class ReturnStatus:
 
     UNSAT   = 'UNSAT'
@@ -8,7 +9,6 @@ class ReturnStatus:
     UNKNOWN = 'UNKNOWN'
     TIMEOUT = 'TIMEOUT'
     RESTART = 'RESTART'
-
 
 
 class Configuration:
@@ -26,7 +26,7 @@ class Configuration:
         self.max_input_branch  = 100000 # if exceed, return unknown
 
         self.early_stop = True # stop when all branches are verified (for hidden splitting)
-        self.print_progress = True # print remaining unverified branches
+        self.print_progress = True  # print remaining unverified branches
         self.attack = True
 
     def __getitem__(self, key):
@@ -35,8 +35,10 @@ class Configuration:
     def __setitem__(self, key, value):
         self.__dict__[key] = value
 
+
 # global configuration
 Config = Configuration()
 
 if __name__ == '__main__':
     print(Config['dtype'])
+    
