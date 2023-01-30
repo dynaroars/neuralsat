@@ -1,5 +1,6 @@
 import argparse
 import time
+from pathlib import Path
 
 
 from util.network.network_parser import NetworkParser
@@ -33,12 +34,11 @@ if __name__ == '__main__':
         arguments.Config['batch'] = args.batch
                 
     net = NetworkParser.parse(args.net, args.device)
-    specs = read_vnnlib(args.spec)
-    print(net)
+    specs = read_vnnlib(Path(args.spec))
+    # print(net)
     # print(specs)
-
     start_time = time.perf_counter()
-
+    
     solver = NeuralSAT(net, specs)
     stat = solver.solve(timeout=args.timeout)
 

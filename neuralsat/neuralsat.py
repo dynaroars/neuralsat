@@ -66,7 +66,9 @@ class NeuralSAT:
                 input_split_solver = InputSolver(self.net, vnnlib_spec)
                 stat = input_split_solver.solve()
 
-                logger.info(f'Spec {idx+1}/{len(self.processed_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')
+                logger.info(f'Spec {idx+1}/{len(self.processed_specs)} '
+                            f'stat={stat} time={time.perf_counter() - spec_start_time:.02f} '
+                            f'remain={timeout - (time.perf_counter() - start_time):.02f}')
 
                 if stat in [arguments.ReturnStatus.SAT, arguments.ReturnStatus.TIMEOUT]: 
                     self._assignment = input_split_solver.get_assignment()
@@ -89,7 +91,9 @@ class NeuralSAT:
             smt_solver = SMTSolver(self.net, vnnlib_spec)
             stat = smt_solver.solve(timeout=remain_time)
 
-            logger.info(f'Spec {idx+1}/{len(self.processed_specs)} stat={stat} time={time.perf_counter() - spec_start_time:.02f} remain={timeout - (time.perf_counter() - start_time):.02f}')
+            logger.info(f'Spec {idx+1}/{len(self.processed_specs)} '  
+                        f'stat={stat} time={time.perf_counter() - spec_start_time:.02f} '
+                        f'remain={timeout - (time.perf_counter() - start_time):.02f}')
 
             if stat in [arguments.ReturnStatus.SAT, arguments.ReturnStatus.TIMEOUT]:
                 self._assignment = smt_solver.get_assignment()
@@ -99,7 +103,9 @@ class NeuralSAT:
 
             # post-verifying attack
             if return_status[-1] == arguments.ReturnStatus.UNKNOWN:
-                logger.info(f'Spec {idx+1}/{len(self.processed_specs)} Post-verifying attack remain={timeout - (time.perf_counter() - start_time):.02f}')
+                logger.info(f'Spec {idx+1}/{len(self.processed_specs)} '
+                            f'Post-verifying attack '
+                            f'remain={timeout - (time.perf_counter() - start_time):.02f}')
                 # shrink_attack_timeout = None
                 if self.shrink_attack([spec]):
                     return arguments.ReturnStatus.SAT

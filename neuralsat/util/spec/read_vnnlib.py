@@ -11,13 +11,17 @@ import hashlib
 import pickle
 import re
 import os
+from pathlib import Path
 
-def read_statements(vnnlib_filename):
+from beartype import beartype
+
+@beartype
+def read_statements(vnnlib_filename: Path) -> list[str]:
     '''process vnnlib and return a list of strings (statements)
 
     useful to get rid of comments and blank lines and combine multi-line statements
     '''
-
+    
     with open(vnnlib_filename, 'r') as f:
         lines = f.readlines()
 
@@ -127,7 +131,8 @@ def make_input_box_dict(num_inputs):
     return rv
 
 
-def read_vnnlib_simple(vnnlib_filename, num_inputs, num_outputs, regression=False):
+@beartype
+def read_vnnlib_simple(vnnlib_filename:Path, num_inputs, num_outputs, regression=False):
     '''process in a vnnlib file
 
     this is not a general parser, and assumes files are provided in a 'nice' format. Only a single disjunction
@@ -261,8 +266,8 @@ def read_vnnlib_simple(vnnlib_filename, num_inputs, num_outputs, regression=Fals
     return final_rv
 
 
-
-def read_vnnlib(vnnlib_filename, regression=False):
+@beartype
+def read_vnnlib(vnnlib_filename:Path, regression:bool=False) -> list:
     '''process in a vnnlib file
 
     this is not a general parser, and assumes files are provided in a 'nice' format. Only a single disjunction
@@ -280,6 +285,8 @@ def read_vnnlib(vnnlib_filename, regression=False):
         2. For the later loading, it will check *.compiled and see if the stored md5 matches the original one. If not, regeneration is needed for vnnlib changing cases. Otherwise return the cache file.
     '''
 
+    assert vnnlib_filename.is_file() and vnnlib_filename.suffix == ".vnnlib", vnnlib_filename
+    
     # example: "(declare-const X_0 Real)"
     regex_declare = re.compile(r"^\(declare-const (X|Y)_(\S+) Real\)$")
 
