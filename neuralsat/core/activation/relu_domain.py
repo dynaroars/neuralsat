@@ -9,14 +9,17 @@ import time
 import re
 import os
 
+
 class ReLUDomain:
+
     """
     Object representing a domain where the domain is specified by decision assigned to ReLUs.
     Comparison between instances is based on the values of the lower bound estimated for the instances.
     """
 
-    def __init__(self, lA=None, lb=-float('inf'), ub=float('inf'), lb_all=None, up_all=None, slope=None, beta=None, 
-                 split_history=None, history=None, intermediate_betas=None, primals=None, assignment_mapping=None):
+    def __init__(self, lA=None, lb=-float('inf'), ub=float('inf'), lb_all=None, up_all=None, 
+                 slope=None, beta=None, split_history=None, history=None, intermediate_betas=None,
+                 assignment_mapping=None, pre_history=None):
 
         self.lA = lA
         self.lower_bound = lb # output lower bound
@@ -28,13 +31,13 @@ class ReLUDomain:
         self.intermediate_betas = intermediate_betas
         self.slope = slope
         self.beta = beta
-        self.primals = primals
         self.assignment_mapping = assignment_mapping
         self.valid = True
         self.unsat = False
         self.next_decision = None
 
         self.full = sum([((l < 0) * (u > 0)).sum() for l, u in zip(lb_all[:-1], up_all[:-1])]) == 0 if lb_all is not None else False
+        self.pre_history = [] if pre_history is None else pre_history # status of neurons are set initially
 
 
     def get_assignment(self):
@@ -42,6 +45,7 @@ class ReLUDomain:
         for lid, (lnodes, lsigns) in enumerate(self.history):
             assignment.update({self.assignment_mapping[(lid, lnodes[i])]: lsigns[i] > 0 for i in range(len(lnodes))})
         return assignment
+
 
     def to_cpu(self):
         # transfer the content of this domain to cpu memory (try to reduce memory consumption)
@@ -80,6 +84,7 @@ class ReLUDomain:
         
         return self
 
+
     def to_device(self, device, partial=False):
         if not partial:
             self.lA = [lA.to(device, non_blocking=True) for lA in self.lA]
@@ -107,10 +112,8 @@ class ReLUDomain:
         if self.intermediate_betas is not None:
             for split_layer in self.intermediate_betas:
                 for intermediate_layer in self.intermediate_betas[split_layer]:
-                    self.intermediate_betas[split_layer][intermediate_layer]["lb"] = \
-                    self.intermediate_betas[split_layer][intermediate_layer]["lb"].to(device, non_blocking=True)
-                    self.intermediate_betas[split_layer][intermediate_layer]["ub"] = \
-                    self.intermediate_betas[split_layer][intermediate_layer]["ub"].to(device, non_blocking=True)
+                    self.intermediate_betas[split_layer][intermediate_layer]["lb"] = self.intermediate_betas[split_layer][intermediate_layer]["lb"].to(device, non_blocking=True)
+                    self.intermediate_betas[split_layer][intermediate_layer]["ub"] = self.intermediate_betas[split_layer][intermediate_layer]["ub"].to(device, non_blocking=True)
         if self.beta is not None:
             self.beta = [b.to(device, non_blocking=True) for b in self.beta]
 
@@ -118,9 +121,8 @@ class ReLUDomain:
 
 
 
-def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, beta,
-                        split_history=None, branching_decision=None, decision_thresh=0,
-                        intermediate_betas=None, primals=None, priorities=None):
+def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, beta, split_history=None, 
+                        branching_decision=None, decision_thresh=0, intermediate_betas=None):
 
     # change returned lAs in beta_solver, so that lAs need to be rearranged
     instance_lAs = [[] for _ in range(len(lb))]
@@ -156,7 +158,6 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, bet
                           split_history=split_history[i],
                           history=new_history,
                           intermediate_betas=intermediate_betas[i],
-                          primals=primals[i] if primals is not None else None,
                           assignment_mapping=selected_domains[i].assignment_mapping)
         
         if (left.lower_bound > decision_thresh_cpu).any():
@@ -180,7 +181,6 @@ def add_domain_parallel(lA, lb, ub, lb_all, up_all, selected_domains, slope, bet
                            split_history=split_history[i+batch],
                            history=new_history,
                            intermediate_betas=intermediate_betas[i + batch],
-                           primals=primals[i + batch] if primals is not None else None,
                            assignment_mapping=selected_domains[i].assignment_mapping)
 
         if (right.lower_bound > decision_thresh_cpu).any():
