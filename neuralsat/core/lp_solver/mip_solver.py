@@ -19,8 +19,13 @@ class MIPSolver:
 
         c, self.rhs, _, _ = self.spec.extract()
 
-        self.model = LiRPANaive(model_ori=self.net.layers, input_shape=self.net.input_shape, device=self.device, c=c, rhs=self.rhs)
+        self.model = LiRPANaive(model_ori=self.net.layers, 
+                                input_shape=self.net.input_shape, 
+                                device=self.device, 
+                                c=c, 
+                                rhs=self.rhs)
 
+        self.refined_bounds = None
 
     def build_solver_model(self, lower_bounds, upper_bounds, timeout=None):
         x_range = torch.tensor(self.spec.bounds, dtype=self.dtype, device=self.device)
@@ -31,7 +36,8 @@ class MIPSolver:
         self.model(input_lb, input_ub)
 
         # build Gurobi solver
-        refined_bounds = self.model.build_solver_mip(x_range, lower_bounds, upper_bounds, timeout=timeout)
+        if self.refined_bounds is None:
+            self.refined_bounds = self.model.build_solver_mip(x_range, lower_bounds, upper_bounds, timeout=timeout)
 
-        return refined_bounds
+        return self.refined_bounds
 

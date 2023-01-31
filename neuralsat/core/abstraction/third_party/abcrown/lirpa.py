@@ -78,9 +78,9 @@ class LiRPA:
                                           early_stop=False, 
                                           history=history)
 
-        lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas, primals = ret
+        lower_bounds, upper_bounds, lAs, slopes, betas, split_history, best_intermediate_betas = ret
 
-        return [i[-1] for i in upper_bounds], [i[-1] for i in lower_bounds], None, lAs, lower_bounds, upper_bounds, slopes, split_history, betas, best_intermediate_betas, primals
+        return [i[-1] for i in upper_bounds], [i[-1] for i in lower_bounds], lAs, lower_bounds, upper_bounds, slopes, split_history, betas, best_intermediate_betas
 
 
     def get_relu(self, model, idx):
@@ -500,8 +500,7 @@ class LiRPA:
                                         bound_upper=False, 
                                         needed_A_dict=self.needed_A_dict)
 
-        ub = float('inf')  # dummy upper bound
-        primal_x = None
+        ub = lb + float('inf')
 
         with torch.no_grad():
             # Move tensors to CPU for all elements in this batch.
@@ -532,7 +531,7 @@ class LiRPA:
                 ret_l[i] = [j[i:i + 1] for j in lower_bounds_new]
                 ret_u[i] = [j[i:i + 1] for j in upper_bounds_new]
 
-        return ret_l, ret_u, lAs, ret_s, ret_b, new_split_history, best_intermediate_betas, primal_x
+        return ret_l, ret_u, lAs, ret_s, ret_b, new_split_history, best_intermediate_betas
 
 
     def build_the_model(self, input_domain, x, stop_criterion_func=stop_criterion_sum(0)):
@@ -546,11 +545,10 @@ class LiRPA:
         
         self.x = x
 
-        # first get CROWN bounds
         # Reference bounds are intermediate layer bounds from initial CROWN bounds.
         lb, ub, aux_reference_bounds = self.net.init_slope((self.x,), share_slopes=share_slopes, c=self.c, bound_upper=False)
         if stop_criterion_func(lb).all().item():
-            return None, lb[-1], None, None, None, None, None, None, None, None, None, None
+            return None, lb[-1], None, None, None, None, None, None
         
         self.net.set_bound_opts({'optimize_bound_args': 
                                     {'ob_iteration': init_iteration, 
@@ -579,20 +577,18 @@ class LiRPA:
         slope_opt = self.get_slope(self.net)[0]  # initial with one node only
 
         # update bounds
-        primals, duals, mini_inp = None, None, None
-        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf'))  # primals are better upper bounds
+        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf')) 
         mask, lA = self.get_mask_lA_parallel(self.net)
 
         if stop_criterion_func(lb[-1]):
             history = [[[], []] for _ in range(len(self.net.relus))]
-            return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
-            # return ub[-1], lb[-1], mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
+            return ub[-1], lb[-1], lA, lb, ub, slope_opt, history, pre_relu_indices
 
         # for each pre-relu layer, we initial 2 lists for active and inactive split
         history = [[[], []] for _ in range(len(self.net.relus))]
 
-        return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
-        # return ub[-1].item(), lb[-1].item(), mini_inp, duals, primals, mask[0], lA[0], lb, ub, pre_relu_indices, slope_opt, history
+        return ub[-1], lb[-1], lA, lb, ub, slope_opt, history, pre_relu_indices
+
 
     def build_the_model_with_refined_bounds(self, input_domain, x, refined_lower_bounds, refined_upper_bounds,
                                             stop_criterion_func=stop_criterion_sum(0), reference_slopes=None):
@@ -615,9 +611,6 @@ class LiRPA:
             ######## using bab_verification_mip_refine.py ########
             lb, ub = refined_lower_bounds, refined_upper_bounds
         
-        primals, duals, mini_inp = None, None, None
-        return_A = False
-
         # first get CROWN bounds
         self.net.init_slope((self.x,), share_slopes=share_slopes, c=self.c)
         # If we already have slopes available, we initialize them.
@@ -668,25 +661,22 @@ class LiRPA:
                 # print(i, nd, lb[i].shape)
                 new_interval[nd] = [lb[i], ub[i]]
                 # reference_bounds[nd] = [lb[i], ub[i]]
+                
         ret = self.net.compute_bounds(x=(x,), 
                                       IBP=False, 
                                       C=self.c, 
                                       method='crown-optimized', 
-                                      return_A=return_A,
+                                      return_A=False,
                                       new_interval=new_interval, 
                                       bound_upper=False, 
                                       needed_A_dict=self.needed_A_dict)
-        if return_A:
-            lb, ub, A = ret
-        else:
-            lb, ub = ret
+        lb, ub = ret
 
-        # print("alpha-CROWN with fixed intermediate bounds:", lb, ub)
         slope_opt = self.get_slope(self.net)[0]
-        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf'))  # primals are better upper bounds
+        lb, ub, pre_relu_indices = self.get_candidate(self.net, lb, lb + float('inf'))
 
         mask, lA = self.get_mask_lA_parallel(self.net)
         history = [[[], []] for _ in range(len(self.net.relus))]
 
-        return ub[-1], lb[-1], mini_inp, duals, primals, mask, lA, lb, ub, pre_relu_indices, slope_opt, history
+        return ub[-1], lb[-1], lA, lb, ub, slope_opt, history, pre_relu_indices
 

@@ -98,7 +98,7 @@ class ABCrownAbstraction:
     def forward(self, input_lower, input_upper, extra_params=None):
         logger.debug('\t\tabstraction forward')
         if extra_params is None: # initialize
-            output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.build_the_model()
+            output_ub, output_lb, lA, all_lowers, all_uppers, slope, history, self.pre_relu_indices = self.build_the_model()
 
             # Keep only the alpha for the last layer.
             new_slope = defaultdict(dict)
@@ -114,16 +114,15 @@ class ABCrownAbstraction:
                                      all_uppers, 
                                      new_slope, 
                                      history=history, 
-                                     primals=primals, 
                                      assignment_mapping=self.assignment_mapping).to_device(self.net.device, partial=True)
 
             if (output_lb > self.decision_threshold).any():
                 init_domain.unsat = True
-            else:
+            elif arguments.Config['pre_verify_mip_refine']:
                 refined_bounds = self.mip_solver.build_solver_model(all_lowers, all_uppers)
                 assert refined_bounds is not None
 
-                output_ub, output_lb, _, _, primals, updated_mask, lA, all_lowers, all_uppers, self.pre_relu_indices, slope, history = self.build_the_model(refined_bounds)
+                output_ub, output_lb, lA, all_lowers, all_uppers, slope, history, _ = self.build_the_model(refined_bounds)
 
                 init_domain = ReLUDomain(lA, 
                                          output_lb, 
@@ -132,7 +131,6 @@ class ABCrownAbstraction:
                                          all_uppers, 
                                          new_slope, 
                                          history=history, 
-                                         primals=primals, 
                                          assignment_mapping=self.assignment_mapping).to_device(self.net.device, partial=True)
 
                 if (output_lb > self.decision_threshold).any():
@@ -162,7 +160,7 @@ class ABCrownAbstraction:
                                              single_node_split=True, 
                                              intermediate_betas=intermediate_betas)
             
-            dom_ub, dom_lb, dom_ub_point, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas, primals = ret
+            dom_ub, dom_lb, lAs, dom_lb_all, dom_ub_all, slopes, split_history, betas, intermediate_betas = ret
             batch = len(selected_domains)
             domain_list = add_domain_parallel(lA=lAs, 
                                               lb=dom_lb[:2*batch], 
@@ -175,7 +173,6 @@ class ABCrownAbstraction:
                                               branching_decision=branching_decision, 
                                               decision_thresh=self.decision_threshold,
                                               split_history=split_history[:2*batch], 
-                                              intermediate_betas=intermediate_betas[:2*batch],
-                                              primals=primals[:2*batch] if primals is not None else None)
+                                              intermediate_betas=intermediate_betas[:2*batch])
 
             return domain_list
