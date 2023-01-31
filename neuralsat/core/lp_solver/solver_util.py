@@ -16,6 +16,12 @@ def handle_gurobi_error(message):
     raise
 
 
+def copy_model(model):
+    model_split = model.copy()
+    model_split.update()
+    return model_split
+    
+
 def mip_solver_worker(candidate, init=None):
     """ Multiprocess worker for solving MIP models in build_the_model_mip_refine """
 
@@ -355,3 +361,63 @@ def build_solver_mip(self, input_domain, lower_bounds, upper_bounds, timeout, ad
         refined_bounds[nd] = [lower_bounds[i], upper_bounds[i]]
 
     return lower_bounds, upper_bounds
+
+
+def lp_solve_all_node_split(self, lower_bounds, upper_bounds, rhs):
+    all_node_model = copy_model(self.net.model)
+    pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
+    relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
+
+    for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
+        lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
+        for neuron_idx in range(lbs.shape[0]):
+            pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+            pre_var.lb = pre_lb = lbs[neuron_idx]
+            pre_var.ub = pre_ub = ubs[neuron_idx]
+            var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
+            # var is None if originally stable
+            if var is not None:
+                if pre_lb >= 0 and pre_ub >= 0:
+                    # ReLU is always passing
+                    var.lb = pre_lb
+                    var.ub = pre_ub
+                    all_node_model.addConstr(pre_var == var)
+                elif pre_lb <= 0 and pre_ub <= 0:
+                    var.lb = 0
+                    var.ub = 0
+                else:
+                    raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
+
+    all_node_model.update()
+    
+    feasible = True
+    adv = None
+    
+    orig_out_vars = self.net.final_node().solver_vars
+    assert len(orig_out_vars) == len(rhs), f"out shape not matching! {len(orig_out_vars)} {len(rhs)}"
+    for out_idx in range(len(orig_out_vars)):
+        objVar = all_node_model.getVarByName(orig_out_vars[out_idx].VarName)
+        decision_threshold = rhs[out_idx]
+        all_node_model.setObjective(objVar, grb.GRB.MINIMIZE)
+        all_node_model.update()
+        all_node_model.optimize()
+
+        if all_node_model.status == 2:
+            glb = objVar.X
+        elif all_node_model.status == 3:
+            print("gurobi all node split lp model infeasible!")
+            glb = float('inf')
+        else:
+            print(f"Warning: model status {m.all_node_model.status}!")
+            glb = float('inf')
+
+        if glb > decision_threshold:
+            feasible = False
+            break
+
+        input_vars = [all_node_model.getVarByName(var.VarName) for var in self.net.input_vars]
+        adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+
+    del all_node_model
+    # print(lp_status, glb)
+    return feasible, adv

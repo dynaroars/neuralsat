@@ -30,7 +30,7 @@ class LPSolver:
         self.model(input_lb, input_ub)
 
         # build Gurobi solver
-        self.model.build_solver_model(timeout=100)
+        self.model.build_solver_model(model_type='lp', timeout=100)
 
 
     def solve(self, lower_bounds, upper_bounds):
