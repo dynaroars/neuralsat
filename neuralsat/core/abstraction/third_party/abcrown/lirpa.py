@@ -538,7 +538,7 @@ class LiRPA:
 
         lr_init_alpha = arguments.Config["solver"]["alpha-crown"]["lr_alpha"]
         init_iteration = arguments.Config["solver"]["alpha-crown"]["iteration"]
-        share_slopes = arguments.Config["solver"]["alpha-crown"]["share_slopes"]
+        share_slopes = arguments.Config["solver"]["alpha-crown"].get("share_slopes", False)
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
         loss_reduction_func = reduction_str2func(arguments.Config["general"]["loss_reduction_func"])
@@ -595,7 +595,7 @@ class LiRPA:
 
         lr_init_alpha = arguments.Config["solver"]["alpha-crown"]["lr_alpha"]
         init_iteration = arguments.Config["solver"]["alpha-crown"]["iteration"]
-        share_slopes = arguments.Config["solver"]["alpha-crown"]["share_slopes"]
+        share_slopes = arguments.Config["solver"]["alpha-crown"].get("share_slopes", False)
         optimizer = arguments.Config["solver"]["beta-crown"]["optimizer"]
         lr_decay = arguments.Config["solver"]["beta-crown"]["lr_decay"]
         loss_reduction_func = arguments.Config["general"]["loss_reduction_func"]

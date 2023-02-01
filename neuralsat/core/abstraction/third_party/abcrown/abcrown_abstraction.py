@@ -33,7 +33,6 @@ class ABCrownAbstraction:
         arguments.Config['solver']['alpha-crown']['lr_alpha'] = 0.1
         arguments.Config['solver']['alpha-crown']['lr_decay'] = 0.98
         arguments.Config['solver']['alpha-crown']['iteration'] = 50
-        arguments.Config['solver']['alpha-crown']['share_slopes'] = False
 
         arguments.Config['solver']['beta-crown'] = {}
         arguments.Config['solver']['beta-crown']['beta'] = True
