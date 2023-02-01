@@ -245,52 +245,6 @@ def build_solver_mip(self, input_domain, lower_bounds, upper_bounds, timeout, ad
                     else:
                         need_refine = False
                         last_relu_layer_refined = False
-                # else:
-                #     with multiprocessing.Pool(N_PROC) as pool:
-                #         if adv_warmup: # create pgd adv list as mip refinement warmup
-                #             raise NotImplementedError
-                #         else:
-                #             if True:
-                #                 solver_result = pool.map_async(mip_solver_worker, candidates, chunksize=1)
-                #             else:
-                #                 solver_result = []
-                #                 for can in candidates:
-                #                     solver_result.append(mip_solver_worker(can))
-                        
-                #         # TODO: check timeout
-                #         if last_relu_layer_refined:
-                #             # TODO: forward to check unsat
-                #             last_relu_layer_refined = False
-
-                #         solver_result = solver_result.get()
-
-                #     lb_refined_sum, ub_refined_sum, refined_num = 0., 0., 0
-                #     for (vlb, vub, refined), neuron_idx in zip(solver_result, candidate_neuron_ids):
-                #         if refined:
-                #             vlb = max(vlb, lower_bounds[relu_idx][0, neuron_idx]) #
-                #             vub = min(vub, upper_bounds[relu_idx][0, neuron_idx]) #
-                #             refined_num += 1
-                #             lb_refined_sum += vlb - lower_bounds[relu_idx][0, neuron_idx]
-                #             ub_refined_sum += upper_bounds[relu_idx][0, neuron_idx] - vub
-                #             lower_bounds[relu_idx][0, neuron_idx] = vlb
-                #             upper_bounds[relu_idx][0, neuron_idx] = vub
-                #             if vlb >= 0:
-                #                 unstable_to_stable[relu_idx].append((neuron_idx, 1))
-                #             if vub <= 0:
-                #                 unstable_to_stable[relu_idx].append((neuron_idx, -1))
-
-                #         v = new_layer_gurobi_vars[neuron_idx]
-                #         v.lb, v.ub = lower_bounds[relu_idx][0, neuron_idx], upper_bounds[relu_idx][0, neuron_idx]
-                #     self.mip_model.update()
-
-                #     print(f"MIP improved {refined_num} nodes out of {len(candidates)} unstable nodes, lb improved {lb_refined_sum}, ub improved {ub_refined_sum}")
-                #     if refined_num > 0:
-                #         maximum_refined_relu_layers = relu_idx
-                #         this_layer_refined = True
-                #         last_relu_layer_refined = True
-                #     else:
-                #         need_refine = False
-                #         last_relu_layer_refined = False
 
         elif type(layer) is nn.ReLU:
             new_relu_layer_constr = []

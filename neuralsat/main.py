@@ -26,16 +26,25 @@ if __name__ == '__main__':
                         help='the maximum number of parallel splits in bound abstraction.')
     parser.add_argument('--summary', type=str,
                         help='path to result file.')
+    parser.add_argument('--attack', action='store_true',
+                        help='enable adversarial attacks.')
+    parser.add_argument('--refine', action='store_true',
+                        help='enable pre-verifying bound refinement.')
     args = parser.parse_args()   
     
-    # global configifurations
+    # update global configifurations
     arguments.Config['device'] = args.device
+    arguments.Config['attack'] = args.attack
+    arguments.Config['pre_verify_mip_refine'] = args.refine
     if args.batch:
         arguments.Config['batch'] = args.batch
                 
+    # load network
     net = NetworkParser.parse(args.net, args.device)
+    print(net)
+
+    # load spec
     specs = read_vnnlib(Path(args.spec))
-    # print(net)
     # print(specs)
     start_time = time.perf_counter()
     

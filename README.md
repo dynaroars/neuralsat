@@ -50,7 +50,7 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 - More options
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] [--solution]
+python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] [--solution] [--attack] [--refine]
 ```
 
 
@@ -64,6 +64,8 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
 - `--timeout`: Timeout (in second) for verifying one instance.
 - `--batch`: Maximum number of parallel splits in bound abstraction.
+- `--attack`: Enable adversarial attacks.
+- `--refine`: Enable pre-verifying bound refinement (01/02/2023: only supports naive FNN networks).
 
 ## Examples
 
@@ -93,19 +95,19 @@ python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx
 - Examples showing **NeuralSAT** disproving properties (i.e., SAT results):
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --solution --device cuda
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --device cuda --solution --attack
 # SAT,0.123
 # adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --solution --device cuda
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --device cuda --solution --attack
 # SAT,3.321
 # adv (first 5): tensor([-0.3284,  0.5000,  0.5000,  0.0000,  0.5000])
 ```
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --solution --device cuda
+python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --device cuda --solution --attack
 # SAT,1.526
 # adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
 ```
