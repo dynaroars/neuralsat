@@ -18,9 +18,7 @@ class Configuration:
         self.seed = 0
         self.dtype = torch.float32
         self.device = 'cpu'
-        
-        self.batch = 1024
-        self.logging_level = logging.INFO
+        self.batch = 1
 
         self.max_hidden_branch = 100000 # if exceed, return unknown
         self.max_input_branch  = 100000 # if exceed, return unknown

@@ -9,4 +9,3 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
-logger.setLevel(arguments.Config['logging_level'])

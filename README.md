@@ -51,7 +51,8 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 
 ```python
 python3 main.py --net ONNX_PATH --spec VNNLIB_PATH 
-               [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] 
+               [--device {cpu,cuda}] [--timeout TIMEOUT] [--batch BATCH] 
+               [--summary OUTPUT_FILE] [--verbosity {0,1,2}]
                [--solution] [--attack] [--refine]
 ```
 
@@ -66,6 +67,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
 - `--timeout`: Timeout (in second) for verifying one instance.
 - `--batch`: Maximum number of parallel splits in bound abstraction.
+- `--verbosity`: Select logger level (0: `NOTSET`, 1: `INFO`, 2: `DEBUG`).
 - `--attack`: Enable adversarial attacks.
 - `--refine`: Enable pre-verifying bound refinement (01/02/2023: only supports naive FNN networks).
 

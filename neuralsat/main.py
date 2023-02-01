@@ -5,6 +5,7 @@ from pathlib import Path
 
 from util.network.network_parser import NetworkParser
 from util.spec.read_vnnlib import read_vnnlib
+from util.misc.args import update_arguments
 from util.misc.logger import logger
 from neuralsat import NeuralSAT
 import arguments
@@ -22,8 +23,10 @@ if __name__ == '__main__':
                         help='select device to run verifier, cpu or cuda (GPU).')
     parser.add_argument('--timeout', type=int, default=1000,
                         help='timeout (in second) for verifying one instance.')
-    parser.add_argument('--batch', type=int,
+    parser.add_argument('--batch', type=int, default=1000,
                         help='the maximum number of parallel splits in bound abstraction.')
+    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=1, 
+                        help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
     parser.add_argument('--summary', type=str,
                         help='path to result file.')
     parser.add_argument('--attack', action='store_true',
@@ -33,12 +36,8 @@ if __name__ == '__main__':
     args = parser.parse_args()   
     
     # update global configifurations
-    arguments.Config['device'] = args.device
-    arguments.Config['attack'] = args.attack
-    arguments.Config['pre_verify_mip_refine'] = args.refine
-    if args.batch:
-        arguments.Config['batch'] = args.batch
-                
+    update_arguments(args)
+
     # load network
     net = NetworkParser.parse(args.net, args.device)
     print(net)
