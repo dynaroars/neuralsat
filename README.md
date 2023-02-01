@@ -50,7 +50,9 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 - More options
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] [--solution] [--attack] [--refine]
+python3 main.py --net ONNX_PATH --spec VNNLIB_PATH 
+               [--device {cpu,cuda}] [--timeout TIMEOUT] [--summary OUTPUT_FILE] [--batch BATCH] 
+               [--solution] [--attack] [--refine]
 ```
 
 
