@@ -27,6 +27,8 @@ class MIPSolver:
 
         self.refined_bounds = None
 
+        # self.build_general()
+        # exit()
 
     def build_solver_model(self, lower_bounds, upper_bounds, timeout=None):
         x_range = torch.tensor(self.spec.bounds, dtype=self.dtype, device=self.device)

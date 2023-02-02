@@ -846,12 +846,12 @@ class BoundRelu(BoundOptimizableActivation):
             elif pre_ub <= 0:
                 var = zero_var
             else:
-                ub = pre_ub
-
-                var = model.addVar(ub=ub, lb=pre_lb,
+                var = model.addVar(ub=pre_ub, lb=pre_lb,
                                    obj=0,
                                    vtype=grb.GRB.CONTINUOUS,
                                    name=f'ReLU{self.name}_{neuron_idx}')
+                # assert (pre_lb == pre_var.lb)
+                # assert (pre_ub == pre_var.ub)
 
                 if model_type == "mip" or model_type == "lp_integer":
                     # binary indicator

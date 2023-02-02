@@ -74,6 +74,11 @@ def _build_solver_general(self, node, C=None, model_type="mip", solver_pkg="guro
             solver_vars = node.build_solver(*inp, model=self.model, C=C, model_type=model_type, solver_pkg=solver_pkg)
         else:
             solver_vars = node.build_solver(*inp, model=self.model, C=None, model_type=model_type, solver_pkg=solver_pkg)
+        
+        # print('build done:', node, len(node.solver_vars), node.solver_vars[0].VarName)
+        # if hasattr(node, 'solver_constrs'):
+        #     print(node.solver_constrs[0])
+        # print()
 
         return solver_vars
     
