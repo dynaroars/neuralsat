@@ -52,7 +52,7 @@ def build_solver_module(self, x=None, C=None, intermediate_layer_bounds=None,
             # create input vars for gurobi self.model
             inp_gurobi_vars = self._build_solver_input(root[i])
         else:
-            # regular weights
+            # regular weights, no need to build solver_vars
             root[i].solver_vars = value
 
     final = self.final_node() if final_node_name is None else self[final_node_name]
@@ -69,18 +69,12 @@ def _build_solver_general(self, node, C=None, model_type="mip", solver_pkg="guro
         for n in node.inputs:
             self._build_solver_general(n, C=C, model_type=model_type, solver_pkg=solver_pkg)
         inp = [n_pre.solver_vars for n_pre in node.inputs]
-        # print(node, node.inputs)
-        if C is not None and isinstance(node, BoundLinear) and\
-                not node.is_input_perturbed(1) and self.final_name == node.name:
-            # when node is the last layer
-            # merge the last BoundLinear node with the specification, 
-            # available when weights of this layer are not perturbed
-            solver_vars = node.build_solver(*inp, model=self.model, C=C, 
-                    model_type=model_type, solver_pkg=solver_pkg)
+        if (C is not None) and isinstance(node, BoundLinear) and not node.is_input_perturbed(1) and self.final_name == node.name:
+            # when node is the last layer, merge the last BoundLinear node with the specification
+            solver_vars = node.build_solver(*inp, model=self.model, C=C, model_type=model_type, solver_pkg=solver_pkg)
         else:
-            solver_vars = node.build_solver(*inp, model=self.model, C=None, 
-                    model_type=model_type, solver_pkg=solver_pkg)
-        # just return output node gurobi vars
+            solver_vars = node.build_solver(*inp, model=self.model, C=None, model_type=model_type, solver_pkg=solver_pkg)
+
         return solver_vars
     
 
@@ -90,13 +84,14 @@ def _build_solver_input(self, node):
     assert node.perturbation is not None
     assert node.perturbation.norm == float("inf")
     inp_gurobi_vars = []
+
     # zero var will be shared within the solver model
     zero_var = self.model.addVar(lb=0, ub=0, obj=0, vtype=grb.GRB.CONTINUOUS, name='zero')
+
     x_L = node.value - node.perturbation.eps if node.perturbation.x_L is None else node.perturbation.x_L
     x_U = node.value + node.perturbation.eps if node.perturbation.x_U is None else node.perturbation.x_U
     x_L = x_L.squeeze(0)
     x_U = x_U.squeeze(0)
-    # x_L, x_U = node.lower.squeeze(0), node.upper.squeeze(0)
     
     if x_L.ndim == 2:
         x_L = x_L.squeeze()
@@ -105,9 +100,7 @@ def _build_solver_input(self, node):
     if x_L.ndim == 1:
         # This is a linear input.
         for dim, (lb, ub) in enumerate(zip(x_L, x_U)):
-            v = self.model.addVar(lb=lb, ub=ub, obj=0,
-                                    vtype=grb.GRB.CONTINUOUS,
-                                    name=f'inp_{dim}')
+            v = self.model.addVar(lb=lb, ub=ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'inp_{dim}')
             inp_gurobi_vars.append(v)
     else:
         assert x_L.ndim == 3, f"x_L ndim  {x_L.ndim} {x_L.shape}"
@@ -119,17 +112,13 @@ def _build_solver_input(self, node):
                 for col in range(x_L.shape[2]):
                     lb = x_L[chan, row, col]
                     ub = x_U[chan, row, col]
-                    v = self.model.addVar(lb=lb, ub=ub, obj=0,
-                                            vtype=grb.GRB.CONTINUOUS,
-                                            name=f'inp_{dim}')
-                                            # name=f'inp_[{chan},{row},{col}]')
+                    v = self.model.addVar(lb=lb, ub=ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'inp_{dim}')
                     row_vars.append(v)
                     dim += 1
                 chan_vars.append(row_vars)
             inp_gurobi_vars.append(chan_vars)
 
     node.solver_vars = inp_gurobi_vars
-    # save the gurobi input variables so that we can later extract primal values in input space easily
     self.input_vars = inp_gurobi_vars
     self.model.update()
     return inp_gurobi_vars

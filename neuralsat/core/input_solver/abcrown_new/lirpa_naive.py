@@ -70,6 +70,7 @@ class LiRPANaive:
             assert torch.allclose(net(dummy), self.net(dummy))
         except AssertionError:
             print(f'torch allclose failed: norm {torch.norm(net(dummy) - self.net(dummy))}')
+            exit()
 
 
     @torch.no_grad()
@@ -79,9 +80,8 @@ class LiRPANaive:
         new_x = BoundedTensor(dm_l, ptb)  # the value of new_x doesn't matter, only pdb matters
         C = self.c.repeat(batch, *[1] * len(self.c.shape[1:]))
 
-        with torch.no_grad():
-            lb, _ = self.net.compute_bounds(x=(new_x,), C=C, method="backward", bound_upper=False)
-            lb = lb.cpu()
+        lb, _ = self.net.compute_bounds(x=(new_x,), C=C, method="crown", bound_upper=False)
+        lb = lb.cpu()
         ub = [None] * (batch)
 
         return (lb, ub), None
