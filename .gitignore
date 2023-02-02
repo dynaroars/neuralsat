@@ -6,8 +6,8 @@ rac/
 *.DS_Store
 # ref/
 archive/
-vnncomp2021/
-baselines/
+# vnncomp2021/
+# baselines/
 *.pynet
 *.pt
 *.gz
