@@ -40,11 +40,6 @@ class NeuralSAT:
         start_time = time.perf_counter()
         return_status = []
 
-        # debug
-        # if self.shrink_attack([self.processed_specs[-1]]):
-        #     return arguments.ReturnStatus.SAT
-        # exit()
-
         # pre-verifying attack
         if arguments.Config['attack']:
             if self.check_adv_pre():
@@ -106,7 +101,6 @@ class NeuralSAT:
                 logger.info(f'Spec {idx+1}/{len(self.processed_specs)} '
                             f'Post-verifying attack '
                             f'remain={timeout - (time.perf_counter() - start_time):.02f}')
-                # shrink_attack_timeout = None
                 if self.shrink_attack([spec]):
                     return arguments.ReturnStatus.SAT
 
