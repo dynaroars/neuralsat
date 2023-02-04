@@ -1,7 +1,6 @@
 import torch.nn as nn
 import numpy as np
 import torch
-import math
 import onnx
 import gzip
 

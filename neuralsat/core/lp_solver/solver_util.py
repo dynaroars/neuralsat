@@ -1,10 +1,8 @@
-from collections import defaultdict
 import gurobipy as grb
 import multiprocessing
 import torch.nn as nn
 import numpy as np
 import torch
-import copy
 import time
 import sys
 
