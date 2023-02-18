@@ -15,8 +15,8 @@ from beartype import beartype
 class NeuralSAT:
     
     @beartype
-    def __init__(self, net: util.network.read_onnx.PyTorchModelWrapper, 
-                 raw_specs: list) -> None:
+    def __init__(self, net: util.network.read_onnx.ONNXParser, 
+                       raw_specs: list) -> None:
         self.net = net
         self.raw_specs = raw_specs
         # create multiple specs from DNF spec

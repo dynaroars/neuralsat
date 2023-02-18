@@ -1,9 +1,11 @@
 import sortedcontainers
 import torch.nn as nn
+import numpy as np
 import torch
 
 from util.network.read_onnx import ONNXParser
 import arguments
+
 
 class NetworkParser:
 
@@ -32,23 +34,21 @@ class NetworkParser:
         return model
 
     def parse_onnx(filename):
+        model = ONNXParser(filename)
 
-        model = ONNXParser(filename).pytorch_model
+        # forward to record relu shapes
         x = torch.randn(model.input_shape, dtype=arguments.Config['dtype'])
-
+        assert x.shape[0] == 1
+        output_pytorch = model(x)
+        
+        # extract boolean abstraction
         count = 1
         layers_mapping = {}
         idx = 0
-        
-        for layer in model.layers:
-            if isinstance(layer, nn.ReLU):
-                layers_mapping[idx] = sortedcontainers.SortedList(range(count, count+x.numel()))
-                idx += 1
-                count += x.numel()
-            try:
-                x = layer(x)
-            except:
-                pass
-
+        for k, v in model.activation.items():
+            layers_mapping[idx] = sortedcontainers.SortedList(range(count, count+np.prod(v)))
+            idx += 1
+            count += np.prod(v)
         model.layers_mapping = layers_mapping
+        
         return model

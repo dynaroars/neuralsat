@@ -149,11 +149,11 @@ class ConvertModel(nn.Module):
             self.onnx_model.graph, self, self.mapping
         )
 
-        if experimental:
-            warnings.warn(
-                "Using experimental implementation that allows 'batch_size > 1'."
-                "Batchnorm layers could potentially produce false outputs."
-            )
+        # if experimental:
+        #     warnings.warn(
+        #         "Using experimental implementation that allows 'batch_size > 1'."
+        #         "Batchnorm layers could potentially produce false outputs."
+        #     )
 
     def forward(self, *input_list, **input_dict):
         if len(input_list) > 0 and len(input_dict) > 0:

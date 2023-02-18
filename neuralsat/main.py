@@ -32,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--attack', action='store_true',
                         help='enable adversarial attacks.')
     parser.add_argument('--refine', action='store_true',
-                        help='enable pre-verifying bound refinement.')
+                        help='enable pre-verifying bound refinement (not support ResNet yet!).')
     args = parser.parse_args()   
     
     # update global configifurations
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     # load network
     net = NetworkParser.parse(args.net, args.device)
-    print(net)
+    print(net.layers)
 
     # load spec
     specs = read_vnnlib(Path(args.spec))
