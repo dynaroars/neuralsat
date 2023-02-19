@@ -56,6 +56,30 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
                [--solution] [--attack] [--refine]
 ```
 
+## Preprocessing (if needed)
+
+Remove redundant blocks in `ONNX` model, convert `MaxPool` layer into multiple `ReLU` ones.
+
+
+- Install [dnnv](https://github.com/dlshriver/DNNV) tool for simplified preprocessing (Thanks, David Shriver!)
+
+```bash
+conda env remove --name dnnv
+conda env create -f env-dnnv.yaml
+```
+
+- Simplified a `ONNX` model
+
+```python
+$HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx [PATH/TO/ONNX/MODEL]
+```
+
+- Example
+
+```python
+$HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx "../benchmark/marabou-cifar10/nnet/cifar10_small.onnx"
+# [+] Exported to: outputs/cifar10_small_simplified.onnx
+```
 
 ## Options
 Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT**. 
