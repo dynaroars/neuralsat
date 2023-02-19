@@ -56,6 +56,21 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
                [--solution] [--attack] [--refine]
 ```
 
+## Options
+Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT**. 
+
+- `--net`: Load pretrained `ONNX` model from this specified path.
+- `--spec`: Path to `VNNLIB` specification file.
+- `--device`: Select device to run **NeuralSAT**.
+- `--summary`: Path to result file (format `[STAT],[RUNTIME]`).
+- `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
+- `--timeout`: Timeout (in second) for verifying one instance.
+- `--batch`: Maximum number of parallel splits in bound abstraction.
+- `--verbosity`: Select logger level (0: `NOTSET`, 1: `INFO`, 2: `DEBUG`).
+- `--attack`: Enable adversarial attacks.
+- `--refine`: Enable pre-verifying bound refinement (01/02/2023: only supports naive FNN networks).
+
+
 ## Preprocessing (if needed)
 
 Remove redundant blocks in `ONNX` model, convert `MaxPool` layer into multiple `ReLU` ones.
@@ -81,19 +96,6 @@ $HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx "../benchmark/m
 # [+] Exported to: outputs/cifar10_small_simplified.onnx
 ```
 
-## Options
-Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT**. 
-
-- `--net`: Load pretrained `ONNX` model from this specified path.
-- `--spec`: Path to `VNNLIB` specification file.
-- `--device`: Select device to run **NeuralSAT**.
-- `--summary`: Path to result file (format `[STAT],[RUNTIME]`).
-- `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
-- `--timeout`: Timeout (in second) for verifying one instance.
-- `--batch`: Maximum number of parallel splits in bound abstraction.
-- `--verbosity`: Select logger level (0: `NOTSET`, 1: `INFO`, 2: `DEBUG`).
-- `--attack`: Enable adversarial attacks.
-- `--refine`: Enable pre-verifying bound refinement (01/02/2023: only supports naive FNN networks).
 
 ## Examples
 
