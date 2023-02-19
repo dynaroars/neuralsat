@@ -1,6 +1,7 @@
 benchmark/
 test*.py
 ref/
+outputs/
 rac/
 *.compiled
 *.DS_Store
