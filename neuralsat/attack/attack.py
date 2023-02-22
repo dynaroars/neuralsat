@@ -13,8 +13,7 @@ DBG = pdb.set_trace
 class Attacker:
     
     @beartype
-    def __init__(self, net: util.network.read_onnx.ONNXParser, 
-                       raw_specs: list) -> None:
+    def __init__(self, net, raw_specs: list) -> None:
 
         self.net = net
         self.raw_specs = raw_specs
@@ -50,8 +49,7 @@ class Attacker:
 
 class ShrinkAttacker:
 
-    def __init__(self, net: util.network.read_onnx.ONNXParser,
-                       raw_specs: list):
+    def __init__(self, net, raw_specs: list):
 
         self.attackers = [PGDAttack(net, s, mode=m)
                           for s in raw_specs for m in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']]

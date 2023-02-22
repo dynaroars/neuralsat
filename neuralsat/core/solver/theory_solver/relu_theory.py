@@ -3,9 +3,101 @@ from core.lp_solver.lp_solver import LPSolver
 from util.misc.logger import logger
 import arguments
 
+import torch.optim as optim
 import gurobipy as grb
 import torch
 
+class RandomCexGenerator:
+
+    def __init__(self, net, spec, n_sample=10):
+        self.net = net
+        self.spec = spec
+        self.n_sample = n_sample
+        
+        self.device = net.device
+        self.dtype = arguments.Config['dtype']
+        bounds_init = self.spec.get_input_property()
+        self.lbs_init = torch.tensor(bounds_init['lbs'], dtype=self.dtype, device=self.device).view(net.input_shape)
+        self.ubs_init = torch.tensor(bounds_init['ubs'], dtype=self.dtype, device=self.device).view(net.input_shape)
+        
+        self.mat = []
+        for prop_mat, prop_rhs in self.spec.mat:
+            prop_mat = torch.from_numpy(prop_mat).float().to(self.device)
+            prop_rhs = torch.from_numpy(prop_rhs).float().to(self.device)
+            self.mat.append((prop_mat, prop_rhs))
+        
+    def distance_loss(self, x):
+        dl = self.lbs_init - x
+        du = x - self.ubs_init
+        return dl + du
+        
+    def check(self, y):
+        # print('\t', y[0, 9].item(), y[0, 8].item())
+        loss = 0.0
+        for prop_mat, prop_rhs in self.mat:
+            # print(prop_mat, prop_rhs)
+            vec = prop_mat.matmul(y.t())
+            sat = torch.all(vec <= prop_rhs.reshape(-1, 1), dim=0)
+            if (sat==True).any():
+                return True, None
+            loss += vec.mean()
+        return False, loss
+    
+    
+    def __call__(self, lower=None, upper=None):
+        for _ in range(100):
+            if (lower is None) or (upper is None):
+                cex = (self.ubs_init - self.lbs_init) * torch.rand(self.n_sample, *self.net.input_shape[1:], device=self.device) + self.lbs_init
+            else:
+                cex = (upper - lower) * torch.rand(self.n_sample, *self.net.input_shape[1:], device=self.device) + lower
+                
+            assert torch.all(self.lbs_init <= cex) and torch.all(cex <= self.ubs_init)
+            
+            orig_cex = cex.clone()
+            
+            cex.requires_grad = True
+            
+            optimizer = optim.Adam([cex], lr=5e-3, betas=(0.6, 0.98))
+            old_loss = 1e5
+            
+            for i in range(200):
+                optimizer.zero_grad()
+                stat, loss = self.check(self.net(cex))
+                if stat:
+                    print(_, i, stat)
+                    exit()
+                
+                # loss += self.distance_loss(cex).mean()
+                # self.net.zero_grad()
+                loss.backward()
+                optimizer.step()
+                # print('grad:', cex.grad.sign().shape)
+                
+                # cex.data = cex.data + 2/255*cex.grad.sign()
+                # eta = torch.clamp(adv_images - ori_images, min=-eps, max=eps)
+                # images = torch.clamp(ori_images + eta, min=0, max=1).detach_()
+
+                for ii in range(cex.shape[0]):
+                    cex[ii].data[cex[ii] < self.lbs_init[0]] = orig_cex[ii][cex[ii] < self.lbs_init[0]]
+                    cex[ii].data[cex[ii] > self.ubs_init[0]] = orig_cex[ii][cex[ii] > self.ubs_init[0]]
+                    # cex[ii].data[cex[ii] < self.lbs_init[0]] = self.lbs_init[0, cex[ii] < self.lbs_init[0]]
+                    # cex[ii].data[cex[ii] > self.ubs_init[0]] = self.ubs_init[0, cex[ii] > self.ubs_init[0]]
+                assert torch.all(self.lbs_init <= cex) and torch.all(cex <= self.ubs_init)
+                
+                # cex[cex < ]
+                
+                if abs(old_loss - loss.item()) < 1e-5:
+                    break
+                
+                old_loss = loss.item()
+            print(f'[{_}, {i}] loss', loss.item())
+            
+            print(_, stat)
+        exit()
+        return stat
+            
+        
+        
 class ReLUTheory:
 
     "Theory for ReLU"
@@ -50,7 +142,10 @@ class ReLUTheory:
         self.ubs_init = torch.tensor(bounds_init['ubs'], dtype=self.dtype, device=self.device)
 
         assert len(self.ubs_init.flatten()) == len(self.lbs_init.flatten()) == self.net.n_input
-
+        
+        # self.cex_generator = RandomCexGenerator(net, spec)
+        # self.cex_generator()
+        
 
     def assignment_to_conflict_clause(self, assignment):
         conflict_clause = set()

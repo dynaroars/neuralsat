@@ -59,30 +59,3 @@ def parse_onnx(path):
         
     return pytorch_model, batched_input_shape, output_shape
 
-
-def get_activation_shape(name, result):
-    def hook(model, input, output):
-        result[name] = output.shape
-    return hook
-
-
-class ONNXParser(nn.Module):
-
-
-    def __init__(self, filename):
-        super().__init__()
-
-        self.model, self.input_shape, self.output_shape = parse_onnx(filename)
-        self.n_input = np.prod(self.input_shape)
-        self.n_output = np.prod(self.output_shape)
-        # self.layers = list(self.model.modules())[1:]
-        self.layers = self.model
-        
-        self.activation = collections.OrderedDict()
-        for name, layer in self.model.named_modules():
-            if 'relu' in name.lower():
-                layer.register_forward_hook(get_activation_shape(name, self.activation))
-    
-    
-    def forward(self, x):
-        return self.model(x)

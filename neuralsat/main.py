@@ -29,6 +29,8 @@ if __name__ == '__main__':
                         help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
     parser.add_argument('--summary', type=str,
                         help='path to result file.')
+    parser.add_argument('--ckpt', type=str, required=False, default=None,
+                        help='path to result file.')
     parser.add_argument('--attack', action='store_true',
                         help='enable adversarial attacks.')
     parser.add_argument('--refine', action='store_true',
@@ -39,7 +41,7 @@ if __name__ == '__main__':
     update_arguments(args)
 
     # load network
-    net = NetworkParser.parse(args.net, args.device)
+    net = NetworkParser.parse(args.net, device=args.device, ckpt=args.ckpt)
     print(net.layers)
 
     # load spec
