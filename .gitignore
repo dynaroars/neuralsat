@@ -1,4 +1,7 @@
-benchmark/
+benchmark/*_gdvb
+benchmark/vnncomp21
+benchmark/mcb
+
 test*.py
 ref/
 outputs/
