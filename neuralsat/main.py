@@ -33,6 +33,8 @@ if __name__ == '__main__':
                         help='path to result file.')
     parser.add_argument('--attack', action='store_true',
                         help='enable adversarial attacks.')
+    parser.add_argument('--input_split', action='store_true',
+                        help='enable input splitting method.')
     parser.add_argument('--refine', action='store_true',
                         help='enable pre-verifying bound refinement (not support ResNet yet!).')
     args = parser.parse_args()   

@@ -68,7 +68,10 @@ class NetworkParser:
         elif (ckpt is not None) and os.path.exists(ckpt):
             net = NetworkParser.parse_pytorch(filename, ckpt)
         else:
-            raise NotImplementedError("Checkpoint is missing")
+            if filename == 'Example()':
+                net = NetworkParser.parse_pytorch(filename, ckpt)
+            else:
+                raise NotImplementedError("Checkpoint is missing")
         net.device = device
         return net.to(device)
 
@@ -120,14 +123,15 @@ class NetworkParser:
         except SyntaxError:
             raise ValueError(model_name)
         else:
-            sd = torch.load(ckpt, map_location=torch.device('cpu'))
-            if 'state_dict' in sd:
-                sd = sd['state_dict']
-            if isinstance(sd, list):
-                sd = sd[0]
-            if not isinstance(sd, dict):
-                raise NotImplementedError("Unknown model format.")
-            net.layers.load_state_dict(sd)
+            if ckpt is not None:
+                sd = torch.load(ckpt, map_location=torch.device('cpu'))
+                if 'state_dict' in sd:
+                    sd = sd['state_dict']
+                if isinstance(sd, list):
+                    sd = sd[0]
+                if not isinstance(sd, dict):
+                    raise NotImplementedError("Unknown model format.")
+                net.layers.load_state_dict(sd)
             
             model = PytorchParser(net)
             

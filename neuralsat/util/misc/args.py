@@ -12,6 +12,7 @@ LOGGER_LEVEL = {
 def update_arguments(args):
     arguments.Config['device'] = args.device
     arguments.Config['attack'] = args.attack
+    arguments.Config['input_split'] = args.input_split
     arguments.Config['batch'] = args.batch
     arguments.Config['pre_verify_mip_refine'] = args.refine
 

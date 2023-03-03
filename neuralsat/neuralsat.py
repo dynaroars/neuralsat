@@ -56,7 +56,7 @@ class NeuralSAT:
                 return arguments.ReturnStatus.TIMEOUT
 
             # try input splitting
-            if self.net.n_input < 10:
+            if arguments.Config['input_split']:
                 input_split_solver = InputSolver(self.net, vnnlib_spec)
                 stat = input_split_solver.solve()
 

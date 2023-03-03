@@ -435,6 +435,10 @@ def choose_node_parallel_kFSB(lower_bounds, upper_bounds, orig_mask, net, pre_re
     # Flatten the scores vector.
     all_score = torch.cat(score, dim=1)
     all_itb = torch.cat(intercept_tb, dim=1)
+
+    # in case topk > #neurons
+    topk = min(topk, all_score.shape[-1])
+    
     # Select top-k candidates among all layers for two kinds of scores.
     score_idx = torch.topk(all_score, topk)
     # These indices are the indices for the top-k scores in flatten

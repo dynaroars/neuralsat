@@ -315,30 +315,46 @@ def build_solver_mip(self, input_domain, lower_bounds, upper_bounds, timeout, ad
     return lower_bounds, upper_bounds
 
 
-def lp_solve_all_node_split(self, lower_bounds, upper_bounds, rhs):
+def lp_solve_all_node_split(self, lower_bounds, upper_bounds, assignment, rhs):
     all_node_model = copy_model(self.net.model)
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
 
-    for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
-        lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
-        for neuron_idx in range(lbs.shape[0]):
-            pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
-            pre_var.lb = pre_lb = lbs[neuron_idx]
-            pre_var.ub = pre_ub = ubs[neuron_idx]
-            var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
-            # var is None if originally stable
-            if var is not None:
-                if pre_lb >= 0 and pre_ub >= 0:
-                    # ReLU is always passing
-                    var.lb = pre_lb
-                    var.ub = pre_ub
-                    all_node_model.addConstr(pre_var == var)
-                elif pre_lb <= 0 and pre_ub <= 0:
-                    var.lb = 0
-                    var.ub = 0
-                else:
-                    raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
+    assert (lower_bounds is not None) or (assignment is not None)
+    if lower_bounds is not None:
+        for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
+            lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
+            for neuron_idx in range(lbs.shape[0]):
+                pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+                pre_var.lb = pre_lb = lbs[neuron_idx]
+                pre_var.ub = pre_ub = ubs[neuron_idx]
+                var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
+                # var is None if originally stable
+                if var is not None:
+                    if pre_lb >= 0 and pre_ub >= 0:
+                        # ReLU is always passing
+                        var.lb = pre_lb
+                        var.ub = pre_ub
+                        all_node_model.addConstr(pre_var == var)
+                    elif pre_lb <= 0 and pre_ub <= 0:
+                        var.lb = 0
+                        var.ub = 0
+                    else:
+                        raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
+
+    else:
+        for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
+            for neuron_idx in range(len(self.layers_mapping[relu_idx])):
+                pre_var = all_node_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+                var = all_node_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
+                # var is None if originally stable
+                if var is not None:
+                    if assignment[self.layers_mapping[relu_idx][neuron_idx]]['value']:
+                        # ReLU is always passing
+                        all_node_model.addConstr(pre_var == var)
+                    else:
+                        var.lb = 0
+                        var.ub = 0
 
     all_node_model.update()
     
@@ -355,9 +371,10 @@ def lp_solve_all_node_split(self, lower_bounds, upper_bounds, rhs):
         all_node_model.optimize()
 
         if all_node_model.status == 2:
+            print("Gurobi all node split: feasible!")
             glb = objVar.X
         elif all_node_model.status == 3:
-            print("gurobi all node split lp model infeasible!")
+            print("Gurobi all node split: infeasible!")
             glb = float('inf')
         else:
             print(f"Warning: model status {m.all_node_model.status}!")

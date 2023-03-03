@@ -26,6 +26,7 @@ class Configuration:
         self.early_stop = True # stop when all branches are verified (for hidden splitting)
         self.print_progress = True  # print remaining unverified branches
         self.attack = False
+        self.input_split = False
         self.pre_verify_mip_refine = False
 
     def __getitem__(self, key):

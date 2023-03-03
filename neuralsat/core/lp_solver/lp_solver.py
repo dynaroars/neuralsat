@@ -18,6 +18,7 @@ class LPSolver:
         c, self.rhs, _, _ = self.spec.extract()
 
         self.model = LiRPANaive(model_ori=self.net.layers, input_shape=self.net.input_shape, device=self.device, c=c, rhs=self.rhs)
+        self.model.layers_mapping = self.net.layers_mapping
 
         self.build_solver_model()
         
@@ -33,6 +34,8 @@ class LPSolver:
         self.model.build_solver_model(model_type='lp', timeout=100)
 
 
-    def solve(self, lower_bounds, upper_bounds):
-        feasible, adv = self.model.lp_solve_all_node_split(lower_bounds=lower_bounds, upper_bounds=upper_bounds, rhs=self.rhs[0])
+    def solve(self, lower_bounds=None, upper_bounds=None, assignment=None):
+        feasible, adv = self.model.lp_solve_all_node_split(lower_bounds=lower_bounds, upper_bounds=upper_bounds, assignment=assignment, rhs=self.rhs[0])
         return feasible, adv
+
+

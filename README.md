@@ -112,12 +112,12 @@ python3 main.py --net "../benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cuda
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --input_split --device cuda
 # UNSAT,5.186
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --device cpu
+python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --input_split --device cpu
 # UNSAT,7.799
 ```
 

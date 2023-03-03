@@ -143,6 +143,8 @@ class ReLUTheory:
 
         assert len(self.ubs_init.flatten()) == len(self.lbs_init.flatten()) == self.net.n_input
         
+        self.lp_model = None # for solving full assignment
+        
         # self.cex_generator = RandomCexGenerator(net, spec)
         # self.cex_generator()
         
@@ -327,12 +329,13 @@ class ReLUTheory:
         logger.debug('\tprocess_extra_full_domains')
         
         # create LP solver instance
-        model = LPSolver(self.net, self.spec)
+        if self.lp_model is None:
+            self.lp_model = LPSolver(self.net, self.spec)
 
         # for idx, d in enumerate(self.all_domains.values()): # debug only
         for idx, d in enumerate(self.get_full_domains()):
             d.to_cpu()
-            feasible, adv = model.solve(lower_bounds=d.lower_all[:-1], upper_bounds=d.upper_all[:-1])
+            feasible, adv = self.lp_model.solve(lower_bounds=d.lower_all[:-1], upper_bounds=d.upper_all[:-1])
             # print(feasible)
             if not feasible:
                 d.unsat = True
@@ -347,7 +350,22 @@ class ReLUTheory:
 
     def process_full_assignment(self, assignment):
         logger.debug('\tprocess_full_assignment')
-        raise NotImplementedError
+        
+        # create LP solver instance
+        if self.lp_model is None:
+            self.lp_model = LPSolver(self.net, self.spec)
+            
+        feasible, adv = self.lp_model.solve(assignment=assignment)
+        
+        if feasible:
+            if self.spec.check_solution(self.net(adv)):
+                self.assignment = adv
+            else:
+                # invalid adv, but still feasible, set assignment for dummy array
+                self.assignment = torch.tensor([1, 2, 3], dtype=self.dtype, device=self.device)
+            return True
+        
+        return False
 
 
     def propagate(self, assignment):
