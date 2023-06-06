@@ -1,19 +1,23 @@
 **NeuralSAT**: A DPLL(T)-based Constraint Solving Approach to Verifying Deep Neural Networks
 ====================
 
-**NeuralSAT** is a technique and prototype tool for verifying DNNs.  It combines ideas from DPLL(T)/CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. The tool is under active development, and periodically we evaluate the tool on existing standard benchmarks such as `ACAS Xu`, `MNISTFC`, `CIFAR2020` and compare the performance of the prototype to other state-of-the-art DNN verifiers.
+**NeuralSAT** is a technique and prototype tool for verifying DNNs. 
+It combines ideas from DPLL(T)/CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. 
+**NeuralSAT** takes as input the formula $\alpha$ representing the DNN `N` (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. 
+Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *`UNSAT`* if the formula is unsatisfiable, indicating  `N` satisfies $\phi$, and *`SAT`* if the formula is satisfiable, indicating the `N` does not satisfy $\phi$.
 
-**NeuralSAT** takes as input the formula $\alpha$ representing the DNN `N` (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \land \phi_{in} \land \overline{\phi_{out}}$. **NeuralSAT** returns *`UNSAT`* if the formula is not satisfiable, indicating  `N` satisfies $\phi$, and *`SAT`* if the formula is satisfiable, indicating the `N` does not satisfy $\phi$.
-
-**NeuralSAT** uses a  DPLL(T)-based algorithm to check unsatisfiability. **NeuralSAT** applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts, backtracks to erase such decisions, and learns clauses to avoid those decisions in the future. **NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can backtrack, in which it returns *`UNSAT`*.
+**NeuralSAT** uses a DPLL(T)-based algorithm to check unsatisfiability. 
+It applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. 
+If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts and learns clauses to avoid those decisions in the future. 
+**NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can decide, in which it returns *`UNSAT`*.
 
 Content
 ====================
-- ```neuralsat```: Containing source code for **NeuralSAT**.
+- ```neuralsat```: source code for **NeuralSAT**.
 
-- ```benchmark```: Containing benchmarks taken from [VNNCOMP'21](https://sites.google.com/view/vnn2021) and [VNNCOMP'22](https://sites.google.com/view/vnn2022).
+- ```benchmark```: benchmarks taken from [VNNCOMP'21](https://sites.google.com/view/vnn2021) and [VNNCOMP'22](https://sites.google.com/view/vnn2022).
 
-- ```third_party```: Containing external libraries.
+- ```third_party```: external libraries.
 
 
 Getting Started
@@ -45,12 +49,6 @@ conda env create -f env.yaml
 
 ```bash
 conda activate neuralsat
-```
-
-- Navigate to **NeuralSAT** folder.
-
-```bash
-cd neuralsat
 ```
 
 - Minimal command
