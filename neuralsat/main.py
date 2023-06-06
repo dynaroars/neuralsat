@@ -51,4 +51,6 @@ if __name__ == '__main__':
     status = verifier.verify(objectives, timeout=timeout)
     print('\n[!] Iterations:', verifier.iteration)
     
-    print(f'\n{status},{time.time()-START_TIME:.04f}\n')
+    print(f'\n{status},{time.time()-START_TIME:.04f}')
+    if verifier.adv is not None:
+        print('adv (first 5):', verifier.adv.flatten()[:5].detach().cpu())

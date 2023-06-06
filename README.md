@@ -13,6 +13,7 @@ Content
 
 - ```benchmark```: Containing benchmarks taken from [VNNCOMP'21](https://github.com/stanleybak/vnncomp2021).
 
+- ```third_party```: Containing external libraries.
 
 
 Getting Started
@@ -51,9 +52,7 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 
 ```python
 python3 main.py --net ONNX_PATH --spec VNNLIB_PATH 
-               [--device {cpu,cuda}] [--timeout TIMEOUT] [--batch BATCH] 
-               [--summary OUTPUT_FILE] [--verbosity {0,1,2}]
-               [--solution] [--attack] [--refine]
+               [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}]
 ```
 
 ## Options
@@ -61,40 +60,10 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 - `--net`: Load pretrained `ONNX` model from this specified path.
 - `--spec`: Path to `VNNLIB` specification file.
-- `--device`: Select device to run **NeuralSAT**.
-- `--summary`: Path to result file (format `[STAT],[RUNTIME]`).
-- `--solution`: Get a solution (counter-example) if **NeuralSAT** returns `SAT`.
+- `--batch`: Maximum number of parallel splits.
 - `--timeout`: Timeout (in second) for verifying one instance.
-- `--batch`: Maximum number of parallel splits in bound abstraction.
-- `--verbosity`: Select logger level (0: `NOTSET`, 1: `INFO`, 2: `DEBUG`).
-- `--attack`: Enable adversarial attacks.
-- `--refine`: Enable pre-verifying bound refinement (01/02/2023: only supports naive FNN networks).
+- `--device`: Select device to run **NeuralSAT**.
 
-
-## Preprocessing (if needed)
-
-Remove redundant blocks in `ONNX` model, convert `MaxPool` layer into multiple `ReLU` ones.
-
-
-- Install [dnnv](https://github.com/dlshriver/DNNV) tool for simplified preprocessing (Thanks, David Shriver!)
-
-```bash
-conda env remove --name dnnv
-conda env create -f env-dnnv.yaml
-```
-
-- Simplified a `ONNX` model
-
-```python
-$HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx [PATH/TO/ONNX/MODEL]
-```
-
-- Example
-
-```python
-$HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx "../benchmark/marabou-cifar10/nnet/cifar10_small.onnx"
-# [+] Exported to: outputs/cifar10_small_simplified.onnx
-```
 
 
 ## Examples
@@ -102,42 +71,31 @@ $HOME/anaconda3/envs/dnnv/bin/python3 -m util.misc.simplify_onnx "../benchmark/m
 - Examples showing **NeuralSAT** verifies properties (i.e., UNSAT results):
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.03.vnnlib" --device cuda
-# UNSAT,4.603
+python3 main.py --net "example/mnistfc-medium-net-554.onnx" --spec "example/test.vnnlib"
+# UNSAT,29.7011
 ```
 
 ```python
-python3 main.py --net "../benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx" --spec "../benchmark/cifar2020/spec/cifar10_spec_idx_76_eps_0.03137_n1.vnnlib"  --device cuda
-# UNSAT,19.003
+python3 main.py --net "example/cifar10_2_255_simplified.onnx" --spec "example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib"
+# UNSAT,20.0496
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --input_split --device cuda
-# UNSAT,5.186
-```
-
-```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_1_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_4.vnnlib" --input_split --device cpu
-# UNSAT,7.799
+python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example/prop_6.vnnlib"
+# UNSAT,4.3972
 ```
 
 
 - Examples showing **NeuralSAT** disproving properties (i.e., SAT results):
 
 ```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_1_0.05.vnnlib" --device cuda --solution --attack
-# SAT,0.123
-# adv (first 5): tensor([0.0000, 0.0000, 0.0250, 0.0125, 0.0500])
+python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"
+# SAT,3.6618
+# adv (first 5): tensor([-0.3284, -0.4299, -0.4991,  0.0000,  0.0156])
 ```
 
 ```python
-python3 main.py --net "../benchmark/acasxu/nnet/ACASXU_run2a_1_9_batch_2000.onnx" --spec "../benchmark/acasxu/spec/prop_7.vnnlib" --device cuda --solution --attack
-# SAT,3.321
-# adv (first 5): tensor([-0.3284,  0.5000,  0.5000,  0.0000,  0.5000])
-```
-
-```python
-python3 main.py --net "../benchmark/mnistfc/nnet/mnist-net_256x2.onnx" --spec "../benchmark/mnistfc/spec/prop_0_0.05.vnnlib" --device cuda --solution --attack
-# SAT,1.526
+python3 main.py --net "example/mnist-net_256x2.onnx" --spec "example/prop_1_0.05.vnnlib"
+# SAT,1.4306
 # adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
 ```

@@ -3,8 +3,8 @@ benchmark/vnncomp21
 benchmark/mcb
 
 # test*.py
-ref/
-outputs/
+# ref/
+# outputs/
 rac/
 *.compiled
 *.DS_Store
