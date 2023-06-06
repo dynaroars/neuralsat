@@ -11,7 +11,7 @@ Content
 ====================
 - ```neuralsat```: Containing source code for **NeuralSAT**.
 
-- ```benchmark```: Containing benchmarks taken from [VNNCOMP'21](https://github.com/stanleybak/vnncomp2021).
+- ```benchmark```: Containing benchmarks taken from [VNNCOMP'21](https://sites.google.com/view/vnn2021) and [VNNCOMP'22](https://sites.google.com/view/vnn2022).
 
 - ```third_party```: Containing external libraries.
 
@@ -25,8 +25,19 @@ Getting Started
 
 ## Installation
 - Make sure you have `Anaconda`/`Miniconda` and `Gurobi` properly installed.
-- (Optional) Run `conda deactivate; conda env remove --name neuralsat` to remove installed environment
-- Run `conda env create -f env.yaml` to install required packages.
+
+- Remove pre-installed environment 
+
+```bash
+conda deactivate 
+conda env remove --name neuralsat
+```
+
+- Install required packages 
+
+```bash
+conda env create -f env.yaml
+```
 
 ## Usages
 
@@ -62,7 +73,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - `--spec`: Path to `VNNLIB` specification file.
 - `--batch`: Maximum number of parallel splits.
 - `--timeout`: Timeout (in second) for verifying one instance.
-- `--device`: Select device to run **NeuralSAT**.
+- `--device`: Select device to run.
 
 
 
