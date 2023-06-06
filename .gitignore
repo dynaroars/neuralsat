@@ -2,7 +2,7 @@ benchmark/*_gdvb
 benchmark/vnncomp21
 benchmark/mcb
 
-test*.py
+# test*.py
 ref/
 outputs/
 rac/
