@@ -33,7 +33,14 @@ def test_sigmoid():
     
     
 def test_relu():
-    net = nn.Sequential(nn.Flatten(), nn.Linear(2, 3), nn.ReLU(), nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
+    net = nn.Sequential(
+        nn.Flatten(), 
+        nn.Linear(2, 3), 
+        nn.ReLU(), 
+        nn.Linear(3, 4), 
+        nn.ReLU(), 
+        nn.Linear(4, 2)
+    )
     print(net)
     x = torch.tensor([[1.0, 2.0]])
     y = net(x)

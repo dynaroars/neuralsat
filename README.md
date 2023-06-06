@@ -43,6 +43,12 @@ conda env remove --name neuralsat
 conda env create -f env.yaml
 ```
 
+- (Optional) Install specific Pytorch C++/CUDA extensions
+
+```bash
+pip install "third_party/haioc"
+```
+
 ## Usages
 
 - Activate `conda` environment

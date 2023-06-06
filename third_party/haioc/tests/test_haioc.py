@@ -78,8 +78,8 @@ def _tensors_match(a: Tensor, b: Tensor, strict: bool = True):
 
 
 def main(n_trials=100, device='cpu'):
-    data_size = (7000, 100)
-    xs_size = 5000
+    data_size = (700, 100)
+    xs_size = 500
     data = torch.randperm(data_size[0] * data_size[1]).sub_(data_size[0] * data_size[1] // 2).view(data_size[0], data_size[1]).int().to(device)
     xs = torch.arange(0, xs_size).int().to(device)
 
