@@ -12,8 +12,7 @@ from pathlib import Path
 
 from beartype import beartype
 
-@beartype
-def read_statements(vnnlib_filename: Path) -> list[str]:
+def read_statements(vnnlib_filename: Path):
     '''process vnnlib and return a list of strings (statements)
 
     useful to get rid of comments and blank lines and combine multi-line statements

@@ -30,8 +30,14 @@ def parse_onnx(path):
     
     onnx_input_dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
     onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
-    orig_input_shape = tuple(d.dim_value for d in onnx_input_dims)
-    batched_input_shape = tuple(d.dim_value for d in onnx_input_dims) if len(onnx_input_dims) > 1 else (1, onnx_input_dims[0].dim_value)
+    orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
+    # assert all([_ > 0 for _ in orig_input_shape]), print(orig_input_shape)
+
+    if len(onnx_input_dims) == 1:
+        batched_input_shape = (1, orig_input_shape[0])
+    else:
+        batched_input_shape = orig_input_shape
+        
     output_shape = tuple(d.dim_value for d in onnx_output_dims) if len(onnx_output_dims) > 1 else (1, onnx_output_dims[0].dim_value)
 
     # convert ONNX to Pytorch model (experimental=True for supporting batch processing)
@@ -42,6 +48,7 @@ def parse_onnx(path):
     correct_conversion = True
     try:
         dummy = torch.randn(batched_input_shape)
+        # print(dummy.shape)
         output_pytorch = pytorch_model(dummy).detach().numpy()
         output_onnx = inference_onnx(path, dummy.view(orig_input_shape).numpy())[0]
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-4, 1e-5)

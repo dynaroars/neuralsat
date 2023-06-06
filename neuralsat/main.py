@@ -1,14 +1,12 @@
+from pathlib import Path
 import argparse
 import time
-from pathlib import Path
 
-
-from util.network.network_parser import NetworkParser
 from util.spec.read_vnnlib import read_vnnlib
-from util.misc.args import update_arguments
-from util.misc.logger import logger
-from neuralsat import NeuralSAT
-import arguments
+from util.network.read_onnx import parse_onnx
+
+from verifier.objective import Objective, DnfObjectives
+from verifier.verifier import Verifier 
 
 if __name__ == '__main__':
 
@@ -17,49 +15,40 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--solution', action='store_true',
-                        help='get a solution (counterexample) if verifier returns SAT.')
-    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'],
-                        help='select device to run verifier, cpu or cuda (GPU).')
-    parser.add_argument('--timeout', type=int, default=1000,
-                        help='timeout (in second) for verifying one instance.')
     parser.add_argument('--batch', type=int, default=1000,
-                        help='the maximum number of parallel splits in bound abstraction.')
-    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=1, 
-                        help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
-    parser.add_argument('--summary', type=str,
-                        help='path to result file.')
-    parser.add_argument('--ckpt', type=str, required=False, default=None,
-                        help='path to result file.')
-    parser.add_argument('--attack', action='store_true',
-                        help='enable adversarial attacks.')
-    parser.add_argument('--input_split', action='store_true',
-                        help='enable input splitting method.')
-    parser.add_argument('--refine', action='store_true',
-                        help='enable pre-verifying bound refinement (not support ResNet yet!).')
+                        help="number of branches verified each iteration")
+    parser.add_argument('--timeout', type=float, default=3600,
+                        help="timeout in seconds")
+    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
+                        help="choose device to use for verifying.")
+    
     args = parser.parse_args()   
     
-    # update global configifurations
-    update_arguments(args)
-
-    # load network
-    net = NetworkParser.parse(args.net, device=args.device, ckpt=args.ckpt)
-    print(net.layers)
-
-    # load spec
-    specs = read_vnnlib(Path(args.spec))
-    # print(specs)
-    start_time = time.perf_counter()
+    START_TIME = time.time()
+    vnnlibs = read_vnnlib(Path(args.spec))
+    model, input_shape, output_shape = parse_onnx(args.net)
+    model.to(args.device)
+    print(model)
     
-    solver = NeuralSAT(net, specs)
-    stat = solver.solve(timeout=args.timeout)
-
-    runtime = time.perf_counter() - start_time
-    print(f'{stat},{runtime:.03f}')
-
-    if stat == arguments.ReturnStatus.SAT and args.solution:
-        print('adv (first 5):', solver.get_assignment().flatten().detach().cpu()[:5])
-
-    if args.summary:
-        with open(args.summary, 'w') as fp:
-            print(f'{stat},{runtime:.03f}', file=fp)
+    # print(vnnlib[0][1])
+    
+    verifier = Verifier(
+        net=model, 
+        input_shape=input_shape, 
+        batch=args.batch,
+        device=args.device,
+    )
+    
+    objectives = []
+    for spec in vnnlibs:
+        bounds = spec[0]
+        for prop_i in spec[1]:
+            objectives.append(Objective((bounds, prop_i)))
+            
+    objectives = DnfObjectives(objectives)
+   
+    timeout = args.timeout - (time.time() - START_TIME)
+    status = verifier.verify(objectives, timeout=timeout)
+    print('\n[!] Iterations:', verifier.iteration)
+    
+    print(f'\n{status},{time.time()-START_TIME:.04f}\n')

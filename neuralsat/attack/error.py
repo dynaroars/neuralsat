@@ -1,4 +1,0 @@
-
-class AttackTimeoutError(Exception):
-    pass
-
