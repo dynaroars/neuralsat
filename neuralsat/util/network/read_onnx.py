@@ -8,8 +8,10 @@ import torch
 import onnx
 import gzip
 
+from beartype import beartype
 
-def load_onnx(path):
+@beartype
+def load_onnx(path: str):
     if path.endswith('.gz'):
         onnx_model = onnx.load(gzip.GzipFile(path))
     else:
@@ -17,7 +19,8 @@ def load_onnx(path):
     return onnx_model
 
 
-def inference_onnx(path, *inputs):
+@beartype
+def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
     sess = ort.InferenceSession(load_onnx(path).SerializeToString())
     names = [i.name for i in sess.get_inputs()]
     inp = dict(zip(names, inputs))
@@ -25,7 +28,8 @@ def inference_onnx(path, *inputs):
     return res
 
 
-def parse_onnx(path):
+@beartype
+def parse_onnx(path: str) -> tuple:
     onnx_model = load_onnx(path)
     
     onnx_input_dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
