@@ -101,7 +101,7 @@ python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example
 ```
 
 
-- Examples showing **NeuralSAT** disproving properties (i.e., SAT results):
+- Examples showing **NeuralSAT** disproves properties (i.e., SAT results):
 
 ```python
 python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"

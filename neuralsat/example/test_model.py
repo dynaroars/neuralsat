@@ -27,8 +27,8 @@ def test_sigmoid():
     torch.onnx.export(
         net,
         x,
-        "model_fnn_signmoid.onnx",
-        opset_version=12,
+        "fnn_signmoid.onnx",
+        verbose=False,
     )
     
     
@@ -45,7 +45,12 @@ def test_relu():
     x = torch.tensor([[1.0, 2.0]])
     y = net(x)
     print(y)
-    torch.onnx.export(net, x, "/home/droars/Desktop/bab-smt/src/example/fnn.onnx", verbose=False)
+    torch.onnx.export(
+        net, 
+        x, 
+        "fnn_relu.onnx", 
+        verbose=False,
+    )
     
 if __name__ == '__main__':
     test_relu()
