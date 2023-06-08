@@ -31,21 +31,18 @@ def get_slope(self, model):
 
 
 def set_slope(self, model, slope, set_all=False):
-    if isinstance(slope, defaultdict):
-        for m in model.perturbed_optimizable_activations:
-            for spec_name in list(m.alpha.keys()):
-                if spec_name in slope[m.name]:
-                    # setup the last layer slopes if no refinement.
-                    if (spec_name == self.net.final_name) or set_all:
-                        slope_len = slope[m.name][spec_name].size(2)
-                        if slope_len > 0:
-                            m.alpha[spec_name] = slope[m.name][spec_name]
-                            m.alpha[spec_name] = m.alpha[spec_name].repeat(1, 1, 2, *([1] * (m.alpha[spec_name].ndim - 3))).detach().requires_grad_() # 2 * batch
-                else:
-                    # layer's alpha is not used
-                    del m.alpha[spec_name]
-    else:
-        raise NotImplementedError
+    assert isinstance(slope, defaultdict)
+    for m in model.perturbed_optimizable_activations:
+        for spec_name in list(m.alpha.keys()):
+            if spec_name in slope[m.name]:
+                if (spec_name == self.net.final_name) or set_all:
+                    slope_len = slope[m.name][spec_name].size(2)
+                    if slope_len > 0:
+                        m.alpha[spec_name] = slope[m.name][spec_name]
+                        m.alpha[spec_name] = m.alpha[spec_name].repeat(1, 1, 2, *([1] * (m.alpha[spec_name].ndim - 3))).detach().requires_grad_() # 2 * batch
+            else:
+                # do not use alphas
+                del m.alpha[spec_name]
 
 
 def reset_beta(self, batch, max_splits_per_layer, betas=None):
@@ -63,33 +60,21 @@ def reset_beta(self, batch, max_splits_per_layer, betas=None):
 
 
 def get_hidden_bounds(self, model, lb):
-    lower_bounds = []
-    upper_bounds = []
-    self.pre_relu_indices = []
-    self.name_dict = {}
     ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
-
-    for i, layer in enumerate(model.perturbed_optimizable_activations):
-        lower_bounds.append(layer.inputs[0].lower.detach())
-        upper_bounds.append(layer.inputs[0].upper.detach())
-        self.name_dict[i] = layer.inputs[0].name
-        if isinstance(layer, BoundRelu):
-            self.pre_relu_indices.append(i)
-
+    lower_bounds = [layer.inputs[0].lower.detach() for layer in model.perturbed_optimizable_activations]
+    upper_bounds = [layer.inputs[0].upper.detach() for layer in model.perturbed_optimizable_activations]
     lower_bounds.append(lb.flatten(1).detach())
     upper_bounds.append(ub.flatten(1).detach())
+    self.pre_relu_indices = [i for (i, layer) in enumerate(model.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
+    self.name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(model.perturbed_optimizable_activations)}
     return lower_bounds, upper_bounds
 
 
-def get_batch_hidden_bounds(self, model, lb, batch):
-    lower_bounds = []
-    upper_bounds = []
+def get_batch_hidden_bounds(self, model, lb):
+    batch = len(lb)
     ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
-
-    for layer in model.perturbed_optimizable_activations:
-        lower_bounds.append(layer.inputs[0].lower)
-        upper_bounds.append(layer.inputs[0].upper)
-
+    lower_bounds = [layer.inputs[0].lower for layer in model.perturbed_optimizable_activations]
+    upper_bounds = [layer.inputs[0].upper for layer in model.perturbed_optimizable_activations]
     lower_bounds.append(lb.view(batch, -1).detach())
     upper_bounds.append(ub.view(batch, -1).detach())
     return lower_bounds, upper_bounds
@@ -98,13 +83,8 @@ def get_batch_hidden_bounds(self, model, lb, batch):
 def get_lAs(self, model):
     if len(model.perturbed_optimizable_activations) == 0:
         return [None]
-
-    lA = []
-    for this_relu in model.perturbed_optimizable_activations:
-        if hasattr(this_relu, 'lA') and this_relu.lA is not None:
-            lA.append(this_relu.lA.transpose(0, 1))
-        else:
-            lA.append(None) # inactive
+    lA = [layer.lA.transpose(0, 1) if (hasattr(layer, 'lA') and layer.lA is not None) else None 
+            for layer in model.perturbed_optimizable_activations]
     return lA
 
 
@@ -126,13 +106,11 @@ def get_batch_lAs(self, model, size=None, to_cpu=False):
 
 
 def get_beta(self, model, splits_per_example):
-    # split_per_example only has half of the examples.
     batch = splits_per_example.size(0)
     retb = [[] for _ in range(batch * 2)]
-    
     for mi, m in enumerate(model.perturbed_optimizable_activations):
         if hasattr(m, 'sparse_beta'):
-            # Save only used beta, discard padding beta.
+            # discard padding beta.
             for i in range(batch):
                 retb[i].append(m.sparse_beta[i, :splits_per_example[i, mi]])
                 retb[i + batch].append(m.sparse_beta[i + batch, :splits_per_example[i, mi]])
@@ -140,7 +118,6 @@ def get_beta(self, model, splits_per_example):
 
 
 def set_beta(self, model, betas, histories, decision, use_beta=True):
-    # iteratively change upper and lower bound from former to later layer
     if use_beta:
         batch = len(decision)
         # count split nodes 
@@ -256,7 +233,7 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
     return new_input_lowers, new_input_uppers
 
 
-def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, transfer_items="all"):
+def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     class TMP:
         pass
     
@@ -267,37 +244,27 @@ def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, t
         cpu_net.perturbed_optimizable_activations[i].inputs = [lambda : None]
         cpu_net.perturbed_optimizable_activations[i].name = net.perturbed_optimizable_activations[i].name
 
-    # transfer data structures for each relu
-    if transfer_items == "all":
-        for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-            cpu_layer.inputs[0].lower = layer.inputs[0].lower.to(device='cpu', non_blocking=non_blocking)
-            cpu_layer.inputs[0].upper = layer.inputs[0].upper.to(device='cpu', non_blocking=non_blocking)
+    for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
+        # alphas
+        cpu_layer.alpha = OrderedDict()
+        for spec_name, alpha in layer.alpha.items():
+            cpu_layer.alpha[spec_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
+            
+        if slope_only:
+            continue
+        
+        # hidden bounds
+        cpu_layer.inputs[0].lower = layer.inputs[0].lower.to(device='cpu', non_blocking=non_blocking)
+        cpu_layer.inputs[0].upper = layer.inputs[0].upper.to(device='cpu', non_blocking=non_blocking)
 
-        for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-            cpu_layer.lA = layer.lA.to(device='cpu', non_blocking=non_blocking)
+        # lAs
+        cpu_layer.lA = layer.lA.to(device='cpu', non_blocking=non_blocking)
+        
+        # betas
+        if hasattr(layer, 'sparse_beta') and layer.sparse_beta is not None:
+            cpu_layer.sparse_beta = layer.sparse_beta.to(device='cpu', non_blocking=non_blocking)
+            
 
-    if transfer_items == "all" or transfer_items == "slopes":
-        for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-            cpu_layer.alpha = OrderedDict()
-            for spec_name, alpha in layer.alpha.items():
-                cpu_layer.alpha[spec_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
-
-    if transfer_items == "all":
-        for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-            if hasattr(layer, 'sparse_beta') and layer.sparse_beta is not None:
-                cpu_layer.sparse_beta = layer.sparse_beta.to(device='cpu', non_blocking=non_blocking)
-
-        if opt_intermediate_beta and net.best_intermediate_betas is not None:
-            cpu_net.best_intermediate_betas = OrderedDict()
-            for split_layer, all_int_betas_this_layer in net.best_intermediate_betas.items():
-                assert 'single' in all_int_betas_this_layer
-                assert 'history' not in all_int_betas_this_layer
-                assert 'split' not in all_int_betas_this_layer
-                cpu_net.best_intermediate_betas[split_layer] = {'single': defaultdict(dict)}
-                for intermediate_layer, this_layer_intermediate_betas in all_int_betas_this_layer['single'].items():
-                    cpu_net.best_intermediate_betas[split_layer]['single'][intermediate_layer]['lb'] = this_layer_intermediate_betas['lb'].to(device='cpu', non_blocking=non_blocking)
-                    cpu_net.best_intermediate_betas[split_layer]['single'][intermediate_layer]['ub'] = this_layer_intermediate_betas['ub'].to(device='cpu', non_blocking=non_blocking)
-    
     return cpu_net
 
     

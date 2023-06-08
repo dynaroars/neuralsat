@@ -232,15 +232,15 @@ class NetworkAbstractor:
 
         # process output on CPU instead of GPU
         with torch.no_grad():
-            lAs = self.get_batch_lAs(self.net, size=len(double_input_lowers), to_cpu=True)
+            lAs = self.get_batch_lAs(model=self.net, size=len(double_input_lowers), to_cpu=True)
             lb = lb.to(device='cpu')
-            transfer_net = self.transfer_to_cpu(self.net, non_blocking=False)
+            cpu_net = self.transfer_to_cpu(net=self.net, non_blocking=False)
             # slopes
-            ret_s = self.get_slope(transfer_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
+            ret_s = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
             # betas
-            ret_b = self.get_beta(transfer_net, splits_per_example) if use_beta else [[] for _ in range(batch * 2)]
+            ret_b = self.get_beta(cpu_net, splits_per_example) if use_beta else [[] for _ in range(batch * 2)]
             # hidden bounds
-            ret_l, ret_u = self.get_batch_hidden_bounds(transfer_net, lb, batch * 2)
+            ret_l, ret_u = self.get_batch_hidden_bounds(cpu_net, lb)
             
         assert all([_.shape[0] == 2*batch for _ in ret_l]), print([_.shape for _ in ret_l])
         assert all([_.shape[0] == 2*batch for _ in ret_u]), print([_.shape for _ in ret_u])
@@ -297,9 +297,13 @@ class NetworkAbstractor:
 
         with torch.no_grad():
             # indexing on CPU
-            transfer_net = self.transfer_to_cpu(self.net, non_blocking=False, transfer_items="slopes")
+            cpu_net = self.transfer_to_cpu(
+                net=self.net, 
+                non_blocking=False, 
+                slope_only=True,
+            )
             # slopes
-            ret_s = self.get_slope(transfer_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
+            ret_s = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
 
         return AbstractResults(**{
             'output_lbs': lb, 
