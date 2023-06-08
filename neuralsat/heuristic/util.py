@@ -3,9 +3,9 @@ import torch
 import time
 import copy
 
-from auto_LiRPA.bound_ops import BoundRelu, BoundLinear, BoundConv, BoundBatchNormalization, BoundAdd
-
 from solver.sat_solver import SATSolver
+from auto_LiRPA.bound_ops import *
+
 
 def compute_masks(lower_bounds, upper_bounds, device):
     new_masks = [torch.logical_and(
@@ -13,6 +13,7 @@ def compute_masks(lower_bounds, upper_bounds, device):
                     upper_bounds[j] > 0).flatten(start_dim=1).float().to(device=device, non_blocking=True)
                 for j in range(len(lower_bounds) - 1)]
     return new_masks
+
 
 def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, masks, reduce_op, number_bounds):
     score = []
@@ -70,18 +71,6 @@ def _compute_ratio(lower_bound, upper_bound):
     slope_ratio = upper_temp / (upper_temp - lower_temp)
     intercept = -1 * lower_temp * slope_ratio
     return slope_ratio, intercept
-
-
-def _get_branching_op(branching_reduceop):
-    if branching_reduceop == 'min':
-        reduce_op = torch.min
-    elif branching_reduceop == 'max':
-        reduce_op = torch.max
-    elif branching_reduceop == 'mean':
-        reduce_op = torch.mean
-    else:
-        raise NotImplementedError()
-    return reduce_op
 
     
 def _get_bias_term(input_node):

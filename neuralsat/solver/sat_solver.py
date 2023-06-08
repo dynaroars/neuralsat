@@ -113,6 +113,7 @@ class SATSolver:
         print(self.clauses)
         print()
         
+        
     def __deepcopy__(self, memo):
         new_solver = SATSolver([])
         new_solver.clauses = self.clauses.clone()
@@ -130,6 +131,7 @@ class SATSolver:
         except:
             return self.multiple_assign_python(literals)
     
+    
     def multiple_assign_python(self, literals):
         print('[!] Parallel assign using Python')
         remain_mask = torch.ones(self.clauses.size(0), dtype=torch.bool, device=self.clauses.device)
@@ -144,6 +146,7 @@ class SATSolver:
         # self.clauses = torch.where(zero_mask, 0, self.clauses)
         self.clauses[zero_mask] = 0
         return True
+    
     
     def multiple_assign_cpp(self, literals):
         import haioc

@@ -24,7 +24,12 @@ class DomainsList:
         ######## clause learning ########
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and len(preconditions)
         if self.use_restart:
-            stat = self.init_sat_solver(lower_bounds=lower_bounds, upper_bounds=upper_bounds, histories=histories, preconditions=preconditions)
+            stat = self.init_sat_solver(
+                lower_bounds=lower_bounds, 
+                upper_bounds=upper_bounds, 
+                histories=histories, 
+                preconditions=preconditions
+            )
             if not stat:
                 raise ValueError('BCP conflict')
             print(histories)
@@ -87,7 +92,7 @@ class DomainsList:
         batch = min(len(self), batch)
 
         if torch.cuda.is_available(): 
-            torch.cuda.synchronize()  # make sure GPU to CPU transfer is finished
+            torch.cuda.synchronize()
 
         # input bounds
         input_lowers = self.all_input_lowers.pop(batch).to(device=device, non_blocking=True)

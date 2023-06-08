@@ -9,7 +9,6 @@ from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule, BoundedTensor
 
 from util.misc.result import AbstractResults
-from .utils import get_unstable_neurons
 from .params import *
 
 
@@ -104,17 +103,11 @@ class NetworkAbstractor:
                 return AbstractResults(**{'output_lbs': lb})
             
             # reorganize tensors
-            ub = torch.zeros_like(lb) + np.inf
-            lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb, ub)
-            masks, lAs = self.get_mask_lA(self.net)
+            lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb)
 
-            # unstable nodes 
-            # n_unstables = get_unstable_neurons(mask)
-            
             return AbstractResults(**{
                 'output_lbs': lower_bounds[-1], 
-                'masks': masks, 
-                'lAs': lAs, 
+                'lAs': self.get_lAs(self.net), 
                 'lower_bounds': lower_bounds, 
                 'upper_bounds': upper_bounds, 
                 'slopes': self.get_slope(self.net), 
@@ -150,53 +143,82 @@ class NetworkAbstractor:
             raise NotImplementedError()
         
 
-    def _forward_hidden(self, input_lowers, input_uppers, lower_bounds, upper_bounds, cs, rhs, branching_decisions, 
-                        slopes=None, use_beta=True, betas=None, histories=None, sat_solvers=None, shortcut=False):
-
-        assert len(cs) == len(rhs) == len(input_lowers) == len(input_uppers)
+    def _naive_forward_hidden(self, domain_params, branching_decisions):
+        assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
         decision = np.array(branching_decisions)
         batch = len(decision)
         assert batch > 0
         
-        # set betas with new decisions
-        splits_per_example = self.set_beta(self.net, betas, histories, decision, use_beta=use_beta)
-        
         # update layer bounds with new decisions (perform splitting)
-        new_intermediate_layer_bounds, last_output_lbs, last_output_ubs = self.hidden_split_idx(
-            lower_bounds=lower_bounds, 
-            upper_bounds=upper_bounds, 
+        new_intermediate_layer_bounds = self.hidden_split_idx(
+            lower_bounds=domain_params.lower_bounds, 
+            upper_bounds=domain_params.upper_bounds, 
             decision=decision
         )
         
         # sample-wise for supporting handling multiple targets in one batch
-        double_cs = torch.cat([cs, cs], dim=0)
-        double_rhs = torch.cat([rhs, rhs], dim=0)
-        double_input_lowers = torch.cat([input_lowers, input_lowers], dim=0)
-        double_input_uppers = torch.cat([input_uppers, input_uppers], dim=0)
+        double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
+        double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
+        double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
         assert torch.all(double_input_lowers <= double_input_uppers)
         
         # create new inputs
         new_x = BoundedTensor(double_input_lowers, PerturbationLpNorm(x_L=double_input_lowers, x_U=double_input_uppers))
         
         # set slope here again
-        if len(slopes) > 0: 
-            self.set_slope(self.net, slopes)
+        if len(domain_params.slopes) > 0: 
+            self.set_slope(self.net, domain_params.slopes)
 
-        # quick abstraction for branching
-        if shortcut: 
-            # setup optimization parameters
-            self.net.set_bound_opts(get_branching_opt_params())
+        # setup optimization parameters
+        self.net.set_bound_opts(get_branching_opt_params())
 
-            with torch.no_grad():
-                lb, _, = self.net.compute_bounds(
-                    x=(new_x,), 
-                    C=double_cs, 
-                    method='backward', 
-                    reuse_alpha=True,
-                    intermediate_layer_bounds=new_intermediate_layer_bounds
-                )
-            return AbstractResults(**{'output_lbs': lb})
+        with torch.no_grad():
+            lb, _, = self.net.compute_bounds(
+                x=(new_x,), 
+                C=double_cs, 
+                method='backward', 
+                reuse_alpha=True,
+                intermediate_layer_bounds=new_intermediate_layer_bounds
+            )
+        return AbstractResults(**{'output_lbs': lb})
     
+
+    def _forward_hidden(self, domain_params, branching_decisions, use_beta=True):
+        assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
+        decision = np.array(branching_decisions)
+        batch = len(decision)
+        assert batch > 0
+        
+        # update betas with new decisions
+        splits_per_example = self.set_beta(
+            model=self.net, 
+            betas=domain_params.betas, 
+            histories=domain_params.histories, 
+            decision=decision,
+            use_beta=use_beta,
+        )
+        
+        # update hidden bounds with new decisions (perform splitting)
+        new_intermediate_layer_bounds = self.hidden_split_idx(
+            lower_bounds=domain_params.lower_bounds, 
+            upper_bounds=domain_params.upper_bounds, 
+            decision=decision
+        )
+        
+        # 2 * batch
+        double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
+        double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
+        double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
+        double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
+        assert torch.all(double_input_lowers <= double_input_uppers)
+        
+        # create new inputs
+        new_x = BoundedTensor(double_input_lowers, PerturbationLpNorm(x_L=double_input_lowers, x_U=double_input_uppers))
+        
+        # update slopes
+        if len(domain_params.slopes) > 0: 
+            self.set_slope(self.net, domain_params.slopes)
+
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(use_beta, stop_criterion_batch_any(double_rhs)))
         
@@ -207,26 +229,18 @@ class NetworkAbstractor:
             intermediate_layer_bounds=new_intermediate_layer_bounds,
             decision_thresh=double_rhs
         )
-        ub = torch.zeros_like(lb) + np.inf
 
         # process output on CPU instead of GPU
         with torch.no_grad():
-            # indexing on GPU
-            lAs = self.get_lA(self.net, size=len(double_input_lowers), to_cpu=True)
-            
-            # indexing on CPU
-            lb, ub = lb.to(device='cpu'), ub.to(device='cpu')
+            lAs = self.get_batch_lAs(self.net, size=len(double_input_lowers), to_cpu=True)
+            lb = lb.to(device='cpu')
             transfer_net = self.transfer_to_cpu(self.net, non_blocking=False)
             # slopes
-            ret_s = self.get_slope(transfer_net) if len(slopes) > 0 else [[] for _ in range(batch * 2)]
+            ret_s = self.get_slope(transfer_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
             # betas
             ret_b = self.get_beta(transfer_net, splits_per_example) if use_beta else [[] for _ in range(batch * 2)]
-
-            # reorganize hidden bounds
-            lower_bounds_new, upper_bounds_new = self.get_batch_hidden_bounds(transfer_net, lb, ub, batch * 2)
-            lower_bounds_new[-1] = torch.max(lower_bounds_new[-1], last_output_lbs.cpu())
-            upper_bounds_new[-1] = torch.min(upper_bounds_new[-1], last_output_ubs.cpu())
-            ret_l, ret_u = lower_bounds_new, upper_bounds_new
+            # hidden bounds
+            ret_l, ret_u = self.get_batch_hidden_bounds(transfer_net, lb, batch * 2)
             
         assert all([_.shape[0] == 2*batch for _ in ret_l]), print([_.shape for _ in ret_l])
         assert all([_.shape[0] == 2*batch for _ in ret_u]), print([_.shape for _ in ret_u])
@@ -240,32 +254,36 @@ class NetworkAbstractor:
             'upper_bounds': ret_u, 
             'slopes': ret_s, 
             'betas': ret_b, 
-            'histories': histories,
+            'histories': domain_params.histories,
             'cs': double_cs,
             'rhs': double_rhs,
-            'sat_solvers': sat_solvers,
+            'sat_solvers': domain_params.sat_solvers,
         })
         
         
-    def _forward_input(self, input_lowers, input_uppers, branching_decisions, slopes, cs, rhs):
-        assert len(cs) == len(rhs) == len(input_lowers) == len(input_uppers)
+    def _forward_input(self, domain_params, branching_decisions):
+        assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
         batch = len(branching_decisions)
         assert batch > 0
         
         # splitting input by branching_decisions (perform splitting)
-        new_input_lowers, new_input_uppers = self.input_split_idx(input_lowers, input_uppers, branching_decisions)
+        new_input_lowers, new_input_uppers = self.input_split_idx(
+            input_lowers=domain_params.input_lowers, 
+            input_uppers=domain_params.input_uppers, 
+            split_idx=branching_decisions,
+        )
         assert torch.all(new_input_lowers <= new_input_uppers)
         
         # create new inputs
         new_x = BoundedTensor(new_input_lowers, PerturbationLpNorm(x_L=new_input_lowers, x_U=new_input_uppers))
         
         # sample-wise for supporting handling multiple targets in one batch
-        double_cs = torch.cat([cs, cs], dim=0)
-        double_rhs = torch.cat([rhs, rhs], dim=0)
+        double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
+        double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
         
         # set slope again since batch might change
-        if len(slopes) > 0: 
-            self.set_slope(self.net, slopes, set_all=True)
+        if len(domain_params.slopes) > 0: 
+            self.set_slope(self.net, domain_params.slopes, set_all=True)
         
         # set optimization parameters
         self.net.set_bound_opts(get_input_opt_params(stop_criterion_batch_any(double_rhs)))
@@ -281,7 +299,7 @@ class NetworkAbstractor:
             # indexing on CPU
             transfer_net = self.transfer_to_cpu(self.net, non_blocking=False, transfer_items="slopes")
             # slopes
-            ret_s = self.get_slope(transfer_net) if len(slopes) > 0 else [[] for _ in range(batch * 2)]
+            ret_s = self.get_slope(transfer_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
 
         return AbstractResults(**{
             'output_lbs': lb, 
@@ -296,25 +314,12 @@ class NetworkAbstractor:
     def forward(self, branching_decisions, domain_params):
         if self.input_split:
             return self._forward_input(
-                input_lowers=domain_params.input_lowers, 
-                input_uppers=domain_params.input_uppers, 
+                domain_params=domain_params,
                 branching_decisions=branching_decisions,
-                slopes=domain_params.slopes,
-                cs=domain_params.cs,
-                rhs=domain_params.rhs,
             )
         return self._forward_hidden(
-            input_lowers=domain_params.input_lowers, 
-            input_uppers=domain_params.input_uppers, 
-            lower_bounds=domain_params.lower_bounds, 
-            upper_bounds=domain_params.upper_bounds, 
-            branching_decisions=branching_decisions, 
-            slopes=domain_params.slopes, 
-            histories=domain_params.histories,
-            betas=domain_params.betas,
-            cs=domain_params.cs,
-            rhs=domain_params.rhs,
-            sat_solvers=domain_params.sat_solvers,
+            domain_params=domain_params,
+            branching_decisions=branching_decisions,
         )
 
 
@@ -322,7 +327,7 @@ class NetworkAbstractor:
         get_slope, set_slope,
         get_beta, set_beta, reset_beta, 
         get_hidden_bounds, get_batch_hidden_bounds,
-        get_mask_lA, get_lA, 
+        get_lAs, get_batch_lAs, 
         transfer_to_cpu, 
         hidden_split_idx, input_split_idx,
         build_lp_solver, solve_full_assignment,

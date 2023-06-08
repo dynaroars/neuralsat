@@ -3,7 +3,7 @@ import random
 import torch
 import time
 
-from heuristic.branching_heuristics import DecisionHeuristic
+from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.restart_heuristics import get_restart_strategy
 from attacker.pgd_attack.general import general_attack
 from abstractor.abstractor import NetworkAbstractor
@@ -93,7 +93,7 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
         X=adv_example, 
         data_min=input_lowers, 
         data_max=input_uppers, 
-        C_mat=cs, 
+        cs_mat=cs, 
         rhs_mat=rhs, 
         cond_mat=[[1 for i in range(domain_params.cs[indices].shape[0])]], 
         same_number_const=True, 

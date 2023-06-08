@@ -5,7 +5,7 @@ import copy
 
 from auto_LiRPA.utils import stop_criterion_batch_any
 
-from heuristic.branching_domains import DomainsList
+from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
 from heuristic.util import compute_masks
 from abstractor.utils import new_slopes

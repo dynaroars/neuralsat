@@ -1,5 +1,6 @@
 from collections import defaultdict, OrderedDict
 import gurobipy as grb
+import numpy as np
 import torch
 
 from auto_LiRPA.bound_ops import BoundRelu, BoundOptimizableActivation
@@ -18,42 +19,28 @@ def new_slopes(slopes, keep_name):
     return new_slope
 
 
-def get_unstable_neurons(masks):
-    total_unstables = 0
-    for i, layer_mask in enumerate([mask[0:1] for mask in masks]):
-        layer_unstables = int(torch.sum(layer_mask).item())
-        print(f'Layer {i}: size {layer_mask.shape[1:]}, unstable {layer_unstables}')
-        total_unstables += layer_unstables
-    print(f'-----------------\nTotal number of unstable neurons: {total_unstables}\n-----------------\n')
-    return total_unstables
-
-
-def get_slope(self, model, only_final=False):
+def get_slope(self, model):
     if len(model.perturbed_optimizable_activations) == 0:
         return {}
     ret = {}
-    kept_layer_names = [self.net.final_name]
     for m in model.perturbed_optimizable_activations:
         ret[m.name] = {}
         for spec_name, alpha in m.alpha.items():
-            if not only_final or spec_name in kept_layer_names:
-                ret[m.name][spec_name] = alpha # (2, spec, batch, *shape)
+            ret[m.name][spec_name] = alpha # (2, spec, batch, *shape)
     return ret
 
 
 def set_slope(self, model, slope, set_all=False):
-    kept_layer_names = [self.net.final_name]
     if isinstance(slope, defaultdict):
         for m in model.perturbed_optimizable_activations:
             for spec_name in list(m.alpha.keys()):
                 if spec_name in slope[m.name]:
                     # setup the last layer slopes if no refinement.
-                    if spec_name in kept_layer_names or set_all:
+                    if (spec_name == self.net.final_name) or set_all:
                         slope_len = slope[m.name][spec_name].size(2)
                         if slope_len > 0:
                             m.alpha[spec_name] = slope[m.name][spec_name]
-                            # 2 * batch
-                            m.alpha[spec_name] = m.alpha[spec_name].repeat(1, 1, 2, *([1] * (m.alpha[spec_name].ndim - 3))).detach().requires_grad_()
+                            m.alpha[spec_name] = m.alpha[spec_name].repeat(1, 1, 2, *([1] * (m.alpha[spec_name].ndim - 3))).detach().requires_grad_() # 2 * batch
                 else:
                     # layer's alpha is not used
                     del m.alpha[spec_name]
@@ -75,11 +62,12 @@ def reset_beta(self, batch, max_splits_per_layer, betas=None):
             m.sparse_beta = m.sparse_beta.repeat(2, 1).detach().to(device=self.net.device, non_blocking=True).requires_grad_()
 
 
-def get_hidden_bounds(self, model, lb, ub):
+def get_hidden_bounds(self, model, lb):
     lower_bounds = []
     upper_bounds = []
     self.pre_relu_indices = []
     self.name_dict = {}
+    ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
 
     for i, layer in enumerate(model.perturbed_optimizable_activations):
         lower_bounds.append(layer.inputs[0].lower.detach())
@@ -93,9 +81,10 @@ def get_hidden_bounds(self, model, lb, ub):
     return lower_bounds, upper_bounds
 
 
-def get_batch_hidden_bounds(self, model, lb, ub, batch):
+def get_batch_hidden_bounds(self, model, lb, batch):
     lower_bounds = []
     upper_bounds = []
+    ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
 
     for layer in model.perturbed_optimizable_activations:
         lower_bounds.append(layer.inputs[0].lower)
@@ -106,35 +95,33 @@ def get_batch_hidden_bounds(self, model, lb, ub, batch):
     return lower_bounds, upper_bounds
 
 
-def get_mask_lA(self, model):
+def get_lAs(self, model):
     if len(model.perturbed_optimizable_activations) == 0:
-        return [None], [None]
+        return [None]
 
-    mask, lA = [], []
+    lA = []
     for this_relu in model.perturbed_optimizable_activations:
-        mask_tmp = torch.logical_and(this_relu.inputs[0].lower < 0, this_relu.inputs[0].upper > 0).float() # 1 is unstable, 0 is stable
-        mask.append(mask_tmp.reshape(mask_tmp.size(0), -1))
         if hasattr(this_relu, 'lA') and this_relu.lA is not None:
             lA.append(this_relu.lA.transpose(0, 1))
         else:
             lA.append(None) # inactive
-    return mask, lA
+    return lA
 
 
-def get_lA(self, model, size=None, to_cpu=False):
-    preserve_mask = self.net.last_update_preserve_mask
+def get_batch_lAs(self, model, size=None, to_cpu=False):
     if len(model.perturbed_optimizable_activations) == 0:
         return [None]
-    # get lower A matrix of ReLU
+
     lA = []
+    preserve_mask = self.net.last_update_preserve_mask
     if preserve_mask is not None:
         for this_relu in model.perturbed_optimizable_activations:
             new_lA = torch.zeros([size, this_relu.lA.shape[0]] + list(this_relu.lA.shape[2:]), dtype=this_relu.lA.dtype, device=this_relu.lA.device)
-            new_lA[preserve_mask] = this_relu.lA.transpose(0,1)
+            new_lA[preserve_mask] = this_relu.lA.transpose(0, 1)
             lA.append(new_lA.to(device='cpu', non_blocking=False) if to_cpu else new_lA)
     else:
         for this_relu in model.perturbed_optimizable_activations:
-            lA.append(this_relu.lA.transpose(0,1).to(device='cpu', non_blocking=False) if to_cpu else this_relu.lA.squeeze(0))
+            lA.append(this_relu.lA.transpose(0, 1).to(device='cpu', non_blocking=False) if to_cpu else this_relu.lA.squeeze(0))
     return lA
 
 
@@ -163,8 +150,12 @@ def set_beta(self, model, betas, histories, decision, use_beta=True):
             for mi, layer_splits in enumerate(histories[bi]):
                 splits_per_example[bi, mi] = len(layer_splits[0]) + int(d == mi)  # First element of layer_splits is a list of split neuron IDs.
 
-        # warm start beta
-        self.reset_beta(batch, betas=betas, max_splits_per_layer=splits_per_example.max(dim=0)[0])
+        # update beta
+        self.reset_beta(
+            batch=batch, 
+            betas=betas, 
+            max_splits_per_layer=splits_per_example.max(dim=0)[0],
+        )
 
         # update new decisions
         # positive splits in 1st half
@@ -217,10 +208,6 @@ def hidden_split_idx(self, lower_bounds, upper_bounds, decision):
         tmp_ubs = [torch.cat([i[:batch], i[:batch]], dim=0) for i in upper_bounds[:-1]]
         tmp_lbs = [torch.cat([i[:batch], i[:batch]], dim=0) for i in lower_bounds[:-1]]
 
-        # save for later
-        pre_lb_last = torch.cat([lower_bounds[-1][:batch], lower_bounds[-1][:batch]])
-        pre_ub_last = torch.cat([upper_bounds[-1][:batch], upper_bounds[-1][:batch]])
-
         new_intermediate_layer_bounds = {}
         for d in range(len(tmp_lbs)):
             if len(splitting_indices_batch[d]):
@@ -238,7 +225,7 @@ def hidden_split_idx(self, lower_bounds, upper_bounds, decision):
                 
             new_intermediate_layer_bounds[self.name_dict[d]] = [tmp_lbs[d], tmp_ubs[d]]
             
-    return new_intermediate_layer_bounds, pre_lb_last, pre_ub_last
+    return new_intermediate_layer_bounds
 
 
 @torch.no_grad()
@@ -255,10 +242,10 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
     input_lowers_cp_tmp = input_lowers_cp.clone()
     input_uppers_cp_tmp = input_uppers_cp.clone()
 
-    mid = (input_lowers_cp[indices, idx] + input_uppers_cp[indices, idx]) / 2
+    split_value = (input_lowers_cp[indices, idx] + input_uppers_cp[indices, idx]) / 2
 
-    input_lowers_cp[indices, idx] = mid
-    input_uppers_cp_tmp[indices, idx] = mid
+    input_lowers_cp[indices, idx] = split_value
+    input_uppers_cp_tmp[indices, idx] = split_value
     
     input_lowers_cp = torch.cat([input_lowers_cp, input_lowers_cp_tmp])
     input_uppers_cp = torch.cat([input_uppers_cp, input_uppers_cp_tmp])
@@ -270,10 +257,9 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
 
 
 def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, transfer_items="all"):
-    """Trasfer all necessary tensors to CPU in a batch."""
-
     class TMP:
         pass
+    
     cpu_net = TMP()
     cpu_net.perturbed_optimizable_activations = [None] * len (net.perturbed_optimizable_activations)
     for i in range(len(cpu_net.perturbed_optimizable_activations)):
@@ -281,7 +267,7 @@ def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, t
         cpu_net.perturbed_optimizable_activations[i].inputs = [lambda : None]
         cpu_net.perturbed_optimizable_activations[i].name = net.perturbed_optimizable_activations[i].name
 
-    # Transfer data structures for each relu.
+    # transfer data structures for each relu
     if transfer_items == "all":
         for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
             cpu_layer.inputs[0].lower = layer.inputs[0].lower.to(device='cpu', non_blocking=non_blocking)
@@ -292,7 +278,6 @@ def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, t
 
     if transfer_items == "all" or transfer_items == "slopes":
         for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-
             cpu_layer.alpha = OrderedDict()
             for spec_name, alpha in layer.alpha.items():
                 cpu_layer.alpha[spec_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
@@ -305,7 +290,6 @@ def transfer_to_cpu(self, net, non_blocking=True, opt_intermediate_beta=False, t
         if opt_intermediate_beta and net.best_intermediate_betas is not None:
             cpu_net.best_intermediate_betas = OrderedDict()
             for split_layer, all_int_betas_this_layer in net.best_intermediate_betas.items():
-
                 assert 'single' in all_int_betas_this_layer
                 assert 'history' not in all_int_betas_this_layer
                 assert 'split' not in all_int_betas_this_layer
@@ -337,46 +321,46 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
 
 
 def solve_full_assignment(self, lower_bounds, upper_bounds, rhs):
-    working_model = self.net.model.copy()
+    tmp_model = self.net.model.copy()
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     
     for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
         lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
         for neuron_idx in range(lbs.shape[0]):
-            pre_var = working_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+            pre_var = tmp_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
             pre_var.lb = pre_lb = lbs[neuron_idx]
             pre_var.ub = pre_ub = ubs[neuron_idx]
-            var = working_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
+            var = tmp_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
             # var is None if originally stable
             if var is not None:
                 if pre_ub >= pre_lb >= 0:
                     var.lb = pre_lb
                     var.ub = pre_ub
-                    working_model.addConstr(pre_var == var)
+                    tmp_model.addConstr(pre_var == var)
                 elif pre_lb <= pre_ub <= 0:
                     var.lb = 0
                     var.ub = 0
                 else:
                     raise ValueError(f'Exists unstable neuron at index [{relu_idx}][{neuron_idx}]: lb={pre_lb} ub={pre_ub}')
                 
-    working_model.update()
+    tmp_model.update()
 
     feasible = True
     adv = None
     output_vars = self.net.final_node().solver_vars
     assert len(output_vars) == len(rhs), f"out shape not matching! {len(output_vars)} {len(rhs)}"
     for out_idx in range(len(output_vars)):
-        objective_var = working_model.getVarByName(output_vars[out_idx].VarName)
-        working_model.setObjective(objective_var, grb.GRB.MINIMIZE)
-        working_model.update()
-        working_model.optimize()
+        objective_var = tmp_model.getVarByName(output_vars[out_idx].VarName)
+        tmp_model.setObjective(objective_var, grb.GRB.MINIMIZE)
+        tmp_model.update()
+        tmp_model.optimize()
 
-        if working_model.status == 2:
+        if tmp_model.status == 2:
             # print("Gurobi all node split: feasible!")
             output_lb = objective_var.X
         else:
-            # print(f"Gurobi all node split: infeasible! Model status {working_model.status}")
+            # print(f"Gurobi all node split: infeasible! Model status {tmp_model.status}")
             output_lb = float('inf')
 
         if output_lb > rhs[out_idx]:
@@ -384,8 +368,8 @@ def solve_full_assignment(self, lower_bounds, upper_bounds, rhs):
             adv = None
             break
 
-        input_vars = [working_model.getVarByName(var.VarName) for var in self.net.input_vars]
+        input_vars = [tmp_model.getVarByName(var.VarName) for var in self.net.input_vars]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
         
-    del working_model
+    del tmp_model
     return feasible, adv

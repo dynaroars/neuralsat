@@ -19,23 +19,23 @@ def attack(model, x, data_min, data_max, list_target_label_arrays, initializatio
 
     output = model(x).detach()
     
-    C_mat, rhs_mat, cond_mat, same_number_const = build_conditions(x, list_target_label_arrays)
+    cs_mat, rhs_mat, cond_mat, same_number_const = build_conditions(x, list_target_label_arrays)
 
     output = output.unsqueeze(1).unsqueeze(1).repeat(1, 1, len(cond_mat[0]), 1)
-    if test_conditions(x, output, C_mat, rhs_mat, cond_mat, same_number_const, data_max.unsqueeze(1), data_min.unsqueeze(1)).all():
+    if test_conditions(x, output, cs_mat, rhs_mat, cond_mat, same_number_const, data_max.unsqueeze(1), data_min.unsqueeze(1)).all():
         return True, x[:, None, None].detach()
 
 
     data_min = data_min.to(device)
     data_max = data_max.to(device)
     rhs_mat = rhs_mat.to(device)
-    C_mat = C_mat.to(device)
+    cs_mat = cs_mat.to(device)
     attack_images = general_attack(
         model=model, 
         X=x, 
         data_min=data_min, 
         data_max=data_max, 
-        C_mat=C_mat, 
+        cs_mat=cs_mat, 
         rhs_mat=rhs_mat, 
         cond_mat=cond_mat, 
         same_number_const=same_number_const, 
@@ -56,7 +56,7 @@ def attack(model, x, data_min, data_max, list_target_label_arrays, initializatio
 
 
 
-def general_attack(model, X, data_min, data_max, C_mat, rhs_mat, cond_mat, same_number_const, alpha, 
+def general_attack(model, X, data_min, data_max, cs_mat, rhs_mat, cond_mat, same_number_const, alpha, 
                    use_adam=True, normalize=lambda x: x, initialization='uniform', GAMA_loss=False, 
                    num_restarts=10, attack_iters=100, only_replicate_restarts=False):
     lr_decay = 0.99
@@ -65,7 +65,7 @@ def general_attack(model, X, data_min, data_max, C_mat, rhs_mat, cond_mat, same_
     input_shape = (X.shape[0], *X.shape[2:]) if only_replicate_restarts else X.size()
     device = X.device
 
-    num_classes = C_mat.shape[-1]
+    num_classes = cs_mat.shape[-1]
     num_or_spec = len(cond_mat[0])
     extra_dim = (num_restarts, num_or_spec) if only_replicate_restarts == False else (num_restarts,)
     # shape of x: [num_example, *shape_of_x]
@@ -83,7 +83,7 @@ def general_attack(model, X, data_min, data_max, C_mat, rhs_mat, cond_mat, same_
     extra_dim = (X.shape[1], X.shape[2])
 
     if initialization == 'osi':
-        X_init = osi_init(model, X, alpha, C_mat.shape[-1], attack_iters, data_min, data_max)
+        X_init = osi_init(model, X, alpha, cs_mat.shape[-1], attack_iters, data_min, data_max)
         delta = (X_init - X).detach().requires_grad_()
     elif initialization == 'uniform':
         delta = (torch.empty_like(X).uniform_() * (delta_upper_limit - delta_lower_limit) + delta_lower_limit).requires_grad_()
@@ -107,11 +107,11 @@ def general_attack(model, X, data_min, data_max, C_mat, rhs_mat, cond_mat, same_
         else:
             origin_out = None
 
-        _, loss_gama = build_loss(origin_out, output, C_mat, rhs_mat, cond_mat, same_number_const, gama_lambda if GAMA_loss else 0.0, mode='hinge')
+        _, loss_gama = build_loss(origin_out, output, cs_mat, rhs_mat, cond_mat, same_number_const, gama_lambda if GAMA_loss else 0.0, mode='hinge')
         gama_lambda *= 0.9
         loss_gama.sum().backward()
 
-        if test_conditions(inputs, output, C_mat, rhs_mat, cond_mat, same_number_const, data_max, data_min).all():
+        if test_conditions(inputs, output, cs_mat, rhs_mat, cond_mat, same_number_const, data_max, data_min).all():
             # print("early stop")
             return inputs
 

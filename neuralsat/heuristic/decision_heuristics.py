@@ -3,11 +3,11 @@ from torch import nn
 import numpy as np
 import torch
 
-from .util import _compute_babsr_scores, _get_branching_op, _get_bias_term
+from .util import _compute_babsr_scores, _get_bias_term
 
 class DecisionHeuristic:
     
-    def __init__(self, branching_candidates, input_split, branching_reduceop='max'):
+    def __init__(self, branching_candidates, input_split, branching_reduceop=torch.max):
         self.branching_candidates = branching_candidates
         self.input_split = input_split
         self.branching_reduceop = branching_reduceop
@@ -26,7 +26,6 @@ class DecisionHeuristic:
     # hidden branching
     def filtered_smart_branching(self, abstractor, domain_params):
         batch = len(domain_params.masks[0])
-        reduce_op = _get_branching_op(self.branching_reduceop)
         topk = min(self.branching_candidates, int(sum([i.sum() for i in domain_params.masks]).item()))
         
         score, intercept_tb = _compute_babsr_scores(
@@ -36,7 +35,7 @@ class DecisionHeuristic:
             lAs=domain_params.lAs, 
             batch=batch, 
             masks=domain_params.masks, 
-            reduce_op=reduce_op, 
+            reduce_op=self.branching_reduceop, 
             number_bounds=domain_params.cs.shape[1]
         )
         
@@ -46,14 +45,12 @@ class DecisionHeuristic:
         double_upper_bounds = [torch.cat([i, i]) for i in domain_params.upper_bounds]
         
         # slope
-        if isinstance(domain_params.slopes, dict):
-            sps = defaultdict(dict)
-            for k, vv in domain_params.slopes.items():
-                sps[k] = {}
-                for kk, v in vv.items():
-                    sps[k][kk] = torch.cat([v, v], dim=2)
-        else:
-            sps = [torch.cat([i, i]) for i in domain_params.slopes]
+        assert isinstance(domain_params.slopes, dict)
+        sps = defaultdict(dict)
+        for k, vv in domain_params.slopes.items():
+            sps[k] = {}
+            for kk, v in vv.items():
+                sps[k][kk] = torch.cat([v, v], dim=2)
         
         # spec
         double_cs = torch.cat([domain_params.cs, domain_params.cs])
@@ -65,22 +62,20 @@ class DecisionHeuristic:
         
         assert torch.all(double_input_lowers <= double_input_uppers)
 
-        # use to convert an index to its layer and offset.
-        score_length = np.cumsum([len(score[i][0]) for i in range(len(score))])
-        score_length = np.insert(score_length, 0, 0)
+        # convert an index to its layer and offset
+        score_length = np.insert(np.cumsum([len(score[i][0]) for i in range(len(score))]), 0, 0)
 
-        # top-k candidates among all layers for two kinds of scores.
-        all_score = torch.cat(score, dim=1)
-        score_idx = torch.topk(all_score, topk)
+        # top-k candidates among all layers for two kinds of scores
+        score_idx = torch.topk(torch.cat(score, dim=1), topk)
         score_idx_indices = score_idx.indices.cpu()
         
-        all_itb = torch.cat(intercept_tb, dim=1)
-        itb_idx = torch.topk(all_itb, topk, largest=False)  # k-smallest elements.
+        # k-smallest elements
+        itb_idx = torch.topk(torch.cat(intercept_tb, dim=1), topk, largest=False)  
         itb_idx_indices = itb_idx.indices.cpu()
 
         k_decision = []
         k_ret = torch.empty(size=(topk, batch * 2), device=domain_params.lower_bounds[0].device, requires_grad=False)
-        # only set slope once
+        
         set_slope = True 
         for k in range(topk):
             # top-k candidates from the slope scores.
@@ -105,17 +100,21 @@ class DecisionHeuristic:
             k_decision.append(decision_max_ + decision_min_)
 
             # lower bounds of the temporal splits
-            abs_ret = abstractor._forward_hidden(
-                input_lowers=double_input_lowers,
-                input_uppers=double_input_uppers,
-                lower_bounds=double_lower_bounds, # hidden bounds
-                upper_bounds=double_upper_bounds, # hidden bounds
+                    
+            class TMP:
+                pass
+            k_domain_params = TMP()
+            k_domain_params.input_lowers = double_input_lowers # input bounds
+            k_domain_params.input_uppers = double_input_uppers # input bounds
+            k_domain_params.lower_bounds = double_lower_bounds # hidden bounds
+            k_domain_params.upper_bounds = double_upper_bounds # hidden bounds
+            k_domain_params.slopes = sps if set_slope else [] # slopes
+            k_domain_params.cs = double_cs
+            k_domain_params.rhs = double_rhs
+            
+            abs_ret = abstractor._naive_forward_hidden(
+                domain_params=k_domain_params,
                 branching_decisions=k_decision[-1], 
-                slopes=sps if set_slope else [], 
-                cs=double_cs,
-                rhs=double_rhs,
-                use_beta=False, 
-                shortcut=True, 
             )
             k_ret_lbs = abs_ret.output_lbs
 
@@ -127,7 +126,7 @@ class DecisionHeuristic:
             # build masks indicates invalid scores (1) for stable neurons
             mask_score = (score_idx.values[:, k] <= 1e-4).float()  
             mask_itb = (itb_idx.values[:, k] >= -1e-4).float()
-            k_ret[k] = reduce_op((k_ret_lbs.view(-1) - torch.cat([mask_score, mask_itb]).repeat(2) * 1e6).reshape(2, -1), dim=0).values # (top-k, batch*2)
+            k_ret[k] = self.branching_reduceop((k_ret_lbs.view(-1) - torch.cat([mask_score, mask_itb]).repeat(2) * 1e6).reshape(2, -1), dim=0).values # (top-k, batch*2)
 
         # find corresponding decision
         i_idx = k_ret.topk(1, 0)
