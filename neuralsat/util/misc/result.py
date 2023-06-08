@@ -18,8 +18,8 @@ AbstractResults = namedtuple(
 
 class ReturnStatus:
 
-    UNSAT   = 'UNSAT'
-    SAT     = 'SAT'
-    UNKNOWN = 'UNKNOWN'
-    TIMEOUT = 'TIMEOUT'
-    RESTART = 'RESTART'
+    UNSAT   = 'unsat'
+    SAT     = 'sat'
+    UNKNOWN = 'unknown'
+    TIMEOUT = 'timeout'
+    RESTART = 'restart'

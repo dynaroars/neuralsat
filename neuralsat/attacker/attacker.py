@@ -3,6 +3,7 @@ import torch
 import random
 
 from .pgd_attack.general import attack
+from util.misc.logger import logger
 
 import pdb
 DBG = pdb.set_trace
@@ -23,7 +24,7 @@ class Attacker:
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
-            print(atk)
+            logger.info(atk)
             is_attacked, adv = atk.run()
             if is_attacked:
                 return is_attacked, adv
@@ -83,7 +84,7 @@ class PGDAttacker:
                     adv = attack_images[:, 0, idx]
                     if self._check_adv(adv, data_min=data_min[:, idx], data_max=data_max[:, idx]):
                         return True, adv
-            print("[!] Invalid counter-example")
+            logger.debug("[!] Invalid counter-example")
             
         return False, None
 

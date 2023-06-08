@@ -4,6 +4,7 @@ import torch
 import copy
 import time
 
+from util.misc.logger import logger
 
 class SATSolver:
     
@@ -41,7 +42,7 @@ class SATSolver:
         if variable in self.assignment: 
             if self.assignment[variable] != (literal > 0):
                 return False
-            print('Already assigned:', variable, self.assignment[variable], literal)
+            logger.debug(f'Already assigned: {variable}')
             return True
             # raise ValueError('Already assigned')
             
@@ -134,7 +135,8 @@ class SATSolver:
     
     
     def multiple_assign_python(self, literals):
-        print('[!] Parallel assign using Python')
+        logger.debug('[!] Parallel assign using Python')
+        
         remain_mask = torch.ones(self.clauses.size(0), dtype=torch.bool, device=self.clauses.device)
         for lit in literals:
             remain_mask &= self.clauses.ne(lit).all(1)
@@ -151,7 +153,8 @@ class SATSolver:
     
     def multiple_assign_cpp(self, literals):
         import haioc
-        print('[!] Parallel assign using C++')
+        logger.debug('[!] Parallel assign using C++')
+        
         xs = torch.tensor(literals).int()#.cuda()
         # self.clauses = self.clauses.cuda()
         self.clauses = self.clauses[haioc.any_eq_any(self.clauses, xs).logical_not_()]
@@ -174,6 +177,7 @@ if __name__ == "__main__":
     # s = SATSolver(clauses)
     
     # print(s.clauses)
+    # logger.setLevel(1)
     
     # stat, inferred = s.bcp()
     # if not stat:

@@ -4,6 +4,7 @@ import time
 import copy
 
 from solver.sat_solver import SATSolver
+from util.misc.logger import logger
 from auto_LiRPA.bound_ops import *
 
 
@@ -164,7 +165,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
         if not self.update_hidden_bounds_histories(lower_bounds, upper_bounds, histories, literal, batch_idx=0):
             return False
         
-    print('Create SAT solver:', time.time() - tic)
+    logger.debug('Create SAT solver:', time.time() - tic)
     return True
     
     
@@ -181,7 +182,7 @@ def boolean_propagation(self, domain_params, branching_decisions, new_history, b
     
     # assign
     if not new_sat_solver.assign(literal):
-        print('[!] Assign conflicted')
+        logger.debug('[!] Assign conflicted')
         return None
     
     # propagation
@@ -198,7 +199,7 @@ def boolean_propagation(self, domain_params, branching_decisions, new_history, b
                             literal=lit, 
                             batch_idx=batch_idx) for lit in bcp_vars]
         if not all(update_stats):
-            print('[!] BCP assign conflicted')
+            logger.debug('[!] BCP assign conflicted')
             return None
         
     return new_sat_solver

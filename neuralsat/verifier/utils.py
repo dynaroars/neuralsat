@@ -9,6 +9,7 @@ from attacker.pgd_attack.general import general_attack
 from abstractor.abstractor import NetworkAbstractor
 from util.misc.check import check_solution
 from attacker.attacker import Attacker
+from util.misc.logger import logger
 from setting import Settings
 
     
@@ -35,7 +36,7 @@ def _setup_restart(self, nth_restart):
     if params is None:
         return False
     
-    print(f'Params of {nth_restart}-th run:', params)
+    logger.info(f'Params of {nth_restart}-th run: {params}')
     abstract_method = params['abstract_method']
     branching_candidates = params.get('branching_candidates', None)
     
@@ -47,7 +48,7 @@ def _setup_restart(self, nth_restart):
     
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
-        print('Initialized abstractor')
+        logger.debug('Initialized abstractor')
         self.abstractor = NetworkAbstractor(
             pytorch_model=self.net, 
             input_shape=self.input_shape, 
@@ -109,7 +110,7 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
                 adv = attack_images[:, i, j]
                 if check_solution(self.net, adv, domain_params.cs[indices][j], domain_params.rhs[indices][j], input_lowers[:, j], input_uppers[:, j]):
                     return True, adv
-        print("[!] Invalid counter-example")
+        logger.debug("[!] Invalid counter-example")
         
     return False, None
 

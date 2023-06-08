@@ -5,12 +5,13 @@ Stanley Bak
 June 2021
 '''
 
+from beartype import beartype
 from copy import deepcopy
+from pathlib import Path
 import numpy as np
 import re
-from pathlib import Path
 
-from beartype import beartype
+from util.misc.logger import logger
 
 @beartype
 def read_statements(vnnlib_filename: Path):
@@ -184,7 +185,7 @@ def read_vnnlib(vnnlib_filename: Path, regression: bool = False) -> list:
                 num_outputs = max(num_outputs, int(declare[1]) + 1)
             else:
                 raise ValueError(f'Unknown declaration: {line}')
-    print(f'{num_inputs} inputs and {num_outputs} outputs in vnnlib')
+    logger.info(f'[!] VNNLIB: {num_inputs} inputs, {num_outputs} outputs')
     
     rv = []  # list of 3-tuples, (box-dict, mat, rhs)
     rv.append((make_input_box_dict(num_inputs), [], []))

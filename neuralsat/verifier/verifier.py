@@ -9,6 +9,7 @@ from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
 from heuristic.util import compute_masks
 from abstractor.utils import new_slopes
+from util.misc.logger import logger
 from setting import Settings
 
 import warnings
@@ -54,7 +55,7 @@ class Verifier:
             else:
                 objective = dnf_objectives.pop(self.batch)
                 
-            print('\nVerifying:', len(objective.cs), '\t remain:', len(dnf_objectives))
+            logger.info(f'Verifying: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
             
             # restart variables
             learned_clauses = []
@@ -86,7 +87,7 @@ class Verifier:
                 if status == ReturnStatus.UNSAT:
                     break # objective is verified
                 if status == ReturnStatus.RESTART:
-                    print('Restarting')
+                    logger.debug('Restarting')
                     learned_clauses += self._get_learned_conflict_clauses()
                     nth_restart += 1
                     continue
@@ -185,9 +186,9 @@ class Verifier:
         # logging
         self.visited_branches += (len(branching_decisions) * 2)
         self.iteration += 1
-        print(f'[{"Input" if self.input_split else "Hidden"} domain] '
-              f'Iteration: {self.iteration:<6} '
-              f'Length: {len(self.domains_list):<10} Visited: {self.visited_branches}')
+        logger.info(f'[{"Input" if self.input_split else "Hidden"} domain] '
+                    f'Iteration: {self.iteration:<6} '
+                    f'Length: {len(self.domains_list):<10} Visited: {self.visited_branches}')
         
         
     def _check_full_assignment(self, domain_params):

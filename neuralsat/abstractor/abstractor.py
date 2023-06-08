@@ -9,6 +9,7 @@ from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule, BoundedTensor
 
 from util.misc.result import AbstractResults
+from util.misc.logger import logger
 from .params import *
 
 
@@ -34,7 +35,7 @@ class NetworkAbstractor:
         self._init_module(self.mode)
         self._check()
         
-        print(f'[!] Using mode="{self.mode}", method="{self.method}"')
+        logger.info(f'[!] Using mode="{self.mode}", method="{self.method}"')
 
         # check conversion correctness
         dummy = torch.randn(input_shape, device=self.device)
@@ -88,7 +89,7 @@ class NetworkAbstractor:
 
             # initial bounds
             lb, _, aux_reference_bounds = self.net.init_slope((self.x,), share_slopes=share_slopes, c=objective.cs)
-            print('Initial bounds:', lb.detach().cpu().flatten())
+            logger.debug(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
 
@@ -98,7 +99,7 @@ class NetworkAbstractor:
                 method=self.method,
                 aux_reference_bounds=aux_reference_bounds
             )
-            print('Initial optimized bounds:', lb.detach().cpu().flatten())
+            logger.debug(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
             
@@ -125,7 +126,7 @@ class NetworkAbstractor:
                     C=objective.cs, 
                     method=self.method, 
                 )
-            print('Initial bounds:', lb.detach().cpu().flatten())
+            logger.debug(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
             

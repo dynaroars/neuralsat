@@ -32,7 +32,7 @@ class DomainsList:
             )
             if not stat:
                 raise ValueError('BCP conflict')
-            print(histories)
+            # print(histories)
             self.all_conflict_clauses = []
         ######## end clause learning ########
         
