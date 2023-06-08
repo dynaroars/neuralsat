@@ -207,8 +207,11 @@ class Verifier:
                 )
 
                 feasible, adv = self.abstractor.solve_full_assignment(
+                    input_lower=domain_params.input_lowers[idx_], 
+                    input_upper=domain_params.input_uppers[idx_], 
                     lower_bounds=[l[idx_] for l in domain_params.lower_bounds],
                     upper_bounds=[u[idx_] for u in domain_params.upper_bounds],
+                    c=domain_params.cs[idx_],
                     rhs=domain_params.rhs[idx_]
                 )
                 

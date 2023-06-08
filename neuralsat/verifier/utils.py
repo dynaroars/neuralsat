@@ -7,9 +7,9 @@ from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.restart_heuristics import get_restart_strategy
 from attacker.pgd_attack.general import general_attack
 from abstractor.abstractor import NetworkAbstractor
+from util.misc.check import check_solution
 from attacker.attacker import Attacker
 from setting import Settings
-
 
     
 def _preprocess(self, objectives):
@@ -107,20 +107,11 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
         for i in range(attack_images.shape[1]): # restarts
             for j in range(attack_images.shape[2]): # props
                 adv = attack_images[:, i, j]
-                if _check_adv(self.net, adv, domain_params.cs[indices][j], domain_params.rhs[indices][j], input_lowers[:, j], input_uppers[:, j]):
+                if check_solution(self.net, adv, domain_params.cs[indices][j], domain_params.rhs[indices][j], input_lowers[:, j], input_uppers[:, j]):
                     return True, adv
         print("[!] Invalid counter-example")
         
     return False, None
-        
-
-@torch.no_grad()
-def _check_adv(net, adv, cs, rhs, data_min, data_max):
-    if torch.all(data_min <= adv) and torch.all(adv <= data_max):
-        output = net(adv).detach()
-        cond = torch.matmul(cs, output.unsqueeze(-1)).squeeze(-1) - rhs
-        return (cond.amax(dim=-1, keepdim=True) < 0.0).any(dim=-1).any(dim=-1)
-    return False
 
 
 def _get_learned_conflict_clauses(self):

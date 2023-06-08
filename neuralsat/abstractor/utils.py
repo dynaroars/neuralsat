@@ -8,6 +8,7 @@ from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor
 
 from .params import get_branching_opt_params
+from util.misc.check import check_solution
 
 
 def new_slopes(slopes, keep_name):
@@ -287,7 +288,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
     self.net.model.update()
 
 
-def solve_full_assignment(self, lower_bounds, upper_bounds, rhs):
+def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
     tmp_model = self.net.model.copy()
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
@@ -337,6 +338,8 @@ def solve_full_assignment(self, lower_bounds, upper_bounds, rhs):
 
         input_vars = [tmp_model.getVarByName(var.VarName) for var in self.net.input_vars]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+        if check_solution(net=self.pytorch_model, adv=adv, cs=c, rhs=rhs, data_min=input_lower, data_max=input_upper):
+            return True, adv
         
     del tmp_model
     return feasible, adv
