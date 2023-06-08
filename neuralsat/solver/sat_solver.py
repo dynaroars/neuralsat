@@ -39,10 +39,11 @@ class SATSolver:
             raise NotImplementedError()
         
         if variable in self.assignment: 
-            # print('Already assigned:', variable, self.assignment[variable], literal)
             if self.assignment[variable] != (literal > 0):
                 return False
-            raise ValueError('Already assigned')
+            print('Already assigned:', variable, self.assignment[variable], literal)
+            return True
+            # raise ValueError('Already assigned')
             
         self.assignment[variable] = value
         self._last_assigned_literals = True
