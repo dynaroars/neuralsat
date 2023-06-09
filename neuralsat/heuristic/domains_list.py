@@ -85,9 +85,6 @@ class DomainsList:
 
 
     def pick_out(self, batch, device='cpu'):
-        # tic = time.time()
-        # total_sat_time = 0.0
-        
         assert batch > 0
         batch = min(len(self), batch)
 
@@ -116,27 +113,18 @@ class DomainsList:
         else: 
             # hidden spliting 
             new_lAs = [lA.pop(batch).to(device=device, non_blocking=True) for lA in self.all_lAs]
-            # hidden bounds
-            lower_bounds = [lower_bound.pop(batch) for lower_bound in self.all_lower_bounds]
-            upper_bounds = [upper_bound.pop(batch) for upper_bound in self.all_upper_bounds]
-
-            lower_bounds = [item.to(device=device, non_blocking=True) for item in lower_bounds]
-            upper_bounds = [item.to(device=device, non_blocking=True) for item in upper_bounds]
-            
-            # pop batch 
+            lower_bounds = [lower_bound.pop(batch).to(device=device, non_blocking=True) for lower_bound in self.all_lower_bounds]
+            upper_bounds = [upper_bound.pop(batch).to(device=device, non_blocking=True) for upper_bound in self.all_upper_bounds]
             new_betas = self.all_betas[-batch:]
             new_histories = copy.deepcopy(self.all_histories[-batch:])
-
             # remove batch
             self.all_betas = self.all_betas[:-batch]
             self.all_histories = self.all_histories[:-batch]
             
             if self.use_restart:
-                # tic_sat = time.time()
                 new_sat_solvers = self.all_sat_solvers[-batch:]
                 # new_sat_solvers = copy.deepcopy(self.all_sat_solvers[-batch:])
                 self.all_sat_solvers = self.all_sat_solvers[:-batch]
-                # total_sat_time += (time.time() - tic_sat)
             else:
                 new_sat_solvers = None
             
@@ -146,8 +134,6 @@ class DomainsList:
         
         self._check_consistent()
         
-        # print('Pick out time:', time.time() - tic, 'Sat time:', total_sat_time)
-
         return AbstractResults(**{
             'input_lowers': input_lowers, 
             'input_uppers': input_uppers, 
@@ -165,9 +151,6 @@ class DomainsList:
 
 
     def add(self, branching_decisions, domain_params):
-        # tic = time.time()
-        # total_sat_time = 0.0
-        
         assert branching_decisions is not None
         batch = len(branching_decisions)
         assert batch > 0
@@ -176,7 +159,11 @@ class DomainsList:
         
         # hidden splitting
         if not self.input_split:
-            new_masks = compute_masks(lower_bounds=domain_params.lower_bounds, upper_bounds=domain_params.upper_bounds, device='cpu')
+            new_masks = compute_masks(
+                lower_bounds=domain_params.lower_bounds, 
+                upper_bounds=domain_params.upper_bounds, 
+                device='cpu',
+            )
             
             extra_conflict_index = []
             for idx_ in remaining_index:
@@ -221,14 +208,16 @@ class DomainsList:
             
             # conflict clauses
             if self.use_restart:
-                self.save_conflict_clauses(branching_decisions=branching_decisions, domain_params=domain_params, remaining_index=remaining_index)
-            
-            # lower A matrix
-            [lA.append(new_lA[remaining_index]) for lA, new_lA in zip(self.all_lAs, domain_params.lAs)]
+                self.save_conflict_clauses(
+                    branching_decisions=branching_decisions, 
+                    domain_params=domain_params, 
+                    remaining_index=remaining_index,
+                )
             
             # hidden bounds
-            [lb.append(new_lb[remaining_index]) if new_lb is not None else None for lb, new_lb in zip(self.all_lower_bounds, domain_params.lower_bounds)]
-            [ub.append(new_ub[remaining_index]) if new_ub is not None else None for ub, new_ub in zip(self.all_upper_bounds, domain_params.upper_bounds)]
+            [lb.append(new_lb[remaining_index]) for lb, new_lb in zip(self.all_lower_bounds, domain_params.lower_bounds)]
+            [ub.append(new_ub[remaining_index]) for ub, new_ub in zip(self.all_upper_bounds, domain_params.upper_bounds)]
+            [lA.append(new_lA[remaining_index]) for lA, new_lA in zip(self.all_lAs, domain_params.lAs)]
         
         # input bounds
         self.all_input_lowers.append(domain_params.input_lowers[remaining_index])
@@ -240,13 +229,10 @@ class DomainsList:
         
         # alpha
         if domain_params.slopes is not None:
-            for k, v in self.all_slopes.items():
-                for kk, vv in v.items():
-                    vv.append(domain_params.slopes[k][kk][:,:,remaining_index])
+            [vv.append(domain_params.slopes[k][kk][:,:,remaining_index]) for (k, v) in self.all_slopes.items() for (kk, vv) in v.items()]
             
         # checking
         self._check_consistent()
-        # print('Add time:', time.time() - tic, 'Sat time:', total_sat_time)
         
         
     def __len__(self):

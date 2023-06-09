@@ -1,6 +1,24 @@
 import torch
 import torch.nn as nn
 
+class CifarConv(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.layers = nn.Sequential(
+            nn.Conv2d(3, 2, 2, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(512, 32),
+            nn.ReLU(),
+            nn.Linear(32, 10)
+        )
+        
+    def forward(self, x):
+        return self.layers(x)
+    
+    
 class Net(nn.Module):
     
     def __init__(self):
