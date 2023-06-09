@@ -23,27 +23,24 @@ def new_slopes(slopes, keep_name):
 def get_slope(self, model):
     if len(model.perturbed_optimizable_activations) == 0:
         return {}
-    ret = {}
-    for m in model.perturbed_optimizable_activations:
-        ret[m.name] = {}
-        for spec_name, alpha in m.alpha.items():
-            ret[m.name][spec_name] = alpha # (2, spec, batch, *shape)
-    return ret
+    slopes = {m.name: {node_name: alpha for (node_name, alpha) in m.alpha.items()}
+                for m in model.perturbed_optimizable_activations} 
+    return slopes
 
 
 def set_slope(self, model, slope, set_all=False):
     assert isinstance(slope, defaultdict)
     for m in model.perturbed_optimizable_activations:
-        for spec_name in list(m.alpha.keys()):
-            if spec_name in slope[m.name]:
-                if (spec_name == self.net.final_name) or set_all:
-                    slope_len = slope[m.name][spec_name].size(2)
+        for node_name in list(m.alpha.keys()):
+            if node_name in slope[m.name]:
+                if (node_name == self.net.final_name) or set_all:
+                    slope_len = slope[m.name][node_name].size(2)
                     if slope_len > 0:
-                        m.alpha[spec_name] = slope[m.name][spec_name]
-                        m.alpha[spec_name] = m.alpha[spec_name].repeat(1, 1, 2, *([1] * (m.alpha[spec_name].ndim - 3))).detach().requires_grad_() # 2 * batch
+                        m.alpha[node_name] = slope[m.name][node_name]
+                        m.alpha[node_name] = m.alpha[node_name].repeat(1, 1, 2, *([1] * (m.alpha[node_name].ndim - 3))).detach().requires_grad_() # 2 * batch
             else:
                 # do not use alphas
-                del m.alpha[spec_name]
+                del m.alpha[node_name]
 
 
 def reset_beta(self, batch, max_splits_per_layer, betas=None):
@@ -106,15 +103,14 @@ def get_batch_lAs(self, model, size=None, to_cpu=False):
     return lA
 
 
-def get_beta(self, model, splits_per_example):
-    batch = splits_per_example.size(0)
+def get_beta(self, model, num_splits):
+    batch = num_splits.size(0)
     retb = [[] for _ in range(batch * 2)]
     for mi, m in enumerate(model.perturbed_optimizable_activations):
-        if hasattr(m, 'sparse_beta'):
-            # discard padding beta.
+        if hasattr(m, 'sparse_beta'): # discard padding beta.
             for i in range(batch):
-                retb[i].append(m.sparse_beta[i, :splits_per_example[i, mi]])
-                retb[i + batch].append(m.sparse_beta[i + batch, :splits_per_example[i, mi]])
+                retb[i].append(m.sparse_beta[i, :num_splits[i, mi]])
+                retb[i + batch].append(m.sparse_beta[i + batch, :num_splits[i, mi]])
     return retb
 
 
@@ -122,17 +118,18 @@ def set_beta(self, model, betas, histories, decision, use_beta=True):
     if use_beta:
         batch = len(decision)
         # count split nodes 
-        splits_per_example = torch.zeros((batch, len(model.relus)), dtype=torch.int64, device='cpu') # (batch, num of layers)
+        num_splits = torch.zeros((batch, len(model.relus)), dtype=torch.int64, device='cpu') # (batch, num of layers)
         for bi in range(batch):
             d = decision[bi][0]
             for mi, layer_splits in enumerate(histories[bi]):
-                splits_per_example[bi, mi] = len(layer_splits[0]) + int(d == mi)  # First element of layer_splits is a list of split neuron IDs.
+                neuron_indices = layer_splits[0]
+                num_splits[bi, mi] = len(neuron_indices) + int(d == mi)
 
         # update beta
         self.reset_beta(
             batch=batch, 
             betas=betas, 
-            max_splits_per_layer=splits_per_example.max(dim=0)[0],
+            max_splits_per_layer=num_splits.max(dim=0)[0],
         )
 
         # update new decisions
@@ -162,11 +159,11 @@ def set_beta(self, model, betas, histories, decision, use_beta=True):
         for m in model.relus:
             m.sparse_beta_sign = m.sparse_beta_sign.to(device=model.device, non_blocking=True)
     else:
-        splits_per_example = None
+        num_splits = None
         for m in model.relus:
             m.beta = None
             
-    return splits_per_example
+    return num_splits
             
             
 def hidden_split_idx(self, lower_bounds, upper_bounds, decision):
@@ -248,23 +245,19 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
         # alphas
         cpu_layer.alpha = OrderedDict()
-        for spec_name, alpha in layer.alpha.items():
-            cpu_layer.alpha[spec_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
-            
+        for node_name, alpha in layer.alpha.items():
+            cpu_layer.alpha[node_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
+        # skip others
         if slope_only:
             continue
-        
         # hidden bounds
         cpu_layer.inputs[0].lower = layer.inputs[0].lower.to(device='cpu', non_blocking=non_blocking)
         cpu_layer.inputs[0].upper = layer.inputs[0].upper.to(device='cpu', non_blocking=non_blocking)
-
         # lAs
         cpu_layer.lA = layer.lA.to(device='cpu', non_blocking=non_blocking)
-        
         # betas
         if hasattr(layer, 'sparse_beta') and layer.sparse_beta is not None:
             cpu_layer.sparse_beta = layer.sparse_beta.to(device='cpu', non_blocking=non_blocking)
-            
 
     return cpu_net
 

@@ -5,6 +5,9 @@ import torch
 
 from .util import _compute_babsr_scores
 
+LARGE = 1e4
+SMALL = 1.0 / LARGE
+
 class DecisionHeuristic:
     
     def __init__(self, branching_candidates, input_split, branching_reduceop=torch.max):
@@ -61,19 +64,19 @@ class DecisionHeuristic:
         for k in range(topk):
             # top-k candidates from scores
             decision_max = [] # higher is better
-            for l in topk_scores_indices[:, k]:
-                l = l.item()
-                layer = np.searchsorted(score_length, l, side='right') - 1
-                idx = l - score_length[layer]
-                decision_max.append([layer, idx])
+            for idx in topk_scores_indices[:, k]:
+                idx = idx.item()
+                layer_idx = np.searchsorted(score_length, idx, side='right') - 1
+                neuron_idx = idx - score_length[layer_idx]
+                decision_max.append([layer_idx, neuron_idx])
 
             # top-k candidates from backup scores.
             decision_min = [] # lower is better
-            for l in topk_backup_scores_indices[:, k]:
-                l = l.item()
-                layer = np.searchsorted(score_length, l, side='right') - 1
-                idx = l - score_length[layer]
-                decision_min.append([layer, idx])
+            for idx in topk_backup_scores_indices[:, k]:
+                idx = idx.item()
+                layer_idx = np.searchsorted(score_length, idx, side='right') - 1
+                neuron_idx = idx - score_length[layer_idx]
+                decision_min.append([layer_idx, neuron_idx])
             
             # top-k candidates
             topk_decisions.append(decision_max + decision_min)
@@ -83,7 +86,7 @@ class DecisionHeuristic:
             k_domain_params.input_uppers = double_input_uppers # input bounds
             k_domain_params.lower_bounds = double_lower_bounds # hidden bounds
             k_domain_params.upper_bounds = double_upper_bounds # hidden bounds
-            k_domain_params.slopes = double_slopes if k == 0 else [] # slopes
+            k_domain_params.slopes = double_slopes if k == 0 else []
             k_domain_params.cs = double_cs
             k_domain_params.rhs = double_rhs
             
@@ -91,13 +94,14 @@ class DecisionHeuristic:
                 domain_params=k_domain_params,
                 branching_decisions=topk_decisions[-1], 
             )
+            # improvements over specification
             k_output_lbs = (abs_ret.output_lbs - torch.cat([double_rhs, double_rhs])).max(-1).values
 
             # invalid scores for stable neurons
-            mask_scores = (topk_scores.values[:, k] <= 1e-4).float()  
-            mask_backup_scores = (topk_backup_scores.values[:, k] >= -1e-4).float()
-            topk_output_lbs[k] = self.branching_reduceop(
-                (k_output_lbs.view(-1) - torch.cat([mask_scores, mask_backup_scores]).repeat(2) * 1e6).reshape(2, -1), dim=0).values
+            invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).float()  
+            invalid_mask_backup_scores = (topk_backup_scores.values[:, k] >= -SMALL).float()
+            invalid_mask = torch.cat([invalid_mask_scores, invalid_mask_backup_scores]).repeat(2) * LARGE
+            topk_output_lbs[k] = self.branching_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
 
         return topk_output_lbs, topk_decisions
     
@@ -146,7 +150,7 @@ class DecisionHeuristic:
         for b in range(batch):
             mask_item = [m[b] for m in domain_params.masks]
             # valid scores
-            if max(best_output_lbs[b], best_output_lbs[b + batch]) > -1e4:
+            if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
                 decision = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
                 if mask_item[decision[0]][decision[1]] != 0:
                     final_decision[b].append(decision)

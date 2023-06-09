@@ -191,7 +191,7 @@ class NetworkAbstractor:
         assert batch > 0
         
         # update betas with new decisions
-        splits_per_example = self.set_beta(
+        num_splits = self.set_beta(
             model=self.net, 
             betas=domain_params.betas, 
             histories=domain_params.histories, 
@@ -223,7 +223,7 @@ class NetworkAbstractor:
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(use_beta, stop_criterion_batch_any(double_rhs)))
         
-        lb, _ = self.net.compute_bounds(
+        new_output_lbs, _ = self.net.compute_bounds(
             x=(new_x,), 
             C=double_cs, 
             method=self.method,
@@ -233,28 +233,28 @@ class NetworkAbstractor:
 
         # process output on CPU instead of GPU
         with torch.no_grad():
-            lAs = self.get_batch_lAs(model=self.net, size=len(double_input_lowers), to_cpu=True)
-            lb = lb.to(device='cpu')
+            double_lAs = self.get_batch_lAs(model=self.net, size=len(double_input_lowers), to_cpu=True)
+            new_output_lbs = new_output_lbs.to(device='cpu')
             cpu_net = self.transfer_to_cpu(net=self.net, non_blocking=False)
             # slopes
-            ret_s = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
+            double_slopes = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
             # betas
-            ret_b = self.get_beta(cpu_net, splits_per_example) if use_beta else [[] for _ in range(batch * 2)]
+            double_betas = self.get_beta(cpu_net, num_splits) if use_beta else [[] for _ in range(batch * 2)]
             # hidden bounds
-            ret_l, ret_u = self.get_batch_hidden_bounds(cpu_net, lb)
+            double_lower_bounds, double_upper_bounds = self.get_batch_hidden_bounds(cpu_net, new_output_lbs)
             
-        assert all([_.shape[0] == 2*batch for _ in ret_l]), print([_.shape for _ in ret_l])
-        assert all([_.shape[0] == 2*batch for _ in ret_u]), print([_.shape for _ in ret_u])
+        assert all([_.shape[0] == 2*batch for _ in double_lower_bounds]), print([_.shape for _ in double_lower_bounds])
+        assert all([_.shape[0] == 2*batch for _ in double_upper_bounds]), print([_.shape for _ in double_upper_bounds])
             
         return AbstractResults(**{
             'input_lowers': double_input_lowers, 
             'input_uppers': double_input_uppers,
-            'output_lbs': ret_l[-1], 
-            'lAs': lAs, 
-            'lower_bounds': ret_l, 
-            'upper_bounds': ret_u, 
-            'slopes': ret_s, 
-            'betas': ret_b, 
+            'output_lbs': double_lower_bounds[-1], 
+            'lAs': double_lAs, 
+            'lower_bounds': double_lower_bounds, 
+            'upper_bounds': double_upper_bounds, 
+            'slopes': double_slopes, 
+            'betas': double_betas, 
             'histories': domain_params.histories,
             'cs': double_cs,
             'rhs': double_rhs,
@@ -289,7 +289,7 @@ class NetworkAbstractor:
         # set optimization parameters
         self.net.set_bound_opts(get_input_opt_params(stop_criterion_batch_any(double_rhs)))
         
-        lb, _ = self.net.compute_bounds(
+        new_output_lbs, _ = self.net.compute_bounds(
             x=(new_x,), 
             C=double_cs, 
             method=self.method,
@@ -304,13 +304,13 @@ class NetworkAbstractor:
                 slope_only=True,
             )
             # slopes
-            ret_s = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
+            double_slopes = self.get_slope(cpu_net) if len(domain_params.slopes) > 0 else [[] for _ in range(batch * 2)]
 
         return AbstractResults(**{
-            'output_lbs': lb, 
+            'output_lbs': new_output_lbs, 
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers,
-            'slopes': ret_s, 
+            'slopes': double_slopes, 
             'cs': double_cs, 
             'rhs': double_rhs, 
         })

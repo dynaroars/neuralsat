@@ -105,11 +105,10 @@ class Verifier:
         if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs).all():
             return []
         
-        # update input splitting
-        # self.input_split = self.input_split or (ret.lower_bounds is None)
-        
-        # create list of domains
+        # keep last layer's alphas for backward propagation
         slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
+        
+        # remaining domains
         return DomainsList(
             input_lowers=ret.input_lowers,
             input_uppers=ret.input_uppers,
@@ -127,7 +126,6 @@ class Verifier:
         
     def _verify(self, objective, preconditions, timeout):
         # initialization
-        self.visited_branches = 0
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions)
         
         # cleaning
@@ -151,7 +149,7 @@ class Verifier:
             
             # check restart
             if Settings.use_restart:
-                if (len(self.domains_list) > max_branches) or (self.visited_branches > max_visited_branches):
+                if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
         
         return ReturnStatus.UNSAT
@@ -184,11 +182,10 @@ class Verifier:
         # 5.3: TODO: check full assignment after bcp
 
         # logging
-        self.visited_branches += (len(branching_decisions) * 2)
         self.iteration += 1
         logger.info(f'[{"Input" if self.input_split else "Hidden"} domain] '
                     f'Iteration: {self.iteration:<6} '
-                    f'Length: {len(self.domains_list):<10} Visited: {self.visited_branches}')
+                    f'Remaining: {len(self.domains_list):<10} Visited: {self.domains_list.visited}')
         
         
     def _check_full_assignment(self, domain_params):

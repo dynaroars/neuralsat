@@ -37,6 +37,7 @@ class DomainsList:
         ######## end clause learning ########
         
         self.input_split = input_split
+        self.visited = 0
         
         # input bounds
         self.all_input_lowers = TensorStorage(input_lowers.cpu())
@@ -159,6 +160,7 @@ class DomainsList:
         assert batch > 0
         
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
+        self.visited += 2 * batch
         
         # hidden splitting
         if not self.input_split:
