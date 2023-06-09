@@ -9,6 +9,7 @@ from util.network.read_onnx import parse_onnx
 from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
 from util.misc.result import ReturnStatus
+from util.misc.logger import logger
 
 
 class TestVerifier(unittest.TestCase):
@@ -255,5 +256,6 @@ class TestVerifier(unittest.TestCase):
         self.assertTrue(verifier.iteration in [20])
 
 if __name__ == '__main__':
+    logger.setLevel(1)
     unittest.main()
     

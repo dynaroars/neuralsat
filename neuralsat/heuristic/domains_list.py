@@ -92,29 +92,28 @@ class DomainsList:
             torch.cuda.synchronize()
 
         # input bounds
-        input_lowers = self.all_input_lowers.pop(batch).to(device=device, non_blocking=True)
-        input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
+        new_input_lowers = self.all_input_lowers.pop(batch).to(device=device, non_blocking=True)
+        new_input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
         
         # properties
-        cs = self.all_cs.pop(batch).to(device=device, non_blocking=True)
-        rhs = self.all_rhs.pop(batch).to(device=device, non_blocking=True)
+        new_cs = self.all_cs.pop(batch).to(device=device, non_blocking=True)
+        new_rhs = self.all_rhs.pop(batch).to(device=device, non_blocking=True)
         
         # alpha
         new_slopes = defaultdict(dict)
-        for k, v_map in self.all_slopes.items():
-            new_slopes[k] = {}
-            for kk, vv in v_map.items():
-                new_slopes[k][kk] = vv.pop(batch).to(device=device, non_blocking=True)
-        
+        for k, v in self.all_slopes.items():
+            new_slopes[k] = {kk: vv.pop(batch).to(device=device, non_blocking=True) for (kk, vv) in v.items()}
+            
         if self.input_split:
             # input splitting
-            lower_bounds = upper_bounds = new_masks = new_lAs = new_betas = new_histories = None
+            new_lower_bounds = new_upper_bounds = None
+            new_masks = new_lAs = new_betas = new_histories = None
             new_sat_solvers = None
         else: 
             # hidden spliting 
             new_lAs = [lA.pop(batch).to(device=device, non_blocking=True) for lA in self.all_lAs]
-            lower_bounds = [lower_bound.pop(batch).to(device=device, non_blocking=True) for lower_bound in self.all_lower_bounds]
-            upper_bounds = [upper_bound.pop(batch).to(device=device, non_blocking=True) for upper_bound in self.all_upper_bounds]
+            new_lower_bounds = [lb.pop(batch).to(device=device, non_blocking=True) for lb in self.all_lower_bounds]
+            new_upper_bounds = [ub.pop(batch).to(device=device, non_blocking=True) for ub in self.all_upper_bounds]
             new_betas = self.all_betas[-batch:]
             new_histories = copy.deepcopy(self.all_histories[-batch:])
             # remove batch
@@ -128,24 +127,28 @@ class DomainsList:
             else:
                 new_sat_solvers = None
             
-            new_masks = compute_masks(lower_bounds=lower_bounds, upper_bounds=upper_bounds, device=device)
+            new_masks = compute_masks(
+                lower_bounds=new_lower_bounds, 
+                upper_bounds=new_upper_bounds, 
+                device=device,
+            )
             
-            assert len(new_betas) == len(new_histories) == len(lower_bounds[0]) == len(upper_bounds[0]) == len(new_lAs[0]) == batch 
+            assert len(new_betas) == len(new_histories) == len(new_lower_bounds[0]) == len(new_upper_bounds[0]) == len(new_lAs[0]) == batch 
         
         self._check_consistent()
         
         return AbstractResults(**{
-            'input_lowers': input_lowers, 
-            'input_uppers': input_uppers, 
+            'input_lowers': new_input_lowers, 
+            'input_uppers': new_input_uppers, 
             'masks': new_masks, 
             'lAs': new_lAs, 
-            'lower_bounds': lower_bounds, 
-            'upper_bounds': upper_bounds, 
+            'lower_bounds': new_lower_bounds, 
+            'upper_bounds': new_upper_bounds, 
             'slopes': new_slopes, 
             'betas': new_betas,
             'histories': new_histories,
-            'cs': cs,
-            'rhs': rhs,
+            'cs': new_cs,
+            'rhs': new_rhs,
             'sat_solvers': new_sat_solvers,
         })
 
