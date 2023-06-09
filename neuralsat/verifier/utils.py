@@ -38,11 +38,11 @@ def _setup_restart(self, nth_restart):
     
     logger.info(f'Params of {nth_restart}-th run: {params}')
     abstract_method = params['abstract_method']
-    branching_candidates = params.get('branching_candidates', None)
+    decision_topk = params.get('decision_topk', None)
     
     # decision heuristic
     self.decision = DecisionHeuristic(
-        branching_candidates=branching_candidates, 
+        decision_topk=decision_topk, 
         input_split=self.input_split
     )
     

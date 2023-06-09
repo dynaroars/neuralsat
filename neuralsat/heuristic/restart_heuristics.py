@@ -7,10 +7,10 @@ INPUT_SPLIT_RESTART_STRATEGIES = [
 ]
 
 HIDDEN_SPLIT_RESTART_STRATEGIES = [
-    {'abstract_method': 'crown-optimized', 'branching_candidates': 5,  'random_selection': False},
-    {'abstract_method': 'crown-optimized', 'branching_candidates': 5,  'random_selection': True},
-    {'abstract_method': 'crown-optimized', 'branching_candidates': 10, 'random_selection': True},
-    {'abstract_method': 'crown-optimized', 'branching_candidates': 15, 'random_selection': True},
+    {'abstract_method': 'crown-optimized', 'decision_topk': 5,  'random_selection': False},
+    {'abstract_method': 'crown-optimized', 'decision_topk': 5,  'random_selection': True},
+    {'abstract_method': 'crown-optimized', 'decision_topk': 10, 'random_selection': True},
+    {'abstract_method': 'crown-optimized', 'decision_topk': 15, 'random_selection': True},
 ]
 
 

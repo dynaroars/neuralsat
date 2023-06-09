@@ -10,10 +10,10 @@ SMALL = 1.0 / LARGE
 
 class DecisionHeuristic:
     
-    def __init__(self, branching_candidates, input_split, branching_reduceop=torch.max):
-        self.branching_candidates = branching_candidates
+    def __init__(self, decision_topk, input_split, decision_reduceop=torch.max):
+        self.decision_topk = decision_topk
         self.input_split = input_split
-        self.branching_reduceop = branching_reduceop
+        self.decision_reduceop = decision_reduceop
         
 
     @torch.no_grad()
@@ -92,7 +92,7 @@ class DecisionHeuristic:
             
             abs_ret = abstractor._naive_forward_hidden(
                 domain_params=k_domain_params,
-                branching_decisions=topk_decisions[-1], 
+                decisions=topk_decisions[-1], 
             )
             # improvements over specification
             k_output_lbs = (abs_ret.output_lbs - torch.cat([double_rhs, double_rhs])).max(-1).values
@@ -101,7 +101,7 @@ class DecisionHeuristic:
             invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).float()  
             invalid_mask_backup_scores = (topk_backup_scores.values[:, k] >= -SMALL).float()
             invalid_mask = torch.cat([invalid_mask_scores, invalid_mask_backup_scores]).repeat(2) * LARGE
-            topk_output_lbs[k] = self.branching_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
+            topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
 
         return topk_output_lbs, topk_decisions
     
@@ -109,7 +109,7 @@ class DecisionHeuristic:
     # hidden branching
     def filtered_smart_branching(self, abstractor, domain_params):
         batch = len(domain_params.masks[0])
-        topk = min(self.branching_candidates, int(sum([i.sum() for i in domain_params.masks]).item()))
+        topk = min(self.decision_topk, int(sum([i.sum() for i in domain_params.masks]).item()))
         
         # babsr scores
         scores, backup_scores = _compute_babsr_scores(
@@ -119,7 +119,7 @@ class DecisionHeuristic:
             lAs=domain_params.lAs, 
             batch=batch, 
             masks=domain_params.masks, 
-            reduce_op=self.branching_reduceop, 
+            reduce_op=self.decision_reduceop, 
             number_bounds=domain_params.cs.shape[1]
         )
         

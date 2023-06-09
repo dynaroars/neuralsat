@@ -165,10 +165,10 @@ class Verifier:
             return
 
         # step 3: branching
-        branching_decisions = self.decision(self.abstractor, pick_ret)
+        decisions = self.decision(self.abstractor, pick_ret)
 
         # step 4: abstraction 
-        abstraction_ret = self.abstractor.forward(branching_decisions, pick_ret)
+        abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         
         # step 5: pruning
         # 5.1: full assignment
@@ -177,7 +177,7 @@ class Verifier:
             return
         
         # 5.2: unreachable domains
-        self.domains_list.add(branching_decisions, abstraction_ret)
+        self.domains_list.add(decisions, abstraction_ret)
         
         # 5.3: TODO: check full assignment after bcp
 

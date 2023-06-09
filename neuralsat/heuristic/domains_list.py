@@ -154,9 +154,9 @@ class DomainsList:
         })
 
 
-    def add(self, branching_decisions, domain_params):
-        assert branching_decisions is not None
-        batch = len(branching_decisions)
+    def add(self, decisions, domain_params):
+        assert decisions is not None
+        batch = len(decisions)
         assert batch > 0
         
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
@@ -181,19 +181,19 @@ class DomainsList:
                 # new decision
                 idx = idx_ % batch
                 new_history = copy.deepcopy(domain_params.histories[idx])
-                new_history[branching_decisions[idx][0]][0].append(branching_decisions[idx][1])
-                new_history[branching_decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
+                new_history[decisions[idx][0]][0].append(decisions[idx][1])
+                new_history[decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
 
                 # repetition
-                if branching_decisions[idx][1] in domain_params.histories[idx][branching_decisions[idx][0]][0]:
-                    print(branching_decisions[idx], domain_params.histories[idx])
+                if decisions[idx][1] in domain_params.histories[idx][decisions[idx][0]][0]:
+                    print(decisions[idx], domain_params.histories[idx])
                     raise RuntimeError('Repeated split')
                 
                 # bcp
                 if self.use_restart:
                     new_sat_solver = self.boolean_propagation(
                         domain_params=domain_params,
-                        branching_decisions=branching_decisions,
+                        decisions=decisions,
                         new_history=new_history,
                         batch_idx=idx_
                     )
@@ -214,7 +214,7 @@ class DomainsList:
             # conflict clauses
             if self.use_restart:
                 self.save_conflict_clauses(
-                    branching_decisions=branching_decisions, 
+                    decisions=decisions, 
                     domain_params=domain_params, 
                     remaining_index=remaining_index,
                 )

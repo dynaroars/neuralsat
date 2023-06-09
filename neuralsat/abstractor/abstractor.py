@@ -144,17 +144,17 @@ class NetworkAbstractor:
             raise NotImplementedError()
         
 
-    def _naive_forward_hidden(self, domain_params, branching_decisions):
+    def _naive_forward_hidden(self, domain_params, decisions):
         assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
-        decision = np.array(branching_decisions)
-        batch = len(decision)
+        decision_np = np.array(decisions)
+        batch = len(decision_np)
         assert batch > 0
         
         # update layer bounds with new decisions (perform splitting)
         new_intermediate_layer_bounds = self.hidden_split_idx(
             lower_bounds=domain_params.lower_bounds, 
             upper_bounds=domain_params.upper_bounds, 
-            decision=decision
+            decision=decision_np
         )
         
         # sample-wise for supporting handling multiple targets in one batch
@@ -184,10 +184,10 @@ class NetworkAbstractor:
         return AbstractResults(**{'output_lbs': lb})
     
 
-    def _forward_hidden(self, domain_params, branching_decisions, use_beta=True):
+    def _forward_hidden(self, domain_params, decisions, use_beta=True):
         assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
-        decision = np.array(branching_decisions)
-        batch = len(decision)
+        decision_np = np.array(decisions)
+        batch = len(decision_np)
         assert batch > 0
         
         # update betas with new decisions
@@ -195,7 +195,7 @@ class NetworkAbstractor:
             model=self.net, 
             betas=domain_params.betas, 
             histories=domain_params.histories, 
-            decision=decision,
+            decision=decision_np,
             use_beta=use_beta,
         )
         
@@ -203,7 +203,7 @@ class NetworkAbstractor:
         new_intermediate_layer_bounds = self.hidden_split_idx(
             lower_bounds=domain_params.lower_bounds, 
             upper_bounds=domain_params.upper_bounds, 
-            decision=decision
+            decision=decision_np
         )
         
         # 2 * batch
@@ -231,7 +231,7 @@ class NetworkAbstractor:
             decision_thresh=double_rhs
         )
 
-        # process output on CPU instead of GPU
+        # reorganize output
         with torch.no_grad():
             double_lAs = self.get_batch_lAs(model=self.net, size=len(double_input_lowers), to_cpu=True)
             new_output_lbs = new_output_lbs.to(device='cpu')
@@ -262,16 +262,16 @@ class NetworkAbstractor:
         })
         
         
-    def _forward_input(self, domain_params, branching_decisions):
+    def _forward_input(self, domain_params, decisions):
         assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
-        batch = len(branching_decisions)
+        batch = len(decisions)
         assert batch > 0
         
-        # splitting input by branching_decisions (perform splitting)
+        # splitting input by decisions (perform splitting)
         new_input_lowers, new_input_uppers = self.input_split_idx(
             input_lowers=domain_params.input_lowers, 
             input_uppers=domain_params.input_uppers, 
-            split_idx=branching_decisions,
+            split_idx=decisions,
         )
         assert torch.all(new_input_lowers <= new_input_uppers)
         
@@ -316,15 +316,15 @@ class NetworkAbstractor:
         })
         
         
-    def forward(self, branching_decisions, domain_params):
+    def forward(self, decisions, domain_params):
         if self.input_split:
             return self._forward_input(
                 domain_params=domain_params,
-                branching_decisions=branching_decisions,
+                decisions=decisions,
             )
         return self._forward_hidden(
             domain_params=domain_params,
-            branching_decisions=branching_decisions,
+            decisions=decisions,
         )
 
 
