@@ -87,17 +87,17 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 ```python
 python3 main.py --net "example/mnistfc-medium-net-554.onnx" --spec "example/test.vnnlib"
-# UNSAT,29.7011
+# unsat,29.7011
 ```
 
 ```python
 python3 main.py --net "example/cifar10_2_255_simplified.onnx" --spec "example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib"
-# UNSAT,20.0496
+# unsat,20.0496
 ```
 
 ```python
 python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example/prop_6.vnnlib"
-# UNSAT,4.3972
+# unsat,4.3972
 ```
 
 
@@ -105,12 +105,12 @@ python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example
 
 ```python
 python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"
-# SAT,3.6618
+# sat,3.6618
 # adv (first 5): tensor([-0.3284, -0.4299, -0.4991,  0.0000,  0.0156])
 ```
 
 ```python
 python3 main.py --net "example/mnist-net_256x2.onnx" --spec "example/prop_1_0.05.vnnlib"
-# SAT,1.4306
+# sat,1.4306
 # adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
 ```
