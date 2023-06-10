@@ -43,7 +43,7 @@ class Verifier:
         is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
         if is_attacked:
             return ReturnStatus.SAT  
-
+        
         self._preprocess(copy.deepcopy(dnf_objectives))
         
         # verify

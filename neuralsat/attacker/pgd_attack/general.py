@@ -18,13 +18,13 @@ def attack(model, x, data_min, data_max, list_target_label_arrays, initializatio
         p.requires_grad_(False)
 
     output = model(x).detach()
+    if output.ndim == 0:
+        output = output.view(1, 1).float()
     
     cs_mat, rhs_mat, cond_mat, same_number_const = build_conditions(x, list_target_label_arrays)
-
     output = output.unsqueeze(1).unsqueeze(1).repeat(1, 1, len(cond_mat[0]), 1)
     if test_conditions(x, output, cs_mat, rhs_mat, cond_mat, same_number_const, data_max.unsqueeze(1), data_min.unsqueeze(1)).all():
         return True, x[:, None, None].detach()
-
 
     data_min = data_min.to(device)
     data_max = data_max.to(device)

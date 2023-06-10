@@ -66,7 +66,6 @@ def test_conditions(input, output, cs_mat, rhs_mat, cond_mat, same_number_const,
         cs_mat = cs_mat.view(cs_mat.shape[0], 1, len(cond_mat[0]), -1, cs_mat.shape[-1])
         # [batch_size, restarts, num_or_spec, num_and_spec, output_dim]
         rhs_mat = rhs_mat.view(rhs_mat.shape[0], 1, len(cond_mat[0]), -1)
-
         cond = torch.matmul(cs_mat, output.unsqueeze(-1)).squeeze(-1) - rhs_mat
 
         valid = ((input <= data_max) & (input >= data_min))

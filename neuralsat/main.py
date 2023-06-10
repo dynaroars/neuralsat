@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
     parser.add_argument('--batch', type=int, default=1000,
-                        help="number of branches verified each iteration")
+                        help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],

@@ -4,7 +4,7 @@ class GlobalSettings:
 
     def __init__(self):
         
-        # restart thresholds, if exceed, restart
+        # restart thresholds, restart if exceeded
         self.max_hidden_branches = 1e5 
         self.max_hidden_visited_branches = 1e5 
         
@@ -17,7 +17,7 @@ class GlobalSettings:
         # restart
         self.use_restart = 1
         
-        # theshold for switching between input and hidden splitting
+        # threshold for automatically switching between input and hidden splitting
         self.safety_property_threshold = 0.15
 
     def __getitem__(self, key):

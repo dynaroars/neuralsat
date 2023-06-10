@@ -32,20 +32,30 @@ def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
 def parse_onnx(path: str) -> tuple:
     onnx_model = load_onnx(path)
     
-    onnx_input_dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
+    onnx_inputs = [node.name for node in onnx_model.graph.input]
+    initializers = [node.name for node in onnx_model.graph.initializer]
+    inputs = list(set(onnx_inputs) - set(initializers))
+    inputs = [node for node in onnx_model.graph.input if node.name in inputs]
+    
+    onnx_input_dims = inputs[0].type.tensor_type.shape.dim
     onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
+    
     orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
-    # assert all([_ > 0 for _ in orig_input_shape]), print(orig_input_shape)
-
-    if len(onnx_input_dims) == 1:
+    orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims)
+    
+    if len(orig_input_shape) == 1:
         batched_input_shape = (1, orig_input_shape[0])
     else:
         batched_input_shape = orig_input_shape
         
-    output_shape = tuple(d.dim_value for d in onnx_output_dims) if len(onnx_output_dims) > 1 else (1, onnx_output_dims[0].dim_value)
+    if not len(orig_output_shape):
+        batched_output_shape = tuple((1, 1))
+    else:
+        batched_output_shape = orig_output_shape if len(orig_output_shape) > 1 else (1, orig_output_shape[0])
 
-    # convert ONNX to Pytorch model (experimental=True for supporting batch processing)
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True)
+    # print(batched_input_shape, batched_output_shape)
+    # exit()
+    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
     pytorch_model.eval()
     
     # check conversion
@@ -65,8 +75,9 @@ def parse_onnx(path: str) -> tuple:
         warnings.warn('Model was converted incorrectly.')
         exit()
     # else:
+    #     print(output_onnx, output_pytorch)
     #     print('DEBUG: correct')
-    #     exit()
+        # exit()
         
-    return pytorch_model, batched_input_shape, output_shape
+    return pytorch_model, batched_input_shape, batched_output_shape
 
