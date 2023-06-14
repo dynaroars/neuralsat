@@ -1,6 +1,7 @@
-benchmark/*_gdvb
-benchmark/vnncomp21
-benchmark/mcb
+benchmark/
+
+neuralsat/onnx2pytorch
+neuralsat/auto_LiRPA
 
 # test*.py
 # ref/

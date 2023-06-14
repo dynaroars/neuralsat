@@ -8,7 +8,7 @@ def recursive_walk(rootdir):
             
             
 if __name__ == "__main__":
-    BENCHMARK_DIR = '../benchmark'
+    BENCHMARK_DIR = '../benchmark/vnncomp23-instances'
     CMD = 'python3 main.py --net {} --spec {}'
     csv_files = [f for f in recursive_walk(BENCHMARK_DIR) if 'instances.csv' in f]
     

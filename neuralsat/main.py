@@ -38,6 +38,12 @@ if __name__ == '__main__':
     model.to(args.device)
     if args.verbosity:
         print(model)
+        # pass
+        # exit()
+        
+    logger.info(f'[!] Input shape: {input_shape}')
+    logger.info(f'[!] Output shape: {output_shape}')
+    
     
     START_TIME = time.time()
     # verifier

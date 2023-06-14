@@ -27,6 +27,17 @@ def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
     res = sess.run(None, inp)
     return res
 
+@beartype
+def add_batch(shape: tuple) -> tuple:
+    if len(shape) == 1:
+        return (1, shape[0])
+    
+    if shape[0] not in [-1, 1]:
+        return (1, *shape)
+    
+    return shape
+        
+
 
 @beartype
 def parse_onnx(path: str) -> tuple:
@@ -43,20 +54,14 @@ def parse_onnx(path: str) -> tuple:
     orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
     orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims)
     
-    if len(orig_input_shape) == 1:
-        batched_input_shape = (1, orig_input_shape[0])
-    else:
-        batched_input_shape = orig_input_shape
-        
-    if not len(orig_output_shape):
-        batched_output_shape = tuple((1, 1))
-    else:
-        batched_output_shape = orig_output_shape if len(orig_output_shape) > 1 else (1, orig_output_shape[0])
+    batched_input_shape = add_batch(orig_input_shape)
+    batched_output_shape = add_batch(orig_output_shape)
 
     # print(batched_input_shape, batched_output_shape)
     # exit()
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
     pytorch_model.eval()
+    # exit()
     
     # check conversion
     correct_conversion = True
@@ -75,9 +80,11 @@ def parse_onnx(path: str) -> tuple:
         warnings.warn('Model was converted incorrectly.')
         exit()
     # else:
-    #     print(output_onnx, output_pytorch)
+    #     print(pytorch_model)
+    #     print(output_onnx)
+    #     print(output_pytorch)
     #     print('DEBUG: correct')
-        # exit()
+    #     exit()
         
     return pytorch_model, batched_input_shape, batched_output_shape
 

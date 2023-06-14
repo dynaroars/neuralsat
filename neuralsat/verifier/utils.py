@@ -18,7 +18,9 @@ def _preprocess(self, objectives):
     eps = (objectives.upper_bounds - objectives.lower_bounds).max().item()
     if eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
-    elif np.prod(self.input_shape) <= 100: # small inputs
+    elif np.prod(self.input_shape) <= 200: # small inputs
+        self.input_split = True
+    elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
     # debug only
@@ -36,6 +38,9 @@ def _setup_restart(self, nth_restart):
     if params is None:
         return False
     
+    if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
+        params['abstract_method'] = 'forward'
+        
     logger.info(f'Params of {nth_restart}-th run: {params}')
     abstract_method = params['abstract_method']
     decision_topk = params.get('decision_topk', None)
