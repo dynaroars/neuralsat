@@ -18,7 +18,7 @@ class GlobalSettings:
         self.use_restart = 1
         
         # threshold for automatically switching between input and hidden splitting
-        self.safety_property_threshold = 0.15
+        self.safety_property_threshold = 0.3
 
     def __getitem__(self, key):
         return self.__dict__[key]

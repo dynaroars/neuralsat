@@ -3,12 +3,15 @@ import torch.nn as nn
 import onnx2pytorch
 import numpy as np
 import collections
+import onnx2torch
 import warnings
 import torch
 import onnx
 import gzip
 
 from beartype import beartype
+
+USE_ONNX2PYTORCH = True
 
 @beartype
 def load_onnx(path: str):
@@ -59,8 +62,12 @@ def parse_onnx(path: str) -> tuple:
 
     # print(batched_input_shape, batched_output_shape)
     # exit()
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
-    pytorch_model.eval()
+    if USE_ONNX2PYTORCH:
+        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
+        pytorch_model.eval()
+    else:
+        pytorch_model = onnx2torch.convert(path)
+        pytorch_model.eval()
     # exit()
     
     # check conversion

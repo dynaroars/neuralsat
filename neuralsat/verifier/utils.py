@@ -22,7 +22,7 @@ def _preprocess(self, objectives):
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
-        
+    
     # debug only
     if 0:
         self.input_split = False
