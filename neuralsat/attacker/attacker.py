@@ -12,8 +12,7 @@ class Attacker:
     
     @beartype
     def __init__(self, net, objective, input_shape, device) -> None:
-        self.attackers = [PGDAttacker(net, objective, input_shape, mode=mode, device=device) 
-                          for mode in ['PGD', 'diversed_PGD', 'diversed_GAMA_PGD']]
+        self.attackers = [PGDAttacker(net, objective, input_shape, device=device)]
  
     @beartype
     def run(self):
@@ -33,23 +32,12 @@ class Attacker:
 
 class PGDAttacker:
 
-    def __init__(self, net, objective, input_shape, mode='PGD', device='cpu'):
+    def __init__(self, net, objective, input_shape, device='cpu'):
         self.net = net
         self.objective = objective
         self.input_shape = input_shape
         self.dtype = torch.get_default_dtype()
         self.device = device
-
-        assert mode in ['diversed_PGD', 'diversed_GAMA_PGD', 'PGD']
-        self.mode = mode
-
-        self.initialization = "uniform"
-        self.gama_loss = False
-        if "diversed" in mode:
-            self.initialization = "osi"
-        if "GAMA" in mode:
-            self.gama_loss = True
-
         self.seed = None
 
 
@@ -65,25 +53,24 @@ class PGDAttacker:
         assert torch.all(data_min <= data_max)
         x = (data_min[:, 0] + data_max[:, 0]) / 2
         
-        list_target_labels = [[(cs_.numpy(), rhs_.numpy()) for cs_, rhs_ in zip(self.objective.cs, self.objective.rhs)]]
         is_attacked, attack_images = attack(
             model=self.net,
             x=x, 
             data_min=data_min,
             data_max=data_max,
-            list_target_label_arrays=list_target_labels, 
-            initialization=self.initialization, 
-            GAMA_loss=self.gama_loss,
+            cs=self.objective.cs,
+            rhs=self.objective.rhs,
             attack_iters=iterations, 
             num_restarts=restarts,
         )
 
         if is_attacked:
             with torch.no_grad():
-                for idx in range(len(list_target_labels[0])):
-                    adv = attack_images[:, 0, idx]
-                    if self._check_adv(adv, data_min=data_min[:, idx], data_max=data_max[:, idx]):
-                        return True, adv
+                for i in range(attack_images.shape[1]): # restarts
+                    for j in range(attack_images.shape[2]): # props
+                        adv = attack_images[:, i, j]
+                        if self._check_adv(adv, data_min=data_min[:, j], data_max=data_max[:, j]):
+                            return True, adv
             logger.debug("[!] Invalid counter-example")
             
         return False, None
@@ -99,5 +86,5 @@ class PGDAttacker:
     
     
     def __str__(self):
-        return f'PGDAttack(mode={self.mode}, seed={self.seed}, device={self.device})'
+        return f'PGDAttack(seed={self.seed}, device={self.device})'
 

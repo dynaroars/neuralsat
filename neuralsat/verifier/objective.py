@@ -54,8 +54,11 @@ class DnfObjectives:
         self.upper_bounds = torch.stack(self.upper_bounds)
         
         # properties
-        self.cs = torch.stack(self.cs, dim=0)
-        self.rhs = torch.stack(self.rhs)
+        if all([_.shape[0] == self.cs[0].shape[0] for _ in self.cs]):
+            self.cs = torch.stack(self.cs)
+        if all([_.shape[0] == self.rhs[0].shape[0] for _ in self.rhs]):
+            self.rhs = torch.stack(self.rhs)
+            
         self.true_labels = np.array(self.true_labels)
         self.target_labels = np.array(self.target_labels)
             

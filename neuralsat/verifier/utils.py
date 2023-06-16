@@ -93,20 +93,19 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
     
     cs = domain_params.cs[indices].view(1, -1, domain_params.cs[indices].shape[-1])
     rhs = domain_params.rhs[indices].view(1, -1)
-
+    cond = [[domain_params.cs.shape[1] for i in range(len(indices))]]
+    serialized_conditions = (cs, rhs, cond)
+    
     attack_images = general_attack(
         model=self.net, 
         X=adv_example, 
         data_min=input_lowers, 
         data_max=input_uppers, 
-        cs_mat=cs, 
-        rhs_mat=rhs, 
-        cond_mat=[[1 for i in range(domain_params.cs[indices].shape[0])]], 
-        same_number_const=True, 
-        alpha=(input_uppers - input_lowers).max() / 8, 
+        serialized_conditions=serialized_conditions, 
         attack_iters=20, 
         num_restarts=5, 
-        only_replicate_restarts=True)
+        only_replicate_restarts=True,
+    )
     
 
     if attack_images is not None:

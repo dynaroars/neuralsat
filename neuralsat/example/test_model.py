@@ -67,7 +67,7 @@ def test_relu():
     torch.onnx.export(
         net, 
         x, 
-        "fnn_relu.onnx", 
+        "example/fnn.onnx", 
         verbose=False,
     )
     
@@ -180,4 +180,5 @@ def load(path):
     print(pytorch_model)
     
 if __name__ == '__main__':
-    load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
+    # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
+    test_relu()
