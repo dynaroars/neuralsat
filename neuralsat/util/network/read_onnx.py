@@ -3,7 +3,7 @@ import torch.nn as nn
 import onnx2pytorch
 import numpy as np
 import collections
-import onnx2torch
+# import onnx2torch
 import warnings
 import torch
 import onnx
