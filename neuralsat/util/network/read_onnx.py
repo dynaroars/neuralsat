@@ -13,22 +13,13 @@ from beartype import beartype
 
 USE_ONNX2PYTORCH = True
 
-@beartype
-def load_onnx(path: str):
-    if path.endswith('.gz'):
-        onnx_model = onnx.load(gzip.GzipFile(path))
-    else:
-        onnx_model = onnx.load(path)
-    return onnx_model
-
 
 @beartype
 def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
-    sess = ort.InferenceSession(load_onnx(path).SerializeToString())
+    sess = ort.InferenceSession(onnx.load(path).SerializeToString())
     names = [i.name for i in sess.get_inputs()]
-    inp = dict(zip(names, inputs))
-    res = sess.run(None, inp)
-    return res
+    return sess.run(None, dict(zip(names, inputs)))
+
 
 @beartype
 def add_batch(shape: tuple) -> tuple:
@@ -41,10 +32,9 @@ def add_batch(shape: tuple) -> tuple:
     return shape
         
 
-
 @beartype
 def parse_onnx(path: str) -> tuple:
-    onnx_model = load_onnx(path)
+    onnx_model = onnx.load(path)
     
     onnx_inputs = [node.name for node in onnx_model.graph.input]
     initializers = [node.name for node in onnx_model.graph.initializer]

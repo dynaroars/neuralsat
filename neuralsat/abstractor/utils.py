@@ -2,6 +2,7 @@ from collections import defaultdict, OrderedDict
 import gurobipy as grb
 import numpy as np
 import torch
+import copy
 
 from auto_LiRPA.bound_ops import BoundRelu, BoundOptimizableActivation
 from auto_LiRPA.perturbations import PerturbationLpNorm
@@ -282,6 +283,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
+    self.net.model.update()
     tmp_model = self.net.model.copy()
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
@@ -328,8 +330,8 @@ def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bo
             feasible = False
             adv = None
             break
-
-        input_vars = [tmp_model.getVarByName(var.VarName) for var in self.net.input_vars]
+        
+        input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(np.prod(self.input_shape))]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
         if check_solution(net=self.pytorch_model, adv=adv, cs=c, rhs=rhs, data_min=input_lower, data_max=input_upper):
             return True, adv
