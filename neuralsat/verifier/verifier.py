@@ -203,7 +203,7 @@ class Verifier:
                     input_upper=domain_params.input_uppers[idx_][None], 
                     c=domain_params.cs[idx_][None],
                 )
-                
+
                 feasible, adv = self.abstractor.solve_full_assignment(
                     input_lower=domain_params.input_lowers[idx_], 
                     input_upper=domain_params.input_uppers[idx_], 

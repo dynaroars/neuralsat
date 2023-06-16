@@ -265,7 +265,15 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     
 def build_lp_solver(self, model_type, input_lower, input_upper, c):
     assert model_type in ['lp', 'mip']
+
     # gurobi solver
+    if hasattr(self.net, 'model'):
+        if not hasattr(self, 'last_c_lp'):
+            self.last_c_lp = c
+        else:
+            assert (self.last_c_lp == c).all(), print(f'Different cs ({c} vs {self.last_c_lp}) are unsupported yet')
+        return
+    
     self.net.model = grb.Model(model_type)
     self.net.model.setParam('OutputFlag', False)
     self.net.model.setParam("FeasibilityTol", 1e-7)
@@ -283,8 +291,8 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
-    self.net.model.update()
     tmp_model = self.net.model.copy()
+    tmp_model.update()
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     
