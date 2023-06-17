@@ -22,7 +22,6 @@ def _preprocess(self, objectives):
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
-    
     # debug only
     if 0:
         self.input_split = False
@@ -41,14 +40,16 @@ def _setup_restart(self, nth_restart):
     if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         params['abstract_method'] = 'forward'
         
-    logger.info(f'Params of {nth_restart}-th run: {params}')
+    logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
     decision_topk = params.get('decision_topk', None)
+    random_selection = params.get('random_selection', False)
     
     # decision heuristic
     self.decision = DecisionHeuristic(
         decision_topk=decision_topk, 
-        input_split=self.input_split
+        input_split=self.input_split,
+        random_selection=random_selection,
     )
     
     # abstractor
@@ -126,6 +127,7 @@ def _get_learned_conflict_clauses(self):
 
 
 def _fake_learned_clauses():
+    return [eval(line) for line in open('./solver/clauses_oval21.txt').read().strip().split('\n') if line.startswith('[')]
     return [eval(line) for line in open('./solver/clauses_cnn.txt').read().strip().split('\n')]
     return [eval(line) for line in open('./solver/clauses.txt').read().strip().split('\n')]
     

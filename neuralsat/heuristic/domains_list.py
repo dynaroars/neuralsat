@@ -8,6 +8,7 @@ from util.misc.result import AbstractResults
 from .util import compute_masks
 from setting import Settings
 
+from util.misc.logger import logger
 
 class DomainsList:
     
@@ -21,20 +22,19 @@ class DomainsList:
                  cs, rhs, 
                  input_split=False, preconditions=[]):
         
-        ######## clause learning ########
-        self.use_restart = Settings.use_restart and (lower_bounds is not None) and len(preconditions)
+        self.use_restart = Settings.use_restart and (lower_bounds is not None) # and len(preconditions)
         if self.use_restart:
+            tic = time.time()
             stat = self.init_sat_solver(
                 lower_bounds=lower_bounds, 
                 upper_bounds=upper_bounds, 
                 histories=histories, 
                 preconditions=preconditions
             )
+            logger.info(f'Initialize {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
             if not stat:
                 raise ValueError('BCP conflict')
-            # print(histories)
             self.all_conflict_clauses = []
-        ######## end clause learning ########
         
         self.input_split = input_split
         self.visited = 0
@@ -207,6 +207,7 @@ class DomainsList:
                 self.all_betas.append(domain_params.betas[idx_])
                 
             if len(extra_conflict_index):
+                logger.debug(f'BCP removes {len(extra_conflict_index)} domains')
                 assert len(extra_conflict_index) == len(list(set(extra_conflict_index)))
                 for eci in extra_conflict_index:
                     remaining_index = remaining_index[remaining_index != eci]

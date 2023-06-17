@@ -112,11 +112,11 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
     histories[lid][1].append(1.0 if literal > 0 else -1.0)
     # update bounds
     if literal > 0: # active neuron
-        lower_bounds[lid][batch_idx][nid] = 0.0
+        lower_bounds[lid][batch_idx].flatten()[nid] = 0.0
     else: # inactive neuron
-        upper_bounds[lid][batch_idx][nid] = 0.0
+        upper_bounds[lid][batch_idx].flatten()[nid] = 0.0
     
-    if upper_bounds[lid][batch_idx][nid] < lower_bounds[lid][batch_idx][nid]:
+    if upper_bounds[lid][batch_idx].flatten()[nid] < lower_bounds[lid][batch_idx].flatten()[nid]:
         return False
     return True
 

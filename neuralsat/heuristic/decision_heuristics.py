@@ -10,10 +10,11 @@ SMALL = 1.0 / LARGE
 
 class DecisionHeuristic:
     
-    def __init__(self, decision_topk, input_split, decision_reduceop=torch.max):
+    def __init__(self, decision_topk, input_split, decision_reduceop=torch.max, random_selection=False):
         self.decision_topk = decision_topk
         self.input_split = input_split
         self.decision_reduceop = decision_reduceop
+        self.random_selection = random_selection
         
 
     @torch.no_grad()
@@ -140,10 +141,15 @@ class DecisionHeuristic:
         )
         
         # best improvements
-        best = topk_output_lbs.topk(1, 0)
-        best_output_lbs = best.values.cpu().numpy()[0]
-        best_output_lbs_indices = best.indices.cpu().numpy()[0]
-
+        if self.random_selection:
+            best_output_lbs_indices = np.random.random_integers(low=0, high=len(topk_output_lbs)-1, size=topk_output_lbs.shape[1])
+            topk_output_lbs_np = topk_output_lbs.detach().cpu().numpy()
+            best_output_lbs = np.array([topk_output_lbs_np[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)])
+        else:
+            best = topk_output_lbs.topk(1, 0)
+            best_output_lbs = best.values.cpu().numpy()[0]
+            best_output_lbs_indices = best.indices.cpu().numpy()[0]
+            
         # find corresponding decisions
         all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
         final_decision = [[] for b in range(batch)]

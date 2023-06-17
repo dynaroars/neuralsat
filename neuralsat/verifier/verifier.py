@@ -62,8 +62,8 @@ class Verifier:
             nth_restart = 0 
             
             #################### DEBUG ####################
-            from .utils import _fake_learned_clauses
-            # learned_clauses = _fake_learned_clauses()[:1000]
+            # from .utils import _fake_learned_clauses
+            # learned_clauses = _fake_learned_clauses()
             #################### END DEBUG ####################
             
             # verify objective (multiple times if RESTART is returned)
