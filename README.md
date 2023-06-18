@@ -15,8 +15,6 @@ Content
 ====================
 - ```neuralsat```: source code for **NeuralSAT**.
 
-- ```benchmark```: benchmarks taken from [VNNCOMP'21](https://sites.google.com/view/vnn2021) and [VNNCOMP'22](https://sites.google.com/view/vnn2022).
-
 - ```third_party```: external libraries.
 
 
