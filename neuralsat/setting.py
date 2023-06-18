@@ -6,7 +6,7 @@ class GlobalSettings:
         
         # restart thresholds, restart if exceeded
         self.max_hidden_branches = 1e5 
-        self.max_hidden_visited_branches = 1e5
+        self.max_hidden_visited_branches = 1e6
         
         self.max_input_branches  = 1e5
         self.max_input_visited_branches = 5e6

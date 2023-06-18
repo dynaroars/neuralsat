@@ -1,5 +1,6 @@
 import torch.nn as nn
 import numpy as np
+import traceback
 import random
 import torch
 import copy
@@ -85,8 +86,13 @@ class NetworkAbstractor:
         try:
             self.net.compute_bounds(x=(x,), method=method)
         except IndexError:
+            traceback.print_exc()
+            return False
+        except RuntimeError:
+            traceback.print_exc()
             return False
         except NotImplementedError:
+            traceback.print_exc()
             return False
         except:
             raise ValueError()

@@ -20,10 +20,10 @@ class CifarConv(nn.Module):
         return self.layers(x)
     
     
-class Net(nn.Module):
+class NetSigmoid(nn.Module):
     
     def __init__(self):
-        super(Net, self).__init__()
+        super(NetSigmoid, self).__init__()
         
         self.layer = nn.Sequential(
             nn.Flatten(),
@@ -39,7 +39,7 @@ class Net(nn.Module):
     
     
 def test_sigmoid():
-    net = Net()
+    net = NetSigmoid()
     x = torch.randn(1, 1, 28, 28)
     print(net(x).shape)
     
@@ -167,6 +167,39 @@ def test_load_model():
     
     
     
+class NetReLU(nn.Module):
+    
+    def __init__(self):
+        super(NetReLU, self).__init__()
+        
+        self.layer = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(784, 9),
+            nn.ReLU(),
+            nn.Linear(9, 7),
+            nn.ReLU(),
+            nn.Linear(7, 5),
+            nn.ReLU(),
+            nn.Linear(5, 10),
+        )
+
+    def forward(self, x):
+        return self.layer(x)
+    
+    
+def test_relu3():
+    net = NetReLU()
+    x = torch.randn(1, 1, 28, 28)
+    print(net(x).shape)
+    
+    torch.onnx.export(
+        net,
+        x,
+        "example/mnist_relu.onnx",
+        verbose=False,
+    )
+    
+    
 def load(path):
     import onnx2pytorch
     import onnx
@@ -181,4 +214,4 @@ def load(path):
     
 if __name__ == '__main__':
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
-    test_relu()
+    test_relu3()

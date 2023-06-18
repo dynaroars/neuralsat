@@ -42,7 +42,7 @@ class SATSolver:
         if variable in self.assignment: 
             if self.assignment[variable] != (literal > 0):
                 return False
-            logger.debug(f'Already assigned: {variable}')
+            # logger.debug(f'Already assigned: {variable}')
             return True
             # raise ValueError('Already assigned')
             

@@ -166,6 +166,7 @@ class Verifier:
 
         # step 3: branching
         decisions = self.decision(self.abstractor, pick_ret)
+        # print(decisions)
 
         # step 4: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
