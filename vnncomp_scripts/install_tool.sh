@@ -10,9 +10,6 @@ NEURALSAT_PY=$NEURALSAT_CONDA_HOME/bin/python
 NEURALSAT_HOME=$(dirname $(pwd))
 NEURALSAT_MAIN=$NEURALSAT_HOME/neuralsat/main.py
 
-echo "Neuralsat home is                           $NEURALSAT_HOME"
-echo "Conda will be installed to                  $CONDA_HOME"
-echo "Neuralsat's conda env will be installed at  $NEURALSAT_CONDA_HOME"
 
 # check arguments
 if [ "$1" != ${VERSION_STRING} ]; then
@@ -22,6 +19,10 @@ fi
 
 
 echo "======= Installing $TOOL_NAME ======="
+echo "Neuralsat home is                           $NEURALSAT_HOME"
+echo "Conda will be installed to                  $CONDA_HOME"
+echo "Neuralsat's conda env will be installed at  $NEURALSAT_CONDA_HOME"
+
 
 
 wget -O conda.sh https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh
@@ -40,21 +41,37 @@ $CONDA  env create -p $NEURALSAT_CONDA_HOME -f ../env.yaml
 
 
 # setup alias
-echo "======= Adding alias ======="
-echo "neuralsat alias added"
+echo "======= Exporting env variables ======="
 alias neuralsat='$NEURALSAT_PY $NEURALSAT_MAIN'
-sed -i '/neuralsat/d' ~/.bashrc
+sed -i '/neuralsat/Id' ~/.bashrc
+echo "####         Neuralsat stuff            ####" >> ~/.bashrc
 echo "alias neuralsat='$NEURALSAT_PY $NEURALSAT_MAIN'" >> ~/.bashrc
 
+export NEURALSAT_CONDA_HOME
+export NEURALSAT_HOME
+export NEURALSAT_PY
+export NEURALSAT_MAIN
+echo "export NEURALSAT_CONDA_HOME=$NEURALSAT_CONDA_HOME" >> ~/.bashrc
+echo "export NEURALSAT_HOME=$NEURALSAT_HOME" >>  ~/.bashrc
+echo "export NEURALSAT_PY=$NEURALSAT_PY" >> ~/.bashrc
+echo "export NEURALSAT_MAIN=$NEURALSAT_MAIN" >> ~/.bashrc
+
+echo "####       End of Neuralsat stuff       ####" >> ~/.bashrc
 
 # install gurobi license
 echo "======= Installing Gurobi License ======="
-echo "enter WLSACCESSID"
-read ACCESSID
-echo "enter WLSSECRET"
-read SECRET
-echo "enter LICENSEID"
-read LICENSEID
-echo "WLSACCESSID=$ACCESSID" > ~/gurobi.lic
-echo "WLSSECRET=$SECRET" >> ~/gurobi.lic
-echo "LICENSEID=$LICENSEID" >> ~/gurobi.lic
+if [ -e ~/gurobi.lic ]; then
+    echo "Gurobi license detected ~/gurobi.lic"
+else
+    echo "No Gurobi license found...enter it now"
+    echo "enter WLSACCESSID"
+    read ACCESSID
+    echo "enter WLSSECRET"
+    read SECRET
+    echo "enter LICENSEID"
+    read LICENSEID
+    echo "WLSACCESSID=$ACCESSID" > ~/gurobi.lic
+    echo "WLSSECRET=$SECRET" >> ~/gurobi.lic
+    echo "LICENSEID=$LICENSEID" >> ~/gurobi.lic
+fi
+
