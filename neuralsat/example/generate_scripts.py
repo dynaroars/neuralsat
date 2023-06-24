@@ -8,8 +8,8 @@ def recursive_walk(rootdir):
             
             
 if __name__ == "__main__":
-    BENCHMARK_DIR = '../benchmark/official_vnncomp_23'
-    SCRIPTS_DIR = 'example/official_scripts/'
+    BENCHMARK_DIR = '../benchmark/vnncomp23'
+    SCRIPTS_DIR = 'example/vnncomp_23_scripts/'
     CMD = 'python3 main.py --net {} --spec {}'
     csv_files = [f for f in recursive_walk(BENCHMARK_DIR) if f.endswith('instances.csv')]
     

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-
+import torch.nn.functional as F
 class CifarConv(nn.Module):
     
     def __init__(self):
@@ -78,22 +78,28 @@ class ReLUNet(nn.Module):
         super(ReLUNet, self).__init__()
         
         self.linear1 = nn.Linear(2, 3)
-        self.linear1.weight.data = nn.Parameter(torch.tensor([[1, 2], [3, 4], [-5, -6]]).float())
+        self.linear1.weight.data = nn.Parameter(torch.tensor([[1, 2], [3, 4], [5, 6]]).float())
         self.linear1.bias.data = nn.Parameter(torch.tensor([1, 2, 3]).float())
         
         self.linear2 = nn.Linear(3, 2)
-        self.linear2.weight.data = nn.Parameter(torch.tensor([-1, -2, -3, 4, 5, 6]).view(2, 3).float())
+        self.linear2.weight.data = nn.Parameter(torch.tensor([1, 2, 3, -4, -5, -6]).view(2, 3).float())
         self.linear2.bias.data = nn.Parameter(torch.tensor([2, 3]).float())
         # print( self.linear1.weight.data.shape)
         # print( self.linear1.bias.data.shape)
         
-    def forward(self, x):
+        self.linear3 = nn.Linear(2, 3)
+        self.linear3.weight.data = nn.Parameter(torch.tensor([[1, 2], [-3, -4], [-5, -6]]).float())
+        self.linear3.bias.data = nn.Parameter(torch.tensor([1, 2, 3]).float())
         
+    def forward(self, x):
         x = self.linear1(x)
-        # x = x.relu()
-        x = x.pow(3)
+        x = x.relu()
         x = self.linear2(x)
+        x = x.relu()
+        x = self.linear3(x)
+        
         # x = torch.log(x)
+        # x = x.max(dim=1).values
         return x
     
     
@@ -135,10 +141,19 @@ def test_relu2():
     C = torch.tensor([1, -1]).view(1, 1, 2).float()
     # print(x_L.shape, C.shape)
     # print(abstractor(x_U))
-    with torch.no_grad():
-        lb, ub = abstractor.compute_bounds(x=(new_x,), method='forward', C=None, bound_upper=False)
-        print('lower', lb)
-        print('upper', ub)
+    if 0:
+        method = 'forward'
+        with torch.no_grad():
+            lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
+            print('[forward] lower', lb)
+            print('[forward] upper', ub)
+        print()
+    else:
+        method = 'backward'
+        with torch.no_grad():
+            lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
+            print('[backward] lower', lb)
+            print('[backward] upper', ub)
     
     
 def test_load_model():
@@ -212,6 +227,61 @@ def load(path):
     
     print(pytorch_model)
     
+    
+
+    
+class NetConv(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.l1 = nn.Linear(5, 512)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.ct1 = nn.ConvTranspose2d(128, 128, kernel_size=(4, 4), stride=(2, 2))
+        self.bn2 = nn.BatchNorm2d(128)
+        self.ct2 = nn.ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2))
+        self.ct3 = nn.ConvTranspose2d(64, 4, kernel_size=(4, 4), stride=(2, 2))
+        self.l2 = nn.Linear(3600, 1)
+
+    def forward(self, x):
+        x = self.l1(x)
+        # print(1, x.shape)
+        x = x.view(-1, 128, 2, 2)
+        # print(2, x.shape)
+        x = self.bn1(x)
+        # print(3, x.shape)
+        x = self.ct1(x)
+        # print(4, x.shape)
+        x = self.bn1(x)
+        # print(5, x.shape)
+        x = x.relu()
+        x = self.ct2(x)
+        # print(6, x.shape)
+        x = x.relu()
+        x = self.ct3(x)
+        x = x.relu()
+        x = x.flatten(1)
+        x = self.l2(x)
+        return x
+    
+def test_conv1():
+    net = NetConv()
+    
+    x = torch.randn(1, 5)
+    print(net(x).shape)
+   
+    net.eval()
+    torch.onnx.export(
+        net,
+        x,
+        "example/conv.onnx",
+        verbose=False,
+        opset_version=12,
+        
+    )
+    
+    
 if __name__ == '__main__':
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
-    test_relu3()
+    test_conv1()
+    
