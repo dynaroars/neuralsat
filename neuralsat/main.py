@@ -32,10 +32,9 @@ if __name__ == '__main__':
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
-    # parse instance
-    vnnlibs = read_vnnlib(Path(args.spec))
-    model, input_shape, output_shape = parse_onnx(args.net)
+    model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
     model.to(args.device)
+    vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
         # pass
@@ -44,6 +43,7 @@ if __name__ == '__main__':
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     
+    # exit()
     
     START_TIME = time.time()
     # verifier
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         bounds = spec[0]
         for prop_i in spec[1]:
             objectives.append(Objective((bounds, prop_i)))
-    objectives = DnfObjectives(objectives)
+    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
     
     # verify
     timeout = args.timeout - (time.time() - START_TIME)

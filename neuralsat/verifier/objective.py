@@ -7,8 +7,10 @@ class DnfObjectives:
     
     "List of objectives"
     
-    def __init__(self, objectives: list) -> None:
+    def __init__(self, objectives, input_shape, is_nhwc) -> None:
         self.objectives = objectives
+        self.is_nhwc = is_nhwc
+        self.input_shape = input_shape
         
         self._extract()
         
@@ -20,15 +22,37 @@ class DnfObjectives:
     
     
     def pop(self, batch):
-        batch = min(batch, len(self))
+        if isinstance(self.cs, torch.Tensor):
+            batch = min(batch, len(self))
+        else:
+            batch = 1
         # print('\t- popping:', batch)
         class TMP:
             pass
+        
+        lower_bounds = self.lower_bounds[self.num_used : self.num_used + batch]
+        upper_bounds = self.upper_bounds[self.num_used : self.num_used + batch]
+        if self.is_nhwc:
+            n_, c_, h_, w_ = self.input_shape
+            orig_input_shape = (-1, h_, w_, c_)
+            lower_bounds = lower_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            upper_bounds = upper_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            assert torch.all(lower_bounds <= upper_bounds)
+        
         objective = TMP()
-        objective.lower_bounds = self.lower_bounds[self.num_used : self.num_used + batch]
-        objective.upper_bounds = self.upper_bounds[self.num_used : self.num_used + batch]
+        # input bounds
+        objective.lower_bounds = lower_bounds
+        objective.upper_bounds = upper_bounds
+        
+        # specs
         objective.cs = self.cs[self.num_used : self.num_used + batch]
+        if not isinstance(objective.cs, torch.Tensor):
+            objective.cs = torch.cat(objective.cs)[None]
+            
         objective.rhs = self.rhs[self.num_used : self.num_used + batch]
+        if not isinstance(objective.rhs, torch.Tensor):
+            objective.rhs = torch.cat(objective.rhs)[None]
+            
         objective.true_labels = self.true_labels[self.num_used : self.num_used + batch]
         objective.target_labels = self.target_labels[self.num_used : self.num_used + batch]
         self.num_used += batch

@@ -9,6 +9,7 @@ from beartype import beartype
 from copy import deepcopy
 from pathlib import Path
 import numpy as np
+import tqdm
 import re
 
 from util.misc.logger import logger
@@ -79,7 +80,7 @@ def update_rv_tuple(rv_tuple, op, first, second, num_inputs, num_outputs):
 
         assert not second.startswith("X") and not second.startswith("Y"), \
             f"input constraints must be box ({op} {first} {second})"
-        assert 0 <= index < num_inputs
+        assert 0 <= index < num_inputs, print(index, num_inputs)
 
         limits = rv_tuple[0][index]
 
@@ -131,6 +132,10 @@ def make_input_box_dict(num_inputs):
 
 @beartype
 def read_vnnlib(vnnlib_filename: Path, regression: bool = False) -> list:
+    return _read_vnnlib(vnnlib_filename=vnnlib_filename, regression=regression, mismatch_input_output=True)
+
+@beartype
+def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input_output: bool = False) -> list:
     '''process in a vnnlib file
 
     this is not a general parser, and assumes files are provided in a 'nice' format. Only a single disjunction
@@ -171,20 +176,31 @@ def read_vnnlib(vnnlib_filename: Path, regression: bool = False) -> list:
 
     # Read lines to determine number of inputs and outputs
     num_inputs = num_outputs = 0
-    for line in lines:
-        declare = regex_declare.findall(line)
-        if len(declare) == 0:
-            continue
-        elif len(declare) > 1:
-            raise ValueError(f'There cannot be more than one declaration in one line: {line}')
-        else:
-            declare = declare[0]
-            if declare[0] == 'X':
-                num_inputs = max(num_inputs, int(declare[1]) + 1)
-            elif declare[0] == 'Y':
-                num_outputs = max(num_outputs, int(declare[1]) + 1)
+    if mismatch_input_output:
+        # logger.info(f'[!] Mismatch in VNNLIB')
+        for line in lines:
+            num = re.findall(r'X_(\d+)', line)
+            if len(num):
+                num_inputs = max(num_inputs, int(num[0]) + 1)
+            num = re.findall(r'Y_(\d+)', line)
+            if len(num):
+                num_outputs = max(num_outputs, int(num[0]) + 1)
+    else:
+        for line in lines:
+            declare = regex_declare.findall(line)
+            if len(declare) == 0:
+                continue
+            elif len(declare) > 1:
+                raise ValueError(f'There cannot be more than one declaration in one line: {line}')
             else:
-                raise ValueError(f'Unknown declaration: {line}')
+                declare = declare[0]
+                if declare[0] == 'X':
+                    num_inputs = max(num_inputs, int(declare[1]) + 1)
+                elif declare[0] == 'Y':
+                    num_outputs = max(num_outputs, int(declare[1]) + 1)
+                else:
+                    raise ValueError(f'Unknown declaration: {line}')
+                
     logger.info(f'[!] VNNLIB: {num_inputs} inputs, {num_outputs} outputs')
     
     rv = []  # list of 3-tuples, (box-dict, mat, rhs)
@@ -235,7 +251,7 @@ def read_vnnlib(vnnlib_filename: Path, regression: bool = False) -> list:
         rv = []
 
         for rv_tuple in old_rv:
-            for c in conjuncts:
+            for c in tqdm.tqdm(conjuncts):
                 rv_tuple_copy = deepcopy(rv_tuple)
                 rv.append(rv_tuple_copy)
 
