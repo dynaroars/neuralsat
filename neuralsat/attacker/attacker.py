@@ -2,6 +2,7 @@ from beartype import beartype
 import torch
 import random
 
+from util.misc.check import check_solution
 from .random_attack import RandomAttacker
 from .pgd_attack.general import attack
 from util.misc.logger import logger
@@ -56,6 +57,8 @@ class PGDAttacker:
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         assert torch.all(data_min <= data_max)
         x = (data_min[:, 0] + data_max[:, 0]) / 2
+        cs = self.objective.cs.to(self.device)
+        rhs = self.objective.rhs.to(self.device)
         
         # TODO: add timeout
         is_attacked, attack_images = attack(
@@ -63,8 +66,8 @@ class PGDAttacker:
             x=x, 
             data_min=data_min,
             data_max=data_max,
-            cs=self.objective.cs,
-            rhs=self.objective.rhs,
+            cs=cs,
+            rhs=rhs,
             attack_iters=iterations, 
             num_restarts=restarts,
         )
@@ -74,21 +77,12 @@ class PGDAttacker:
                 for i in range(attack_images.shape[1]): # restarts
                     for j in range(attack_images.shape[2]): # props
                         adv = attack_images[:, i, j]
-                        if self._check_adv(adv, data_min=data_min[:, j], data_max=data_max[:, j]):
+                        if check_solution(self.net, adv, cs=cs[j], rhs=rhs[j], data_min=data_min[:, j], data_max=data_max[:, j]):
                             return True, adv
             logger.debug("[!] Invalid counter-example")
             
         return False, None
 
-
-    @torch.no_grad()
-    def _check_adv(self, adv, data_min, data_max):
-        if torch.all(data_min <= adv) and torch.all(adv <= data_max):
-            output = self.net(adv).detach().cpu()
-            cond = torch.matmul(self.objective.cs, output.unsqueeze(-1)).squeeze(-1) - self.objective.rhs
-            return (cond.amax(dim=-1, keepdim=True) < 0.0).any(dim=-1).any(dim=-1)
-        return False
-    
     
     def __str__(self):
         return f'PGDAttack(seed={self.seed}, device={self.device})'
