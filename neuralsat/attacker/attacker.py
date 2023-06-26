@@ -2,6 +2,7 @@ from beartype import beartype
 import torch
 import random
 
+from .random_attack import RandomAttacker
 from .pgd_attack.general import attack
 from util.misc.logger import logger
 
@@ -12,19 +13,22 @@ class Attacker:
     
     @beartype
     def __init__(self, net, objective, input_shape, device) -> None:
-        self.attackers = [PGDAttacker(net, objective, input_shape, device=device)]
+        self.attackers = [
+            PGDAttacker(net, objective, input_shape, device=device),
+            RandomAttacker(net, objective, input_shape, device=device),
+        ]
  
     @beartype
-    def run(self):
-        return self._attack()
+    def run(self, timeout=0.5):
+        return self._attack(timeout=timeout)
 
     @beartype
-    def _attack(self) -> tuple[bool, None | torch.Tensor]:
+    def _attack(self, timeout: float) -> tuple[bool, None | torch.Tensor]:
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
             logger.info(atk)
-            is_attacked, adv = atk.run()
+            is_attacked, adv = atk.run(timeout=timeout)
             if is_attacked:
                 return is_attacked, adv
         return False, None
@@ -47,12 +51,13 @@ class PGDAttacker:
         torch.manual_seed(self.seed)
 
 
-    def run(self, iterations=100, restarts=20):
+    def run(self, iterations=100, restarts=20, timeout=1.0):
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         assert torch.all(data_min <= data_max)
         x = (data_min[:, 0] + data_max[:, 0]) / 2
         
+        # TODO: add timeout
         is_attacked, attack_images = attack(
             model=self.net,
             x=x, 

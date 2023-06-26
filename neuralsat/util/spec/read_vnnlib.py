@@ -251,7 +251,8 @@ def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input
         rv = []
 
         for rv_tuple in old_rv:
-            for c in tqdm.tqdm(conjuncts):
+            # for c in tqdm.tqdm(conjuncts):
+            for c in conjuncts:
                 rv_tuple_copy = deepcopy(rv_tuple)
                 rv.append(rv_tuple_copy)
 

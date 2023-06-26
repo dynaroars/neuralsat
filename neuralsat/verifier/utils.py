@@ -61,9 +61,9 @@ def _setup_restart(self, nth_restart):
     return True
 
 
-def _pre_attack(self, dnf_objectives):
+def _pre_attack(self, dnf_objectives, timeout=0.5):
     if Settings.use_attack:
-        return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run()
+        return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
     
 

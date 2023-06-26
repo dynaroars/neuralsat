@@ -37,13 +37,9 @@ if __name__ == '__main__':
     vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
-        # pass
-        # exit()
         
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
-    
-    # exit()
     
     START_TIME = time.time()
     # verifier
@@ -60,7 +56,12 @@ if __name__ == '__main__':
         bounds = spec[0]
         for prop_i in spec[1]:
             objectives.append(Objective((bounds, prop_i)))
-    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
+            
+    objectives = DnfObjectives(
+        objectives=objectives, 
+        input_shape=input_shape, 
+        is_nhwc=is_nhwc,
+    )
     
     # verify
     timeout = args.timeout - (time.time() - START_TIME)
@@ -68,7 +69,6 @@ if __name__ == '__main__':
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
-    print(f'{status},{time.time()-START_TIME:.04f}')
     if verifier.adv is not None:
         logger.info(f'adv (first 5): {verifier.adv.flatten()[:5].detach().cpu()}')
         
@@ -79,3 +79,5 @@ if __name__ == '__main__':
             print(status, file=fp)
             if verifier.adv is not None:
                 print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv)), file=fp)
+
+    print(f'{status},{time.time() - START_TIME:.04f}')
