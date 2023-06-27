@@ -1,5 +1,6 @@
 import torch.nn as nn
 import numpy as np
+import traceback
 import random
 import torch
 import copy
@@ -30,7 +31,7 @@ class NetworkAbstractor:
         self.method = method
         assert self.select_params(), print('Initialization failed')
         
-        logger.info(f'[!] Using mode="{self.mode}", method="{self.method}"')
+        logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}"')
 
         # check conversion correctness
         dummy = torch.randn(input_shape, device=self.device)
@@ -46,6 +47,9 @@ class NetworkAbstractor:
             ['matrix', self.method],
             ['matrix', 'backward'],
             ['matrix', 'forward'],
+            ['patches', 'forward'],
+            ['patches', 'backward'],
+            # ['matrix', 'crown-optimized'],
         ]
         
         for mode, method in params:
@@ -62,11 +66,11 @@ class NetworkAbstractor:
         bound_opts = {'relu': 'adaptive', 'conv_mode': mode}
         
         # if np.prod(self.input_shape) >= 100000:
-        #     bound_opts['crown_batch_size'] = 8
+        #     bound_opts['crown_batch_size'] = 4096
         #     bound_opts['forward_max_dim'] = 64
         #     bound_opts['dynamic_forward'] = True
         
-        logger.debug(f'Trying bound_opts: {bound_opts}')
+        # logger.debug(f'Trying bound_opts: {bound_opts}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
@@ -78,15 +82,20 @@ class NetworkAbstractor:
         
         
     def _check_module(self, method):
+        if np.prod(self.input_shape) >= 100000:
+            return True
+        
+        # return True
+        # torch.manual_seed(0)
         dummy = torch.rand(self.input_shape)
         ptb = PerturbationLpNorm(x_L=dummy, x_U=dummy+torch.rand(self.input_shape))
         x = BoundedTensor(ptb.x_L, ptb).to(self.device)
         
+        # self.net.compute_bounds(x=(x,), method=method)
         try:
             self.net.compute_bounds(x=(x,), method=method)
-        except IndexError:
-            return False
-        except NotImplementedError:
+        except (IndexError, RuntimeError, TypeError, NotImplementedError):
+            # traceback.print_exc()
             return False
         except:
             raise ValueError()

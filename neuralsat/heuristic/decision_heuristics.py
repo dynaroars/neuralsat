@@ -1,11 +1,12 @@
 from collections import defaultdict
 from torch import nn
 import numpy as np
+import random
 import torch
 
 from .util import _compute_babsr_scores
 
-LARGE = 1e4
+LARGE = 1e6
 SMALL = 1.0 / LARGE
 
 class DecisionHeuristic:
@@ -21,7 +22,11 @@ class DecisionHeuristic:
     def __call__(self, abstractor, domain_params):
         if self.input_split:
             return self.input_branching(domain_params=domain_params)
-         
+        
+        if self.random_selection:
+            if random.uniform(0, 1) > 0.7:
+                return self.naive_randomized_branching(domain_params=domain_params, mode=random.choice(['scale', 'distance', 'polarity']))
+            
         return self.filtered_smart_branching(
             abstractor=abstractor, 
             domain_params=domain_params,
@@ -171,10 +176,59 @@ class DecisionHeuristic:
                         break
         
         final_decision = sum(final_decision, [])
+        
+        # print(final_decision)
+        # if len(final_decision) > 7:
+        #     exit()
+            
         return final_decision
 
 
     def input_branching(self, domain_params, topk=1):
         final_decision = torch.topk(domain_params.input_uppers.flatten(1) - domain_params.input_lowers.flatten(1), topk, -1).indices
         return final_decision
+        
+
+    def naive_randomized_branching(self, domain_params, mode):
+        batch = len(domain_params.masks[0])
+        # print('shape', [l.shape for l in domain_params.lower_bounds[:-1]])
+        # print('lower', [l for l in domain_params.lower_bounds[:-1]])
+        # print('upper', [u for u in domain_params.upper_bounds[:-1]])
+        if mode == 'distance':
+            scores = [torch.min(u, -l) for (u, l) in zip(domain_params.upper_bounds[:-1], domain_params.lower_bounds[:-1])]
+        elif mode == 'polarity':
+            scores = [(u * l) / (l - u) for (u, l) in zip(domain_params.upper_bounds[:-1], domain_params.lower_bounds[:-1])]
+        elif mode == 'scale':
+            scores = [torch.min(u, -l) / (u + l).abs() for (u, l) in zip(domain_params.upper_bounds[:-1], domain_params.lower_bounds[:-1])]
+        else:
+            raise NotImplementedError()
+            
+        # print('mask', sum([s.sum() for s in domain_params.masks]))
+        # print('mask', [s.bool().shape for s in domain_params.masks])
+        # print('scores', [s for s in scores])
+        masked_scores = [torch.where(m.bool(), s, 0.0) for (s, m) in zip(scores, domain_params.masks)]
+        # print('masked_scores', [s for s in masked_scores])
+        # print('masked_scores', [s.shape for s in masked_scores])
+        # exit()
+        # best_scores = [s.topk(1, 1) for s in scores]
+        best_scores = [s.topk(1, 1) for s in masked_scores]
+        
+        # print('scores', scores)
+        
+        # print('best_scores', [s.values for s in best_scores])
+        best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
+        best_scores_all_layers_indices = torch.cat([s.indices for s in best_scores], dim=1).detach().cpu().numpy()
+        # print('best_scores', best_scores_all_layers)
+        # print('best_scores_indices', best_scores_all_layers_indices)
+        # print('best_scores', [s.indices for s in best_scores])
+        best_scores_all = best_scores_all_layers.topk(1, 1)
+        # print('best_scores_all', best_scores_all.values.flatten())
+        assert (best_scores_all.values > 0.0).all()
+        layer_ids = best_scores_all.indices[:, 0].detach().cpu().numpy()
+        assert len(layer_ids) == batch
+        # print(layer_ids)
+        decisions = [[layer_ids[b], best_scores_all_layers_indices[b, layer_ids[b]]] for b in range(batch)]
+        return decisions
+
+        # print()
         

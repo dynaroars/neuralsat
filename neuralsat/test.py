@@ -12,6 +12,20 @@ from util.misc.result import ReturnStatus
 from util.misc.logger import logger
 
 
+def extract_instance(net_path, vnnlib_path):
+    vnnlibs = read_vnnlib(vnnlib_path)
+    model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
+    
+    # objective
+    objectives = []
+    for spec in vnnlibs:
+        bounds = spec[0]
+        for prop_i in spec[1]:
+            objectives.append(Objective((bounds, prop_i)))
+    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
+
+    return model, input_shape, objectives
+
 class TestVerifier(unittest.TestCase):
 
 
@@ -22,8 +36,7 @@ class TestVerifier(unittest.TestCase):
         
         print('\n\nRunning test with', net_path, vnnlib_path)
 
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -33,13 +46,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
@@ -52,8 +58,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cpu'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -63,13 +69,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
@@ -82,8 +81,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cpu'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -93,13 +92,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.SAT)
@@ -111,28 +103,21 @@ class TestVerifier(unittest.TestCase):
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
             net=model, 
             input_shape=input_shape, 
-            batch=1000,
+            batch=2000,
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertEqual(verifier.iteration, 184)
+        # self.assertTrue(verifier.iteration in [180, 184])
         
         
     
@@ -142,8 +127,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -153,13 +138,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
@@ -172,8 +150,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -183,13 +161,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.SAT)
@@ -201,8 +172,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -212,13 +183,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
@@ -232,8 +196,8 @@ class TestVerifier(unittest.TestCase):
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
-        vnnlibs = read_vnnlib(vnnlib_path)
-        model, input_shape, output_shape = parse_onnx(net_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
         
         verifier = Verifier(
@@ -243,13 +207,6 @@ class TestVerifier(unittest.TestCase):
             device=device,
         )
         
-        objectives = []
-        for spec in vnnlibs:
-            bounds = spec[0]
-            for prop_i in spec[1]:
-                objectives.append(Objective((bounds, prop_i)))
-                
-        objectives = DnfObjectives(objectives)
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)

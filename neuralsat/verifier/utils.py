@@ -22,10 +22,6 @@ def _preprocess(self, objectives):
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
-    # debug only
-    if 0:
-        self.input_split = False
-        raise ValueError('Debug only')
 
 
 def _check_timeout(self, timeout):
@@ -54,7 +50,6 @@ def _setup_restart(self, nth_restart):
     
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
-        logger.debug('Initialized abstractor')
         self.abstractor = NetworkAbstractor(
             pytorch_model=self.net, 
             input_shape=self.input_shape, 
@@ -66,9 +61,9 @@ def _setup_restart(self, nth_restart):
     return True
 
 
-def _pre_attack(self, dnf_objectives):
+def _pre_attack(self, dnf_objectives, timeout=0.5):
     if Settings.use_attack:
-        return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run()
+        return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
     
 
@@ -125,10 +120,3 @@ def _get_learned_conflict_clauses(self):
         return self.domains_list.all_conflict_clauses
     return []
 
-
-def _fake_learned_clauses():
-    return [eval(line) for line in open('./solver/clauses_oval21.txt').read().strip().split('\n') if line.startswith('[')]
-    return [eval(line) for line in open('./solver/clauses_cnn.txt').read().strip().split('\n')]
-    return [eval(line) for line in open('./solver/clauses.txt').read().strip().split('\n')]
-    
-    

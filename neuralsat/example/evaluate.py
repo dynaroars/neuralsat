@@ -24,7 +24,7 @@ def evaluate_one(net_path, vnnlib_path, device='cuda', batch=1000):
     )
 
     vnnlibs = read_vnnlib(vnnlib_path)
-    model, input_shape, output_shape = parse_onnx(net_path)
+    model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     model.to(device)
     
     verifier = Verifier(
@@ -40,7 +40,7 @@ def evaluate_one(net_path, vnnlib_path, device='cuda', batch=1000):
         for prop_i in spec[1]:
             objectives.append(Objective((bounds, prop_i)))
             
-    objectives = DnfObjectives(objectives)
+    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
     tic = time.time()
     status = verifier.verify(objectives)
     

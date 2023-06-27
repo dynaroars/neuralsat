@@ -61,11 +61,6 @@ class Verifier:
             learned_clauses = []
             nth_restart = 0 
             
-            #################### DEBUG ####################
-            # from .utils import _fake_learned_clauses
-            # learned_clauses = _fake_learned_clauses()
-            #################### END DEBUG ####################
-            
             # verify objective (multiple times if RESTART is returned)
             while True:
                 # get strategy
@@ -80,7 +75,6 @@ class Verifier:
                     preconditions=preconditions+learned_clauses, 
                     timeout=timeout
                 )
-
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT]:
                     return status 
@@ -166,6 +160,7 @@ class Verifier:
 
         # step 3: branching
         decisions = self.decision(self.abstractor, pick_ret)
+        # print(decisions)
 
         # step 4: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
@@ -186,6 +181,8 @@ class Verifier:
         logger.info(f'[{"Input" if self.input_split else "Hidden"} domain] '
                     f'Iteration: {self.iteration:<6} '
                     f'Remaining: {len(self.domains_list):<10} Visited: {self.domains_list.visited}')
+        
+        # print((pick_ret.input_uppers - pick_ret.input_lowers).sum().detach().cpu(), abstraction_ret.output_lbs.detach().cpu().flatten())
         
         
     def _check_full_assignment(self, domain_params):
