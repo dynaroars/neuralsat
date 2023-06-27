@@ -1,3 +1,5 @@
+#!/bin/bash
+
 TOOL_NAME=neuralsat
 VERSION_STRING=v1
 
