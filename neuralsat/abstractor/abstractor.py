@@ -45,11 +45,12 @@ class NetworkAbstractor:
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
-            ['matrix', 'backward'],
-            ['matrix', 'forward'],
-            ['patches', 'forward'],
+            
             ['patches', 'backward'],
-            # ['matrix', 'crown-optimized'],
+            ['matrix', 'backward'],
+            
+            ['patches', 'forward'],
+            ['matrix', 'forward'],
         ]
         
         for mode, method in params:
@@ -65,15 +66,10 @@ class NetworkAbstractor:
     def _init_module(self, mode):
         bound_opts = {'relu': 'adaptive', 'conv_mode': mode}
         
-        # if np.prod(self.input_shape) >= 100000:
-        #     bound_opts['crown_batch_size'] = 4096
-        #     bound_opts['forward_max_dim'] = 64
-        #     bound_opts['dynamic_forward'] = True
-        
         # logger.debug(f'Trying bound_opts: {bound_opts}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
-            global_input=torch.zeros(self.input_shape, device=self.device),
+            global_input=torch.randn(self.input_shape, device=self.device),
             bound_opts=bound_opts,
             device=self.device,
             verbose=False,
@@ -87,18 +83,19 @@ class NetworkAbstractor:
         
         # return True
         # torch.manual_seed(0)
-        dummy = torch.rand(self.input_shape)
-        ptb = PerturbationLpNorm(x_L=dummy, x_U=dummy+torch.rand(self.input_shape))
+        
+        # at least can run with batch=1
+        dummy = torch.rand(2, *self.input_shape[1:])
+        ptb = PerturbationLpNorm(x_L=dummy, x_U=dummy+torch.rand(2, *self.input_shape[1:]))
         x = BoundedTensor(ptb.x_L, ptb).to(self.device)
         
-        # self.net.compute_bounds(x=(x,), method=method)
         try:
             self.net.compute_bounds(x=(x,), method=method)
-        except (IndexError, RuntimeError, TypeError, NotImplementedError):
+        except KeyboardInterrupt:
+            exit()
+        except:
             # traceback.print_exc()
             return False
-        except:
-            raise ValueError()
         else:
             return True
         

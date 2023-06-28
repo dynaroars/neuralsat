@@ -13,6 +13,18 @@ from beartype import beartype
 
 USE_ONNX2PYTORCH = True
 
+custom_quirks = {
+    'Reshape': {
+        'fix_batch_size': True
+    },
+    'Transpose': {
+        'merge_batch_size_with_channel': True,
+        # 'remove_spare_permute': True
+    },
+    'Softmax' :{
+        'skip_last_layer': True
+    }
+}
 
 @beartype
 def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -53,14 +65,6 @@ def parse_onnx(path: str) -> tuple:
     # print(batched_input_shape, batched_output_shape)
     # exit()
     if USE_ONNX2PYTORCH:
-        custom_quirks = {
-            'Reshape': {
-                'fix_batch_size': True
-            },
-            'Transpose': {
-                'merge_batch_size_with_channel': True
-            },
-        }
         pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
         pytorch_model.eval()
     else:
@@ -69,7 +73,11 @@ def parse_onnx(path: str) -> tuple:
     # exit()
     
     is_nhwc = pytorch_model.is_nhwc
-    # print(batched_input_shape)
+    
+    if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
+        custom_quirks['Softmax']['skip_last_layer'] = pytorch_model.is_last_removed
+    
+    # print('nhwc:', is_nhwc, batched_input_shape)
     
     # check conversion
     correct_conversion = True
@@ -87,7 +95,7 @@ def parse_onnx(path: str) -> tuple:
         import traceback; print(traceback.format_exc())
         exit()
 
-    if not correct_conversion:
+    if not correct_conversion and not custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
         print('Model was converted incorrectly.')
         exit()
     # else:

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import time
 
+from util.network.read_onnx import custom_quirks
 
 class DnfObjectives:
     
@@ -114,6 +115,9 @@ class Objective:
 
         self.cs = torch.tensor(prop_mat, dtype=self.dtype)
         self.rhs = torch.tensor(prop_rhs, dtype=self.dtype)
+        
+        if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
+            assert (self.rhs == 0).all()
 
         true_labels, target_labels = [], []
         for m in prop_mat:
