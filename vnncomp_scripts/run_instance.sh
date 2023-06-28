@@ -7,7 +7,7 @@ if [[ -z "${NEURALSAT_PY}" ]]; then
 fi
 
 if [[ -z "${NEURALSAT_MAIN}" ]]; then
-        NEURALSAT_MAIN=$(dirname $(pwd))/neuralsat/main.py
+        NEURALSAT_MAIN=$(dirname $(dirname $(realpath $0)))/neuralsat/main.py
 fi
 
 
