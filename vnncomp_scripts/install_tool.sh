@@ -9,7 +9,7 @@ CONDA=$CONDA_HOME/bin/conda
 NEURALSAT_CONDA_HOME=~/.conda/envs/neuralsat
 NEURALSAT_PY=$NEURALSAT_CONDA_HOME/bin/python
 
-NEURALSAT_HOME=$(dirname $(pwd))
+NEURALSAT_HOME=$(dirname $(dirname $(realpath $0)))
 NEURALSAT_MAIN=$NEURALSAT_HOME/neuralsat/main.py
 
 
