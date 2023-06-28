@@ -264,10 +264,38 @@ class NetConv(nn.Module):
         x = self.l2(x)
         return x
     
-def test_conv1():
-    net = NetConv()
     
-    x = torch.randn(1, 5)
+    
+class NetConv2(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.c1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, bias=False)
+        self.c2 = nn.Conv2d(16, 32, kernel_size=2, stride=1, bias=False)
+        self.l1 = nn.Linear(23328, 43, bias=False)
+
+    def forward(self, x):
+        x = self.c1(x)
+        x = x.sign()
+        x = torch.add(x, 0.1)
+        x = x.sign()
+        # x = torch.where(x > 0.0, 1.0, -1.0).float()
+        # x[x >= 0] = 1.0
+        # x[x < 0] = -1.0
+        x = self.c2(x)
+        x = x.permute(0, 2, 3, 1)
+        x = x.reshape(-1, 23328)
+        # x = torch.where(x > 0.0, 1.0, -1.0).float()
+        x = self.l1(x)
+        return x
+    
+def test_conv1():
+    torch.manual_seed(0)
+    net = NetConv2()
+    
+    
+    x = torch.randn(1, 3, 30, 30)
     print(net(x).shape)
    
     net.eval()

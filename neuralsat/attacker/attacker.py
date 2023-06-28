@@ -15,8 +15,8 @@ class Attacker:
     @beartype
     def __init__(self, net, objective, input_shape, device) -> None:
         self.attackers = [
-            PGDAttacker(net, objective, input_shape, device=device),
             RandomAttacker(net, objective, input_shape, device=device),
+            PGDAttacker(net, objective, input_shape, device=device),
         ]
  
     @beartype
