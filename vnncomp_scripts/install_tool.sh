@@ -39,7 +39,7 @@ rm ./conda.sh
 echo "======= Installing conda env ======="
 $CONDA env remove -p $NEURALSAT_CONDA_HOME
 rm -rf $NEURALSAT_CONDA_HOME
-$CONDA  env create -p $NEURALSAT_CONDA_HOME -f ../env.yaml
+$CONDA  env create -p $NEURALSAT_CONDA_HOME -f $NEURALSAT_HOME/env.yaml
 
 
 # setup alias
