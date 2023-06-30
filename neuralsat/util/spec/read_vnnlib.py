@@ -163,7 +163,7 @@ def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input
     comparison_str = r"\((<=|>=) (\S+) (\S+)\)"
 
     # example: "(and (<= Y_0 Y_2)(<= Y_1 Y_2))"
-    dnf_clause_str = r"\(and (" + comparison_str + r")+\)"
+    dnf_clause_str = r"\(and\s*(" + comparison_str + r")+\)"
 
     # example: "(assert (<= Y_0 Y_1))"
     regex_simple_assert = re.compile(r"^\(assert " + comparison_str + r"\)$")
@@ -227,7 +227,9 @@ def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input
 
         ################
         groups = regex_dnf.findall(line)
-        assert groups, f"failed parsing line: {line}"
+        if not groups:
+            logger.info(f"[VNNLIB] Skipped parsing line: {line}.")
+            continue
 
         tokens = line.replace("(", " ").replace(")", " ").split()
         tokens = tokens[2:]  # skip 'assert' and 'or'
@@ -251,8 +253,12 @@ def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input
         rv = []
 
         for rv_tuple in old_rv:
-            # for c in tqdm.tqdm(conjuncts):
-            for c in conjuncts:
+            if len(conjuncts) > 10:
+                pbar = tqdm.tqdm(conjuncts)
+            else:
+                pbar = conjuncts
+
+            for c in pbar:
                 rv_tuple_copy = deepcopy(rv_tuple)
                 rv.append(rv_tuple_copy)
 

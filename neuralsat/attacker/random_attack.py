@@ -11,6 +11,9 @@ class RandomAttacker:
         self.input_shape = input_shape
         self.device = device
 
+        if np.prod(self.input_shape) >= 200:
+            return None
+        
         self.n_runs = 10
         self.n_samples = 50
         self.n_pos_samples = int(self.n_samples * 0.1)

@@ -89,6 +89,8 @@ class NetworkAbstractor:
         ptb = PerturbationLpNorm(x_L=dummy, x_U=dummy+torch.rand(2, *self.input_shape[1:]))
         x = BoundedTensor(ptb.x_L, ptb).to(self.device)
         
+        # print(self.net.compute_bounds(x=(x,), method=method)[0])
+        
         try:
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:
