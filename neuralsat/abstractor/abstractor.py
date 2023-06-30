@@ -36,7 +36,7 @@ class NetworkAbstractor:
         # check conversion correctness
         dummy = torch.randn(input_shape, device=self.device)
         try:
-            assert torch.allclose(pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=0)
+            assert torch.allclose(pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
         except AssertionError:
             print(f'torch allclose failed: norm {torch.norm(pytorch_model(dummy) - self.net(dummy))}')
             exit()

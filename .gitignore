@@ -1,6 +1,6 @@
 benchmark/
-example/*/*.csv
-example/*.csv
+neuralsat/example/*/*.csv
+neuralsat/example/*.csv
 
 neuralsat/onnx2pytorch*
 neuralsat/auto_LiRPA*
