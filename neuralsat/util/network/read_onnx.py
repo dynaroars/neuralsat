@@ -49,7 +49,7 @@ def add_batch(shape: tuple) -> tuple:
 
 @beartype
 def _parse_onnx(path: str) -> tuple:
-    print('Loading ONNX with customized quirks:', custom_quirks)
+    # print('Loading ONNX with customized quirks:', custom_quirks)
     onnx_model = onnx.load(path)
     
     onnx_inputs = [node.name for node in onnx_model.graph.input]
@@ -122,7 +122,7 @@ def parse_onnx(path: str) -> tuple:
         try:
             return _parse_onnx(path)
         except OnnxOutputAllCloseError:
-            print(f'[{i}] Model was converted incorrectly. Try again.')
+            # print(f'[{i}] Model was converted incorrectly. Try again.')
             i += 1
             continue
         except OnnxConversionError:

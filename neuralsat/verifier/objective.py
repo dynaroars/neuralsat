@@ -54,25 +54,21 @@ class DnfObjectives:
         if not isinstance(objective.rhs, torch.Tensor):
             objective.rhs = torch.cat(objective.rhs)[None]
             
-        objective.true_labels = self.true_labels[self.num_used : self.num_used + batch]
-        objective.target_labels = self.target_labels[self.num_used : self.num_used + batch]
         self.num_used += batch
         return objective
         
     
     def _extract(self):
-        self.cs, self.rhs, self.true_labels, self.target_labels = [], [], [], []
+        self.cs, self.rhs = [], []
         self.lower_bounds, self.upper_bounds = [], []
         
         for objective in self.objectives:
             self.lower_bounds.append(objective.lower_bound)
             self.upper_bounds.append(objective.upper_bound)
 
-            c_, rhs_, true_label_, target_label_ = objective.get_info()
+            c_, rhs_ = objective.get_info()
             self.cs.append(c_)
             self.rhs.append(rhs_)
-            self.true_labels.append(true_label_)
-            self.target_labels.append(target_label_)
             
         # input bounds
         self.lower_bounds = torch.stack(self.lower_bounds)
@@ -84,12 +80,13 @@ class DnfObjectives:
         if all([_.shape[0] == self.rhs[0].shape[0] for _ in self.rhs]):
             self.rhs = torch.stack(self.rhs)
             
-        self.true_labels = np.array(self.true_labels)
-        self.target_labels = np.array(self.target_labels)
             
-    
+    def add(self, objective):
+        self.num_used -= len(objective.cs)
+        
+
     def get_info(self):
-        return self.cs, self.rhs, self.true_labels, self.target_labels
+        return self.cs, self.rhs
     
     
 class Objective:
@@ -140,5 +137,5 @@ class Objective:
 
     
     def get_info(self):
-        return self.cs, self.rhs, self.true_labels, self.target_labels
+        return self.cs, self.rhs
         

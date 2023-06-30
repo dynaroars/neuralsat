@@ -37,6 +37,16 @@ class Verifier:
         # debug
         self.iteration = 0
         
+        
+    def get_objective(self, dnf_objectives):
+        if self.input_split:
+            objective = dnf_objectives.pop(self.batch)
+        elif Settings.use_restart:
+            objective = dnf_objectives.pop(1)
+        else:
+            objective = dnf_objectives.pop(self.batch)
+        return objective
+    
     
     def verify(self, dnf_objectives, preconditions=[], timeout=3600):
         self.start_time = time.time()
@@ -50,14 +60,7 @@ class Verifier:
         
         # verify
         while len(dnf_objectives):
-            if self.input_split:
-                objective = dnf_objectives.pop(self.batch)
-            elif Settings.use_restart:
-                objective = dnf_objectives.pop(1)
-            else:
-                objective = dnf_objectives.pop(self.batch)
-                
-            logger.info(f'Verifying: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
+            objective = self.get_objective(dnf_objectives)
             
             # restart variables
             learned_clauses = []
@@ -73,7 +76,7 @@ class Verifier:
                 
                 # adaptive batch size
                 while True: 
-                    logger.info(f'Try batch size {self.batch}')
+                    logger.debug(f'Try batch size {self.batch}')
                     try:
                         # main function
                         status = self._verify(
@@ -87,6 +90,8 @@ class Verifier:
                                 # cannot find a suitable batch size to fit this device
                                 return ReturnStatus.UNKNOWN
                             self.batch = self.batch // 2
+                            dnf_objectives.add(objective)
+                            objective = self.get_objective(dnf_objectives)
                             continue
                         else:
                             raise NotImplementedError
@@ -107,6 +112,8 @@ class Verifier:
                     nth_restart += 1
                     continue
                 raise NotImplementedError()
+            
+            logger.info(f'Verified: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
             
         return ReturnStatus.UNSAT  
         
