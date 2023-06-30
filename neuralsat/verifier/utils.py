@@ -16,7 +16,7 @@ from setting import Settings
 def _preprocess(self, objectives):
     # determine search algorithm
     eps = (objectives.upper_bounds - objectives.lower_bounds).max().item()
-    logger.info(f'[!] eps = {eps}')
+    logger.info(f'[!] eps = {eps:.06f}')
     if eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= 200: # small inputs
