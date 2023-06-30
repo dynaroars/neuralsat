@@ -5,11 +5,13 @@ import copy
 
 from auto_LiRPA.utils import stop_criterion_batch_any
 
+from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
 from heuristic.util import compute_masks
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
+
 from setting import Settings
 
 import warnings
@@ -69,12 +71,31 @@ class Verifier:
                 
                 # TODO: refinement
                 
-                # main function
-                status = self._verify(
-                    objective=objective, 
-                    preconditions=preconditions+learned_clauses, 
-                    timeout=timeout
-                )
+                # adaptive batch size
+                while True: 
+                    logger.info(f'Try batch size {self.batch}')
+                    try:
+                        # main function
+                        status = self._verify(
+                            objective=objective, 
+                            preconditions=preconditions+learned_clauses, 
+                            timeout=timeout
+                        )
+                    except RuntimeError as exception:
+                        if is_cuda_out_of_memory(exception):
+                            if self.batch == 1:
+                                # cannot find a suitable batch size to fit this device
+                                return ReturnStatus.UNKNOWN
+                            self.batch = self.batch // 2
+                            continue
+                        else:
+                            raise NotImplementedError
+                    except:
+                        raise NotImplementedError
+                    else:
+                        gc_cuda()
+                        break
+                    
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT]:
                     return status 

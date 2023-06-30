@@ -1,15 +1,18 @@
+from beartype import beartype
 import onnxruntime as ort
 import torch.nn as nn
 import onnx2pytorch
 import numpy as np
 import collections
 # import onnx2torch
+import traceback
 import warnings
 import torch
 import onnx
 import gzip
 
-from beartype import beartype
+from util.misc.error import *
+
 
 USE_ONNX2PYTORCH = True
 
@@ -45,7 +48,8 @@ def add_batch(shape: tuple) -> tuple:
         
 
 @beartype
-def parse_onnx(path: str) -> tuple:
+def _parse_onnx(path: str) -> tuple:
+    print('Loading ONNX with customized quirks:', custom_quirks)
     onnx_model = onnx.load(path)
     
     onnx_inputs = [node.name for node in onnx_model.graph.input]
@@ -62,15 +66,12 @@ def parse_onnx(path: str) -> tuple:
     batched_input_shape = add_batch(orig_input_shape)
     batched_output_shape = add_batch(orig_output_shape)
 
-    # print(batched_input_shape, batched_output_shape)
-    # exit()
     if USE_ONNX2PYTORCH:
         pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
         pytorch_model.eval()
     else:
         pytorch_model = onnx2torch.convert(path)
         pytorch_model.eval()
-    # exit()
     
     is_nhwc = pytorch_model.is_nhwc
     
@@ -89,15 +90,12 @@ def parse_onnx(path: str) -> tuple:
         # print('output_onnx:', output_onnx)
         output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
-        correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-4, 1e-5)
+        correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
     except:
-        warnings.warn(f'Unable to check conversion correctness')
-        import traceback; print(traceback.format_exc())
-        exit()
+        raise OnnxConversionError
 
     if not correct_conversion and not custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
-        print('Model was converted incorrectly.')
-        exit()
+        raise OnnxOutputAllCloseError
     # else:
     #     print(pytorch_model)
     #     print(output_onnx)
@@ -105,6 +103,7 @@ def parse_onnx(path: str) -> tuple:
     #     print(batched_input_shape)
     #     print(batched_output_shape)
     #     print('DEBUG: correct')
+    #     exit()
         
     if is_nhwc:
         assert len(batched_input_shape) == 4
@@ -113,3 +112,30 @@ def parse_onnx(path: str) -> tuple:
     
     return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
 
+
+
+@beartype
+def parse_onnx(path: str) -> tuple:
+    i = 0
+    while True:
+        # print('try', i)
+        try:
+            return _parse_onnx(path)
+        except OnnxOutputAllCloseError:
+            print(f'[{i}] Model was converted incorrectly. Try again.')
+            i += 1
+            continue
+        except OnnxConversionError:
+            if custom_quirks['Reshape']['fix_batch_size']:
+                custom_quirks['Reshape']['fix_batch_size'] = False
+                continue
+            else:
+                warnings.warn(f'Unable to convert onnx to pytorch model')
+                traceback.print_exc()
+                exit()
+        except:
+            warnings.warn(f'Unable to convert onnx to pytorch model')
+            traceback.print_exc()
+            exit()
+            
+            
