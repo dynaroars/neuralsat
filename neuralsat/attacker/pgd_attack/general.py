@@ -8,7 +8,7 @@ from .util import get_loss, check_adv_multi, serialize_specs
 from util.misc.adam_clipping import AdamClipping
 
 
-def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts=10):
+def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts=30):
     # set all parameters without gradient, this can speedup things significantly.
     grad_status = {}
     for p in model.parameters():
@@ -65,11 +65,11 @@ def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts
 
 
 def general_attack(model, X, data_min, data_max, serialized_conditions, 
-                   use_gama=False, num_restarts=10, attack_iters=100, only_replicate_restarts=False):
+                   use_gama=False, num_restarts=10, attack_iters=100, 
+                   only_replicate_restarts=False):
     # hyper params
     lr_decay = 0.99
     gama_lambda = 10
-    normalize=lambda x: x
 
     # shapes
     input_shape = (X.shape[0], *X.shape[2:]) if only_replicate_restarts else X.size()
@@ -89,23 +89,26 @@ def general_attack(model, X, data_min, data_max, serialized_conditions,
 
     delta_lower_limit = data_min - X
     delta_upper_limit = data_max - X
-    delta = (torch.empty_like(X).uniform_() * (delta_upper_limit - delta_lower_limit) + delta_lower_limit).requires_grad_()
     
+    lr = torch.max(data_max - data_min).item() / 8
+    delta = (torch.empty_like(X).uniform_() * (delta_upper_limit - delta_lower_limit) + delta_lower_limit).requires_grad_()
+        
     # optimizer
-    opt = AdamClipping(params=[delta], lr=torch.max(data_max - data_min).item() / 8)
+    opt = AdamClipping(params=[delta], lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(opt, lr_decay)
 
     for _ in range(attack_iters):
-        inputs = normalize(X + delta)
+        inputs = torch.max(torch.min((X + delta), data_max), data_min)
         output = model(inputs.view(-1, *input_shape[1:])).view(input_shape[0], *extra_dim, num_classes)
-        origin_out = torch.softmax(model(normalize(X.reshape(-1, *input_shape[1:]))), 1).view(output.shape) if use_gama else None
-
-        loss = get_loss(origin_out, output, serialized_conditions, gama_lambda if use_gama else 0.0)
-        loss.sum().backward()
-
+        
         # early stop
         if check_adv_multi(inputs, output, serialized_conditions, data_max, data_min):
             return inputs
+        
+        origin_out = torch.softmax(model(X.reshape(-1, *input_shape[1:])), 1).view(output.shape) if use_gama else None
+
+        loss = get_loss(origin_out, output, serialized_conditions, gama_lambda if use_gama else 0.0)
+        loss.sum().backward()
 
         # optimize
         opt.step(clipping=True, lower_limit=delta_lower_limit, upper_limit=delta_upper_limit, sign=1)

@@ -41,7 +41,6 @@ class PGDAttacker:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape
-        self.dtype = torch.get_default_dtype()
         self.device = device
         self.seed = None
 
@@ -52,7 +51,7 @@ class PGDAttacker:
         torch.manual_seed(self.seed)
 
 
-    def run(self, iterations=100, restarts=20, timeout=1.0):
+    def run(self, iterations=50, restarts=20, timeout=1.0):
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         assert torch.all(data_min <= data_max)
@@ -71,7 +70,7 @@ class PGDAttacker:
             attack_iters=iterations, 
             num_restarts=restarts,
         )
-
+        
         if is_attacked:
             with torch.no_grad():
                 for i in range(attack_images.shape[1]): # restarts

@@ -13,17 +13,6 @@ def serialize_specs(x, cs, rhs):
     
     
 def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
-    '''
-    Whether the output satisfies the specifiction conditions.
-    If the output satisfies the specification for adversarial examples, this function returns True, otherwise False.
-
-    input: [num_exampele, num_restarts, num_or_spec, *input_shape]
-    output: [num_example, num_restarts, num_or_spec, num_output]
-    cs_mat: [num_example, num_restarts, num_spec, num_output] or [num_example, num_spec, num_output]
-    rhs_mat: [num_example, num_spec]
-    cond_mat: [[]] * num_examples
-    data_max & data_min: [num_example, num_spec, *input_shape]
-    '''
     cs_mat, rhs_mat, cond_mat = serialized_conditions
     if len(cond_mat[0]) == rhs_mat.shape[-1]:
         assert all([cond_mat[0][0] == i for i in cond_mat[0]])
@@ -37,7 +26,7 @@ def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
         # [num_example, restarts, num_all_spec, output_dim]
         valid = valid.all(-1).view(valid.shape[0], valid.shape[1], len(cond_mat[0]), -1)
         # [num_example, restarts, num_or_spec, num_and_spec]
-        res = ((cond.amax(dim=-1, keepdim=True) < 0.0) & valid).any(dim=-1).any(dim=-1).any(dim=-1)    
+        res = ((cond.amax(dim=-1, keepdim=True) < 0.0) & valid).any(dim=-1).any(dim=-1).any(dim=-1)  
     else:
         output = output.repeat_interleave(torch.tensor(cond_mat[0]).to(output.device), dim=2)
         # [num_example, num_restarts, num_spec, num_output]
@@ -80,14 +69,6 @@ def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
 
 
 def get_loss(origin_out, output, serialized_conditions, gama_lambda=0, threshold=-1e-5):
-    '''
-    output: [num_example, num_restarts, num_or_spec, num_output]
-    cs_mat: [num_example, num_restarts, num_spec, num_output]
-    rhs_mat: [num_example, num_spec]
-    cond_mat: [[]] * num_examples
-    gama_lambda: weight factor for gama loss. If true, sum the loss and return the sum of loss
-    threshold: the threshold for hinge loss
-    '''
     cs_mat, rhs_mat, cond_mat = serialized_conditions
     if rhs_mat.shape[-1] == len(cond_mat[0]):
         assert all([cond_mat[0][0] == i for i in cond_mat[0]])

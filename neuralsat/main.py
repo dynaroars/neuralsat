@@ -71,6 +71,7 @@ if __name__ == '__main__':
     logger.info(f'[!] Iterations: {verifier.iteration}')
     if verifier.adv is not None:
         logger.info(f'adv (first 5): {verifier.adv.flatten()[:5].detach().cpu()}')
+        logger.debug(f'output: {verifier.net(verifier.adv).flatten().detach().cpu()}')
         
     # export
     if args.result_file:

@@ -32,7 +32,7 @@ echo "Running Neuralsat in category '$CATEGORY' with onnx file '$ONNX_FILE', vnn
 
 rm -f $RESULTS_FILE
 
-$NEURALSAT_PY $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=0  >  $RESULTS_FILE  2>/dev/null
+$NEURALSAT_PY $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity 0 --result_file $RESULTS_FILE
 
 if [ $? -ne 0 ]; then
   echo error > $RESULTS_FILE
