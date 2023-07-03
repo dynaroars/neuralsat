@@ -35,7 +35,7 @@ def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, ma
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1)) 
 
         # bias
-        b_temp = _get_bias_term(layer.inputs[0]) * ratio
+        b_temp = _get_bias_term(layer.inputs[0], ratio)
         
         # branching scores, higher score is better
         ratio_temp_0 = ratio_temp_0.unsqueeze(1)
@@ -74,7 +74,7 @@ def _compute_ratio(lower_bound, upper_bound):
     return slope_ratio, intercept
 
     
-def _get_bias_term(input_node):
+def _get_bias_term(input_node, ratio):
     if type(input_node) == BoundConv:
         if len(input_node.inputs) > 2:
             bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
@@ -100,7 +100,7 @@ def _get_bias_term(input_node):
     else: 
         raise NotImplementedError()
     
-    return bias
+    return bias * ratio
     
     
 def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, literal, batch_idx):

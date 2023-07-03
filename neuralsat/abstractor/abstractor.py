@@ -29,19 +29,23 @@ class NetworkAbstractor:
         
         # computation algorithm
         self.method = method
-        assert self.select_params(), print('Initialization failed')
+        
+        
+    def setup(self, objective):
+        assert self.select_params(objective), print('Initialization failed')
         
         logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}"')
 
         # check conversion correctness
-        dummy = torch.randn(input_shape, device=self.device)
+        dummy = torch.randn(self.input_shape, device=self.device)
         try:
-            assert torch.allclose(pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
+            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
         except AssertionError:
-            print(f'torch allclose failed: norm {torch.norm(pytorch_model(dummy) - self.net(dummy))}')
+            print(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
             exit()
             
-    def select_params(self):
+            
+    def select_params(self, objective):
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
@@ -54,9 +58,9 @@ class NetworkAbstractor:
         ]
         
         for mode, method in params:
-            # print('try', mode, method)
+            logger.debug(f'Try {mode}, {method}')
             self._init_module(mode)
-            if self._check_module(method):
+            if self._check_module(method, objective):
                 self.mode = mode
                 self.method = method
                 return True
@@ -77,19 +81,14 @@ class NetworkAbstractor:
         self.net.eval()
         
         
-    def _check_module(self, method):
+    def _check_module(self, method, objective):
         if np.prod(self.input_shape) >= 100000:
             return True
         
-        # return True
-        # torch.manual_seed(0)
-        
         # at least can run with batch=1
-        dummy = torch.rand(2, *self.input_shape[1:])
-        ptb = PerturbationLpNorm(x_L=dummy, x_U=dummy+torch.rand(2, *self.input_shape[1:]))
-        x = BoundedTensor(ptb.x_L, ptb).to(self.device)
-        
-        # print(self.net.compute_bounds(x=(x,), method=method)[0])
+        x_L = objective.lower_bounds[0].view(self.input_shape)
+        x_U = objective.upper_bounds[0].view(self.input_shape)
+        x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
         
         try:
             self.net.compute_bounds(x=(x,), method=method)

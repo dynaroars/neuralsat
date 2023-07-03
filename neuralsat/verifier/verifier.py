@@ -69,7 +69,7 @@ class Verifier:
             # verify objective (multiple times if RESTART is returned)
             while True:
                 # get strategy
-                if not self._setup_restart(nth_restart):
+                if not self._setup_restart(nth_restart, objective):
                     return ReturnStatus.UNKNOWN
                 
                 # TODO: refinement

@@ -26,7 +26,10 @@ custom_quirks = {
     },
     'Softmax' :{
         'skip_last_layer': True
-    }
+    },
+    'Conv' :{
+        'merge_batch_norm': True
+    },
 }
 
 @beartype
@@ -94,12 +97,13 @@ def _parse_onnx(path: str) -> tuple:
     except:
         raise OnnxConversionError
 
+    if not correct_conversion and custom_quirks.get('Conv', {}).get('merge_batch_norm', False):
+        raise OnnxMergeBatchNormError
+    
     if not correct_conversion and not custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
         raise OnnxOutputAllCloseError
     # else:
     #     print(pytorch_model)
-    #     print(output_onnx)
-    #     print(output_pytorch)
     #     print(batched_input_shape)
     #     print(batched_output_shape)
     #     print('DEBUG: correct')
@@ -116,14 +120,14 @@ def _parse_onnx(path: str) -> tuple:
 
 @beartype
 def parse_onnx(path: str) -> tuple:
-    i = 0
     while True:
-        # print('try', i)
         try:
             return _parse_onnx(path)
+        except OnnxMergeBatchNormError:
+            custom_quirks['Conv']['merge_batch_norm'] = False
+            continue
         except OnnxOutputAllCloseError:
             # print(f'[{i}] Model was converted incorrectly. Try again.')
-            i += 1
             continue
         except OnnxConversionError:
             if custom_quirks['Reshape']['fix_batch_size']:
@@ -133,6 +137,8 @@ def parse_onnx(path: str) -> tuple:
                 warnings.warn(f'Unable to convert onnx to pytorch model')
                 traceback.print_exc()
                 exit()
+        except SystemExit:
+            exit()
         except:
             warnings.warn(f'Unable to convert onnx to pytorch model')
             traceback.print_exc()

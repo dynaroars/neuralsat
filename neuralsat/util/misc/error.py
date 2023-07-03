@@ -7,3 +7,6 @@ class OnnxConversionError(Exception):
 class OnnxOutputAllCloseError(Exception):
     pass
 
+
+class OnnxMergeBatchNormError(Exception):
+    pass

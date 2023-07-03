@@ -23,13 +23,16 @@ def _preprocess(self, objectives):
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
+        
+    if len(objectives) >= 50:
+        Settings.use_restart = False
 
 
 def _check_timeout(self, timeout):
     return time.time() - self.start_time > timeout 
 
 
-def _setup_restart(self, nth_restart):
+def _setup_restart(self, nth_restart, objective):
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
         return False
@@ -58,6 +61,8 @@ def _setup_restart(self, nth_restart):
             input_split=self.input_split,
             device=self.device,
         )
+        
+        self.abstractor.setup(objective)
     
     return True
 
