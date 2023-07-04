@@ -359,6 +359,9 @@ class NetworkAbstractor:
         )
 
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.mode}, {self.method})'
+        
     from .utils import (
         get_slope, set_slope,
         get_beta, set_beta, reset_beta, 

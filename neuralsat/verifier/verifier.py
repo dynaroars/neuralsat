@@ -56,7 +56,7 @@ class Verifier:
         if is_attacked:
             return ReturnStatus.SAT  
 
-        self._preprocess(copy.deepcopy(dnf_objectives))
+        dnf_objectives = self._preprocess(dnf_objectives)
         
         # verify
         while len(dnf_objectives):
@@ -244,7 +244,7 @@ class Verifier:
 
         
     from .utils import (
-        _preprocess,
+        _preprocess, _init_abstractor,
         _check_timeout,
         _setup_restart,
         _pre_attack, _attack, 

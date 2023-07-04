@@ -2,6 +2,7 @@ import numpy as np
 import random
 import torch
 import time
+import copy
 
 from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.restart_heuristics import get_restart_strategy
@@ -26,11 +27,50 @@ def _preprocess(self, objectives):
         
     if len(objectives) >= 50:
         Settings.use_restart = False
+        
+    if self.input_split or (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
+        return objectives
+        
+    try:
+        self._init_abstractor('backward', objectives)
+    except:
+        print('Failed to preprocessing objectives')
+        return objectives
+    
+    if not torch.allclose(objectives.lower_bounds.mean(dim=0), objectives.lower_bounds[0], 1e-5, 1e-5):
+        return objectives
+    
+    # prune objectives
+    tmp_objective = copy.deepcopy(objectives)
+    tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1]
+    tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1]
+        
+    ret = self.abstractor.initialize(tmp_objective)
+
+    remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
+    objectives.lower_bounds = objectives.lower_bounds[remaining_index]
+    objectives.upper_bounds = objectives.upper_bounds[remaining_index]
+    objectives.cs = objectives.cs[remaining_index]
+    objectives.rhs = objectives.rhs[remaining_index]
+        
+    return objectives
 
 
 def _check_timeout(self, timeout):
     return time.time() - self.start_time > timeout 
 
+
+def _init_abstractor(self, method, objective):
+    self.abstractor = NetworkAbstractor(
+        pytorch_model=self.net, 
+        input_shape=self.input_shape, 
+        method=method,
+        input_split=self.input_split,
+        device=self.device,
+    )
+    
+    self.abstractor.setup(objective)
+    
 
 def _setup_restart(self, nth_restart, objective):
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
@@ -54,16 +94,8 @@ def _setup_restart(self, nth_restart, objective):
     
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
-        self.abstractor = NetworkAbstractor(
-            pytorch_model=self.net, 
-            input_shape=self.input_shape, 
-            method=abstract_method,
-            input_split=self.input_split,
-            device=self.device,
-        )
+        self._init_abstractor(abstract_method, objective)
         
-        self.abstractor.setup(objective)
-    
     return True
 
 
