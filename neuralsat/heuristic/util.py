@@ -11,7 +11,7 @@ from auto_LiRPA.bound_ops import *
 def compute_masks(lower_bounds, upper_bounds, device):
     new_masks = [torch.logical_and(
                     lower_bounds[j] < 0, 
-                    upper_bounds[j] > 0).flatten(start_dim=1).float().to(device=device, non_blocking=True)
+                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=True)
                 for j in range(len(lower_bounds) - 1)]
     return new_masks
 
@@ -135,7 +135,8 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     clauses = _histories_to_clauses(preconditions, var_mapping)
     
     # masks: 1 for active, -1 for inactive, 0 for unstable
-    masks = [((lower_bounds[j] > 0).flatten().float() - (upper_bounds[j] < 0).flatten().float()).detach().cpu() for j in range(len(lower_bounds) - 1)]
+    masks = [((lower_bounds[j] > 0).flatten().to(torch.get_default_dtype()) - (upper_bounds[j] < 0).flatten().to(torch.get_default_dtype())).detach().cpu() 
+                for j in range(len(lower_bounds) - 1)]
     literals_to_assign = []
     for lid, lmask in enumerate(masks):
         for nid, nstatus in enumerate(lmask):

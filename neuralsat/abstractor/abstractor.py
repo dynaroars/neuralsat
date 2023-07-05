@@ -37,9 +37,9 @@ class NetworkAbstractor:
         logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}"')
 
         # check conversion correctness
-        dummy = torch.randn(self.input_shape, device=self.device)
+        dummy = objective.lower_bounds[0].view(self.input_shape).to(self.device)
         try:
-            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
+            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-5, rtol=1e-5)
         except AssertionError:
             print(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
             exit()

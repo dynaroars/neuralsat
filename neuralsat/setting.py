@@ -1,8 +1,11 @@
-
+import torch
 
 class GlobalSettings:
 
     def __init__(self):
+        
+        # data precision
+        torch.set_default_dtype(torch.float32)
         
         # restart thresholds, restart if exceeded
         self.max_hidden_branches = 1e5 

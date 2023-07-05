@@ -73,7 +73,7 @@ class DnfObjectives:
         # input bounds
         self.lower_bounds = torch.stack(self.lower_bounds)
         self.upper_bounds = torch.stack(self.upper_bounds)
-        
+
         # properties
         if all([_.shape[0] == self.cs[0].shape[0] for _ in self.cs]):
             self.cs = torch.stack(self.cs)

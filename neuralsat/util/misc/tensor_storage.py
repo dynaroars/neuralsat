@@ -6,8 +6,7 @@ class TensorStorage:
     Fast managed dynamic sized tensor storage
     """
     
-    def __init__(self, full_shape, initial_size=1024, switching_size=65536, 
-                 dtype=torch.float32, device='cpu', concat_dim=0):
+    def __init__(self, full_shape, initial_size=1024, switching_size=65536, device='cpu', concat_dim=0):
        
         if isinstance(full_shape, torch.Tensor):
             data = full_shape
@@ -16,7 +15,7 @@ class TensorStorage:
             data = None
             
         self.shape = list(full_shape)  
-        self.dtype = dtype
+        self.dtype = torch.get_default_dtype()
         self.device = device
         self.concat_dim = concat_dim
         self.num_used = 0

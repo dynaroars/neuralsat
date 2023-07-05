@@ -17,7 +17,7 @@ def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts
 
     output = model(x).detach()
     if output.ndim == 0:
-        output = output.view(1, 1).float()
+        output = output.view(1, 1).to(torch.get_default_dtype())
     
     # specifications
     serialized_conditions = serialize_specs(x, cs, rhs)
@@ -29,7 +29,6 @@ def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts
 
     data_min = data_min.to(x.device)
     data_max = data_max.to(x.device)
-    
     attack_images = general_attack(
         model=model, 
         X=x, 

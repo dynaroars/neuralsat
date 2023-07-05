@@ -104,8 +104,8 @@ class DecisionHeuristic:
             k_output_lbs = (abs_ret.output_lbs - torch.cat([double_rhs, double_rhs])).max(-1).values
 
             # invalid scores for stable neurons
-            invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).float()  
-            invalid_mask_backup_scores = (topk_backup_scores.values[:, k] >= -SMALL).float()
+            invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).to(torch.get_default_dtype())  
+            invalid_mask_backup_scores = (topk_backup_scores.values[:, k] >= -SMALL).to(torch.get_default_dtype())  
             invalid_mask = torch.cat([invalid_mask_scores, invalid_mask_backup_scores]).repeat(2) * LARGE
             topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
 

@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+import torch
 import time
 import os
 
@@ -11,7 +12,9 @@ from util.misc.export import get_adv_string
 from verifier.verifier import Verifier 
 
 if __name__ == '__main__':
+    START_TIME = time.time()
 
+    # argument
     parser = argparse.ArgumentParser()
     parser.add_argument('--net', type=str, required=True,
                         help="load pretrained ONNX model from this specified path.")
@@ -32,6 +35,7 @@ if __name__ == '__main__':
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
+    # network
     model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
     model.to(args.device)
     vnnlibs = read_vnnlib(Path(args.spec))
@@ -41,7 +45,6 @@ if __name__ == '__main__':
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     
-    START_TIME = time.time()
     # verifier
     verifier = Verifier(
         net=model, 

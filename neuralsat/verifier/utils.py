@@ -28,11 +28,11 @@ def _preprocess(self, objectives):
     if len(objectives) >= 50:
         Settings.use_restart = False
         
-    if self.input_split or (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
+    if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives
         
     try:
-        self._init_abstractor('backward', objectives)
+        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
         print('Failed to preprocessing objectives')
         return objectives

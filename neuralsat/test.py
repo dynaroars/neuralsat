@@ -1,12 +1,13 @@
 from pathlib import Path
 import unittest
+import os
 
 import warnings
 warnings.filterwarnings(action='ignore')
 
+from verifier.objective import Objective, DnfObjectives
 from util.spec.read_vnnlib import read_vnnlib
 from util.network.read_onnx import parse_onnx
-from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
 from util.misc.result import ReturnStatus
 from util.misc.logger import logger
@@ -211,7 +212,101 @@ class TestVerifier(unittest.TestCase):
         
         self.assertEqual(status, ReturnStatus.UNSAT)
         self.assertTrue(verifier.iteration in [20])
+        
+        
+    def test_cgan1(self):
+        net_path = 'example/cGAN_imgSz32_nCh_1.onnx'
+        vnnlib_path = Path('example/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib')
+        device = 'cuda'
 
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=10,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+        
+        
+        
+    def test_dist_shift1(self):
+        net_path = 'example/mnist_concat.onnx'
+        vnnlib_path = Path('example/index188_delta0.13.vnnlib')
+        device = 'cuda'
+
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=1000,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+
+        
+        
+    def test_tllverifybench1(self):
+        net_path = 'example/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx'
+        vnnlib_path = Path('example/property_N=16_1.vnnlib')
+        device = 'cuda'
+
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=1000,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+        
+        
+    def test_vggnet161(self):
+        net_path = 'example/vgg16-7.onnx'
+        if not os.path.exists(net_path):
+            return True
+        
+        vnnlib_path = Path('example/spec0_screw.vnnlib')
+        device = 'cuda'
+
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=1000,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+        
+        
 if __name__ == '__main__':
     logger.setLevel(1)
     unittest.main()
