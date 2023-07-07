@@ -1,7 +1,10 @@
 
 
 
-def get_adv_string(inputs, outputs):
+def get_adv_string(inputs, outputs, is_nhwc=False):
+    if is_nhwc:
+        assert inputs.ndim == 4
+        inputs = inputs.permute(0, 2, 3, 1)
     x = inputs.flatten().detach().cpu().numpy()
     y = outputs.flatten().detach().cpu().numpy()
     string_x = [f'(X_{i} {x[i]})' for i in range(len(x))]

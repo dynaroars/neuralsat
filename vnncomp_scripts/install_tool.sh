@@ -19,6 +19,20 @@ if [ "$1" != ${VERSION_STRING} ]; then
 	exit 1
 fi
 
+# Install NVIDIA driver
+wget https://us.download.nvidia.com/XFree86/Linux-x86_64/535.54.03/NVIDIA-Linux-x86_64-535.54.03.run
+
+sudo nvidia-smi -pm 0
+chmod +x ./NVIDIA-Linux-x86_64-535.54.03.run
+sudo ./NVIDIA-Linux-x86_64-535.54.03.run --silent --dkms
+# Remove old driver (if already installed) and reload the new one.
+sudo rmmod nvidia_uvm; sudo rmmod nvidia_drm; sudo rmmod nvidia_modeset; sudo rmmod nvidia
+sudo modprobe nvidia; sudo nvidia-smi -e 0; sudo nvidia-smi -r -i 0
+sudo nvidia-smi -pm 1
+# Make sure GPU shows up.
+nvidia-smi
+
+
 
 echo "======= Installing $TOOL_NAME ======="
 echo "Neuralsat home is                           $NEURALSAT_HOME"
@@ -65,15 +79,16 @@ echo "======= Installing Gurobi License ======="
 if [ -e ~/gurobi.lic ]; then
     echo "Gurobi license detected ~/gurobi.lic"
 else
-    echo "No Gurobi license found...enter it now"
-    echo "enter WLSACCESSID"
-    read ACCESSID
-    echo "enter WLSSECRET"
-    read SECRET
-    echo "enter LICENSEID"
-    read LICENSEID
-    echo "WLSACCESSID=$ACCESSID" > ~/gurobi.lic
-    echo "WLSSECRET=$SECRET" >> ~/gurobi.lic
-    echo "LICENSEID=$LICENSEID" >> ~/gurobi.lic
+    echo "No Gurobi license found, install in post-installation script."
+    # echo "No Gurobi license found...enter it now"
+    # echo "enter WLSACCESSID"
+    # read ACCESSID
+    # echo "enter WLSSECRET"
+    # read SECRET
+    # echo "enter LICENSEID"
+    # read LICENSEID
+    # echo "WLSACCESSID=$ACCESSID" > ~/gurobi.lic
+    # echo "WLSSECRET=$SECRET" >> ~/gurobi.lic
+    # echo "LICENSEID=$LICENSEID" >> ~/gurobi.lic
 fi
 

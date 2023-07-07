@@ -82,6 +82,6 @@ if __name__ == '__main__':
         with open(args.result_file, 'w') as fp:
             print(status, file=fp)
             if verifier.adv is not None:
-                print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv)), file=fp)
+                print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv), is_nhwc=is_nhwc), file=fp)
 
     print(f'{status},{time.time() - START_TIME:.04f}')

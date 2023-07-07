@@ -1,6 +1,8 @@
 benchmark/
 neuralsat/example/*/*.csv
 neuralsat/example/*.csv
+neuralsat/example/vgg*.onnx
+neuralsat/example/spec0_screw.vnnlib
 
 neuralsat/onnx2pytorch*
 neuralsat/auto_LiRPA*
