@@ -7,7 +7,7 @@ if [[ -z "${NEURALSAT_PY}" ]]; then
 fi
 
 if [[ -z "${NEURALSAT_MAIN}" ]]; then
-        NEURALSAT_MAIN=$(dirname $(dirname $(realpath $0)))/neuralsat/main.py
+	NEURALSAT_MAIN=$(dirname $(dirname $(realpath $0)))/neuralsat/main.py
 fi
 
 
@@ -36,5 +36,9 @@ $NEURALSAT_PY $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TI
 #$NEURALSAT_PY $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=0  >  $RESULTS_FILE  2>/dev/null
 
 if [ $? -ne 0 ]; then
-  echo error > $RESULTS_FILE
+  	echo error > $RESULTS_FILE
+fi
+
+if [ ! -f $RESULTS_FILE ]; then
+  	echo error > $RESULTS_FILE
 fi

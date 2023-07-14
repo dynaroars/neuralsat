@@ -8,9 +8,10 @@ def recursive_walk(rootdir):
             
             
 if __name__ == "__main__":
-    BENCHMARK_DIR = '../benchmark/vnncomp23'
-    SCRIPTS_DIR = 'example/vnncomp23/'
-    CMD = 'python3 main.py --net {} --spec {}'
+    BENCHMARK_DIR = 'benchmark/vnncomp23'
+    SCRIPTS_DIR = 'neuralsat/example/vnncomp23/'
+    # CMD = 'python3 main.py --net {} --spec {}'
+    CMD = './vnncomp_scripts/run_instance.sh v1 {} {} {} res.txt 100'
     csv_files = [f for f in recursive_walk(BENCHMARK_DIR) if f.endswith('instances.csv')]
     
     os.makedirs(SCRIPTS_DIR, exist_ok=True)
@@ -39,4 +40,4 @@ if __name__ == "__main__":
                     print('\t\t- spec', spec)
                     continue
             
-                print(CMD.format(net, spec), file=fp)
+                print(CMD.format(benchmark, net, spec), file=fp)
