@@ -87,7 +87,7 @@ if __name__ == "__main__":
     verifier._initialize(obj, [])
     
     tic = time.time()
-    verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c)
+    verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
     # print(verifier.abstractor.net.model)
     print('MIP refine:', time.time() - tic)
     
