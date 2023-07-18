@@ -1,6 +1,6 @@
-**NeuralSAT**: A DPLL(T)-based Constraint Solving Approach to Verifying Deep Neural Networks
+**NeuralSAT**: A DPLL(T) Framework for Verifying Deep Neural Networks
 ====================
-
+<!-- 
 **NeuralSAT** is a technique and prototype tool for verifying DNNs. 
 It combines ideas from DPLL(T)/CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. 
 **NeuralSAT** takes as input the formula $\alpha$ representing the DNN `N` (with non-linear ReLU activation) and the formulae $\phi_{in}\Rightarrow \phi_{out}$ representing the property $\phi$ to be proved. 
@@ -9,16 +9,18 @@ Internally, **NeuralSAT** checks the satisfiability of the formula: $\alpha \lan
 **NeuralSAT** uses a DPLL(T)-based algorithm to check unsatisfiability. 
 It applies DPLL/CDCL to assign values to boolean variables and checks for conflicts the assignment has with the real-valued constraints of the DNN and the property of interest. 
 If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts and learns clauses to avoid those decisions in the future. 
-**NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can decide, in which it returns *`UNSAT`*.
+**NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can decide, in which it returns *`UNSAT`*. -->
 
 Content
 ====================
-- ```neuralsat```: source code for **NeuralSAT**.
+- ```neuralsat```: source code
 
-- ```third_party```: external libraries.
+- ```third_party```: external libraries
+
+- ```vnncomp_scripts```: scripts for competition
 
 
-Getting Started
+Installation
 ====================
 
 ## Dependencies
@@ -47,6 +49,10 @@ conda env create -f env.yaml
 pip install "third_party/haioc"
 ```
 
+
+Getting Started
+====================
+
 ## Usages
 
 - Activate `conda` environment
@@ -71,11 +77,13 @@ python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
 ## Options
 Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT**. 
 
-- `--net`: Load pretrained `ONNX` model from this specified path.
+- `--net`: Path to `ONNX` model.
 - `--spec`: Path to `VNNLIB` specification file.
-- `--batch`: Maximum number of parallel splits.
+- `--batch`: Maximum number of parallel checking branches.
 - `--timeout`: Timeout (in second) for verifying one instance.
-- `--device`: Select device to run.
+- `--device`: Device to use (either `cpu` or `cuda`).
+- `--verbosity`: Logging options (0: NOTSET, 1: INFO, 2: DEBUG).
+- `--result_file`: File to export execution results (including counter-example if found).
 
 
 

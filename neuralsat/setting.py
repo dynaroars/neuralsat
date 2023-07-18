@@ -14,6 +14,9 @@ class GlobalSettings:
         self.max_input_branches  = 1e5
         self.max_input_visited_branches = 5e6
         
+        # MIP refinement
+        self.use_mip_refine = 0
+        
         # attack
         self.use_attack = 1
         

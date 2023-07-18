@@ -29,31 +29,53 @@ def _preprocess(self, objectives):
         Settings.use_restart = False
         
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
-        return objectives
+        return objectives, None
         
     try:
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
         print('Failed to preprocessing objectives')
-        return objectives
+        return objectives, None
     
     if not torch.allclose(objectives.lower_bounds.mean(dim=0), objectives.lower_bounds[0], 1e-5, 1e-5):
-        return objectives
+        return objectives, None
     
     # prune objectives
     tmp_objective = copy.deepcopy(objectives)
     tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1]
     tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1]
         
+    # forward
     ret = self.abstractor.initialize(tmp_objective)
 
+    # pruning
     remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
     objectives.lower_bounds = objectives.lower_bounds[remaining_index]
     objectives.upper_bounds = objectives.upper_bounds[remaining_index]
     objectives.cs = objectives.cs[remaining_index]
     objectives.rhs = objectives.rhs[remaining_index]
+    
+    # refine
+    refined_intermediate_bounds = None
+    if len(objectives) and Settings.use_mip_refine and self.abstractor.method == 'backward':
+        logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
+        tic = time.time()
+        self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=None)
+        logger.debug(f'MIP: {time.time() - tic:.04f}')
+        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
         
-    return objectives
+        # forward with refinement
+        ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
+        
+        # pruning
+        remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
+        objectives.lower_bounds = objectives.lower_bounds[remaining_index]
+        objectives.upper_bounds = objectives.upper_bounds[remaining_index]
+        objectives.cs = objectives.cs[remaining_index]
+        objectives.rhs = objectives.rhs[remaining_index]
+        
+    logger.info(f'Remain {len(objectives)} objectives')
+    return objectives, refined_intermediate_bounds
 
 
 def _check_timeout(self, timeout):

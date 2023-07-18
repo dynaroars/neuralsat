@@ -56,7 +56,7 @@ class Verifier:
         if is_attacked:
             return ReturnStatus.SAT  
 
-        dnf_objectives = self._preprocess(dnf_objectives)
+        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives)
         
         # verify
         while len(dnf_objectives):
@@ -82,6 +82,7 @@ class Verifier:
                         status = self._verify(
                             objective=objective, 
                             preconditions=preconditions+learned_clauses, 
+                            reference_bounds=reference_bounds,
                             timeout=timeout
                         )
                     except RuntimeError as exception:
@@ -95,6 +96,8 @@ class Verifier:
                             continue
                         else:
                             raise NotImplementedError
+                    except SystemExit:
+                        exit()
                     except:
                         raise NotImplementedError
                     else:
@@ -118,9 +121,9 @@ class Verifier:
         return ReturnStatus.UNSAT  
         
         
-    def _initialize(self, objective, preconditions):
+    def _initialize(self, objective, preconditions, reference_bounds):
         # initialization params
-        ret = self.abstractor.initialize(objective)
+        ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds)
         
         # check verified
         assert len(ret.output_lbs) == len(objective.cs)
@@ -146,9 +149,9 @@ class Verifier:
         )
         
         
-    def _verify(self, objective, preconditions, timeout):
+    def _verify(self, objective, preconditions, reference_bounds, timeout):
         # initialization
-        self.domains_list = self._initialize(objective=objective, preconditions=preconditions)
+        self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         
         # cleaning
         torch.cuda.empty_cache()

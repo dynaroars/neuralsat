@@ -101,7 +101,7 @@ class NetworkAbstractor:
             return True
         
 
-    def initialize(self, objective, share_slopes=False):
+    def initialize(self, objective, share_slopes=False, reference_bounds=None):
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -123,17 +123,18 @@ class NetworkAbstractor:
             logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
-
+            
             lb, _ = self.net.compute_bounds(
                 x=(self.x,), 
                 C=objective.cs, 
                 method=self.method,
-                aux_reference_bounds=aux_reference_bounds
+                aux_reference_bounds=aux_reference_bounds, 
+                reference_bounds=reference_bounds,
             )
             logger.info(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
-            
+
             # reorganize tensors
             lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb)
 
@@ -156,6 +157,7 @@ class NetworkAbstractor:
                     x=(self.x,), 
                     C=objective.cs, 
                     method=self.method, 
+                    reference_bounds=reference_bounds,
                 )
             logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():

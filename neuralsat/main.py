@@ -32,6 +32,10 @@ if __name__ == '__main__':
                         help="file to save execution results.")
     args = parser.parse_args()   
     
+    # set device
+    if not torch.cuda.is_available():
+        args.device = 'cpu'
+        
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
