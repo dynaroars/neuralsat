@@ -266,28 +266,37 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
 def build_lp_solver(self, model_type, input_lower, input_upper, c):
     assert model_type in ['lp', 'mip']
 
-    # gurobi solver
-    if hasattr(self.net, 'model'):
-        if not hasattr(self, 'last_c_lp'):
-            self.last_c_lp = c
-        else:
-            assert (self.last_c_lp == c).all(), print(f'Different cs ({c} vs {self.last_c_lp}) are unsupported yet')
-        return
+    if hasattr(self.net, 'model'): 
+        if torch.equal(self.last_c_lp, c) and (self.net.model.ModelName == model_type) \
+            and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
+            # print('reuse built model')
+            return
+        self.net.clear_solver_module(self.net.final_node())
+        del self.net.model
     
+    # gurobi solver
     self.net.model = grb.Model(model_type)
     self.net.model.setParam('OutputFlag', False)
-    self.net.model.setParam("FeasibilityTol", 1e-7)
+    self.net.model.setParam("FeasibilityTol", 2e-7)
     # self.net.model.setParam('TimeLimit', timeout)
+    if model_type == 'mip':
+        self.net.model.setParam('MIPGap', 1e-2)  # Relative gap between primal and dual.
+        self.net.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between primal and dual.
 
     # create new inputs
     new_x = BoundedTensor(input_lower, PerturbationLpNorm(x_L=input_lower, x_U=input_upper))
     # disable beta
     self.net.set_bound_opts(get_branching_opt_params()) 
-    # forward to update hidden bounds
+    # forward to recompute hidden bounds
     self.net.compute_bounds(x=(new_x,), C=c, method="backward")
+    # print('before:', self.net.compute_bounds(x=(new_x,), C=c, method="backward")[0])
     # build solver
-    self.net.build_solver_module(C=c, final_node_name=self.net.final_name, model_type=model_type)
+    self.net.build_solver_module(x=(new_x,), C=c, final_node_name=self.net.final_name, model_type=model_type)
     self.net.model.update()
+    # print('after:', self.net.compute_bounds(x=(new_x,), C=c, method="backward")[0])
+    self.last_c_lp = c
+    self.last_input_lower = input_lower.clone()
+    self.last_input_upper = input_upper.clone()
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):

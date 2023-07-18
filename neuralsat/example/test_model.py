@@ -290,19 +290,41 @@ class NetConv2(nn.Module):
         x = self.l1(x)
         return x
     
-def test_conv1():
-    torch.manual_seed(0)
-    net = NetConv2()
+def test():
+    # torch.manual_seed(0)
+    net = nn.Sequential(
+        nn.Flatten(), 
+        nn.Linear(784, 20), 
+        nn.ReLU(),
+        nn.Linear(20, 15), 
+        nn.ReLU(),
+        nn.Linear(15, 25), 
+        nn.ReLU(),
+        nn.Linear(25, 15), 
+        nn.ReLU(),
+        nn.Linear(15, 25), 
+        nn.ReLU(),
+        nn.Linear(25, 10), 
+    )
+    
+    net = nn.Sequential(
+        nn.Flatten(), 
+        nn.Linear(784, 4), 
+        nn.ReLU(),
+        nn.Linear(4, 5), 
+        nn.ReLU(),
+        nn.Linear(5, 10), 
+    )
     
     
-    x = torch.randn(1, 3, 30, 30)
+    x = torch.randn(1, 784)
     print(net(x).shape)
    
     net.eval()
     torch.onnx.export(
         net,
         x,
-        "example/conv.onnx",
+        "example/test_mnistfc.onnx",
         verbose=False,
         opset_version=12,
         
@@ -311,5 +333,5 @@ def test_conv1():
     
 if __name__ == '__main__':
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
-    test_conv1()
+    test()
     

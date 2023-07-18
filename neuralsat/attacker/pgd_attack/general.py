@@ -23,9 +23,9 @@ def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts
     serialized_conditions = serialize_specs(x, cs, rhs)
     
     # sanity check
-    output = output.unsqueeze(1).unsqueeze(1).repeat(1, 1, len(serialized_conditions[-1][0]), 1)
+    output = output[:, None, None].repeat(1, 1, len(serialized_conditions[-1][0]), 1)
     if check_adv_multi(x, output, serialized_conditions, data_max.unsqueeze(1), data_min.unsqueeze(1)):
-        return True, x[:, None, None].detach()
+        return True, x[:, None, None].repeat(1, 1, len(serialized_conditions[-1][0]), 1).detach()
 
     data_min = data_min.to(x.device)
     data_max = data_max.to(x.device)
