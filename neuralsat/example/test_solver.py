@@ -54,9 +54,9 @@ def refine_layer(node):
 
 if __name__ == "__main__":
     
-    # net_path = 'example/mnist-net_256x4.onnx'
     net_path = 'example/test_mnistfc.onnx'
-    vnnlib_path = Path('example/prop_0_0.05.vnnlib')
+    net_path = 'example/mnistfc-medium-net-151.onnx'
+    vnnlib_path = Path('example/prop_2_0.03.vnnlib')
     
     device = 'cpu'
     logger.setLevel(1)
@@ -66,6 +66,7 @@ if __name__ == "__main__":
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     model.to(device)
     print(model)
+    # exit()
     
     verifier = Verifier(
         net=model, 
@@ -74,6 +75,9 @@ if __name__ == "__main__":
         device=device,
     )
 
+    
+    # print(verifier.verify(objectives))
+    # exit()
     
     obj = objectives.pop(1)
     input_lowers = obj.lower_bounds.view(input_shape).to(device)
@@ -84,15 +88,13 @@ if __name__ == "__main__":
     
     
     verifier._setup_restart(0, obj)
-    verifier._initialize(obj, [])
+    verifier._initialize(obj, [], None)
     
     tic = time.time()
     verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
     # print(verifier.abstractor.net.model)
     print('MIP refine:', time.time() - tic)
     
-    print(verifier.verify(objectives))
-    exit()
     
     # verifier.abstractor.net.clear_solver_module(verifier.abstractor.net.final_node())
     # del verifier.abstractor.net.model

@@ -59,12 +59,16 @@ def _preprocess(self, objectives):
     refined_intermediate_bounds = None
     if len(objectives) and Settings.use_mip_refine and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
+        tmp_objective = copy.deepcopy(objectives)
+        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1]
+        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1]
+        
         tic = time.time()
         self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=None)
         logger.debug(f'MIP: {time.time() - tic:.04f}')
-        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
-        
+
         # forward with refinement
+        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
         ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
         
         # pruning

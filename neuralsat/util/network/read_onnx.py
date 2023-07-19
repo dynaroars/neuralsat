@@ -22,7 +22,7 @@ custom_quirks = {
     },
     'Transpose': {
         'merge_batch_size_with_channel': True,
-        # 'remove_spare_permute': True
+        'remove_gdvb_transpose': True,
     },
     'Softmax' :{
         'skip_last_layer': True
