@@ -307,14 +307,14 @@ def test():
         nn.Linear(25, 10), 
     )
     
-    net = nn.Sequential(
-        nn.Flatten(), 
-        nn.Linear(784, 4), 
-        nn.ReLU(),
-        nn.Linear(4, 5), 
-        nn.ReLU(),
-        nn.Linear(5, 10), 
-    )
+    # net = nn.Sequential(
+    #     nn.Flatten(), 
+    #     nn.Linear(784, 4), 
+    #     nn.ReLU(),
+    #     nn.Linear(4, 5), 
+    #     nn.ReLU(),
+    #     nn.Linear(5, 10), 
+    # )
     
     
     x = torch.randn(1, 784)

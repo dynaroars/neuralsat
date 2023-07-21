@@ -12,7 +12,7 @@ from util.network.read_onnx import parse_onnx
 from verifier.verifier import Verifier 
 from util.misc.result import ReturnStatus
 from util.misc.logger import logger
-
+from auto_LiRPA.bound_ops import BoundRelu
 
 def extract_instance(net_path, vnnlib_path):
     vnnlibs = read_vnnlib(vnnlib_path)
@@ -55,7 +55,7 @@ def refine_layer(node):
 if __name__ == "__main__":
     
     net_path = 'example/test_mnistfc.onnx'
-    net_path = 'example/mnistfc-medium-net-151.onnx'
+    # net_path = 'example/mnistfc-medium-net-151.onnx'
     vnnlib_path = Path('example/prop_2_0.03.vnnlib')
     
     device = 'cpu'
@@ -88,13 +88,36 @@ if __name__ == "__main__":
     
     
     verifier._setup_restart(0, obj)
-    verifier._initialize(obj, [], None)
+    verifier.abstractor.initialize(obj, None)
     
     tic = time.time()
     verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
-    # print(verifier.abstractor.net.model)
     print('MIP refine:', time.time() - tic)
     
+    intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
+    
+    # name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations)}
+    # pre_relu_indices = [i for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
+    # print(pre_relu_indices)
+    # print(name_dict)
+    for _ in range(0):
+        tic = time.time()
+        intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+        verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
+        print(_, 'MIP refine:', time.time() - tic)
+        
+        intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+        verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
+        print()
+    
+    
+    # tic = time.time()
+    # intermediate_layer_bounds[name_dict[pre_relu_indices[1]]][0][0][83] = -0.02
+    # intermediate_layer_bounds[name_dict[pre_relu_indices[2]]][1][0][26] = -0.05
+    # intermediate_layer_bounds[name_dict[4]][1][0][105] = 2.05
+    # verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
+    # print('MIP refine:', time.time() - tic)
     
     # verifier.abstractor.net.clear_solver_module(verifier.abstractor.net.final_node())
     # del verifier.abstractor.net.model

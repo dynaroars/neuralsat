@@ -263,13 +263,14 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     return cpu_net
 
     
-def build_lp_solver(self, model_type, input_lower, input_upper, c):
+def build_lp_solver(self, model_type, input_lower, input_upper, c, intermediate_layer_bounds=None):
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
-        if torch.equal(self.last_c_lp, c) and (self.net.model.ModelName == model_type) \
+        if (intermediate_layer_bounds is None) and (self.last_c_lp == c or torch.equal(self.last_c_lp, c)) \
+            and (self.net.model.ModelName == model_type) \
             and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
-            # print('reuse built model')
+            print('[!] Reuse built LP model')
             return
         self.net.clear_solver_module(self.net.final_node())
         del self.net.model
@@ -277,11 +278,11 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
     # gurobi solver
     self.net.model = grb.Model(model_type)
     self.net.model.setParam('OutputFlag', False)
-    self.net.model.setParam("FeasibilityTol", 2e-7)
+    self.net.model.setParam("FeasibilityTol", 1e-7)
     # self.net.model.setParam('TimeLimit', timeout)
     if model_type == 'mip':
-        self.net.model.setParam('MIPGap', 1e-2)  # Relative gap between primal and dual.
-        self.net.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between primal and dual.
+        self.net.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
+        self.net.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
 
     # create new inputs
     new_x = BoundedTensor(input_lower, PerturbationLpNorm(x_L=input_lower, x_U=input_upper))
@@ -289,11 +290,9 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c):
     self.net.set_bound_opts(get_branching_opt_params()) 
     # forward to recompute hidden bounds
     self.net.compute_bounds(x=(new_x,), C=c, method="backward")
-    # print('before:', self.net.compute_bounds(x=(new_x,), C=c, method="backward")[0])
     # build solver
-    self.net.build_solver_module(x=(new_x,), C=c, final_node_name=self.net.final_name, model_type=model_type)
+    self.net.build_solver_module(x=(new_x,), C=c, final_node_name=self.net.final_name, model_type=model_type, intermediate_layer_bounds=intermediate_layer_bounds)
     self.net.model.update()
-    # print('after:', self.net.compute_bounds(x=(new_x,), C=c, method="backward")[0])
     self.last_c_lp = c
     self.last_input_lower = input_lower.clone()
     self.last_input_upper = input_upper.clone()
