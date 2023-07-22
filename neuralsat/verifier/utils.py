@@ -4,13 +4,18 @@ import torch
 import time
 import copy
 
-from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.restart_heuristics import get_restart_strategy
+from heuristic.decision_heuristics import DecisionHeuristic
+from heuristic.tightener import Tightener
+
 from attacker.pgd_attack.general import general_attack
-from abstractor.abstractor import NetworkAbstractor
-from util.misc.check import check_solution
 from attacker.attacker import Attacker
+
+from abstractor.abstractor import NetworkAbstractor
+
+from util.misc.check import check_solution
 from util.misc.logger import logger
+
 from setting import Settings
 
     
@@ -121,6 +126,9 @@ def _setup_restart(self, nth_restart, objective):
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
         self._init_abstractor(abstract_method, objective)
+        
+    # tightener
+    self.tightener = Tightener(self.abstractor)
         
     return True
 

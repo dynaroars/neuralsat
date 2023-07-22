@@ -202,10 +202,13 @@ class Verifier:
         if self.adv is not None:
             return
         
-        # 5.2: unreachable domains
-        self.domains_list.add(decisions, abstraction_ret)
+        # 5.2: tighten bounds
+        tighten_ret = self.tightener(abstraction_ret)
         
-        # 5.3: TODO: check full assignment after bcp
+        # 5.3: unverified domains
+        self.domains_list.add(decisions, tighten_ret)
+        
+        # TODO: check full assignment after bcp
 
         # logging
         self.iteration += 1
