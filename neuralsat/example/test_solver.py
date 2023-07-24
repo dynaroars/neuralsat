@@ -95,6 +95,11 @@ if __name__ == "__main__":
     print('MIP refine:', time.time() - tic)
     
     intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    
+    for k, v in intermediate_layer_bounds.items():
+        print(k, [_.shape for _ in v])
+    exit()
+    
     verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
     
     # name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations)}

@@ -114,6 +114,9 @@ class NetworkAbstractor:
         
         self.x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
         
+        # update initial reference bounds for later use
+        self.init_reference_bounds = reference_bounds
+        
         if self.method == 'crown-optimized':
             # setup optimization parameters
             self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
@@ -326,7 +329,8 @@ class NetworkAbstractor:
             x=(new_x,), 
             C=double_cs, 
             method=self.method,
-            decision_thresh=double_rhs
+            decision_thresh=double_rhs,
+            reference_bounds=self.init_reference_bounds,
         )
 
         with torch.no_grad():

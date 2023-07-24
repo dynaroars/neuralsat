@@ -150,6 +150,7 @@ class Verifier:
         
         
     def _verify(self, objective, preconditions, reference_bounds, timeout):
+        # print('refined bounds:', sum([(v[1] - v[0]).sum().item() for _, v in reference_bounds.items()])) if reference_bounds is not None else None
         # initialization
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         

@@ -35,6 +35,9 @@ def _preprocess(self, objectives):
         
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None
+    
+    if self.input_split and len(objectives) < 50:
+        return objectives, None
         
     try:
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
@@ -61,12 +64,11 @@ def _preprocess(self, objectives):
     objectives.rhs = objectives.rhs[remaining_index]
     
     # refine
-    refined_intermediate_bounds = None
     if len(objectives) and Settings.use_mip_refine and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
-        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1]
-        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1]
+        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
+        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
         tic = time.time()
         self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=None)
@@ -82,9 +84,10 @@ def _preprocess(self, objectives):
         objectives.upper_bounds = objectives.upper_bounds[remaining_index]
         objectives.cs = objectives.cs[remaining_index]
         objectives.rhs = objectives.rhs[remaining_index]
+        return objectives, copy.deepcopy(refined_intermediate_bounds)
         
     logger.info(f'Remain {len(objectives)} objectives')
-    return objectives, refined_intermediate_bounds
+    return objectives, None
 
 
 def _check_timeout(self, timeout):
