@@ -15,7 +15,7 @@ class GlobalSettings:
         self.max_input_visited_branches = 5e6
         
         # MIP refinement
-        self.use_mip_refine = 0
+        self.use_mip_refine = 1
         self.use_mip_refine_domain_bounds = 0
         
         # attack
