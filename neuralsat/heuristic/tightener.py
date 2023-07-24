@@ -16,8 +16,9 @@ def print_tightened_bounds(name, olds, news):
     
     print(f'[+] Layer: {name}')
     for i in range(len(old_lowers)):
-        if (new_lowers[i] - old_lowers[i]).abs() > 1e-4 or (new_uppers[i] - old_uppers[i]).abs() > 1e-4:
-            print(f'\t- neuron {i}: [{old_lowers[i]:.04f}, {old_uppers[i]:.04f}] => [{new_lowers[i]:.04f}, {new_uppers[i]:.04f}]')
+        if old_lowers[i] * old_uppers[i] < 0:
+            if (new_lowers[i] - old_lowers[i]).abs() > 1e-4 or (new_uppers[i] - old_uppers[i]).abs() > 1e-4:
+                print(f'\t- neuron {i}: [{old_lowers[i]:.04f}, {old_uppers[i]:.04f}] => [{new_lowers[i]:.04f}, {new_uppers[i]:.04f}]')
 
 class Tightener:
     
@@ -44,6 +45,7 @@ class Tightener:
             } 
             cur_input_lowers = domain_params.input_lowers[idx][None]
             cur_input_uppers = domain_params.input_uppers[idx][None]
+            # print('refined bounds before:', sum([(v[1] - v[0]).sum().item() for _, v in cur_intermediate_layer_bounds.items()]))
                 
             # tic = time.time()
             self.abstractor.build_lp_solver(
@@ -51,11 +53,12 @@ class Tightener:
                 input_lower=cur_input_lowers, 
                 input_upper=cur_input_uppers, 
                 c=None, 
-                # intermediate_layer_bounds=copy.deepcopy(cur_intermediate_layer_bounds),
-                intermediate_layer_bounds=cur_intermediate_layer_bounds,
-                timeout_per_neuron=2,
+                intermediate_layer_bounds=copy.deepcopy(cur_intermediate_layer_bounds),
+                # intermediate_layer_bounds=cur_intermediate_layer_bounds,
+                timeout_per_neuron=1.0,
             )
             # print(idx, 'refine in:', time.time() - tic)
+            # print('refined bounds after:', sum([(v[1] - v[0]).sum().item() for _, v in cur_intermediate_layer_bounds.items()]))
                 
             new_intermediate_layer_bounds = self.abstractor.net.get_refined_intermediate_bounds()
             

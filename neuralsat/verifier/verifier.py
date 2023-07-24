@@ -213,9 +213,13 @@ class Verifier:
 
         # logging
         self.iteration += 1
-        logger.info(f'[{"Input" if self.input_split else "Hidden"} domain] '
-                    f'Iteration: {self.iteration:<6} '
-                    f'Remaining: {len(self.domains_list):<10} Visited: {self.domains_list.visited}')
+        logger.info(
+            f'[{"Input" if self.input_split else "Hidden"} domain]     '
+            f'Iteration: {self.iteration:<10} '
+            f'Remaining: {len(self.domains_list):<10} '
+            f'Visited: {self.domains_list.visited:<10} '
+            f'Time elapsed: {time.time() - self.start_time:.02f}'
+        )
         
         # print((pick_ret.input_uppers - pick_ret.input_lowers).sum().detach().cpu(), abstraction_ret.output_lbs.detach().cpu().flatten())
         
