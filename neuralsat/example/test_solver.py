@@ -58,63 +58,70 @@ if __name__ == "__main__":
     # net_path = 'example/mnistfc-medium-net-151.onnx'
     vnnlib_path = Path('example/prop_2_0.03.vnnlib')
     
-    device = 'cpu'
-    logger.setLevel(1)
+    net_path = '../benchmark/mnistfc_hard/onnx/mnistfc-hard-net-177.onnx'
+    vnnlib_path = Path('../benchmark/mnistfc_hard/spec/prop_8_0.05.vnnlib')
     
     print('\nRunning test with', net_path, vnnlib_path)
+    device = 'cpu'
+    batch = 1
+    logger.setLevel(1)
+    
+    preconditions = [eval(line) for line in open('clause.txt').read().strip().split('\n') if not line.startswith('#')]
+    # preconditions = []
+    print(preconditions)
+    
 
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     model.to(device)
     print(model)
-    # exit()
     
     verifier = Verifier(
         net=model, 
         input_shape=input_shape, 
-        batch=1000,
+        batch=batch,
         device=device,
     )
 
     
-    # print(verifier.verify(objectives))
-    # exit()
-    
-    obj = objectives.pop(1)
-    input_lowers = obj.lower_bounds.view(input_shape).to(device)
-    input_uppers = obj.upper_bounds.view(input_shape).to(device)
-    c = obj.cs.to(device)
-    print(input_uppers.shape)
-    print(obj.cs.shape)
-    
-    
-    verifier._setup_restart(0, obj)
-    verifier.abstractor.initialize(obj, None)
-    
-    tic = time.time()
-    verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
-    print('MIP refine:', time.time() - tic)
-    
-    intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
-    
-    for k, v in intermediate_layer_bounds.items():
-        print(k, [_.shape for _ in v])
+    print(verifier.verify(objectives, preconditions=preconditions))
     exit()
     
-    verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
+    # obj = objectives.pop(1)
+    # input_lowers = obj.lower_bounds.view(input_shape).to(device)
+    # input_uppers = obj.upper_bounds.view(input_shape).to(device)
+    # c = obj.cs.to(device)
+    # print(input_uppers.shape)
+    # print(obj.cs.shape)
     
-    # name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations)}
-    # pre_relu_indices = [i for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
-    # print(pre_relu_indices)
-    # print(name_dict)
-    for _ in range(0):
-        tic = time.time()
-        intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
-        verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
-        print(_, 'MIP refine:', time.time() - tic)
+    
+    # verifier._setup_restart(0, obj)
+    # verifier.abstractor.initialize(obj, None)
+    
+    # tic = time.time()
+    # verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
+    # print('MIP refine:', time.time() - tic)
+    
+    # intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    
+    # for k, v in intermediate_layer_bounds.items():
+    #     print(k, [_.shape for _ in v])
+    # exit()
+    
+    # verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
+    
+    # # name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations)}
+    # # pre_relu_indices = [i for (i, layer) in enumerate(verifier.abstractor.net.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
+    # # print(pre_relu_indices)
+    # # print(name_dict)
+    # for _ in range(0):
+    #     tic = time.time()
+    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    #     verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
+    #     print(_, 'MIP refine:', time.time() - tic)
         
-        intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
-        verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
-        print()
+    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    #     verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
+    #     print()
     
     
     # tic = time.time()

@@ -254,7 +254,7 @@ class NetworkAbstractor:
         
         # update slopes
         if len(domain_params.slopes) > 0: 
-            self.set_slope(self.net, domain_params.slopes)
+            self.set_slope(self.net, domain_params.slopes, set_all=True)
 
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(use_beta, stop_criterion_batch_any(double_rhs)))
@@ -264,7 +264,8 @@ class NetworkAbstractor:
             C=double_cs, 
             method=self.method,
             intermediate_layer_bounds=new_intermediate_layer_bounds,
-            decision_thresh=double_rhs
+            decision_thresh=double_rhs,
+            # reference_bounds=new_intermediate_layer_bounds,
         )
 
         # reorganize output

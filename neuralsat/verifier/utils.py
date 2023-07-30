@@ -154,13 +154,16 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
     
     if self.iteration % n_interval != 0:
         return False, None
-    
+
     # random samples
     indices = _random_idx(len(domain_params.cs), n_sample, device=self.device).long()
 
     input_lowers = domain_params.input_lowers[indices][None]
     input_uppers = domain_params.input_uppers[indices][None]
-    adv_example = (input_lowers + input_uppers) / 2
+    # adv_example = (input_lowers + input_uppers) / 2
+    adv_example = (input_uppers - input_lowers) * torch.rand(input_lowers.shape, device=self.device) + input_lowers
+    assert torch.all(adv_example <= input_uppers)
+    assert torch.all(adv_example >= input_lowers)
     
     cs = domain_params.cs[indices].view(1, -1, domain_params.cs[indices].shape[-1])
     rhs = domain_params.rhs[indices].view(1, -1)
@@ -176,8 +179,20 @@ def _attack(self, domain_params, n_sample=50, n_interval=10):
         attack_iters=20, 
         num_restarts=5, 
         only_replicate_restarts=True,
+        use_gama=False,
     )
-    
+    if (attack_images is None) and (n_interval == 1):
+        attack_images = general_attack(
+            model=self.net, 
+            X=adv_example, 
+            data_min=input_lowers, 
+            data_max=input_uppers, 
+            serialized_conditions=serialized_conditions, 
+            attack_iters=30, 
+            num_restarts=10, 
+            only_replicate_restarts=True,
+            use_gama=True,
+        )
 
     if attack_images is not None:
         for i in range(attack_images.shape[1]): # restarts

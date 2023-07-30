@@ -54,8 +54,12 @@ class PGDAttacker:
     def run(self, iterations=50, restarts=20, timeout=1.0):
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
-        assert torch.all(data_min <= data_max)
-        x = (data_min[:, 0] + data_max[:, 0]) / 2
+        # assert torch.all(data_min <= data_max)
+        # x = (data_min[:, 0] + data_max[:, 0]) / 2
+        x = (data_max[:, 0] - data_min[:, 0]) * torch.rand(data_min[:, 0].shape, device=self.device) + data_min[:, 0]
+        assert torch.all(x <= data_max[:, 0])
+        assert torch.all(x >= data_min[:, 0])
+        
         cs = self.objective.cs.to(self.device)
         rhs = self.objective.rhs.to(self.device)
         

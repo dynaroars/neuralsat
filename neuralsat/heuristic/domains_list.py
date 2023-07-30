@@ -15,6 +15,7 @@ class DomainsList:
     "List of unverified branches"
 
     def __init__(self, 
+                 output_lbs,
                  input_lowers, input_uppers, 
                  lower_bounds, upper_bounds, 
                  lAs, 
@@ -42,6 +43,9 @@ class DomainsList:
         # input bounds
         self.all_input_lowers = TensorStorage(input_lowers.cpu())
         self.all_input_uppers = TensorStorage(input_uppers.cpu())
+        
+        # output bounds
+        self.all_output_lowers = TensorStorage(output_lbs.cpu())
         
         # properties
         self.all_cs = TensorStorage(cs.cpu())
@@ -73,7 +77,7 @@ class DomainsList:
         
         
     def _check_consistent(self):
-        assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_cs) == len(self.all_rhs) == len(self)
+        assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_cs) == len(self.all_rhs) == len(self.all_output_lowers) == len(self)
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
@@ -95,6 +99,9 @@ class DomainsList:
         # input bounds
         new_input_lowers = self.all_input_lowers.pop(batch).to(device=device, non_blocking=True)
         new_input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
+        
+        # output bounds
+        new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
         
         # properties
         new_cs = self.all_cs.pop(batch).to(device=device, non_blocking=True)
@@ -229,6 +236,9 @@ class DomainsList:
         self.all_input_lowers.append(domain_params.input_lowers[remaining_index])
         self.all_input_uppers.append(domain_params.input_uppers[remaining_index])
         
+        # output bounds
+        self.all_output_lowers.append(domain_params.output_lbs[remaining_index])
+        
         # properties
         self.all_cs.append(domain_params.cs[remaining_index])
         self.all_rhs.append(domain_params.rhs[remaining_index])
@@ -240,9 +250,17 @@ class DomainsList:
         # checking
         self._check_consistent()
         
-        
+
     def __len__(self):
         return len(self.all_input_lowers)
+
+
+    @property
+    def minimum_lowers(self):
+        indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()
+        if len(indices):
+            return self.all_output_lowers[indices[0]].max().detach().item()
+        return 1e-6
 
 
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses

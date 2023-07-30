@@ -131,16 +131,17 @@ class Verifier:
             return []
         
         # keep last layer's alphas for backward propagation
-        slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
+        # slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
         
         # remaining domains
         return DomainsList(
+            output_lbs=ret.output_lbs,
             input_lowers=ret.input_lowers,
             input_uppers=ret.input_uppers,
             lower_bounds=ret.lower_bounds, 
             upper_bounds=ret.upper_bounds, 
             lAs=ret.lAs, 
-            slopes=slopes,
+            slopes=ret.slopes,
             histories=copy.deepcopy(ret.histories), 
             cs=ret.cs,
             rhs=ret.rhs,
@@ -218,8 +219,10 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Time elapsed: {time.time() - self.start_time:.02f}'
+            f'Bound: {self.domains_list.minimum_lowers:<15.02f} '
+            f'Time elapsed: {time.time() - self.start_time:<10.02f}'
         )
+        # print(tighten_ret.histories)
         
         # print((pick_ret.input_uppers - pick_ret.input_lowers).sum().detach().cpu(), abstraction_ret.output_lbs.detach().cpu().flatten())
         

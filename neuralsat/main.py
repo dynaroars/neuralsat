@@ -22,7 +22,7 @@ if __name__ == '__main__':
                         help="path to VNNLIB specification file.")
     parser.add_argument('--batch', type=int, default=1000,
                         help="maximum number of branches to verify in each iteration")
-    parser.add_argument('--timeout', type=float, default=3600,
+    parser.add_argument('--timeout', type=float, default=1e5,
                         help="timeout in seconds")
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help="choose device to use for verifying.")
