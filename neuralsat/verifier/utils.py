@@ -33,6 +33,8 @@ def _preprocess(self, objectives):
     if len(objectives) >= 50:
         Settings.use_restart = False
         
+    # return objectives, None
+        
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None
     
@@ -148,7 +150,7 @@ def _random_idx(total_samples, num_samples, device='cpu'):
     return torch.Tensor(random.sample(range(total_samples), num_samples)).to(device)
 
 
-def _attack(self, domain_params, n_sample=50, n_interval=10):
+def _attack(self, domain_params, n_sample=50, n_interval=1):
     if not Settings.use_attack:
         return False, None
     

@@ -187,7 +187,7 @@ class Verifier:
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
         # step 2: attack
-        is_attacked, self.adv = self._attack(pick_ret)
+        is_attacked, self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
         if is_attacked:
             return
 

@@ -50,7 +50,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertEqual(verifier.iteration, 40)
+        # self.assertEqual(verifier.iteration, 40)
         
 
     def test_mnist2(self):
@@ -73,7 +73,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertTrue(verifier.iteration in [24])
+        # self.assertTrue(verifier.iteration in [24])
         
     
     def test_mnist3(self):
@@ -142,7 +142,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertTrue(verifier.iteration in [40, 177])
+        # self.assertTrue(verifier.iteration in [40, 177])
         
         
     def test_acas3(self):
@@ -187,7 +187,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertTrue(verifier.iteration in [5, 158])
+        # self.assertTrue(verifier.iteration in [5, 158])
         
         
     
@@ -211,7 +211,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        self.assertTrue(verifier.iteration in [20])
+        # self.assertTrue(verifier.iteration in [20])
         
         
     def test_cgan1(self):

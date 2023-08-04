@@ -20,13 +20,13 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--batch', type=int, default=1000,
+    parser.add_argument('--batch', type=int, default=200,
                         help="maximum number of branches to verify in each iteration")
-    parser.add_argument('--timeout', type=float, default=1e5,
+    parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help="choose device to use for verifying.")
-    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=1, 
+    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=2, 
                         help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
     parser.add_argument('--result_file', type=str, required=False,
                         help="file to save execution results.")

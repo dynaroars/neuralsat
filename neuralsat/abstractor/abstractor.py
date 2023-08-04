@@ -11,12 +11,13 @@ from auto_LiRPA import BoundedModule, BoundedTensor
 
 from util.misc.result import AbstractResults
 from util.misc.logger import logger
+from setting import Settings
 from .params import *
 
 
 class NetworkAbstractor:
     
-    "Over-approximation method: https://github.com/Verified-Intelligence/alpha-beta-CROWN"
+    "Over-approximation method alpha-beta-CROWN"
 
     def __init__(self, pytorch_model, input_shape, method, input_split=False, device='cpu'):
 
@@ -30,6 +31,8 @@ class NetworkAbstractor:
         # computation algorithm
         self.method = method
         
+        # debug
+        self.iteration = 0
         
     def setup(self, objective):
         assert self.select_params(objective), print('Initialization failed')
@@ -84,6 +87,7 @@ class NetworkAbstractor:
     def _check_module(self, method, objective):
         if np.prod(self.input_shape) >= 100000:
             return True
+        # return True
         
         # at least can run with batch=1
         x_L = objective.lower_bounds[0].view(self.input_shape)
@@ -96,6 +100,7 @@ class NetworkAbstractor:
             exit()
         except:
             # traceback.print_exc()
+            # raise
             return False
         else:
             return True
@@ -259,14 +264,22 @@ class NetworkAbstractor:
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(use_beta, stop_criterion_batch_any(double_rhs)))
         
-        new_output_lbs, _ = self.net.compute_bounds(
-            x=(new_x,), 
-            C=double_cs, 
-            method=self.method,
-            intermediate_layer_bounds=new_intermediate_layer_bounds,
-            decision_thresh=double_rhs,
-            # reference_bounds=new_intermediate_layer_bounds,
-        )
+        if Settings.use_hidden_bounds_optimization and (self.iteration % Settings.hidden_bounds_optimization_interval == 1):
+            new_output_lbs, _ = self.net.compute_bounds(
+                x=(new_x,), 
+                C=double_cs, 
+                method=self.method,
+                decision_thresh=double_rhs,
+                reference_bounds=new_intermediate_layer_bounds,
+            )
+        else:
+            new_output_lbs, _ = self.net.compute_bounds(
+                x=(new_x,), 
+                C=double_cs, 
+                method=self.method,
+                decision_thresh=double_rhs,
+                intermediate_layer_bounds=new_intermediate_layer_bounds,
+            )
 
         # reorganize output
         with torch.no_grad():
@@ -355,6 +368,7 @@ class NetworkAbstractor:
         
         
     def forward(self, decisions, domain_params):
+        self.iteration += 1
         if self.input_split:
             return self._forward_input(
                 domain_params=domain_params,

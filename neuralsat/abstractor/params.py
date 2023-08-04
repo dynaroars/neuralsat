@@ -18,9 +18,10 @@ def get_initialize_opt_params(share_slopes, stop_criterion_func):
                 'fix_intermediate_layer_bounds': True,
                 'stop_criterion_func': stop_criterion_func,
                 'iteration': 50, 
-                'lr_alpha': 0.05, 
+                'lr_alpha': 0.1, 
                 'lr_decay': 0.98, 
             }}
+    
     
 def get_beta_opt_params(use_beta, stop_criterion_func):
     return {'optimize_bound_args': {
@@ -42,7 +43,7 @@ def get_input_opt_params(stop_criterion_func):
                 'enable_beta_crown': False, 
                 'fix_intermediate_layer_bounds': True, 
                 'iteration': 20,
-                'lr_alpha': 0.05, 
+                'lr_alpha': 0.1, 
                 'lr_decay': 0.98, 
                 'pruning_in_iteration': True,
                 'stop_criterion_func': stop_criterion_func,

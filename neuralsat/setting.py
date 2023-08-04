@@ -20,9 +20,14 @@ class GlobalSettings:
         
         # attack
         self.use_attack = 1
+        self.attack_interval = 10
         
         # restart
         self.use_restart = 1
+        
+        # abstraction
+        self.use_hidden_bounds_optimization = 1
+        self.hidden_bounds_optimization_interval = 10
         
         # threshold for automatically switching between input and hidden splitting
         self.safety_property_threshold = 0.5
