@@ -25,6 +25,9 @@ def _mip_attack(self, dnf_objectives):
     if not Settings.use_attack:
         return False, None
     
+    if not hasattr(self.abstractor.net, 'model'):
+        return False, None
+    
     output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
     atk = MIPAttacker(
         net=self.net, 
