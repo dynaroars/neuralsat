@@ -294,17 +294,17 @@ def test():
     # torch.manual_seed(0)
     net = nn.Sequential(
         nn.Flatten(), 
-        nn.Linear(784, 20), 
+        nn.Linear(784, 5), 
         nn.ReLU(),
-        nn.Linear(20, 15), 
+        nn.Linear(5, 7), 
         nn.ReLU(),
-        nn.Linear(15, 25), 
+        nn.Linear(7, 9), 
         nn.ReLU(),
-        nn.Linear(25, 15), 
-        nn.ReLU(),
-        nn.Linear(15, 25), 
-        nn.ReLU(),
-        nn.Linear(25, 10), 
+        # nn.Linear(25, 15), 
+        # nn.ReLU(),
+        # nn.Linear(15, 25), 
+        # nn.ReLU(),
+        nn.Linear(9, 10), 
     )
     
     # net = nn.Sequential(
@@ -321,14 +321,17 @@ def test():
     print(net(x).shape)
    
     net.eval()
+    output_name = "example/test_mnistfc.onnx"
     torch.onnx.export(
         net,
         x,
-        "example/test_mnistfc.onnx",
+        output_name,
         verbose=False,
         opset_version=12,
         
     )
+    
+    print('Export onnx to:', output_name)
     
     
 if __name__ == '__main__':

@@ -56,7 +56,13 @@ class Verifier:
         if is_attacked:
             return ReturnStatus.SAT  
 
+        # refine
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives)
+
+        # mip attack
+        is_attacked, self.adv = self._mip_attack(copy.deepcopy(dnf_objectives))
+        if is_attacked:
+            return ReturnStatus.SAT 
         
         # verify
         while len(dnf_objectives):
@@ -261,7 +267,7 @@ class Verifier:
         _preprocess, _init_abstractor,
         _check_timeout,
         _setup_restart,
-        _pre_attack, _attack, 
+        _pre_attack, _attack, _mip_attack,
         _get_learned_conflict_clauses,
     )
     

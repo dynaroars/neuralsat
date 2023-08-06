@@ -9,6 +9,7 @@ from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.tightener import Tightener
 
 from attacker.pgd_attack.general import general_attack
+from attacker.mip_attack import MIPAttacker
 from attacker.attacker import Attacker
 
 from abstractor.abstractor import NetworkAbstractor
@@ -18,6 +19,22 @@ from util.misc.logger import logger
 
 from setting import Settings
 
+    
+    
+def _mip_attack(self, dnf_objectives):
+    if not Settings.use_attack:
+        return False, None
+    
+    output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
+    atk = MIPAttacker(
+        net=self.net, 
+        objective=dnf_objectives, 
+        mip_model=self.abstractor.net.model, 
+        output_names=output_names,
+        input_shape=self.input_shape, 
+        device=self.device,
+    )
+    return atk.run()
     
 def _preprocess(self, objectives):
     # determine search algorithm
@@ -73,7 +90,8 @@ def _preprocess(self, objectives):
         tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
         tic = time.time()
-        self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=None)
+        c_to_use = tmp_objective.cs.transpose(0, 1) if tmp_objective.cs.shape[1] == 1 else None
+        self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=c_to_use)
         logger.debug(f'MIP: {time.time() - tic:.04f}')
 
         # forward with refinement
