@@ -59,7 +59,7 @@ class MIPAttacker:
         torch.manual_seed(self.seed)
         
         
-    def run(self, timeout=1.0):
+    def run(self, reference_bounds=None, timeout=1.0):
         global multiprocess_mip_attack_model, multiprocess_stop
         multiprocess_mip_attack_model = self.mip_model.copy()
         multiprocess_stop = False

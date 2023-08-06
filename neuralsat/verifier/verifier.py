@@ -60,7 +60,7 @@ class Verifier:
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives)
 
         # mip attack
-        is_attacked, self.adv = self._mip_attack(copy.deepcopy(dnf_objectives))
+        is_attacked, self.adv = self._mip_attack(reference_bounds)
         if is_attacked:
             return ReturnStatus.SAT 
         

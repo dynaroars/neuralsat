@@ -21,23 +21,14 @@ from setting import Settings
 
     
     
-def _mip_attack(self, dnf_objectives):
+def _mip_attack(self, reference_bounds):
     if not Settings.use_attack:
         return False, None
     
-    if not hasattr(self.abstractor.net, 'model'):
+    if not Settings.use_mip_attack:
         return False, None
     
-    output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
-    atk = MIPAttacker(
-        net=self.net, 
-        objective=dnf_objectives, 
-        mip_model=self.abstractor.net.model, 
-        output_names=output_names,
-        input_shape=self.input_shape, 
-        device=self.device,
-    )
-    return atk.run()
+    return self.mip_attacker.run(reference_bounds)
     
 def _preprocess(self, objectives):
     # determine search algorithm
@@ -86,7 +77,8 @@ def _preprocess(self, objectives):
     objectives.rhs = objectives.rhs[remaining_index]
     
     # refine
-    if len(objectives) and Settings.use_mip_refine and self.abstractor.method == 'backward':
+    refined_intermediate_bounds = None
+    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack) and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
         tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -107,10 +99,21 @@ def _preprocess(self, objectives):
         objectives.upper_bounds = objectives.upper_bounds[remaining_index]
         objectives.cs = objectives.cs[remaining_index]
         objectives.rhs = objectives.rhs[remaining_index]
-        return objectives, copy.deepcopy(refined_intermediate_bounds)
+        
+        # mip attacker
+        if Settings.use_mip_attack:
+            output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
+            self.mip_attacker = MIPAttacker(
+                net=self.net, 
+                objective=objectives, 
+                mip_model=self.abstractor.net.model, 
+                output_names=output_names,
+                input_shape=self.input_shape, 
+                device=self.device,
+            )
         
     logger.info(f'Remain {len(objectives)} objectives')
-    return objectives, None
+    return objectives, copy.deepcopy(refined_intermediate_bounds)
 
 
 def _check_timeout(self, timeout):
