@@ -20,7 +20,6 @@ from util.misc.logger import logger
 from setting import Settings
 
     
-    
 def _mip_attack(self, reference_bounds):
     if not Settings.use_attack:
         return False, None
@@ -29,6 +28,7 @@ def _mip_attack(self, reference_bounds):
         return False, None
     
     return self.mip_attacker.run(reference_bounds)
+    
     
 def _preprocess(self, objectives):
     # determine search algorithm
@@ -43,8 +43,6 @@ def _preprocess(self, objectives):
         
     if len(objectives) >= 50:
         Settings.use_restart = False
-        
-    # return objectives, None
         
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None

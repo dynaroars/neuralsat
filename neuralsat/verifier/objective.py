@@ -94,13 +94,16 @@ class Objective:
     "Single objective in CNF"
     
     def __init__(self, prop) -> None:
-        bounds, self.mat = prop
+        input_bounds, self.mat = prop
         self.dtype = torch.get_default_dtype()
         
-        bounds = torch.tensor(bounds, dtype=self.dtype)
+        bounds = torch.tensor(input_bounds, dtype=self.dtype)
         self.lower_bound = bounds[:, 0]
         self.upper_bound = bounds[:, 1]
         assert torch.all(self.lower_bound <= self.upper_bound)
+        
+        bounds_f64 = torch.tensor(input_bounds, dtype=torch.float64)
+        assert torch.all(bounds == bounds_f64)
         
         self._extract()
         
@@ -115,26 +118,6 @@ class Objective:
         
         if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
             assert (self.rhs == 0).all()
-
-        true_labels, target_labels = [], []
-        for m in prop_mat:
-            true_label = np.where(m == 1)[-1]
-            if len(true_label) != 0:
-                assert len(true_label) == 1
-                true_labels.append(true_label[0])
-            else:
-                true_labels.append(None)
-
-            target_label = np.where(m == -1)[-1]
-            if len(target_label) != 0:
-                assert len(target_label) == 1
-                target_labels.append(target_label[0])
-            else:
-                target_labels.append(None)
-
-        self.true_labels = np.array(true_labels)
-        self.target_labels = np.array(target_labels)
-
     
     def get_info(self):
         return self.cs, self.rhs
