@@ -9,6 +9,24 @@ from util.misc.check import check_solution
 multiprocess_mip_attack_model = None
 multiprocess_stop = False
 
+class CounterExamplePool:
+    
+    def __init__(self, net, objective):
+        self.net = net
+        self.objective = objective
+        
+        self._initialize()
+
+
+    def _initialize(self, n_samples=10):
+        pass
+        
+        
+    def add(self, inputs):
+        assert len(inputs) > 0
+        pass
+        
+
 def mip_solver_worker(candidate, n_inputs):
     global multiprocess_stop
     if multiprocess_stop:
@@ -42,16 +60,19 @@ def mip_solver_worker(candidate, n_inputs):
     
 class MIPAttacker:
 
-    def __init__(self, net, objective, mip_model, output_names, input_shape, device):
+    def __init__(self, net, objectives, mip_model, output_names, input_shape, device):
         self.net = net
-        self.objective = objective
+        self.objectives = objectives
         self.input_shape = input_shape
         self.device = device
         self.output_names = output_names
 
+        assert self.objectives.cs.shape[1] == 1 # c shape: [#labels, 1, #outputs]
+        
         self.mip_model = mip_model.copy()
         self.mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
         self.mip_model.setParam('BestObjStop', -1e-5)  # Terminiate as long as we find a adversarial example.
+        
         
     def manual_seed(self, seed):
         self.seed = seed
@@ -68,7 +89,21 @@ class MIPAttacker:
             adv = mip_solver_worker(var_name, np.prod(self.input_shape))
             if adv is not None:
                 adv = torch.tensor(adv, device=self.device).view(self.input_shape)
-                if check_solution(net=self.net, adv=adv, cs=self.objective.cs, rhs=self.objective.rhs, data_min=self.objective.lower_bounds, data_max=self.objective.upper_bounds):
+                if check_solution(net=self.net, adv=adv, cs=self.objectives.cs, rhs=self.objectives.rhs, data_min=self.objectives.lower_bounds, data_max=self.objectives.upper_bounds):
                     return True, adv
                 
         return False, None
+    
+    
+    def attack_domains(self, domain_params):
+        # exit()
+        # print(self.run())
+        if not hasattr(self, 'cex_pool'):
+            self.cex_pool = CounterExamplePool(self.net, self.objectives)
+            
+            
+        # print('attack_domains', len(domain_params.lower_bounds[0]), self.objectives.cs.shape)
+        # for h in domain_params.histories:
+        #     print(h)
+        # exit()
+        

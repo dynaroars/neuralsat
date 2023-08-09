@@ -56,6 +56,7 @@ class Tightener:
                 intermediate_layer_bounds=copy.deepcopy(cur_intermediate_layer_bounds),
                 # intermediate_layer_bounds=cur_intermediate_layer_bounds,
                 timeout_per_neuron=1.0,
+                refine=True,
             )
             # print(idx, 'refine in:', time.time() - tic)
             # print('refined bounds after:', sum([(v[1] - v[0]).sum().item() for _, v in cur_intermediate_layer_bounds.items()]))

@@ -263,7 +263,7 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     return cpu_net
 
     
-def build_lp_solver(self, model_type, input_lower, input_upper, c, intermediate_layer_bounds=None, timeout_per_neuron=None):
+def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, intermediate_layer_bounds=None, timeout_per_neuron=None):
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
@@ -298,6 +298,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, intermediate_
         model_type=model_type, 
         intermediate_layer_bounds=intermediate_layer_bounds,
         timeout_per_neuron=timeout_per_neuron,
+        refine=refine,
     )
     self.net.model.update()
     self.last_c_lp = c

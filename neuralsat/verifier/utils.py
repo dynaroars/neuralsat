@@ -84,26 +84,33 @@ def _preprocess(self, objectives):
         
         tic = time.time()
         c_to_use = tmp_objective.cs.transpose(0, 1) if tmp_objective.cs.shape[1] == 1 else None
-        self.abstractor.build_lp_solver('mip', tmp_objective.lower_bounds.view(self.input_shape), tmp_objective.upper_bounds.view(self.input_shape), c=c_to_use)
+        self.abstractor.build_lp_solver(
+            model_type='mip', 
+            input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
+            input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
+            c=c_to_use,
+            refine=Settings.use_mip_refine,
+        )
         logger.debug(f'MIP: {time.time() - tic:.04f}')
 
-        # forward with refinement
-        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
-        ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
-        
-        # pruning
-        remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
-        objectives.lower_bounds = objectives.lower_bounds[remaining_index]
-        objectives.upper_bounds = objectives.upper_bounds[remaining_index]
-        objectives.cs = objectives.cs[remaining_index]
-        objectives.rhs = objectives.rhs[remaining_index]
+        if Settings.use_mip_refine:
+            # forward with refinement
+            refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
+            ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
+            
+            # pruning
+            remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
+            objectives.lower_bounds = objectives.lower_bounds[remaining_index]
+            objectives.upper_bounds = objectives.upper_bounds[remaining_index]
+            objectives.cs = objectives.cs[remaining_index]
+            objectives.rhs = objectives.rhs[remaining_index]
         
         # mip attacker
         if Settings.use_mip_attack:
             output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
             self.mip_attacker = MIPAttacker(
                 net=self.net, 
-                objective=objectives, 
+                objectives=objectives, 
                 mip_model=self.abstractor.net.model, 
                 output_names=output_names,
                 input_shape=self.input_shape, 

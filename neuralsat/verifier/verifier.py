@@ -189,6 +189,8 @@ class Verifier:
             
             
     def _branch_and_bound(self):
+        # self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(5, self.device))
+        
         # step 1: pick out
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
@@ -247,6 +249,7 @@ class Verifier:
                     input_lower=domain_params.input_lowers[idx_][None], 
                     input_upper=domain_params.input_uppers[idx_][None], 
                     c=domain_params.cs[idx_][None],
+                    refine=False,
                 )
 
                 feasible, adv = self.abstractor.solve_full_assignment(

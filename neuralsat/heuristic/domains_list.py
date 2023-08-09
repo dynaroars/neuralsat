@@ -263,4 +263,27 @@ class DomainsList:
         return 1e-6
 
 
+    def pick_out_worst_domains(self, batch, device='cpu'):
+        indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()[:batch]
+
+        new_lower_bounds = [lb[indices].to(device=device, non_blocking=True) for lb in self.all_lower_bounds]
+        new_upper_bounds = [ub[indices].to(device=device, non_blocking=True) for ub in self.all_upper_bounds]
+        
+        new_masks = compute_masks(
+            lower_bounds=new_lower_bounds, 
+            upper_bounds=new_upper_bounds, 
+            device=device,
+        )
+        new_histories = copy.deepcopy([self.all_histories[idx] for idx in indices])
+        
+        self._check_consistent()
+        
+        return AbstractResults(**{
+            'masks': new_masks, 
+            'histories': new_histories,
+            'lower_bounds': new_lower_bounds, 
+            'upper_bounds': new_upper_bounds, 
+        })
+
+
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses
