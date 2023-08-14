@@ -204,7 +204,35 @@ def main(n_trials=100, inplace=False):
             haioc(data, xs, inplace=inplace)
         pbar.set_description(f'[new] average_fps={time_meter.fps:.05f}')
 
+def extract_log():
+    import os
+    import re
+    
+    root = './mnistfc_hard_results/'
+    with open('valid_instances.csv', 'w') as fp:
+        for file in os.listdir(root):
+            file_path = os.path.join(root, file)
+            content = open(file_path).read().strip()
+            if ('unsat' not in content) and ('timeout' not in content):
+                continue
+            
+            net, spec = file.split('_[spec]_')
+            net = net.split('[net]_')[1]
+            spec = spec.split('.log')[0]
+            # print(net, spec)
+            # if 'unsat' in content:
+            if 'timeout,' in content:
+                last_iter_log = content.split('\n')[-3]
+                last_bound = float(re.findall(r'Bound: -([0-9\.]+)', last_iter_log)[0])
+                # print(last_bound)
+                if last_bound >= 5.0:
+                    continue
+                print(last_iter_log)
+            print(file_path)
+                
+            print(f'onnx/{net}.onnx,vnnlib/{spec}.vnnlib,3600', file=fp)
 
 if __name__ == '__main__':
-    main(100, True)
+    # main(100, True)
+    extract_log()
 

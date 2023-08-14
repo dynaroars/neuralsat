@@ -83,7 +83,8 @@ def _preprocess(self, objectives):
         tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
         tic = time.time()
-        c_to_use = tmp_objective.cs.transpose(0, 1) if tmp_objective.cs.shape[1] == 1 else None
+        # FIXME: is that correct?
+        c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
         self.abstractor.build_lp_solver(
             model_type='mip', 
             input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
@@ -107,14 +108,9 @@ def _preprocess(self, objectives):
         
         # mip attacker
         if Settings.use_mip_attack:
-            output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
             self.mip_attacker = MIPAttacker(
-                net=self.net, 
+                abstractor=self.abstractor, 
                 objectives=objectives, 
-                mip_model=self.abstractor.net.model, 
-                output_names=output_names,
-                input_shape=self.input_shape, 
-                device=self.device,
             )
         
     logger.info(f'Remain {len(objectives)} objectives')

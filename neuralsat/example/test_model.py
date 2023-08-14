@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+import time
+
 class CifarConv(nn.Module):
     
     def __init__(self):
@@ -289,16 +291,36 @@ class NetConv2(nn.Module):
         # x = torch.where(x > 0.0, 1.0, -1.0).float()
         x = self.l1(x)
         return x
+   
+
+def extract_instance(net_path, vnnlib_path):
+    from util.spec.read_vnnlib import read_vnnlib
+    from util.network.read_onnx import parse_onnx
+    from verifier.objective import Objective, DnfObjectives
     
+    vnnlibs = read_vnnlib(vnnlib_path)
+    model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
+    
+    # objective
+    objectives = []
+    for spec in vnnlibs:
+        bounds = spec[0]
+        for prop_i in spec[1]:
+            objectives.append(Objective((bounds, prop_i)))
+    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
+
+    return model, input_shape, objectives
+
+ 
 def test():
     # torch.manual_seed(0)
     net = nn.Sequential(
         nn.Flatten(), 
-        nn.Linear(784, 5), 
+        nn.Linear(784, 10), 
         nn.ReLU(),
-        nn.Linear(5, 7), 
+        nn.Linear(10, 16), 
         nn.ReLU(),
-        nn.Linear(7, 9), 
+        nn.Linear(16, 9), 
         nn.ReLU(),
         # nn.Linear(25, 15), 
         # nn.ReLU(),
@@ -321,7 +343,7 @@ def test():
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/test_mnistfc.onnx"
+    output_name = "example/test_mnistfc_unsat.onnx"
     torch.onnx.export(
         net,
         x,
@@ -333,8 +355,34 @@ def test():
     
     print('Export onnx to:', output_name)
     
+    from pathlib import Path
+
+    net_path = output_name
+    vnnlib_path = Path('example/test.vnnlib')
+    device = 'cpu'
+    
+    print('Running test with', net_path, vnnlib_path)
+    START_TIME = time.time()
+    model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+    model.to(device)
+
+    from verifier.verifier import Verifier 
+    verifier = Verifier(
+        net=model, 
+        input_shape=input_shape, 
+        batch=1000,
+        device=device,
+    )
+    
+    status = verifier.verify(objectives)
+    print(f'{status},{time.time() - START_TIME:.04f}')
     
 if __name__ == '__main__':
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
-    test()
+    trial = 0
+    while True:
+        test()
+        print(f'Trail {trial} failed\n\n')
+        trial += 1
+        time.sleep(1.0)
     

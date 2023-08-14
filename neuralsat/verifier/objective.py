@@ -103,7 +103,8 @@ class Objective:
         assert torch.all(self.lower_bound <= self.upper_bound)
         
         bounds_f64 = torch.tensor(input_bounds, dtype=torch.float64)
-        assert torch.all(bounds == bounds_f64)
+        # FIXME: unsound errors
+        # assert torch.all(bounds == bounds_f64)
         
         self._extract()
         

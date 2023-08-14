@@ -50,6 +50,8 @@ class Verifier:
     
     def verify(self, dnf_objectives, preconditions=[], timeout=3600):
         self.start_time = time.time()
+        if not len(dnf_objectives):
+            return ReturnStatus.UNSAT
         
         # attack
         is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
@@ -58,7 +60,9 @@ class Verifier:
 
         # refine
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives)
-
+        if not len(dnf_objectives):
+            return ReturnStatus.UNSAT
+        
         # mip attack
         is_attacked, self.adv = self._mip_attack(reference_bounds)
         if is_attacked:
@@ -189,7 +193,8 @@ class Verifier:
             
             
     def _branch_and_bound(self):
-        # self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(5, self.device))
+        if Settings.use_mip_attack:
+            self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(5, self.device))
         
         # step 1: pick out
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
@@ -201,7 +206,6 @@ class Verifier:
 
         # step 3: branching
         decisions = self.decision(self.abstractor, pick_ret)
-        # print(decisions)
 
         # step 4: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)

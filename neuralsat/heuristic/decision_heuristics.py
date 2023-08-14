@@ -176,10 +176,6 @@ class DecisionHeuristic:
                         break
         
         final_decision = sum(final_decision, [])
-        
-        # print(final_decision)
-        # if len(final_decision) > 7:
-        #     exit()
             
         return final_decision
 
