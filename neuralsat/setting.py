@@ -28,8 +28,8 @@ class GlobalSettings:
         self.use_restart = 0
         
         # abstraction
-        self.use_hidden_bounds_optimization = 1
-        self.hidden_bounds_optimization_interval = 1
+        self.use_hidden_bounds_optimization = 0
+        self.hidden_bounds_optimization_interval = 10
         
         # threshold for automatically switching between input and hidden splitting
         self.safety_property_threshold = 0.5

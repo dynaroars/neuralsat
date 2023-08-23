@@ -194,7 +194,7 @@ class Verifier:
             
     def _branch_and_bound(self):
         if Settings.use_mip_attack:
-            self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(5, self.device))
+            self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, self.device))
         
         # step 1: pick out
         pick_ret = self.domains_list.pick_out(self.batch, self.device)

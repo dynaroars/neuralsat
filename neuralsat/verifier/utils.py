@@ -32,8 +32,10 @@ def _mip_attack(self, reference_bounds):
     
 def _preprocess(self, objectives):
     # determine search algorithm
-    eps = (objectives.upper_bounds - objectives.lower_bounds).max().item()
-    logger.info(f'[!] eps = {eps:.06f}')
+    diff = objectives.upper_bounds - objectives.lower_bounds
+    eps = diff.max().item()
+    perturbed = (diff > 0).numel()
+    logger.info(f'[!] eps = {eps:.06f}, perturbed={perturbed}')
     if eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= 200: # small inputs
@@ -83,7 +85,6 @@ def _preprocess(self, objectives):
         tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
         tic = time.time()
-        # FIXME: is that correct?
         c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
         self.abstractor.build_lp_solver(
             model_type='mip', 

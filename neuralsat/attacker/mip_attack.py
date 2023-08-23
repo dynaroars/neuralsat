@@ -6,7 +6,9 @@ import torch
 import time
 import math
 
+from util.misc.result import AbstractResults
 from util.misc.check import check_solution
+from heuristic.util import compute_masks
 
 multiprocess_mip_attack_model = None
 multiprocess_stop = False
@@ -88,10 +90,6 @@ class CounterExamplePool:
             activation_i = [_[batch_idx] for _ in activations]
             self._add_one(CounterExample(inputs[batch_idx], pred[batch_idx].item(), activation_i))
             
-        print(len(self.pool))
-        common_activation = self.get_common_pattern()
-        print(common_activation)
-        exit()
         
     def _add_one(self, cex):
         if len(self.pool) >= self.capacity:
@@ -148,7 +146,12 @@ class CounterExamplePool:
         
         return ret
         
-        
+    def get_uncommon_pattern(self, prob_threshold=0.5):
+        pass
+
+    def __len__(self):
+        return len(self.pool)
+
 def mip_solver_worker(candidate, n_inputs):
     global multiprocess_stop
     if multiprocess_stop:
@@ -222,15 +225,68 @@ class MIPAttacker:
     
     def attack_domains(self, domain_params):
         # exit()
-        print('mip attack', self.run()[0])
+        # print('mip attack', self.run()[0])
         print('attack_domains', len(domain_params.lower_bounds[0]))
-        print( self.objectives.cs)
-        print( self.objectives.cs.shape)
+        # print( self.objectives.cs)
+        # print( self.objectives.cs.shape)
         if not hasattr(self, 'cex_pool'):
-            self.cex_pool = CounterExamplePool(self.abstractor, self.objectives, capacity=100)
-            
-            
+            self.cex_pool = CounterExamplePool(self.abstractor, self.objectives, capacity=200)
+        
+        select_domain_params = self.select_domains(domain_params, 100)
+        print(f'Selected {len(select_domain_params.lower_bounds[0])} domains from {len(domain_params.lower_bounds[0])} domains for MIP hidden attack')
         # for h in domain_params.histories:
         #     print(h)
         # exit()
+        
+        
+    def select_domains(self, domain_params, n_candidates=1):
+        # print(len(self.cex_pool))
+        # print(common_activation)
+        # print([_.shape for _ in common_activation])
+        
+        # domain_activations = [
+        #     ((domain_params.lower_bounds[j] > 0).int() - (domain_params.upper_bounds[j] < 0).int()).flatten(1).cpu()
+        #         for j in range(len(domain_params.lower_bounds) - 1)
+        # ]
+        
+        if n_candidates >= len(domain_params.lower_bounds[0]):
+            return domain_params
+
+        common_activation = self.cex_pool.get_common_pattern()
+        domain_masks = compute_masks(domain_params.lower_bounds, domain_params.upper_bounds, 'cpu')
+        domain_activations = [
+            (((domain_params.lower_bounds[j] + domain_params.upper_bounds[j]) > 0).int() - ((domain_params.lower_bounds[j] + domain_params.upper_bounds[j]) <= 0).int()).flatten(1).cpu()
+                for j in range(len(domain_masks))
+        ]
+        
+        domain_scores = torch.zeros([len(domain_masks[0])])
+        for ca, da, dm in zip(common_activation, domain_activations, domain_masks):
+            domain_scores += (((ca == da) * dm).sum(dim=1) / dm.sum(dim=1))
+        domain_scores = domain_scores / len(domain_masks)
+        assert (domain_scores <= 1.0).all()
+        
+        select_ids = torch.where(domain_scores >= 0.985)[0]
+        # print(select_ids)
+        if len(select_ids) >= n_candidates:
+            select_ids = torch.topk(domain_scores, n_candidates).indices
+        else:
+            remain_candidates = n_candidates - len(select_ids)
+            output_lbs = domain_params.lower_bounds[-1].flatten().cpu()
+            normalized_output_lbs = -output_lbs / output_lbs.neg().max()
+            # print(normalized_output_lbs, remain_candidates)
+            probs = torch.nn.functional.softmax(normalized_output_lbs / 0.1, dim=0)
+            extra_ids = probs.multinomial(remain_candidates, replacement=False)
+            # print('extra_ids', extra_ids)
+            # print('select_ids', select_ids)
+            # print('select_ids', )
+            select_ids = torch.concat([select_ids, extra_ids]).unique()
+            
+            
+            # assert len(extra_ids) + len(select_ids) == n_candidates
+        # print('select_ids', select_ids)
+        
+        return AbstractResults(**{
+            'lower_bounds': [lb[select_ids] for lb in domain_params.lower_bounds], 
+            'upper_bounds': [ub[select_ids] for ub in domain_params.upper_bounds], 
+        })
         

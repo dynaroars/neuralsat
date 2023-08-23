@@ -269,18 +269,18 @@ class DomainsList:
         new_lower_bounds = [lb[indices].to(device=device, non_blocking=True) for lb in self.all_lower_bounds]
         new_upper_bounds = [ub[indices].to(device=device, non_blocking=True) for ub in self.all_upper_bounds]
         
-        new_masks = compute_masks(
-            lower_bounds=new_lower_bounds, 
-            upper_bounds=new_upper_bounds, 
-            device=device,
-        )
-        new_histories = copy.deepcopy([self.all_histories[idx] for idx in indices])
+        # new_masks = compute_masks(
+        #     lower_bounds=new_lower_bounds, 
+        #     upper_bounds=new_upper_bounds, 
+        #     device=device,
+        # )
+        # new_histories = copy.deepcopy([self.all_histories[idx] for idx in indices])
         
         self._check_consistent()
         
         return AbstractResults(**{
-            'masks': new_masks, 
-            'histories': new_histories,
+            # 'masks': new_masks, 
+            # 'histories': new_histories,
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
         })
