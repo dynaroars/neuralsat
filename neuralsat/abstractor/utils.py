@@ -12,6 +12,16 @@ from .params import get_branching_opt_params
 from util.misc.check import check_solution
 
 
+def update_refined_beta(self, betas, batch):
+    if betas is not None:
+        self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
+        assert len(self.net.relus) == len(betas['sparse_beta'])
+        for relu_idx, relu_layer in enumerate(self.net.relus):
+            relu_layer.sparse_beta = betas['sparse_beta'][relu_idx].detach().clone().repeat(batch, 1).requires_grad_() # need detach()
+            relu_layer.sparse_beta_loc = betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
+            relu_layer.sparse_beta_sign = betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
+    
+
 def new_slopes(slopes, keep_name):
     new_slope = {}
     for relu_layer, alphas in slopes.items():
@@ -263,7 +273,7 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     return cpu_net
 
     
-def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, intermediate_layer_bounds=None, timeout_per_neuron=None):
+def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
@@ -306,6 +316,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
         final_node_name=self.net.final_name, 
         model_type=model_type, 
         intermediate_layer_bounds=intermediate_layer_bounds,
+        timeout=timeout,
         timeout_per_neuron=timeout_per_neuron,
         refine=refine,
     )

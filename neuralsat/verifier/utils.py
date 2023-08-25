@@ -94,6 +94,7 @@ def _preprocess(self, objectives):
             input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
             c=c_to_use,
             refine=Settings.use_mip_refine,
+            timeout=None,
         )
         logger.debug(f'MIP: {time.time() - tic:.04f}')
         
@@ -140,14 +141,7 @@ def _init_abstractor(self, method, objective):
     
     self.abstractor.setup(objective)
     
-    # if hasattr(self, 'refined_betas'):
-    #     # print('refined_betas:', self.refined_betas)
-    #     assert (len(self.abstractor.net.relus)) == len(self.refined_betas['sparse_beta'])
-    #     for relu_idx, relu_layer in enumerate(self.abstractor.net.relus):
-    #         relu_layer.sparse_beta = self.refined_betas['sparse_beta'][relu_idx].detach().clone().requires_grad_() # need detach()
-    #         relu_layer.sparse_beta_loc = self.refined_betas['sparse_beta_loc'][relu_idx].clone()
-    #         relu_layer.sparse_beta_sign = self.refined_betas['sparse_beta_sign'][relu_idx].clone()
-
+    
 def _setup_restart(self, nth_restart, objective):
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:

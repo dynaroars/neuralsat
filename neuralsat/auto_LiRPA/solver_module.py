@@ -1,14 +1,18 @@
 import multiprocessing
+import time
 import sys
 import os
 
 import torch
 from .bound_ops import *
 
-multiprocess_mip_model = None
+MULTIPROCESS_MODEL = None
+START_TIME = None
+TIMEOUT = None
+
 TIMEOUT_PER_NEURON = 10
 N_THREAD = 1
-N_REFINE_LAYER = 4
+N_REFINE_LAYER = 10
 N_PROC = os.cpu_count() // N_THREAD
 EAGER_OPTIMIZE = False
 
@@ -23,6 +27,10 @@ def mip_solver_worker(candidate):
     """ Multiprocess worker for solving MIP models in build_the_model_mip_refine """
 
     # print('solving:', candidate, TIMEOUT_PER_NEURON)
+    if check_timeout(time.time()):
+        if DEBUG:
+            print(f'skip {candidate} due to timeout')
+        return None, None, False
 
     def get_grb_solution(grb_model, reference, bound_type, eps=1e-5):
         refined = False
@@ -65,7 +73,7 @@ def mip_solver_worker(candidate):
 
     init_lb, init_ub = None, None
 
-    model = multiprocess_mip_model.copy()
+    model = MULTIPROCESS_MODEL.copy()
     model.setParam('TimeLimit', TIMEOUT_PER_NEURON)
     model.setParam('Threads', N_THREAD)
     v = model.getVarByName(candidate)
@@ -106,7 +114,7 @@ def mip_solver_worker(candidate):
 
 
 def build_solver_module(self, x=None, C=None, intermediate_layer_bounds=None, final_node_name=None, 
-                        model_type="mip", solver_pkg="gurobi", timeout_per_neuron=None, refine=False):
+                        model_type="mip", solver_pkg="gurobi", timeout=None, timeout_per_neuron=None, refine=False):
     r"""build lp/mip solvers in general graph.
 
     Args:
@@ -138,6 +146,11 @@ def build_solver_module(self, x=None, C=None, intermediate_layer_bounds=None, fi
     if timeout_per_neuron is not None:
         global TIMEOUT_PER_NEURON
         TIMEOUT_PER_NEURON = timeout_per_neuron
+        
+    if timeout is not None:
+        global TIMEOUT, START_TIME
+        TIMEOUT = timeout
+        START_TIME = time.time()
 
     if (x is not None) and (intermediate_layer_bounds is not None):
         # Set the model to use new intermediate layer bounds, ignore the original ones.
@@ -177,6 +190,11 @@ def clear_solver_module(self, node):
         del node.solver_vars
         
         
+def check_timeout(current_time):
+    if TIMEOUT is None:
+        return False
+    return (current_time - START_TIME) > TIMEOUT
+
 def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="gurobi", refine=False):
     if not hasattr(node, 'solver_vars'):
         for n in node.inputs:
@@ -184,9 +202,10 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
         # print(node, node.inputs)
         
         # refine from second relu layer
-        if refine and isinstance(node, BoundRelu) and (node in self.relus[1:1+N_REFINE_LAYER]):
+        # print('Timeout:', check_timeout(time.time()))
+        if refine and isinstance(node, BoundRelu) and (node in self.relus[1:1+N_REFINE_LAYER]) and not check_timeout(time.time()):
             # TODO: refined node is not Linear
-            global multiprocess_mip_model
+            global MULTIPROCESS_MODEL
             
             refine_node = node.inputs[0]
             
@@ -202,24 +221,28 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                     # print(v.VarName, v.lb==refine_node.lower[0, neuron_idx], v.ub==refine_node.upper[0, neuron_idx] if refine_node.upper is not None else None)
                     candidates.append(v.VarName)
                     candidate_neuron_ids.append(neuron_idx)
-    
                 # speed up
-                if not EAGER_OPTIMIZE:
-                    v.lb, v.ub = -np.inf, np.inf
+                v.lb, v.ub = -np.inf, np.inf
                     
             self.model.update()
             
             # tighten bounds
             if len(candidates):
-                multiprocess_mip_model = self.model.copy()
-                if N_PROC > 1:
+                print('#candidates =', len(candidates))
+                MULTIPROCESS_MODEL = self.model.copy()
+                # global N_THREAD, N_PROC
+                # if len(candidates) < os.cpu_count():
+                #     N_PROC = len(candidates)
+                #     N_THREAD = max(1, os.cpu_count() // N_PROC)
+                
+                if (N_PROC > 1) and (len(candidates) > 1):
                     with multiprocessing.Pool(min(N_PROC, len(candidates))) as pool:
                         solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
                 else:
                     solver_result = []
                     for can in candidates:
                         solver_result.append(mip_solver_worker(can))
-                multiprocess_mip_model = None
+                MULTIPROCESS_MODEL = None
                     
                 # update bounds
                 for (vlb, vub, refined), neuron_idx in zip(solver_result, candidate_neuron_ids):
@@ -269,7 +292,8 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 
                 self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
                 lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds)
-                print('optimized  (w/ beta):', lb_)
+                if DEBUG:
+                    print('optimized  (w/ beta):', lb_)
                 
             # TODO: check spec here?
         else:

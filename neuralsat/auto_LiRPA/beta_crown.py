@@ -5,9 +5,9 @@ def get_betas(self):
     betas = {'sparse_beta': [], 'sparse_beta_loc': [], 'sparse_beta_sign': []}
     for relu_layer in self.relus:
         if hasattr(relu_layer, 'sparse_beta_loc'):
-            betas['sparse_beta'].append(relu_layer.sparse_beta)
-            betas['sparse_beta_loc'].append(relu_layer.sparse_beta_loc)
-            betas['sparse_beta_sign'].append(relu_layer.sparse_beta_sign)
+            betas['sparse_beta'].append(relu_layer.sparse_beta.clone())
+            betas['sparse_beta_loc'].append(relu_layer.sparse_beta_loc.clone())
+            betas['sparse_beta_sign'].append(relu_layer.sparse_beta_sign.clone())
     return betas
 
 def beta_bias(self):
