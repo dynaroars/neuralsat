@@ -106,7 +106,7 @@ class NetworkAbstractor:
             return True
         
 
-    def initialize(self, objective, share_slopes=False, reference_bounds=None):
+    def initialize(self, objective, share_slopes=False, reference_bounds=None, init_betas=None):
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -131,6 +131,17 @@ class NetworkAbstractor:
             logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
+            
+            # update refined betas
+            if init_betas:
+                self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
+                # print(init_betas)
+                assert len(self.net.relus) == len(init_betas['sparse_beta'])
+                batch = len(objective.cs)
+                for relu_idx, relu_layer in enumerate(self.net.relus):
+                    relu_layer.sparse_beta = init_betas['sparse_beta'][relu_idx].detach().clone().repeat(batch, 1).requires_grad_() # need detach()
+                    relu_layer.sparse_beta_loc = init_betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
+                    relu_layer.sparse_beta_sign = init_betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
             
             lb, _ = self.net.compute_bounds(
                 x=(self.x,), 

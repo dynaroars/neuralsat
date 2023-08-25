@@ -278,7 +278,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     # gurobi solver
     self.net.model = grb.Model(model_type)
     self.net.model.setParam('OutputFlag', False)
-    self.net.model.setParam("FeasibilityTol", 1e-7)
+    self.net.model.setParam("FeasibilityTol", 1e-5)
     # self.net.model.setParam('TimeLimit', timeout)
     if model_type == 'mip':
         self.net.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
@@ -287,9 +287,18 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     # create new inputs
     new_x = BoundedTensor(input_lower, PerturbationLpNorm(x_L=input_lower, x_U=input_upper))
     # disable beta
-    self.net.set_bound_opts(get_branching_opt_params()) 
+    
     # forward to recompute hidden bounds
+    self.net.set_bound_opts(get_branching_opt_params()) 
     self.net.compute_bounds(x=(new_x,), C=c, method="backward")
+    
+    # self.net.set_bound_opts({'optimize_bound_args': {
+    #             'enable_beta_crown': False, 
+    #             'iteration': 100, 
+    #             'lr_alpha': 0.1,
+    #         }} ) 
+    # self.net.compute_bounds(x=(new_x,), C=c, method="crown-optimized")
+    
     # build solver
     self.net.build_solver_module(
         x=(new_x,), 

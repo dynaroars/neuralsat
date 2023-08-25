@@ -1,6 +1,15 @@
 import torch
 
 
+def get_betas(self):
+    betas = {'sparse_beta': [], 'sparse_beta_loc': [], 'sparse_beta_sign': []}
+    for relu_layer in self.relus:
+        if hasattr(relu_layer, 'sparse_beta_loc'):
+            betas['sparse_beta'].append(relu_layer.sparse_beta)
+            betas['sparse_beta_loc'].append(relu_layer.sparse_beta_loc)
+            betas['sparse_beta_sign'].append(relu_layer.sparse_beta_sign)
+    return betas
+
 def beta_bias(self):
     batch_size = len(self.relus[-1].split_beta)
     batch = int(batch_size/2)
@@ -26,6 +35,20 @@ def print_optimized_beta(self, relus, intermediate_beta_enabled=False):
         if model.split_beta_used:
             print(f"{model.name} split beta:", model.split_beta.view(-1))
             print(f"{model.name} bias:", model.split_bias)
+
+
+def print_betas(self):
+    for relu_layer in self.relus:
+        print('[+] Layer:', relu_layer)
+        if hasattr(relu_layer, 'sparse_beta'):
+            print('\t- sparse_beta', relu_layer.sparse_beta)
+            
+        if hasattr(relu_layer, 'sparse_beta_loc'):
+            print('\t- sparse_beta_loc', relu_layer.sparse_beta_loc)
+            
+        if hasattr(relu_layer, 'sparse_beta_sign'):
+            print('\t- sparse_beta_sign', relu_layer.sparse_beta_sign)
+        print()
 
 
 def save_best_intermediate_betas(self, relus, idx):

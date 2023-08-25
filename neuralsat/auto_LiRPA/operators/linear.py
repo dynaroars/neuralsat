@@ -584,6 +584,10 @@ class BoundLinear(Bound):
         this_layer_shape = self.lower.squeeze(0).shape
         out_lbs = self.lower.squeeze(0).detach().cpu().numpy() if self.lower is not None else None
         out_ubs = self.upper.squeeze(0).detach().cpu().numpy() if self.upper is not None else None
+        
+        refined_lbs = torch.tensor([v_.lb for v_ in v[0]])
+        # print(this_layer_shape, refined_lbs.shape, out_lbs.shape)
+        # exit()
 
         # current layer weight (100, 1024)
         this_layer_weight = v[1]

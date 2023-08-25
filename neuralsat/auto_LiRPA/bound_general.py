@@ -1379,7 +1379,8 @@ class BoundedModule(nn.Module):
         get_unstable_locations, batched_backward, scaled_batched_backward)
     from .optimized_bounds import get_optimized_bounds, init_slope, get_refined_intermediate_bounds
     from .beta_crown import (
-        beta_bias, save_best_intermediate_betas,
+        beta_bias, save_best_intermediate_betas, 
+        print_betas, get_betas,
         print_optimized_beta)
 
     from .solver_module import (

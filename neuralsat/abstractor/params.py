@@ -19,6 +19,7 @@ def get_initialize_opt_params(share_slopes, stop_criterion_func):
                 'stop_criterion_func': stop_criterion_func,
                 'iteration': 50, 
                 'lr_alpha': 0.1, 
+                'lr_beta': 0.1,
                 'lr_decay': 0.98, 
             }}
     

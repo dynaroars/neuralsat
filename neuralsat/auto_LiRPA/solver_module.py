@@ -6,9 +6,9 @@ import torch
 from .bound_ops import *
 
 multiprocess_mip_model = None
-TIMEOUT_PER_NEURON = 15
-N_THREAD = 2
-N_REFINE_LAYER = 10
+TIMEOUT_PER_NEURON = 10
+N_THREAD = 1
+N_REFINE_LAYER = 4
 N_PROC = os.cpu_count() // N_THREAD
 EAGER_OPTIMIZE = False
 
@@ -67,7 +67,7 @@ def mip_solver_worker(candidate):
 
     model = multiprocess_mip_model.copy()
     model.setParam('TimeLimit', TIMEOUT_PER_NEURON)
-    # model.setParam('Threads', N_THREAD)
+    model.setParam('Threads', N_THREAD)
     v = model.getVarByName(candidate)
     out_lb, out_ub = v.lb, v.ub
     refine_time = time.time()
@@ -97,7 +97,8 @@ def mip_solver_worker(candidate):
             vlb, status_lb, status_lb_r = out_lb, -1, -1
 
     if DEBUG:
-        print(f"Solving MIP (thread={N_PROC}, timeout={TIMEOUT_PER_NEURON}) for {v.VarName:<10}: [{out_lb:.4f}, {out_ub:.4f}]=>[{vlb:.4f}, {vub:.4f}], time: {time.time()-refine_time:.4f}s")
+        # print(model)
+        print(f"Solving MIP (#workers={N_PROC}, #thread={N_THREAD}, timeout={TIMEOUT_PER_NEURON}) for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
         sys.stdout.flush()
 
     return vlb, vub, neuron_refined
@@ -236,30 +237,27 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 v.ub = refine_node.upper[0, neuron_idx]
             self.model.update()
 
-            # recompute hidden bounds
-            # reference_bounds = {refine_node.name: [refine_node.lower, refine_node.upper]}
-            # reference_bounds = {n_.inputs[0].name: [n_.inputs[0].lower, n_.inputs[0].upper] for n_ in self.relus}
-            reference_bounds = self.get_refined_intermediate_bounds()
-            lb_, _ = self.compute_bounds(x=x, C=C, method="backward", reference_bounds=reference_bounds)
-            print('w/o optimized        :', lb_)
-            
-            
-            self.set_bound_opts({
-                'optimize_bound_args': {'enable_beta_crown': True},
-                'enable_opt_interm_bounds': False,
-            })
-            lb_, _ = self.compute_bounds(x=x, C=C, method="CROWN-optimized", reference_bounds=reference_bounds)
-            print('optimized  (w/o beta):', lb_)
-            
-            # add beta constraints
-            if node == self.relus[1]:
-                for relu_layer in self.relus:
-                    relu_layer.sparse_beta = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
-                    relu_layer.sparse_beta_loc = torch.zeros(size=(1, 0), dtype=torch.int64, device=self.device, requires_grad=False)
-                    relu_layer.sparse_beta_sign = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
-            # else:
+
             if 1:
-                print('unstable_to_stable:', unstable_to_stable)
+                reference_bounds = self.get_refined_intermediate_bounds()
+                # lb_, _ = self.compute_bounds(x=x, C=C, method="backward", reference_bounds=reference_bounds)
+                # print('w/o optimized        :', lb_)
+                
+                
+                # self.set_bound_opts({
+                #     'optimize_bound_args': {'enable_beta_crown': True},
+                # })
+                # lb_, _ = self.compute_bounds(x=x, C=C, method="CROWN-optimized", reference_bounds=reference_bounds)
+                # print('optimized  (w/o beta):', lb_)
+                
+                # add beta constraints
+                if node == self.relus[1]:
+                    for relu_layer in self.relus:
+                        relu_layer.sparse_beta = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
+                        relu_layer.sparse_beta_loc = torch.zeros(size=(1, 0), dtype=torch.int64, device=self.device, requires_grad=False)
+                        relu_layer.sparse_beta_sign = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
+
+                # print('unstable_to_stable:', unstable_to_stable)
                 max_splits_per_layer = len(unstable_to_stable)
                 node.sparse_beta = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
                 node.sparse_beta_loc = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.int64, device=self.device, requires_grad=False)
@@ -268,21 +266,16 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 for neuron_idx, (refined_neuron, sign) in enumerate(unstable_to_stable):
                     node.sparse_beta_loc[0, neuron_idx] = refined_neuron
                     node.sparse_beta_sign[0, neuron_idx] = sign
-            
-            self.set_bound_opts({
-                'optimize_bound_args': {'enable_beta_crown': True},
-                'enable_opt_interm_bounds': False,
-            })
-            lb_, _ = self.compute_bounds(x=x, C=C, method="CROWN-optimized", reference_bounds=reference_bounds)
-            print('optimized  (w/ beta):', lb_)
-            
-            
-            # exit()
+                
+                self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
+                lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds)
+                print('optimized  (w/ beta):', lb_)
+                
             # TODO: check spec here?
         else:
             # TODO: refine for general activation
             pass
-
+        
         inp = [n_pre.solver_vars for n_pre in node.inputs]
         if C is not None and isinstance(node, BoundLinear) and \
                 not node.is_input_perturbed(1) and self.final_name == node.name:

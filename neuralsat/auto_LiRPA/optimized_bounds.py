@@ -682,8 +682,8 @@ def get_optimized_bounds(
         total_loss = -1 * loss_
         # total_loss = 0.0
         
-        if int(0.4 * iteration) <= i <= int(0.6 * iteration): 
-        # if 0:
+        # if int(0.4 * iteration) <= i <= int(0.6 * iteration): 
+        if 0:
             thresh_ = 0.01
             # total_fake_loss = 0.0
             # for node in optimizable_activations:

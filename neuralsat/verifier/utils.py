@@ -32,6 +32,7 @@ def _mip_attack(self, reference_bounds):
     
 def _preprocess(self, objectives):
     # determine search algorithm
+    self.refined_betas = None
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
     perturbed = (diff > 0).numel()
@@ -53,6 +54,7 @@ def _preprocess(self, objectives):
         return objectives, None
         
     try:
+        # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
         print('Failed to preprocessing objectives')
@@ -63,8 +65,8 @@ def _preprocess(self, objectives):
     
     # prune objectives
     tmp_objective = copy.deepcopy(objectives)
-    tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1]
-    tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1]
+    tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1] # raise errors if using beta, use full objectives instead
+    tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1] # raise errors if using beta, use full objectives instead
         
     # forward
     ret = self.abstractor.initialize(tmp_objective)
@@ -94,6 +96,8 @@ def _preprocess(self, objectives):
             refine=Settings.use_mip_refine,
         )
         logger.debug(f'MIP: {time.time() - tic:.04f}')
+        
+        # self.abstractor.net.print_betas()
 
         if Settings.use_mip_refine:
             # forward with refinement
@@ -106,6 +110,8 @@ def _preprocess(self, objectives):
             objectives.upper_bounds = objectives.upper_bounds[remaining_index]
             objectives.cs = objectives.cs[remaining_index]
             objectives.rhs = objectives.rhs[remaining_index]
+            
+            self.refined_betas = self.abstractor.net.get_betas()
         
         # mip attacker
         if Settings.use_mip_attack:
@@ -113,9 +119,10 @@ def _preprocess(self, objectives):
                 abstractor=self.abstractor, 
                 objectives=objectives, 
             )
+            
         
     logger.info(f'Remain {len(objectives)} objectives')
-    return objectives, copy.deepcopy(refined_intermediate_bounds)
+    return objectives, refined_intermediate_bounds
 
 
 def _check_timeout(self, timeout):
@@ -133,6 +140,13 @@ def _init_abstractor(self, method, objective):
     
     self.abstractor.setup(objective)
     
+    # if hasattr(self, 'refined_betas'):
+    #     # print('refined_betas:', self.refined_betas)
+    #     assert (len(self.abstractor.net.relus)) == len(self.refined_betas['sparse_beta'])
+    #     for relu_idx, relu_layer in enumerate(self.abstractor.net.relus):
+    #         relu_layer.sparse_beta = self.refined_betas['sparse_beta'][relu_idx].detach().clone().requires_grad_() # need detach()
+    #         relu_layer.sparse_beta_loc = self.refined_betas['sparse_beta_loc'][relu_idx].clone()
+    #         relu_layer.sparse_beta_sign = self.refined_betas['sparse_beta_sign'][relu_idx].clone()
 
 def _setup_restart(self, nth_restart, objective):
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
