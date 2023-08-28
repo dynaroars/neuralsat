@@ -217,11 +217,11 @@ class Verifier:
         if self.adv is not None:
             return
         
-        # 5.2: tighten bounds
-        tighten_ret = self.tightener(abstraction_ret)
+        # 5.2: unverified domains
+        self.domains_list.add(decisions, abstraction_ret)
         
-        # 5.3: unverified domains
-        self.domains_list.add(decisions, tighten_ret)
+        # step 6: tighten bounds
+        self.tightener(self.domains_list)
         
         # TODO: check full assignment after bcp
 
@@ -232,7 +232,7 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Bound: {self.domains_list.minimum_lowers:<15.02f} '
+            f'Bound: {self.domains_list.minimum_lowers:<15.04f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f}'
         )
         # print(tighten_ret.histories)

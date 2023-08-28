@@ -80,7 +80,8 @@ def _preprocess(self, objectives):
     
     # refine
     refined_intermediate_bounds = None
-    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack) and self.abstractor.method == 'backward':
+    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack or Settings.use_mip_tightening) \
+            and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
         tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -120,6 +121,10 @@ def _preprocess(self, objectives):
                 abstractor=self.abstractor, 
                 objectives=objectives, 
             )
+            
+        # mip tightener
+        if Settings.use_mip_tightening:
+            self.tightener = Tightener(self.abstractor)
             
         
     logger.info(f'Remain {len(objectives)} objectives')
@@ -165,9 +170,6 @@ def _setup_restart(self, nth_restart, objective):
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
         self._init_abstractor(abstract_method, objective)
-        
-    # tightener
-    self.tightener = Tightener(self.abstractor)
         
     return True
 

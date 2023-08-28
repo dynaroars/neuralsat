@@ -175,6 +175,8 @@ def build_solver_module(self, x=None, C=None, intermediate_layer_bounds=None, fi
     if model_type == 'lp':
         self._build_solver_general(node=final, C=C, model_type=model_type, solver_pkg=solver_pkg)
     else:
+        if refine:
+            assert all([isinstance(_, BoundRelu) for _ in self.perturbed_optimizable_activations]), print('Error: Support ReLU only')
         self._build_solver_refined(x=x, node=final, C=C, model_type=model_type, solver_pkg=solver_pkg, refine=refine)
     # print(self.model)
 

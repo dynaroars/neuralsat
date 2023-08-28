@@ -224,6 +224,7 @@ class MIPAttacker:
     
     
     def attack_domains(self, domain_params):
+        return None
         # exit()
         # print('mip attack', self.run()[0])
         print('attack_domains', len(domain_params.lower_bounds[0]))
