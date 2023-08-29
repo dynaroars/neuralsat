@@ -24,10 +24,11 @@ def mip_solver_worker(candidate):
         refined = False
         if grb_model.status == 9: # Timed out. Get current bound.
             bound = bound_type(grb_model.objbound, reference)
-            refined = bound != reference
+            refined = abs(bound - reference) >= 1e-4
         elif grb_model.status == 2: # Optimally solved.
             bound = grb_model.objbound
-            refined = True
+            refined = abs(bound - reference) >= 1e-4
+            # refined = True
         elif grb_model.status == 15: # Found an lower bound >= 0 or upper bound <= 0, so this neuron becomes stable.
             bound = bound_type(1., -1.) * eps
             refined = True
@@ -66,10 +67,12 @@ def mip_solver_worker(candidate):
     neuron_refined = False
     eps = 1e-5
 
+    solve_both = False
+    
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
         vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vlb <= 0: # Still unstable. Solve ub.
+        if vlb <= 0 and solve_both: # Still unstable. Solve ub.
             vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # lb > 0, neuron is stable, we skip solving ub.
@@ -77,7 +80,7 @@ def mip_solver_worker(candidate):
     else: # ub is tighter, solve ub first.
         vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vub >= 0: # Still unstable. Solve lb.
+        if vub >= 0 and solve_both: # Still unstable. Solve lb.
             vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # ub < 0, neuron is stable, we skip solving ub.
@@ -85,7 +88,10 @@ def mip_solver_worker(candidate):
 
     if DEBUG:
         # print(model)
-        print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}, refined={neuron_refined}")
+        if neuron_refined:
+            print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
+        else:
+            print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s")
         sys.stdout.flush()
 
     return vlb, vub, neuron_refined
@@ -244,18 +250,23 @@ class Tightener:
         # print(unified_indices)
         # print(unified_scores, len(unified_indices))
         # print(unified_scores.topk(5), len(unified_indices))
-        n_candidates = 32
+        n_candidates = 16
         
         for idx, (l_id, n_id) in enumerate(unified_indices):
             assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
         
-        candidates = [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
+        candidates = []
+        candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=True).indices]
+        candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
         print('select:', time.time() - tic)
         
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', 5.0)
+        MULTIPROCESS_MODEL.setParam('TimeLimit', 20.0)
         MULTIPROCESS_MODEL.setParam('Threads', 1)
+        MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
+        MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
+        # MULTIPROCESS_MODEL.setParam('Threads', 128 // len(candidates))
         print(MULTIPROCESS_MODEL)
         # exit()
         
@@ -263,13 +274,13 @@ class Tightener:
         #     mip_solver_worker(can)
         tic = time.time()
         print(candidates)
-        with multiprocessing.Pool(n_candidates) as pool:
+        with multiprocessing.Pool(min(len(candidates), os.cpu_count())) as pool:
             solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
         MULTIPROCESS_MODEL = None
-        print('refine:', time.time() - tic)
+        print('refine:', sum([_[-1] for _ in solver_result]), len(candidates), time.time() - tic)
         
-        if len(domain_list) > 3:
-            exit()
+        # if len(domain_list) > 3:
+        exit()
         # for i in range(batch):
         #     print('repeat_domain_activations:', i, [rda[i].abs().sum() for rda in repeat_domain_activations])
         # # print('repeat_domain_activations:', [_.abs().sum() for _ in repeat_domain_activations])

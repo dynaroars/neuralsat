@@ -20,7 +20,7 @@ class GlobalSettings:
         self.use_mip_tightening = 1
         
         # attack
-        self.use_attack = 1
+        self.use_attack = 0
         self.attack_interval = 10
         
         self.use_mip_attack = 0
