@@ -10,6 +10,7 @@ from auto_LiRPA import BoundedTensor
 
 from .params import get_branching_opt_params
 from util.misc.check import check_solution
+from util.misc.logger import logger
 
 
 def update_refined_beta(self, betas, batch):
@@ -327,6 +328,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
+    logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]

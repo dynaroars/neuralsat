@@ -19,7 +19,8 @@ from util.misc.logger import logger
 
 from setting import Settings
 
-    
+DEBUG = True
+
 def _mip_attack(self, reference_bounds):
     if not Settings.use_attack:
         return False, None
@@ -50,8 +51,11 @@ def _preprocess(self, objectives):
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None
     
-    if self.input_split and len(objectives) < 50:
-        return objectives, None
+    if not DEBUG:
+        if self.input_split and len(objectives) < 50:
+            return objectives, None
+    else:
+        self.input_split = False
         
     try:
         # self._init_abstractor('crown-optimized', objectives)

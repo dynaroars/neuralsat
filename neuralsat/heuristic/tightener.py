@@ -15,10 +15,69 @@ DEBUG = True
 def handle_gurobi_error(message):
     print(f'Gurobi error: {message}')
     raise
+  
+def _get_prefix_constr_name(name):
+    if name.startswith('lay'):
+        return ''.join(name.split('_')[:-2])
+    return ''.join(name.split('_')[:-3])
+
+def _get_prefix_var_name(name):
+    return ''.join(name.split('_')[:-1])
     
     
 def mip_solver_worker(candidate):
     """ Multiprocess worker for solving MIP models in build_the_model_mip_refine """
+    
+    def remove_unused_vars_and_constrs(grb_model, var_name, pre_activation_names, activation_names, final_name):
+        print('removing some variables and constraints', var_name, pre_activation_names, activation_names)
+        
+        current_layer_name = ''.join(var_name.split('_')[:-1])[3:] # remove "lay" and "_{nid}"
+        assert current_layer_name in pre_activation_names
+        current_layer_id = pre_activation_names[current_layer_name]
+        print('current_layer_name:', current_layer_name)
+        print('current_layer_id:', current_layer_id)
+        
+        remove_pre_activation_patterns = [f'lay{k}' for k, v in pre_activation_names.items() if v >= current_layer_id]
+        remove_pre_activation_patterns += [f'lay{final_name}']
+        remove_activation_patterns = [f'ReLU{v}' for k, v in activation_names.items() if k >= current_layer_id]
+        remove_activation_patterns += [f'aReLU{v}' for k, v in activation_names.items() if k >= current_layer_id]
+        print('remove_pre_activation_patterns:', remove_pre_activation_patterns)
+        print('remove_activation_patterns:', remove_activation_patterns)
+        all_remove_patterns = remove_pre_activation_patterns + remove_activation_patterns
+        remove_vars = []
+        remove_constrs = []
+        
+        # remove constraints
+        for c_ in model.getConstrs():
+            if c_.ConstrName == f'{var_name}_eq':
+                print('skip', c_.ConstrName)
+                continue
+            if _get_prefix_constr_name(c_.ConstrName) in all_remove_patterns:
+                remove_constrs.append(c_)
+                # remove_constrs.append(c_.ConstrName)
+            # print(c_.ConstrName, _get_prefix_constr_name(c_.ConstrName), )
+            
+        # remove variables
+        for v_ in model.getVars():
+            if v_.VarName == var_name:
+                print('skip', var_name)
+                continue
+            if _get_prefix_var_name(v_.VarName) in all_remove_patterns:
+                remove_vars.append(v_)
+                # remove_vars.append(v_.VarName)
+            # print(v_.VarName)
+        
+        print(remove_constrs)
+        print(remove_vars)
+        print()
+        print()
+        print()
+        model.remove(remove_constrs)
+        model.remove(remove_vars)
+        model.update()
+        model.write('example/test_gurobi_removed.lp')
+        
+        # exit()
 
     def get_grb_solution(grb_model, reference, bound_type, eps=1e-5):
         refined = False
@@ -41,6 +100,8 @@ def mip_solver_worker(candidate):
         model.setObjective(v, grb.GRB.MAXIMIZE)
         model.reset()
         model.setParam('BestBdStop', -eps)  # Terminiate as long as we find a negative upper bound.
+        model.write(f'example/test_gurobi_ub.lp')
+        
         try:
             model.optimize()
         except grb.GurobiError as e:
@@ -53,6 +114,7 @@ def mip_solver_worker(candidate):
         model.setObjective(v, grb.GRB.MINIMIZE)
         model.reset()
         model.setParam('BestBdStop', eps)  # Terminiate as long as we find a positive lower bound.
+        model.write(f'example/test_gurobi_lb.lp')
         try:
             model.optimize()
         except grb.GurobiError as e:
@@ -61,13 +123,17 @@ def mip_solver_worker(candidate):
         return vlb, refined, status_lb, status_lb_r
 
     model = MULTIPROCESS_MODEL.copy()
-    v = model.getVarByName(candidate)
+    var_name, pre_relu_names, relu_names, final_name = candidate
+    print('\t\tfinal name:', final_name)
+    v = model.getVarByName(var_name)
     out_lb, out_ub = v.lb, v.ub
     refine_time = time.time()
     neuron_refined = False
     eps = 1e-5
 
-    solve_both = False
+    solve_both = True
+    
+    remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
     
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
         vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
@@ -91,7 +157,8 @@ def mip_solver_worker(candidate):
         if neuron_refined:
             print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
         else:
-            print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s")
+            pass
+            # print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s")
         sys.stdout.flush()
 
     return vlb, vub, neuron_refined
@@ -125,7 +192,7 @@ class Tightener:
         assert len(abstractor.net.relus) == len(abstractor.net.perturbed_optimizable_activations), print('[!] Error: Support ReLU only')
         self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.relu_names = {i: layer.name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
-       
+               
         
     # def test(self, domain_params):
     #     if self.abstractor.input_split:
@@ -178,15 +245,17 @@ class Tightener:
     
     
     def __call__(self, domain_list):
-            
+        # return
         worst_domains = domain_list.pick_out_worst_domains(len(domain_list), device='cpu')
         batch = len(worst_domains.lower_bounds[0])
         print('[+] Tightening:', batch)
+        self.mip_model.write(f'example/test_gurobi_all.lp')
         # print(self.pre_relu_indices)
         print(self.pre_relu_names)
         print(self.relu_names)
         # print(worst_domains.lower_bounds[-1].flatten())
-        
+        print(self.mip_model)
+        # exit()
         # FIXME: only work with ReLU
         # domain_activations = [((worst_domains.lower_bounds[j] == 0).int() - (worst_domains.upper_bounds[j] == 0).int()).flatten(1).cpu() for j in range(len(worst_domains.lower_bounds) - 1)]
         # # print([_.shape for _ in domain_activations])
@@ -250,14 +319,18 @@ class Tightener:
         # print(unified_indices)
         # print(unified_scores, len(unified_indices))
         # print(unified_scores.topk(5), len(unified_indices))
-        n_candidates = 16
+        all_candidates = sum(_.numel() for _ in unified_scores)
+        n_candidates = min(10, all_candidates)
         
         for idx, (l_id, n_id) in enumerate(unified_indices):
             assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
         
         candidates = []
-        candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=True).indices]
-        candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
+        select_indices = unified_scores.topk(n_candidates, largest=True).indices
+        print(f'select {n_candidates} indices:', select_indices)
+        candidates += [(f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", self.pre_relu_names, self.relu_names, self.abstractor.net.final_name) for select_idx in select_indices]
+        # candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
+        candidates = [candidates[3]]
         print('select:', time.time() - tic)
         
         global MULTIPROCESS_MODEL

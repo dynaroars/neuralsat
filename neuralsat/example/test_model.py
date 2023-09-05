@@ -1,8 +1,11 @@
-import torch
+import torch.nn.functional as F
+import onnxruntime as ort
 import torch.nn as nn
 import numpy as np
-import torch.nn.functional as F
+import torch
 import time
+import onnx
+import os
 
 class CifarConv(nn.Module):
     
@@ -297,8 +300,9 @@ def extract_instance(net_path, vnnlib_path):
     from util.spec.read_vnnlib import read_vnnlib
     from util.network.read_onnx import parse_onnx
     from verifier.objective import Objective, DnfObjectives
+    from pathlib import Path
     
-    vnnlibs = read_vnnlib(vnnlib_path)
+    vnnlibs = read_vnnlib(Path(vnnlib_path))
     model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     
     # objective
@@ -350,7 +354,6 @@ def test():
         output_name,
         verbose=False,
         opset_version=12,
-        
     )
     
     print('Export onnx to:', output_name)
@@ -377,8 +380,7 @@ def test():
     status = verifier.verify(objectives)
     print(f'{status},{time.time() - START_TIME:.04f}')
     
-if __name__ == '__main__':
-    # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
+def trail1():
     trial = 0
     while True:
         test()
@@ -386,3 +388,47 @@ if __name__ == '__main__':
         trial += 1
         time.sleep(1.0)
     
+
+def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
+    sess = ort.InferenceSession(onnx.load(path).SerializeToString())
+    names = [i.name for i in sess.get_inputs()]
+    return sess.run(None, dict(zip(names, inputs)))
+
+
+if __name__ == '__main__':
+    # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
+    root_dir = '/home/droars/Desktop/tool/neuralsat/benchmark/mnistfc_hard'
+    with open(f'{root_dir}/instances.csv', 'w') as fp:
+        for line in open(f'{root_dir}/instances_old.csv').read().strip().split('\n'):
+            onnx_path, vnnlib_path, _ = line.split(',')
+            # extract_instance(os.path.exists(f'{root_dir}/{onnx_path}'))
+            model, input_shape, _ = extract_instance(f'{root_dir}/{onnx_path}', f'{root_dir}/{vnnlib_path}')
+            if len([_ for _ in list(model.modules())[1:] if isinstance(_, torch.nn.ReLU)]) == 1:
+                # print(model)
+                continue
+            print(onnx_path)
+            x = torch.randn(input_shape)
+            with torch.no_grad():
+                output_pytorch = model(x)
+            model.eval()
+            
+            output_name = f'{root_dir}/{onnx_path[:-5]}_simplified.onnx' #'example/cacmodel.onnx'
+            os.system(f'rm -rf {output_name}')
+            
+            torch.onnx.export(
+                model,
+                x,
+                output_name,
+                verbose=False,
+                opset_version=12,
+            )
+            
+            assert os.path.exists(output_name)
+            output_onnx = inference_onnx(output_name, x.view(input_shape).float().numpy())[0]
+            assert np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
+            
+            # break
+            print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
+            
+        
+        
