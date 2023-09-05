@@ -106,7 +106,7 @@ def mip_solver_worker(candidate):
             model.optimize()
         except grb.GurobiError as e:
             handle_gurobi_error(e.message)
-        vub, refined, status_ub = get_grb_solution(model, out_ub, min)
+        vub, refined, status_ub = get_grb_solution(model, out_ub, min, eps=eps)
         return vub, refined, status_ub, status_ub_r
 
     def solve_lb(model, v, out_lb, eps=1e-5):
@@ -119,7 +119,7 @@ def mip_solver_worker(candidate):
             model.optimize()
         except grb.GurobiError as e:
             handle_gurobi_error(e.message)
-        vlb, refined, status_lb = get_grb_solution(model, out_lb, max)
+        vlb, refined, status_lb = get_grb_solution(model, out_lb, max, eps=eps)
         return vlb, refined, status_lb, status_lb_r
 
     model = MULTIPROCESS_MODEL.copy()
@@ -128,7 +128,7 @@ def mip_solver_worker(candidate):
     out_lb, out_ub = v.lb, v.ub
     refine_time = time.time()
     neuron_refined = False
-    eps = 1e-5
+    eps = 1e-8
 
     solve_both = False
     
@@ -334,7 +334,7 @@ class Tightener:
         
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', 20.0)
+        MULTIPROCESS_MODEL.setParam('TimeLimit', 2.0)
         MULTIPROCESS_MODEL.setParam('Threads', 1)
         MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
         MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
@@ -350,6 +350,7 @@ class Tightener:
             solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
         MULTIPROCESS_MODEL = None
         print('refine:', sum([_[-1] for _ in solver_result]), len(candidates), time.time() - tic)
+        # print('stablized:', sum([_[-1] for _ in solver_result]))
         
         # if len(domain_list) > 3:
         exit()
