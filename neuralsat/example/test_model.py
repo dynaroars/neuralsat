@@ -397,7 +397,7 @@ def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
 
 if __name__ == '__main__':
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
-    root_dir = '/home/droars/Desktop/tool/neuralsat/benchmark/mnistfc_hard'
+    root_dir = '/home/droars/Desktop/tool/neuralsat/benchmark/mnistfc'
     with open(f'{root_dir}/instances.csv', 'w') as fp:
         for line in open(f'{root_dir}/instances_old.csv').read().strip().split('\n'):
             onnx_path, vnnlib_path, _ = line.split(',')
@@ -406,7 +406,9 @@ if __name__ == '__main__':
             if len([_ for _ in list(model.modules())[1:] if isinstance(_, torch.nn.ReLU)]) == 1:
                 # print(model)
                 continue
-            print(onnx_path)
+            
+            # input_shape = [1, 1, 28 , 28]
+            print(onnx_path, input_shape)
             x = torch.randn(input_shape)
             with torch.no_grad():
                 output_pytorch = model(x)

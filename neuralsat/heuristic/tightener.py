@@ -7,11 +7,22 @@ import sys
 import os
 
 from auto_LiRPA.bound_ops import BoundRelu
+from util.misc.logger import logger
 from setting import Settings
 
 MULTIPROCESS_MODEL = None
 DEBUG = True
 
+solve_both = False
+
+def _bound_improvement(orig, refined, bound_type):
+    assert len(orig) == len(refined)
+    if bound_type == 'lower':
+        assert all([(i <= ii).all() for (i, ii) in zip(orig, refined)])
+        return sum([(ii - i).sum() for (i, ii) in zip(orig, refined)])
+    assert all([(i >= ii).all() for (i, ii) in zip(orig, refined)])
+    return sum([(i - ii).sum() for (i, ii) in zip(orig, refined)])
+        
 def handle_gurobi_error(message):
     print(f'Gurobi error: {message}')
     raise
@@ -130,8 +141,6 @@ def mip_solver_worker(candidate):
     neuron_refined = False
     eps = 1e-8
 
-    solve_both = False
-    
     remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
     
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
@@ -192,68 +201,18 @@ class Tightener:
         self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.relu_names = {i: layer.name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
                
-        
-    # def test(self, domain_params):
-    #     if self.abstractor.input_split:
-    #         return domain_params
-        
-    #     if not Settings.use_mip_refine_domain_bounds:
-    #         return domain_params
-        
-    #     assert len(self.abstractor.pre_relu_indices) == len(domain_params.lower_bounds) - 1, print('Support ReLU only')
-        
-    #     remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-    #     for idx in remaining_index:
-    #         cur_intermediate_layer_bounds = {
-    #             self.abstractor.name_dict[d]: [
-    #                 domain_params.lower_bounds[d][idx][None].clone(),
-    #                 domain_params.upper_bounds[d][idx][None].clone(),
-    #             ] for d in self.abstractor.pre_relu_indices # exclude output layer
-    #         } 
-    #         cur_input_lowers = domain_params.input_lowers[idx][None]
-    #         cur_input_uppers = domain_params.input_uppers[idx][None]
-    #         # print('refined bounds before:', sum([(v[1] - v[0]).sum().item() for _, v in cur_intermediate_layer_bounds.items()]))
-                
-    #         # tic = time.time()
-    #         self.abstractor.build_lp_solver(
-    #             model_type='mip', 
-    #             input_lower=cur_input_lowers, 
-    #             input_upper=cur_input_uppers, 
-    #             c=None, 
-    #             intermediate_layer_bounds=copy.deepcopy(cur_intermediate_layer_bounds),
-    #             # intermediate_layer_bounds=cur_intermediate_layer_bounds,
-    #             timeout_per_neuron=1.0,
-    #             refine=True,
-    #         )
-    #         # print(idx, 'refine in:', time.time() - tic)
-    #         # print('refined bounds after:', sum([(v[1] - v[0]).sum().item() for _, v in cur_intermediate_layer_bounds.items()]))
-                
-    #         new_intermediate_layer_bounds = self.abstractor.net.get_refined_intermediate_bounds()
-            
-    #         # for k in new_intermediate_layer_bounds:
-    #         #     old_bounds = cur_intermediate_layer_bounds[k]
-    #         #     new_bounds = new_intermediate_layer_bounds[k]
-    #         #     print_tightened_bounds(name=k, olds=old_bounds, news=new_bounds)
-            
-    #         for i_ in self.abstractor.pre_relu_indices:
-    #             new_l, new_u = new_intermediate_layer_bounds[self.abstractor.name_dict[i_]]
-    #             domain_params.lower_bounds[i_][idx] = new_l.clone()
-    #             domain_params.upper_bounds[i_][idx] = new_u.clone()
-            
-    #     return domain_params
-    
     
     def __call__(self, domain_list):
         # return
         worst_domains = domain_list.pick_out_worst_domains(len(domain_list), device='cpu')
         batch = len(worst_domains.lower_bounds[0])
-        print('[+] Tightening:', batch)
+        logger.debug(f'Tightening: {batch}')
         # self.mip_model.write(f'example/test_gurobi_all.lp')
         # print(self.pre_relu_indices)
-        print(self.pre_relu_names)
-        print(self.relu_names)
+        # print(self.pre_relu_names)
+        # print(self.relu_names)
         # print(worst_domains.lower_bounds[-1].flatten())
-        print(self.mip_model)
+        # print(self.mip_model)
         # exit()
         # FIXME: only work with ReLU
         # domain_activations = [((worst_domains.lower_bounds[j] == 0).int() - (worst_domains.upper_bounds[j] == 0).int()).flatten(1).cpu() for j in range(len(worst_domains.lower_bounds) - 1)]
@@ -262,14 +221,14 @@ class Tightener:
         #     print('domain_activations:', i, [da[i].abs().sum() for da in domain_activations])
         
         # repeat_domain_activations = [_[0:1].repeat(batch, 1) for _ in domain_activations]
-        print([_.shape for _ in worst_domains.lower_bounds[:-1]])
+        # print([_.shape for _ in worst_domains.lower_bounds[:-1]])
         unified_lower_bounds = [_.min(dim=0).values for _ in worst_domains.lower_bounds[:-1]]
         unified_upper_bounds = [_.max(dim=0).values for _ in worst_domains.upper_bounds[:-1]]
-        print([_.shape for _ in unified_upper_bounds])
+        # print([_.shape for _ in unified_upper_bounds])
         
         assert all([(u_lb <= o_lb).all() for u_lb, o_lb in zip(unified_lower_bounds, worst_domains.lower_bounds[:-1])])
         assert all([(u_ub >= o_ub).all() for u_ub, o_ub in zip(unified_upper_bounds, worst_domains.upper_bounds[:-1])])
-        print()
+        # print()
         
         
         # step 1: update bounds
@@ -309,13 +268,18 @@ class Tightener:
         # step 2: select candidates
         tic = time.time()
         unified_masks = [torch.where(lb_ * ub_ < 0)[0].numpy() for (lb_, ub_) in zip(unified_lower_bounds, unified_upper_bounds)]
-        unified_indices = [(l_id, n_id) for l_id in range(len(unified_masks)) for n_id in unified_masks[l_id]]
+        unified_indices = [(l_id, n_id) for l_id in range(1, len(unified_masks)) for n_id in unified_masks[l_id]] # skip first layer
         
-        unified_scores = torch.concat([torch.min(unified_upper_bounds[l_id][unified_masks[l_id]].abs(), unified_lower_bounds[l_id][unified_masks[l_id]].abs()).flatten() for l_id in range(len(unified_masks))])
+        unified_scores = torch.concat([
+            torch.min(unified_upper_bounds[l_id][unified_masks[l_id]].abs(), unified_lower_bounds[l_id][unified_masks[l_id]].abs()).flatten() 
+                for l_id in range(1, len(unified_masks)) # skip first layer
+        ])
         # unified_scores = [unified_upper_bounds[l_id] for l_id in range(len(unified_masks))]
-        
+        # print(unified_scores)
+        assert unified_scores.numel() == len(unified_indices)
         # print(unified_masks)
         # print(unified_indices)
+        # exit()
         # print(unified_scores, len(unified_indices))
         # print(unified_scores.topk(5), len(unified_indices))
         all_candidates = sum(_.numel() for _ in unified_scores)
@@ -326,15 +290,20 @@ class Tightener:
         
         candidates = []
         select_indices = unified_scores.topk(n_candidates, largest=False).indices
-        print(f'select {n_candidates} indices:', select_indices)
-        candidates += [(f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", self.pre_relu_names, self.relu_names, self.abstractor.net.final_name) for select_idx in select_indices]
+        # print(f'select {n_candidates} indices:', select_indices)
+        candidates += [(
+            f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", 
+             self.pre_relu_names, 
+             self.relu_names, 
+             self.abstractor.net.final_name,
+        ) for select_idx in select_indices]
         # candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
         # candidates = [candidates[3]]
-        print('select:', time.time() - tic)
+        print('select:', len(candidates), time.time() - tic)
         
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', 2.0)
+        MULTIPROCESS_MODEL.setParam('TimeLimit', 3.0)
         MULTIPROCESS_MODEL.setParam('Threads', 1)
         MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
         MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
@@ -349,10 +318,34 @@ class Tightener:
         with multiprocessing.Pool(min(len(candidates), os.cpu_count())) as pool:
             solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
         MULTIPROCESS_MODEL = None
-        print('refine:', sum([_[-1] for _ in solver_result]), len(candidates), time.time() - tic)
+        print('refine:', time.time() - tic)
         # print('stablized:', sum([_[-1] for _ in solver_result]))
         
+        unified_lower_bounds_refined = [lb.clone() for lb in unified_lower_bounds]
+        unified_upper_bounds_refined = [ub.clone() for ub in unified_upper_bounds]
+        unstable_to_stable_neurons = []
+        for idx, (vlb, vub, neuron_refined) in zip(select_indices, solver_result):
+            l_id, n_id = unified_indices[idx]
+            # print(l_id, n_id)
+            if neuron_refined:
+                unified_lower_bounds_refined[l_id][n_id] = max(unified_lower_bounds[l_id][n_id], vlb)
+                unified_upper_bounds_refined[l_id][n_id] = min(unified_upper_bounds[l_id][n_id], vub)
+                if vlb > 0:
+                    unstable_to_stable_neurons.append((l_id, n_id, 1.0))
+                elif vub < 0:
+                    unstable_to_stable_neurons.append((l_id, n_id, -1.0))
+                    
+                print(f'neuron[{l_id}][{n_id}]: [{unified_lower_bounds[l_id][n_id]:.06f}, {unified_upper_bounds[l_id][n_id]:.06f}] => [{unified_lower_bounds_refined[l_id][n_id]:.06f}, {unified_upper_bounds_refined[l_id][n_id]:.06f}]')
+            
         # if len(domain_list) > 3:
+        
+        # print([(i <= ii).all() for (i, ii) in zip(unified_lower_bounds, unified_lower_bounds_refined)])
+        # print([(i >= ii).all() for (i, ii) in zip(unified_upper_bounds, unified_upper_bounds_refined)])
+        print('Lower bounds improvement:', _bound_improvement(unified_lower_bounds, unified_lower_bounds_refined, 'lower'))
+        print('Upper bounds improvement:', _bound_improvement(unified_upper_bounds, unified_upper_bounds_refined, 'upper'))
+        print('Stabilized neurons:', len(unstable_to_stable_neurons), sum([_[-1] for _ in solver_result]), len(candidates), unstable_to_stable_neurons)
+        logger.debug('Finished tightening')
+        
         exit()
         # for i in range(batch):
         #     print('repeat_domain_activations:', i, [rda[i].abs().sum() for rda in repeat_domain_activations])
