@@ -14,6 +14,8 @@ MULTIPROCESS_MODEL = None
 DEBUG = True
 
 solve_both = False
+remove_unused = True
+LARGEST = False
 
 def _bound_improvement(orig, refined, bound_type):
     assert len(orig) == len(refined)
@@ -133,15 +135,16 @@ def mip_solver_worker(candidate):
         vlb, refined, status_lb = get_grb_solution(model, out_lb, max, eps=eps)
         return vlb, refined, status_lb, status_lb_r
 
+    refine_time = time.time()
     model = MULTIPROCESS_MODEL.copy()
     var_name, pre_relu_names, relu_names, final_name = candidate
     v = model.getVarByName(var_name)
     out_lb, out_ub = v.lb, v.ub
-    refine_time = time.time()
     neuron_refined = False
     eps = 1e-8
 
-    remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
+    if remove_unused:
+        remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
     
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
         vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
@@ -222,12 +225,12 @@ class Tightener:
         
         # repeat_domain_activations = [_[0:1].repeat(batch, 1) for _ in domain_activations]
         # print([_.shape for _ in worst_domains.lower_bounds[:-1]])
-        unified_lower_bounds = [_.min(dim=0).values for _ in worst_domains.lower_bounds[:-1]]
-        unified_upper_bounds = [_.max(dim=0).values for _ in worst_domains.upper_bounds[:-1]]
-        # print([_.shape for _ in unified_upper_bounds])
+        unified_lower_bounds = [_.min(dim=0).values.flatten() for _ in worst_domains.lower_bounds[:-1]]
+        unified_upper_bounds = [_.max(dim=0).values.flatten() for _ in worst_domains.upper_bounds[:-1]]
+        print([_.shape for _ in unified_upper_bounds])
         
-        assert all([(u_lb <= o_lb).all() for u_lb, o_lb in zip(unified_lower_bounds, worst_domains.lower_bounds[:-1])])
-        assert all([(u_ub >= o_ub).all() for u_ub, o_ub in zip(unified_upper_bounds, worst_domains.upper_bounds[:-1])])
+        assert all([(u_lb <= o_lb.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, worst_domains.lower_bounds[:-1])])
+        assert all([(u_ub >= o_ub.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, worst_domains.upper_bounds[:-1])])
         # print()
         
         
@@ -289,7 +292,7 @@ class Tightener:
             assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
         
         candidates = []
-        select_indices = unified_scores.topk(n_candidates, largest=False).indices
+        select_indices = unified_scores.topk(n_candidates, largest=LARGEST).indices
         # print(f'select {n_candidates} indices:', select_indices)
         candidates += [(
             f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", 
@@ -303,7 +306,7 @@ class Tightener:
         
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', 3.0)
+        MULTIPROCESS_MODEL.setParam('TimeLimit', 5.0)
         MULTIPROCESS_MODEL.setParam('Threads', 1)
         MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
         MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
@@ -335,7 +338,7 @@ class Tightener:
                 elif vub < 0:
                     unstable_to_stable_neurons.append((l_id, n_id, -1.0))
                     
-                print(f'neuron[{l_id}][{n_id}]: [{unified_lower_bounds[l_id][n_id]:.06f}, {unified_upper_bounds[l_id][n_id]:.06f}] => [{unified_lower_bounds_refined[l_id][n_id]:.06f}, {unified_upper_bounds_refined[l_id][n_id]:.06f}]')
+                # print(f'neuron[{l_id}][{n_id}]: [{unified_lower_bounds[l_id][n_id]:.06f}, {unified_upper_bounds[l_id][n_id]:.06f}] => [{unified_lower_bounds_refined[l_id][n_id]:.06f}, {unified_upper_bounds_refined[l_id][n_id]:.06f}]')
             
         # if len(domain_list) > 3:
         
