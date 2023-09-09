@@ -19,7 +19,17 @@ from util.misc.logger import logger
 
 from setting import Settings
 
-DEBUG = True
+DEBUG = False
+
+
+def new_slopes(slopes, keep_name):
+    new_slope = {}
+    for relu_layer, alphas in slopes.items():
+        new_slope[relu_layer] = {}
+        if keep_name in alphas:
+            new_slope[relu_layer][keep_name] = alphas[keep_name]
+    return new_slope
+
 
 def _mip_attack(self, reference_bounds):
     if not Settings.use_attack:

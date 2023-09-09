@@ -1,4 +1,5 @@
 benchmark/
+benchmark
 ref/
 neuralsat/example/*/*.csv
 neuralsat/example/*.csv

@@ -12,6 +12,7 @@ from heuristic.util import compute_masks
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
 
+from .utils import new_slopes
 from setting import Settings
 
 import warnings
@@ -141,7 +142,8 @@ class Verifier:
             return []
         
         # keep last layer's alphas for backward propagation
-        # slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
+        # FIXME: full slopes uses too much memory
+        slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
         
         # remaining domains
         return DomainsList(
@@ -151,7 +153,8 @@ class Verifier:
             lower_bounds=ret.lower_bounds, 
             upper_bounds=ret.upper_bounds, 
             lAs=ret.lAs, 
-            slopes=ret.slopes,
+            # slopes=ret.slopes, # full slopes
+            slopes=slopes, # last layer's slopes
             histories=copy.deepcopy(ret.histories), 
             cs=ret.cs,
             rhs=ret.rhs,
@@ -222,7 +225,8 @@ class Verifier:
         
         # step 6: tighten bounds
         if Settings.use_mip_tightening:
-            self.tightener(self.domains_list)
+            self.tightener(self.domains_list, topk=64, timeout=2.0, largest=False, solve_both=False)
+            self.tightener(self.domains_list, topk=64, timeout=3.0, largest=True, solve_both=False)
         
         # TODO: check full assignment after bcp
 

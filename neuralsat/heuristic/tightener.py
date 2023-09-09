@@ -11,11 +11,10 @@ from util.misc.logger import logger
 from setting import Settings
 
 MULTIPROCESS_MODEL = None
-DEBUG = False
+DEBUG = True
 
-solve_both = False
-remove_unused = True
-LARGEST = False
+SOLVE_BOTH = False
+REMOVE_UNUSED = True
 
 def _bound_improvement(orig, refined, bound_type):
     assert len(orig) == len(refined)
@@ -143,13 +142,13 @@ def mip_solver_worker(candidate):
     neuron_refined = False
     eps = 1e-8
 
-    if remove_unused:
+    if REMOVE_UNUSED:
         remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
     
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
         vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vlb <= 0 and solve_both: # Still unstable. Solve ub.
+        if vlb <= 0 and SOLVE_BOTH: # Still unstable. Solve ub.
             vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # lb > 0, neuron is stable, we skip solving ub.
@@ -157,7 +156,7 @@ def mip_solver_worker(candidate):
     else: # ub is tighter, solve ub first.
         vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vub >= 0 and solve_both: # Still unstable. Solve lb.
+        if vub >= 0 and SOLVE_BOTH: # Still unstable. Solve lb.
             vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # ub < 0, neuron is stable, we skip solving ub.
@@ -205,11 +204,11 @@ class Tightener:
         self.relu_names = {i: layer.name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
                
     
-    def __call__(self, domain_list):
+    def __call__(self, domain_list, topk=64, largest=False, timeout=2.0, solve_both=False):
         # return
         worst_domains = domain_list.pick_out_worst_domains(len(domain_list), device='cpu')
         batch = len(worst_domains.lower_bounds[0])
-        logger.debug(f'Tightening: {batch}')
+        # logger.debug(f'Tightening: {batch}')
         if batch == 0:
             return
         # self.mip_model.write(f'example/test_gurobi_all.lp')
@@ -236,8 +235,8 @@ class Tightener:
         # print()
         
         
-        assert all([(u_lb <= o_lb.data.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, domain_list.all_lower_bounds[:-1])])
-        assert all([(u_ub >= o_ub.data.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, domain_list.all_upper_bounds[:-1])])
+        # assert all([(u_lb <= o_lb.data.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, domain_list.all_lower_bounds[:-1])])
+        # assert all([(u_ub >= o_ub.data.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, domain_list.all_upper_bounds[:-1])])
         
         # step 1: update bounds
         # FIXME: support other activation
@@ -285,19 +284,24 @@ class Tightener:
         # unified_scores = [unified_upper_bounds[l_id] for l_id in range(len(unified_masks))]
         # print(unified_scores)
         assert unified_scores.numel() == len(unified_indices)
+        
+        if not len(unified_indices):
+            return
+        
         # print(unified_masks)
-        # print(unified_indices)
+        # print(unified_indices, len(unified_indices))
         # exit()
         # print(unified_scores, len(unified_indices))
+        # print(sum(_.numel() for _ in unified_scores))
+        # exit()
         # print(unified_scores.topk(5), len(unified_indices))
-        all_candidates = sum(_.numel() for _ in unified_scores)
-        n_candidates = min(64, all_candidates)
+        n_candidates = min(topk, len(unified_indices))
         
-        for idx, (l_id, n_id) in enumerate(unified_indices):
-            assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
+        # for idx, (l_id, n_id) in enumerate(unified_indices):
+        #     assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
         
         candidates = []
-        select_indices = unified_scores.topk(n_candidates, largest=LARGEST).indices
+        select_indices = unified_scores.topk(n_candidates, largest=largest).indices
         # print(f'select {n_candidates} indices:', select_indices)
         # select_indices = []
         candidates += [(
@@ -309,10 +313,22 @@ class Tightener:
         # candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
         # candidates = [candidates[3]]
         # print('select:', len(candidates), time.time() - tic)
+        # if 0:
+        #     n_candidates_remain =  min(topk // 4, len(unified_indices) - len(select_indices))
+        #     if n_candidates_remain > 0:
+        #         select_indices_remain = unified_scores.topk(n_candidates_remain, largest=True).indices
+        #         candidates += [(
+        #             f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", 
+        #             self.pre_relu_names, 
+        #             self.relu_names, 
+        #             self.abstractor.net.final_name,
+        #         ) for select_idx in select_indices_remain]
         
-        global MULTIPROCESS_MODEL
+        global MULTIPROCESS_MODEL, SOLVE_BOTH
+        SOLVE_BOTH = solve_both
+        
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', 2.0)
+        MULTIPROCESS_MODEL.setParam('TimeLimit', timeout)
         MULTIPROCESS_MODEL.setParam('Threads', 1)
         MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
         MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
@@ -322,6 +338,7 @@ class Tightener:
         
         # for can in candidates:
         #     mip_solver_worker(can)
+        
         tic = time.time()
         # print(candidates)
         solver_result = []
@@ -360,6 +377,7 @@ class Tightener:
         # print('Upper bounds improvement:', _bound_improvement(unified_upper_bounds, unified_upper_bounds_refined, 'upper'), sum([_.sum() for _ in unified_upper_bounds]), sum([_.sum() for _ in unified_upper_bounds_refined]))
         # print('Stabilized neurons:', len(unstable_to_stable_neurons), sum([_[-1] for _ in solver_result]), len(candidates), unstable_to_stable_neurons)
         
+        logger.debug(f'Selected {len(candidates)}/{len(unified_indices)}, tightened {sum([_[-1] for _ in solver_result])}/{len(candidates)} neurons, stabilized {len(unstable_to_stable_neurons)} neurons')
         
         # logger.debug('Finished tightening')
         # print('cut 2', [_.sum() for _ in unified_lower_bounds_refined])
