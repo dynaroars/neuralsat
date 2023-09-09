@@ -284,6 +284,49 @@ class DomainsList:
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
         })
+        
+        
+    def update_refined_bounds(self, domain_params):
+        assert torch.all(domain_params.lower_bounds[0] <= self.all_lower_bounds[0].data)
+        
+        print('before:', [_.sum() for _ in self.all_lower_bounds])
+        print('before:', [_.sum() for _ in self.all_upper_bounds])
+        print('before:', [_.size() for _ in self.all_lower_bounds])
+        
+        # print('after :', [_.sum() for _ in self.all_lower_bounds])
+        # print('after :', [_.shape for _ in self.all_lower_bounds])
+        
+        print(sum([_.sum() for _ in domain_params.lower_bounds]))
+        print(sum([_.sum() for _ in domain_params.upper_bounds]))
+        # print([_.shape for _ in domain_params.lower_bounds])
+        # print([_.shape for _ in self.all_lower_bounds])
+        # print(torch.where(domain_params.upper_bounds[0] < self.all_upper_bounds[0].data))
+        # print([(i >= ii.data).any() for i, ii in zip(domain_params.lower_bounds, self.all_lower_bounds)])
+        # print()
+        # if 0:
+        #     current_lower_bounds = [lb.pop(len(self)).to(device='cpu') for lb in self.all_lower_bounds]
+        #     print('before:', [_.sum() for _ in current_lower_bounds])
+        #     print('before:', [_.size() for _ in current_lower_bounds])
+            
+        # exit()
+        # for idx, (new_lower_bound, orig_lower_bound) in enumerate(zip(domain_params.lower_bounds, self.all_lower_bounds[:-1])):
+        for idx in range(len(domain_params.lower_bounds)):
+            # print(idx, domain_params.lower_bounds[idx].shape, self.all_lower_bounds[idx].size())
+            # continue
+            # print(new_lower_bound.shape, orig_lower_bound.shape, orig_lower_bound.device)
+            orig_shape = self.all_lower_bounds[idx].size()[1:] # skip batch dim
+            # print(idx, orig_shape, orig_lower_bound.size(), len(self))
+            if idx == 0:
+                assert (domain_params.lower_bounds[idx] <= self.all_lower_bounds[idx].data.flatten(1)).all()
+                assert (domain_params.upper_bounds[idx] >= self.all_upper_bounds[idx].data.flatten(1)).all()
+                # continue
+                
+            # print(torch.where(new_lower_bound.view(orig_shape) >= self.all_lower_bounds[idx].data, new_lower_bound.view(orig_shape), self.all_lower_bounds[idx].data).sum())
+            self.all_lower_bounds[idx].copy_(torch.where(domain_params.lower_bounds[idx].view(orig_shape) > self.all_lower_bounds[idx].data, domain_params.lower_bounds[idx].view(orig_shape), self.all_lower_bounds[idx].data))
+            self.all_upper_bounds[idx].copy_(torch.where(domain_params.upper_bounds[idx].view(orig_shape) < self.all_upper_bounds[idx].data, domain_params.upper_bounds[idx].view(orig_shape), self.all_upper_bounds[idx].data))
 
+        print('after :', [_.sum() for _ in self.all_lower_bounds])
+        print('after :', [_.sum() for _ in self.all_upper_bounds])
+        print('after :', [_.size() for _ in self.all_lower_bounds])
 
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses
