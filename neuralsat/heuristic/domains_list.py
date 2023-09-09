@@ -287,17 +287,17 @@ class DomainsList:
         
         
     def update_refined_bounds(self, domain_params):
-        assert torch.all(domain_params.lower_bounds[0] <= self.all_lower_bounds[0].data)
+        # assert torch.all(domain_params.lower_bounds[0] <= self.all_lower_bounds[0].data)
         
-        print('before:', [_.sum() for _ in self.all_lower_bounds])
-        print('before:', [_.sum() for _ in self.all_upper_bounds])
-        print('before:', [_.size() for _ in self.all_lower_bounds])
+        # print('before:', [_.sum() for _ in self.all_lower_bounds])
+        # print('before:', [_.sum() for _ in self.all_upper_bounds])
+        # print('before:', [_.size() for _ in self.all_lower_bounds])
         
         # print('after :', [_.sum() for _ in self.all_lower_bounds])
         # print('after :', [_.shape for _ in self.all_lower_bounds])
         
-        print(sum([_.sum() for _ in domain_params.lower_bounds]))
-        print(sum([_.sum() for _ in domain_params.upper_bounds]))
+        # print(sum([_.sum() for _ in domain_params.lower_bounds]))
+        # print(sum([_.sum() for _ in domain_params.upper_bounds]))
         # print([_.shape for _ in domain_params.lower_bounds])
         # print([_.shape for _ in self.all_lower_bounds])
         # print(torch.where(domain_params.upper_bounds[0] < self.all_upper_bounds[0].data))
@@ -325,8 +325,8 @@ class DomainsList:
             self.all_lower_bounds[idx].copy_(torch.where(domain_params.lower_bounds[idx].view(orig_shape) > self.all_lower_bounds[idx].data, domain_params.lower_bounds[idx].view(orig_shape), self.all_lower_bounds[idx].data))
             self.all_upper_bounds[idx].copy_(torch.where(domain_params.upper_bounds[idx].view(orig_shape) < self.all_upper_bounds[idx].data, domain_params.upper_bounds[idx].view(orig_shape), self.all_upper_bounds[idx].data))
 
-        print('after :', [_.sum() for _ in self.all_lower_bounds])
-        print('after :', [_.sum() for _ in self.all_upper_bounds])
-        print('after :', [_.size() for _ in self.all_lower_bounds])
+        # print('after :', [_.sum() for _ in self.all_lower_bounds])
+        # print('after :', [_.sum() for _ in self.all_upper_bounds])
+        # print('after :', [_.size() for _ in self.all_lower_bounds])
 
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses

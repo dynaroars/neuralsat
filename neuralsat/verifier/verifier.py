@@ -221,7 +221,8 @@ class Verifier:
         self.domains_list.add(decisions, abstraction_ret)
         
         # step 6: tighten bounds
-        self.tightener(self.domains_list)
+        if Settings.use_mip_tightening:
+            self.tightener(self.domains_list)
         
         # TODO: check full assignment after bcp
 

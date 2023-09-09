@@ -11,7 +11,7 @@ from util.misc.logger import logger
 from setting import Settings
 
 MULTIPROCESS_MODEL = None
-DEBUG = True
+DEBUG = False
 
 solve_both = False
 remove_unused = True
@@ -210,6 +210,8 @@ class Tightener:
         worst_domains = domain_list.pick_out_worst_domains(len(domain_list), device='cpu')
         batch = len(worst_domains.lower_bounds[0])
         logger.debug(f'Tightening: {batch}')
+        if batch == 0:
+            return
         # self.mip_model.write(f'example/test_gurobi_all.lp')
         # print(self.pre_relu_indices)
         # print(self.pre_relu_names)
@@ -219,7 +221,7 @@ class Tightener:
         # exit()
         # FIXME: only work with ReLU
         # domain_activations = [((worst_domains.lower_bounds[j] == 0).int() - (worst_domains.upper_bounds[j] == 0).int()).flatten(1).cpu() for j in range(len(worst_domains.lower_bounds) - 1)]
-        print(' aaaaa ',[_.sum() for _ in domain_list.all_lower_bounds[:-1]])
+        # print(' aaaaa ',[_.sum() for _ in domain_list.all_lower_bounds[:-1]])
         # for i in range(batch):
         #     print('domain_activations:', i, [da[i].abs().sum() for da in domain_activations])
         
@@ -227,7 +229,7 @@ class Tightener:
         # print([_.shape for _ in worst_domains.lower_bounds[:-1]])
         unified_lower_bounds = [_.min(dim=0).values.flatten() for _ in worst_domains.lower_bounds[:-1]]
         unified_upper_bounds = [_.max(dim=0).values.flatten() for _ in worst_domains.upper_bounds[:-1]]
-        print([_.shape for _ in unified_upper_bounds])
+        # print([_.shape for _ in unified_upper_bounds])
         
         assert all([(u_lb <= o_lb.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, worst_domains.lower_bounds[:-1])])
         assert all([(u_ub >= o_ub.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, worst_domains.upper_bounds[:-1])])
@@ -269,7 +271,7 @@ class Tightener:
                 # if var.UB * unified_upper_bounds[layer_idx][neuron_idx] < 0:
                 #     print('\t- upper:', layer_idx, neuron_idx, var, var.UB, unified_upper_bounds[layer_idx][neuron_idx])
         current_model.update()
-        print('update:', time.time() - tic)
+        # print('update:', time.time() - tic)
         
         # step 2: select candidates
         tic = time.time()
@@ -306,7 +308,7 @@ class Tightener:
         ) for select_idx in select_indices]
         # candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
         # candidates = [candidates[3]]
-        print('select:', len(candidates), time.time() - tic)
+        # print('select:', len(candidates), time.time() - tic)
         
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
@@ -315,7 +317,7 @@ class Tightener:
         MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
         MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
         # MULTIPROCESS_MODEL.setParam('Threads', 128 // len(candidates))
-        print(MULTIPROCESS_MODEL)
+        # print(MULTIPROCESS_MODEL)
         # exit()
         
         # for can in candidates:
@@ -327,7 +329,7 @@ class Tightener:
             with multiprocessing.Pool(min(len(candidates), os.cpu_count())) as pool:
                 solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
         MULTIPROCESS_MODEL = None
-        print('refine:', time.time() - tic)
+        # print('refine:', time.time() - tic)
         # print('stablized:', sum([_[-1] for _ in solver_result]))
         
         unified_lower_bounds_refined = [lb.clone() for lb in unified_lower_bounds]
@@ -350,11 +352,16 @@ class Tightener:
         
         # print([(i <= ii).all() for (i, ii) in zip(unified_lower_bounds, unified_lower_bounds_refined)])
         # print([(i >= ii).all() for (i, ii) in zip(unified_upper_bounds, unified_upper_bounds_refined)])
-        print('cut 1', [_.sum() for _ in unified_lower_bounds_refined])
-        print('Lower bounds improvement:', _bound_improvement(unified_lower_bounds, unified_lower_bounds_refined, 'lower'), sum([_.sum() for _ in unified_lower_bounds]), sum([_.sum() for _ in unified_lower_bounds_refined]))
-        print('Upper bounds improvement:', _bound_improvement(unified_upper_bounds, unified_upper_bounds_refined, 'upper'), sum([_.sum() for _ in unified_upper_bounds]), sum([_.sum() for _ in unified_upper_bounds_refined]))
-        print('Stabilized neurons:', len(unstable_to_stable_neurons), sum([_[-1] for _ in solver_result]), len(candidates), unstable_to_stable_neurons)
-        logger.debug('Finished tightening')
+        
+        # print('cut 1', [_.sum() for _ in unified_lower_bounds_refined])
+        
+        
+        # print('Lower bounds improvement:', _bound_improvement(unified_lower_bounds, unified_lower_bounds_refined, 'lower'), sum([_.sum() for _ in unified_lower_bounds]), sum([_.sum() for _ in unified_lower_bounds_refined]))
+        # print('Upper bounds improvement:', _bound_improvement(unified_upper_bounds, unified_upper_bounds_refined, 'upper'), sum([_.sum() for _ in unified_upper_bounds]), sum([_.sum() for _ in unified_upper_bounds_refined]))
+        # print('Stabilized neurons:', len(unstable_to_stable_neurons), sum([_[-1] for _ in solver_result]), len(candidates), unstable_to_stable_neurons)
+        
+        
+        # logger.debug('Finished tightening')
         # print('cut 2', [_.sum() for _ in unified_lower_bounds_refined])
         
         assert torch.equal(unified_lower_bounds[0], unified_lower_bounds_refined[0])
@@ -372,7 +379,7 @@ class Tightener:
         domain_list.update_refined_bounds(refined_domain)
         # print(' aaaaa ',[_.sum() for _ in domain_list.all_lower_bounds[:-1]])
         
-        exit()
+        # exit()
         # for i in range(batch):
         #     print('repeat_domain_activations:', i, [rda[i].abs().sum() for rda in repeat_domain_activations])
         # # print('repeat_domain_activations:', [_.abs().sum() for _ in repeat_domain_activations])
