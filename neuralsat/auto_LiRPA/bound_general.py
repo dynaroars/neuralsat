@@ -148,7 +148,7 @@ class BoundedModule(nn.Module):
             'early_stop_patience': 10,
             # Start to save optimized best bounds
             # when current_iteration > int(iteration*start_save_best)
-            'start_save_best': 0.0,
+            'start_save_best': 0.5,
             # Use double fp (float64) at the last iteration in alpha/beta CROWN.
             'use_float64_in_last_iteration': False,
             # Prune verified domain within iteration.

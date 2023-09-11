@@ -278,10 +278,10 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
-        if (intermediate_layer_bounds is None) and (self.last_c_lp == c or torch.equal(self.last_c_lp, c)) \
+        if (intermediate_layer_bounds is None) and torch.equal(self.last_c_lp, c) \
             and (self.net.model.ModelName == model_type) \
             and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
-            print('[!] Reuse built LP model')
+            logger.debug('[!] Reuse built LP model')
             return
         self.net.clear_solver_module(self.net.final_node())
         del self.net.model

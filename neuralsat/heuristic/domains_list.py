@@ -285,6 +285,8 @@ class DomainsList:
             'upper_bounds': new_upper_bounds, 
         })
         
+        # checking
+        self._check_consistent()
         
     def update_refined_bounds(self, domain_params):
         # assert torch.all(domain_params.lower_bounds[0] <= self.all_lower_bounds[0].data)
@@ -329,4 +331,8 @@ class DomainsList:
         # print('after :', [_.sum() for _ in self.all_upper_bounds])
         # print('after :', [_.size() for _ in self.all_lower_bounds])
 
+        # checking
+        self._check_consistent()
+        
+        
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses

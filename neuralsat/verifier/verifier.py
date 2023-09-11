@@ -224,9 +224,9 @@ class Verifier:
         self.domains_list.add(decisions, abstraction_ret)
         
         # step 6: tighten bounds
-        if Settings.use_mip_tightening:
-            self.tightener(self.domains_list, topk=64, timeout=2.0, largest=False, solve_both=False)
-            self.tightener(self.domains_list, topk=64, timeout=3.0, largest=True, solve_both=False)
+        if Settings.use_mip_tightening and not self.iteration % 20:
+            # self.tightener(self.domains_list, topk=64, timeout=2.0, largest=False, solve_both=False)
+            self.tightener(self.domains_list, topk=1000, timeout=10.0, largest=False, solve_both=True)
         
         # TODO: check full assignment after bcp
 

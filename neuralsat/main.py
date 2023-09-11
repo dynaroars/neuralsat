@@ -20,7 +20,7 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--batch', type=int, default=1000,
+    parser.add_argument('--batch', type=int, default=3000,
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
@@ -30,6 +30,8 @@ if __name__ == '__main__':
                         help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
     parser.add_argument('--result_file', type=str, required=False,
                         help="file to save execution results.")
+    parser.add_argument('--export_cex', action='store_true',
+                        help="export counter-example to result file.")
     args = parser.parse_args()   
     
     # set device
@@ -84,8 +86,9 @@ if __name__ == '__main__':
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(status, file=fp)
-            if verifier.adv is not None:
+            print(f'{status},{time.time() - START_TIME:.06f}', file=fp)
+            # print(status, file=fp)
+            if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv), is_nhwc=is_nhwc), file=fp)
 
     print(f'{status},{time.time() - START_TIME:.04f}')
