@@ -37,7 +37,8 @@ class Verifier:
         
         # debug
         self.iteration = 0
-        
+        self.last_minimum_lowers = -1e9
+        self.tightening_patience = 0
         
     def get_objective(self, dnf_objectives):
         if self.input_split:
@@ -171,6 +172,8 @@ class Verifier:
         
         # cleaning
         torch.cuda.empty_cache()
+        if Settings.use_mip_tightening:
+            self.tightener.reset()
         
         # restart threshold
         max_branches = Settings.max_input_branches if self.input_split else Settings.max_hidden_branches
@@ -196,10 +199,18 @@ class Verifier:
         return ReturnStatus.UNSAT
             
             
-    def _branch_and_bound(self):
+    def _branch_and_bound(self):        
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, self.device))
         
+        # if Settings.use_mip_tightening and self.iteration == 2:
+        if Settings.use_mip_tightening and self.tightening_patience >= 0 and self.iteration == 0:
+            # self.tightener(self.domains_list, topk=32, timeout=10.0, largest=False, solve_both=True)
+            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
+            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
+            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
+            # exit()
+            
         # step 1: pick out
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
@@ -224,9 +235,17 @@ class Verifier:
         self.domains_list.add(decisions, abstraction_ret)
         
         # step 6: tighten bounds
-        if Settings.use_mip_tightening and not self.iteration % 20:
-            # self.tightener(self.domains_list, topk=64, timeout=2.0, largest=False, solve_both=False)
-            self.tightener(self.domains_list, topk=1000, timeout=10.0, largest=False, solve_both=True)
+        # check patience
+        minimum_lowers = self.domains_list.minimum_lowers
+        if minimum_lowers > self.last_minimum_lowers:
+            self.tightening_patience = 0
+        elif minimum_lowers == self.last_minimum_lowers:
+            self.tightening_patience += 1
+        else:
+            self.tightening_patience += 5
+        self.last_minimum_lowers = minimum_lowers
+            
+        
         
         # TODO: check full assignment after bcp
 
@@ -237,8 +256,10 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Bound: {self.domains_list.minimum_lowers:<15.04f} '
+            f'Bound: {minimum_lowers:<15.04f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f}'
+            f'Tighteing patience: {self.tightening_patience:<10}'
+            f'last_minimum_lowers: {self.last_minimum_lowers:<10.04f}'
         )
         # print(tighten_ret.histories)
         

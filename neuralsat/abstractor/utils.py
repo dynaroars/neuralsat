@@ -301,7 +301,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
-    self.net.compute_bounds(x=(new_x,), C=c, method="backward")
+    self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
     
     # self.net.set_bound_opts({'optimize_bound_args': {
     #             'enable_beta_crown': False, 
@@ -313,10 +313,10 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     # build solver
     self.net.build_solver_module(
         x=(new_x,), 
+        # intermediate_layer_bounds=intermediate_layer_bounds,
         C=c, 
         final_node_name=self.net.final_name, 
         model_type=model_type, 
-        intermediate_layer_bounds=intermediate_layer_bounds,
         timeout=timeout,
         timeout_per_neuron=timeout_per_neuron,
         refine=refine,

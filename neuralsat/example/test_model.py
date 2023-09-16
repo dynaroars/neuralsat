@@ -395,7 +395,7 @@ def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
     return sess.run(None, dict(zip(names, inputs)))
 
 
-if __name__ == '__main__':
+def simplify_network():
     # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
     root_dir = '/home/droars/Desktop/tool/neuralsat/benchmark/mnistfc'
     with open(f'{root_dir}/instances.csv', 'w') as fp:
@@ -433,4 +433,5 @@ if __name__ == '__main__':
             print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
             
         
-        
+if __name__ == '__main__':
+    pass

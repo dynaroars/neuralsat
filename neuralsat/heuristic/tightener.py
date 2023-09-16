@@ -1,5 +1,7 @@
 import gurobipy as grb
 import multiprocessing
+import numpy as np
+import random
 import torch
 import copy
 import time
@@ -13,7 +15,6 @@ from setting import Settings
 MULTIPROCESS_MODEL = None
 DEBUG = True
 
-SOLVE_BOTH = False
 REMOVE_UNUSED = True
 
 def _bound_improvement(orig, refined, bound_type):
@@ -60,7 +61,7 @@ def mip_solver_worker(candidate):
         remove_constrs = []
         
         # remove constraints
-        for c_ in model.getConstrs():
+        for c_ in grb_model.getConstrs():
             if c_.ConstrName == f'{var_name}_eq':
                 # print('skip', c_.ConstrName)
                 continue
@@ -70,7 +71,7 @@ def mip_solver_worker(candidate):
             # print(c_.ConstrName, _get_prefix_constr_name(c_.ConstrName), )
             
         # remove variables
-        for v_ in model.getVars():
+        for v_ in grb_model.getVars():
             if v_.VarName == var_name:
                 # print('skip', var_name)
                 continue
@@ -79,27 +80,20 @@ def mip_solver_worker(candidate):
                 # remove_vars.append(v_.VarName)
             # print(v_.VarName)
         
-        # print(remove_constrs)
-        # print(remove_vars)
-        # print()
-        # print()
-        # print()
-        model.remove(remove_constrs)
-        model.remove(remove_vars)
-        model.update()
-        # model.write('example/test_gurobi_removed.lp')
+        grb_model.remove(remove_constrs)
+        grb_model.remove(remove_vars)
+        grb_model.update()
+        # grb_model.write('example/test_gurobi_removed.lp')
         
-        # exit()
 
     def get_grb_solution(grb_model, reference, bound_type, eps=1e-5):
         refined = False
         if grb_model.status == 9: # Timed out. Get current bound.
             bound = bound_type(grb_model.objbound, reference)
-            refined = abs(bound - reference) >= 1e-4
+            refined = abs(bound - reference) >= eps
         elif grb_model.status == 2: # Optimally solved.
             bound = grb_model.objbound
-            refined = abs(bound - reference) >= 1e-4
-            # refined = True
+            refined = abs(bound - reference) >= eps
         elif grb_model.status == 15: # Found an lower bound >= 0 or upper bound <= 0, so this neuron becomes stable.
             bound = bound_type(1., -1.) * eps
             refined = True
@@ -136,19 +130,21 @@ def mip_solver_worker(candidate):
 
     refine_time = time.time()
     model = MULTIPROCESS_MODEL.copy()
-    var_name, pre_relu_names, relu_names, final_name = candidate
+    l_id, n_id, var_name, solve_both, pre_relu_names, relu_names, final_name = candidate
     v = model.getVarByName(var_name)
-    out_lb, out_ub = v.lb, v.ub
+    out_lb, out_ub = v.LB, v.UB
     neuron_refined = False
-    eps = 1e-8
+    eps = 1e-5
+    v.LB, v.UB = -np.inf, np.inf
+    model.update()
 
     if REMOVE_UNUSED:
-        remove_unused_vars_and_constrs(model, var_name, {v: k for k, v in pre_relu_names.items()}, relu_names, final_name)
+        remove_unused_vars_and_constrs(model, var_name, {v_: k_ for k_, v_ in pre_relu_names.items()}, relu_names, final_name)
     
     if abs(out_lb) < abs(out_ub): # lb is tighter, solve lb first.
         vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vlb <= 0 and SOLVE_BOTH: # Still unstable. Solve ub.
+        if vlb <= 0 and solve_both: # Still unstable. Solve ub.
             vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # lb > 0, neuron is stable, we skip solving ub.
@@ -156,7 +152,7 @@ def mip_solver_worker(candidate):
     else: # ub is tighter, solve ub first.
         vub, refined, status_ub, status_ub_r = solve_ub(model, v, out_ub, eps=eps)
         neuron_refined = neuron_refined or refined
-        if vub >= 0 and SOLVE_BOTH: # Still unstable. Solve lb.
+        if vub >= 0 and solve_both: # Still unstable. Solve lb.
             vlb, refined, status_lb, status_lb_r = solve_lb(model, v, out_lb, eps=eps)
             neuron_refined = neuron_refined or refined
         else: # ub < 0, neuron is stable, we skip solving ub.
@@ -171,7 +167,7 @@ def mip_solver_worker(candidate):
             # print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s")
         sys.stdout.flush()
 
-    return vlb, vub, neuron_refined
+    return l_id, n_id, var_name, vlb, vub, neuron_refined, status_lb, status_ub
 
 
 
@@ -193,87 +189,92 @@ def print_tightened_bounds(name, olds, news):
 
 class Tightener:
     
-    def __init__(self, abstractor):
+    def __init__(self, abstractor, objectives):
         self.abstractor = abstractor
-        assert abstractor.net.model.ModelName == 'mip', print(f'Model error: "{abstractor.net.model.ModelName}" != "mip"')
-        self.mip_model = abstractor.net.model.copy()
+        # self.objectives = copy.deepcopy(objectives)
+        self.input_lowers = objectives.lower_bounds[0].clone().view(self.abstractor.input_shape).to(self.abstractor.device)
+        self.input_uppers = objectives.upper_bounds[0].clone().view(self.abstractor.input_shape).to(self.abstractor.device)
+        self.c_to_use = objectives.cs.clone().transpose(0, 1).to(self.abstractor.device)
+        
+        # assert abstractor.net.model.ModelName == 'mip', print(f'Model error: "{abstractor.net.model.ModelName}" != "mip"')
+        # self.orig_mip_model = abstractor.net.model.copy()
         
         # self.pre_relu_indices = [i for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
         assert len(abstractor.net.relus) == len(abstractor.net.perturbed_optimizable_activations), print('[!] Error: Support ReLU only')
         self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.relu_names = {i: layer.name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
-               
-    
+        self.black_list = []
+        self.tightened_layers = []
+        
+        
+    def reset(self):
+        self.black_list = []
+        self.tightened_layers = []
+        
+        
+    def select_layer(self):
+        for i in range(1, len(self.relu_names)):
+            if i not in self.tightened_layers:
+                return i
+        return random.choice(self.tightened_layers)
+        
+        
+    # FIXME: only work with ReLU
     def __call__(self, domain_list, topk=64, largest=False, timeout=2.0, solve_both=False):
-        # return
+        # step 1: select domains
         worst_domains = domain_list.pick_out_worst_domains(len(domain_list), device='cpu')
         batch = len(worst_domains.lower_bounds[0])
-        # logger.debug(f'Tightening: {batch}')
+        logger.debug(f'Tightening: {batch}')
         if batch == 0:
             return
-        # self.mip_model.write(f'example/test_gurobi_all.lp')
-        # print(self.pre_relu_indices)
-        # print(self.pre_relu_names)
-        # print(self.relu_names)
-        # print(worst_domains.lower_bounds[-1].flatten())
-        # print(self.mip_model)
-        # exit()
-        # FIXME: only work with ReLU
-        # domain_activations = [((worst_domains.lower_bounds[j] == 0).int() - (worst_domains.upper_bounds[j] == 0).int()).flatten(1).cpu() for j in range(len(worst_domains.lower_bounds) - 1)]
-        # print(' aaaaa ',[_.sum() for _ in domain_list.all_lower_bounds[:-1]])
-        # for i in range(batch):
-        #     print('domain_activations:', i, [da[i].abs().sum() for da in domain_activations])
         
-        # repeat_domain_activations = [_[0:1].repeat(batch, 1) for _ in domain_activations]
-        # print([_.shape for _ in worst_domains.lower_bounds[:-1]])
+        # worst bounds
         unified_lower_bounds = [_.min(dim=0).values.flatten() for _ in worst_domains.lower_bounds[:-1]]
         unified_upper_bounds = [_.max(dim=0).values.flatten() for _ in worst_domains.upper_bounds[:-1]]
-        # print([_.shape for _ in unified_upper_bounds])
-        
         assert all([(u_lb <= o_lb.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, worst_domains.lower_bounds[:-1])])
         assert all([(u_ub >= o_ub.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, worst_domains.upper_bounds[:-1])])
-        # print()
-        
         
         # assert all([(u_lb <= o_lb.data.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, domain_list.all_lower_bounds[:-1])])
         # assert all([(u_ub >= o_ub.data.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, domain_list.all_upper_bounds[:-1])])
         
-        # step 1: update bounds
-        # FIXME: support other activation
+        # unified_lower_bounds_cl = [_.clone() for _ in unified_lower_bounds]
+        # unified_upper_bounds_cl = [_.clone() for _ in unified_upper_bounds]
+        # current_model = self.rebuild_mip_model(unified_lower_bounds, unified_upper_bounds)
+        # current_model.setParam('TimeLimit', timeout)
+        
+        # update bounds
         assert len(self.pre_relu_names) == len(unified_lower_bounds)
-        current_model = self.mip_model.copy()
-        tic = time.time()
-        for layer_idx, pre_relu_name in self.pre_relu_names.items():
-            for neuron_idx in range(unified_lower_bounds[layer_idx].numel()):
-                var = current_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
-                assert var is not None
-                # print(layer_idx, neuron_idx, var)
-                # if var.LB > unified_lower_bounds[layer_idx][neuron_idx] + 1e-3: print('lb', var.LB, unified_lower_bounds[layer_idx][neuron_idx].item())
-                # if var.UB < unified_upper_bounds[layer_idx][neuron_idx] - 1e-3: print('ub', var.UB, unified_upper_bounds[layer_idx][neuron_idx].item())
-                
-                var.LB = max(var.LB, unified_lower_bounds[layer_idx][neuron_idx].item())
-                var.UB = min(var.UB, unified_upper_bounds[layer_idx][neuron_idx].item())
-                
-                a_var = current_model.getVarByName(f"aReLU{self.relu_names[layer_idx]}_{neuron_idx}")
-                if a_var is not None:
-                    if unified_lower_bounds[layer_idx][neuron_idx] >= 0:
-                        a_var.LB = 1
-                        a_var.UB = 1
-                    elif unified_upper_bounds[layer_idx][neuron_idx] <= 0:
-                        a_var.LB = 0
-                        a_var.UB = 0
-                        # print(unified_lower_bounds[layer_idx][neuron_idx], unified_upper_bounds[layer_idx][neuron_idx])
-                # print(layer_idx, neuron_idx, var, var.lb, var.ub, a_var)
-                
-                # if var.LB * unified_lower_bounds[layer_idx][neuron_idx] < 0:
-                #     print('\t- lower:', layer_idx, neuron_idx, var, var.LB, unified_lower_bounds[layer_idx][neuron_idx])
-                # if var.UB * unified_upper_bounds[layer_idx][neuron_idx] < 0:
-                #     print('\t- upper:', layer_idx, neuron_idx, var, var.UB, unified_upper_bounds[layer_idx][neuron_idx])
-        current_model.update()
-        # print('update:', time.time() - tic)
+        # tic = time.time()
+        if 0:
+            for layer_idx, pre_relu_name in self.pre_relu_names.items():
+                for neuron_idx in range(unified_lower_bounds[layer_idx].numel()):
+                    var = current_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
+                    assert var is not None
+                    # print(layer_idx, neuron_idx, var)
+                    # if var.LB > unified_lower_bounds[layer_idx][neuron_idx] + 1e-3: print('lb', var.LB, unified_lower_bounds[layer_idx][neuron_idx].item())
+                    # if var.UB < unified_upper_bounds[layer_idx][neuron_idx] - 1e-3: print('ub', var.UB, unified_upper_bounds[layer_idx][neuron_idx].item())
+                    
+                    var.LB = max(var.LB, unified_lower_bounds[layer_idx][neuron_idx].item())
+                    var.UB = min(var.UB, unified_upper_bounds[layer_idx][neuron_idx].item())
+                    
+                    a_var = current_model.getVarByName(f"aReLU{self.relu_names[layer_idx]}_{neuron_idx}")
+                    if a_var is not None:
+                        if unified_lower_bounds[layer_idx][neuron_idx] >= 0:
+                            a_var.LB = 1
+                            a_var.UB = 1
+                        elif unified_upper_bounds[layer_idx][neuron_idx] <= 0:
+                            a_var.LB = 0
+                            a_var.UB = 0
+                            # print(unified_lower_bounds[layer_idx][neuron_idx], unified_upper_bounds[layer_idx][neuron_idx])
+                    # print(layer_idx, neuron_idx, var, var.lb, var.ub, a_var)
+                    
+                    # if var.LB * unified_lower_bounds[layer_idx][neuron_idx] < 0:
+                    #     print('\t- lower:', layer_idx, neuron_idx, var, var.LB, unified_lower_bounds[layer_idx][neuron_idx])
+                    # if var.UB * unified_upper_bounds[layer_idx][neuron_idx] < 0:
+                    #     print('\t- upper:', layer_idx, neuron_idx, var, var.UB, unified_upper_bounds[layer_idx][neuron_idx])
+        
         
         # step 2: select candidates
-        tic = time.time()
         unified_masks = [torch.where(lb_ * ub_ < 0)[0].numpy() for (lb_, ub_) in zip(unified_lower_bounds, unified_upper_bounds)]
         unified_indices = [(l_id, n_id) for l_id in range(1, len(unified_masks)) for n_id in unified_masks[l_id]] # skip first layer
         
@@ -281,112 +282,89 @@ class Tightener:
             torch.min(unified_upper_bounds[l_id][unified_masks[l_id]].abs(), unified_lower_bounds[l_id][unified_masks[l_id]].abs()).flatten() 
                 for l_id in range(1, len(unified_masks)) # skip first layer
         ])
-        # unified_scores = [unified_upper_bounds[l_id] for l_id in range(len(unified_masks))]
-        # print(unified_scores)
         assert unified_scores.numel() == len(unified_indices)
         
         if not len(unified_indices):
             return
         
-        # print(unified_masks)
-        # print(unified_indices, len(unified_indices))
-        # exit()
-        # print(unified_scores, len(unified_indices))
-        # print(sum(_.numel() for _ in unified_scores))
-        # exit()
-        # print(unified_scores.topk(5), len(unified_indices))
-        n_candidates = min(topk, len(unified_indices))
-        
-        # for idx, (l_id, n_id) in enumerate(unified_indices):
-        #     assert torch.min(unified_upper_bounds[l_id][n_id], unified_lower_bounds[l_id][n_id].abs()).item() == unified_scores[idx]
-        
+        n_candidates = len(unified_indices)
         candidates = []
-        select_indices = unified_scores.topk(n_candidates, largest=largest).indices
-        # print(f'select {n_candidates} indices:', select_indices)
-        # select_indices = []
-        candidates += [(
-            f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", 
-             self.pre_relu_names, 
-             self.relu_names, 
-             self.abstractor.net.final_name,
-        ) for select_idx in select_indices]
-        # candidates += [f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}" for select_idx in unified_scores.topk(n_candidates, largest=False).indices]
-        # candidates = [candidates[3]]
-        # print('select:', len(candidates), time.time() - tic)
-        # if 0:
-        #     n_candidates_remain =  min(topk // 4, len(unified_indices) - len(select_indices))
-        #     if n_candidates_remain > 0:
-        #         select_indices_remain = unified_scores.topk(n_candidates_remain, largest=True).indices
-        #         candidates += [(
-        #             f"lay{self.pre_relu_names[unified_indices[select_idx][0]]}_{unified_indices[select_idx][1]}", 
-        #             self.pre_relu_names, 
-        #             self.relu_names, 
-        #             self.abstractor.net.final_name,
-        #         ) for select_idx in select_indices_remain]
+        selected_indices = unified_scores.topk(n_candidates, largest=largest).indices
+        selected_layer = self.select_layer()
         
-        global MULTIPROCESS_MODEL, SOLVE_BOTH
-        SOLVE_BOTH = solve_both
+        for s_idx in selected_indices:
+            l_id, n_id = unified_indices[s_idx]
+            if l_id != selected_layer:
+                continue
+            
+            var_name = f"lay{self.pre_relu_names[l_id]}_{n_id}"
+            if var_name in self.black_list:
+                continue
+            
+            candidates.append((
+                l_id, 
+                n_id, 
+                var_name, 
+                solve_both, 
+                self.pre_relu_names, 
+                self.relu_names, 
+                self.abstractor.net.final_name,
+            ))
+            # print('added:', l_id, n_id, var_name)
+            
+            if selected_layer not in self.tightened_layers: # 1st time, tighten all neurons
+                continue
+            
+            if len(candidates) == topk: # 2nd time, tighten topk neurons
+                break
         
+        if selected_layer not in self.tightened_layers:
+            self.tightened_layers.append(selected_layer)
+
+
+        # step 3: rebuild mip model
+        # assert all([(i==ii).all() for (i, ii) in zip(unified_upper_bounds, unified_upper_bounds_cl)])
+        # assert all([(i==ii).all() for (i, ii) in zip(unified_lower_bounds, unified_lower_bounds_cl)])
+        
+        current_model = self.rebuild_mip_model(unified_lower_bounds, unified_upper_bounds)
+        current_model.setParam('TimeLimit', timeout)
+        global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
-        MULTIPROCESS_MODEL.setParam('TimeLimit', timeout)
-        MULTIPROCESS_MODEL.setParam('Threads', 1)
-        MULTIPROCESS_MODEL.setParam('MIPGap', 0.01)
-        MULTIPROCESS_MODEL.setParam('MIPGapAbs', 0.01)
-        # MULTIPROCESS_MODEL.setParam('Threads', 128 // len(candidates))
-        # print(MULTIPROCESS_MODEL)
-        # exit()
-        
-        # for can in candidates:
-        #     mip_solver_worker(can)
-        
-        tic = time.time()
-        # print(candidates)
+
+
+        # step 4: tightening
         solver_result = []
         if len(candidates):
             with multiprocessing.Pool(min(len(candidates), os.cpu_count())) as pool:
                 solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
         MULTIPROCESS_MODEL = None
-        # print('refine:', time.time() - tic)
-        # print('stablized:', sum([_[-1] for _ in solver_result]))
-        
+
+
+        # step 5: update refined bounds
         unified_lower_bounds_refined = [lb.clone() for lb in unified_lower_bounds]
         unified_upper_bounds_refined = [ub.clone() for ub in unified_upper_bounds]
         unstable_to_stable_neurons = []
-        for idx, (vlb, vub, neuron_refined) in zip(select_indices, solver_result):
-            l_id, n_id = unified_indices[idx]
-            # print(l_id, n_id)
+        num_neuron_refined = 0
+        for l_id, n_id, var_name, vlb, vub, neuron_refined, s_lb, s_ub in solver_result:
+            # print(l_id, n_id, var_name, vlb, vub, neuron_refined, s_lb, s_ub)
             if neuron_refined:
+                num_neuron_refined += 1 
                 unified_lower_bounds_refined[l_id][n_id] = max(unified_lower_bounds[l_id][n_id], vlb)
                 unified_upper_bounds_refined[l_id][n_id] = min(unified_upper_bounds[l_id][n_id], vub)
                 if vlb > 0:
                     unstable_to_stable_neurons.append((l_id, n_id, 1.0))
                 elif vub < 0:
                     unstable_to_stable_neurons.append((l_id, n_id, -1.0))
-                    
+
                 # print(f'neuron[{l_id}][{n_id}]: [{unified_lower_bounds[l_id][n_id]:.06f}, {unified_upper_bounds[l_id][n_id]:.06f}] => [{unified_lower_bounds_refined[l_id][n_id]:.06f}, {unified_upper_bounds_refined[l_id][n_id]:.06f}]')
-            
-        # if len(domain_list) > 3:
-        
-        # print([(i <= ii).all() for (i, ii) in zip(unified_lower_bounds, unified_lower_bounds_refined)])
-        # print([(i >= ii).all() for (i, ii) in zip(unified_upper_bounds, unified_upper_bounds_refined)])
-        
-        # print('cut 1', [_.sum() for _ in unified_lower_bounds_refined])
+                
+            # if (s_lb, s_ub) == (2, 2):
+            #     self.black_list.append(var_name)
+                    
+        logger.debug(f'Selected {len(candidates)}/{len(unified_indices)}, tightened {num_neuron_refined} neurons, stabilized {len(unstable_to_stable_neurons)} neurons, blacklisted {len(self.black_list)} neurons')
         
         
-        # print('Lower bounds improvement:', _bound_improvement(unified_lower_bounds, unified_lower_bounds_refined, 'lower'), sum([_.sum() for _ in unified_lower_bounds]), sum([_.sum() for _ in unified_lower_bounds_refined]))
-        # print('Upper bounds improvement:', _bound_improvement(unified_upper_bounds, unified_upper_bounds_refined, 'upper'), sum([_.sum() for _ in unified_upper_bounds]), sum([_.sum() for _ in unified_upper_bounds_refined]))
-        # print('Stabilized neurons:', len(unstable_to_stable_neurons), sum([_[-1] for _ in solver_result]), len(candidates), unstable_to_stable_neurons)
-        
-        logger.debug(f'Selected {len(candidates)}/{len(unified_indices)}, tightened {sum([_[-1] for _ in solver_result])}/{len(candidates)} neurons, stabilized {len(unstable_to_stable_neurons)} neurons')
-        
-        # logger.debug('Finished tightening')
-        # print('cut 2', [_.sum() for _ in unified_lower_bounds_refined])
-        
-        assert torch.equal(unified_lower_bounds[0], unified_lower_bounds_refined[0])
-        assert torch.all(unified_lower_bounds[0] <= worst_domains.lower_bounds[0])
-        assert torch.all(unified_lower_bounds[0] <= domain_list.all_lower_bounds[0].data)
-        assert torch.all(unified_lower_bounds_refined[0] <= domain_list.all_lower_bounds[0].data)
-        
+        # step 6: update domains bounds
         class TMP:
             pass
         
@@ -395,29 +373,33 @@ class Tightener:
         refined_domain.upper_bounds = unified_upper_bounds_refined
         
         domain_list.update_refined_bounds(refined_domain)
-        # print(' aaaaa ',[_.sum() for _ in domain_list.all_lower_bounds[:-1]])
         
-        # exit()
-        # for i in range(batch):
-        #     print('repeat_domain_activations:', i, [rda[i].abs().sum() for rda in repeat_domain_activations])
-        # # print('repeat_domain_activations:', [_.abs().sum() for _ in repeat_domain_activations])
-        # print()
-        # print()
+        return
         
-        # print([(i==ii).shape for i, ii in zip(domain_activations, repeat_domain_activations)])
-        # print([(i==ii).all() for i, ii in zip(domain_activations, repeat_domain_activations)])
-        # print([torch.where(i == ii, i, 0) * (i != 0) for i, ii in zip(domain_activations, repeat_domain_activations)])
         
-        # print('repeat_domain_activations:', repeat_domain_activations)
-        # print([i == ii for (i, ii) in zip(domain_activations, repeat_domain_activations)])
-        # print([_.shape for _ in repeat_domain_activations])
+    def rebuild_mip_model(self, refined_lower_bounds, refined_upper_bounds):
+        intermediate_layer_bounds = {}
+        for l_id, l_name in self.pre_relu_names.items():
+            intermediate_layer_bounds[l_name] = [
+                refined_lower_bounds[l_id].to(self.abstractor.device), 
+                refined_upper_bounds[l_id].to(self.abstractor.device)
+            ]
         
-        # 1. get worst domains
-        # 2. unify bounds
-        # 3. update mip model
-        # 4. select top-k candidates
-        # 5. refine
-        # 6. update bounds
+        # for name, (lbs, ubs) in intermediate_layer_bounds.items():
+        #     print(name, lbs.shape)
+            
+        self.abstractor.build_lp_solver(
+            model_type='mip', 
+            input_lower=self.input_lowers,
+            input_upper=self.input_uppers,
+            c=self.c_to_use,
+            refine=False,
+            intermediate_layer_bounds=intermediate_layer_bounds,
+        )
+        current_model = self.abstractor.net.model.copy()
+        current_model.setParam('Threads', 1)
+        current_model.setParam('MIPGap', 0.01)
+        current_model.setParam('MIPGapAbs', 0.01)
+        current_model.update()
         
-    def _find_common_activation(self, domain_params):
-        pass
+        return current_model

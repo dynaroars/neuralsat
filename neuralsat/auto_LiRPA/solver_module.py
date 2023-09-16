@@ -10,7 +10,7 @@ MULTIPROCESS_MODEL = None
 START_TIME = None
 TIMEOUT = None
 
-TIMEOUT_PER_NEURON = 10
+TIMEOUT_PER_NEURON = 15
 N_THREAD = 1
 N_REFINE_LAYER = 10
 N_PROC = os.cpu_count() // N_THREAD
@@ -76,7 +76,8 @@ def mip_solver_worker(candidate):
     model = MULTIPROCESS_MODEL.copy()
     model.setParam('TimeLimit', TIMEOUT_PER_NEURON)
     model.setParam('Threads', N_THREAD)
-    v = model.getVarByName(candidate)
+    neuron_idx, var_name = candidate
+    v = model.getVarByName(var_name)
     out_lb, out_ub = v.lb, v.ub
     refine_time = time.time()
     neuron_refined = False
@@ -109,7 +110,7 @@ def mip_solver_worker(candidate):
         print(f"Solving MIP (#workers={N_PROC}, #thread={N_THREAD}, timeout={TIMEOUT_PER_NEURON}) for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
         sys.stdout.flush()
 
-    return vlb, vub, neuron_refined
+    return neuron_idx, vlb, vub, neuron_refined
 
 
 
@@ -210,19 +211,26 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
             global MULTIPROCESS_MODEL
             
             refine_node = node.inputs[0]
+            assert len(refine_node.lower) == 1
             
             if DEBUG:
-                print('[+] Refine layer:', refine_node)
+                print('[+] Refine layer:', refine_node.name)
+                # print(refine_node.solver_vars)
+                # print()
                 
             candidates = []
-            candidate_neuron_ids = []
+            # candidate_neuron_ids = []
             unstable_to_stable = []
             
-            for neuron_idx, v in enumerate(refine_node.solver_vars):
+                
+            for neuron_idx in range(refine_node.lower.numel()):
+                v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
                 if v.ub * v.lb < 0: # unstable neuron
-                    # print(v.VarName, v.lb==refine_node.lower[0, neuron_idx], v.ub==refine_node.upper[0, neuron_idx] if refine_node.upper is not None else None)
-                    candidates.append(v.VarName)
-                    candidate_neuron_ids.append(neuron_idx)
+                    # print(v.VarName, v.lb==refine_node.lower.flatten(1)[0, neuron_idx], v.ub==refine_node.upper.flatten(1)[0, neuron_idx] if refine_node.upper is not None else None)
+                    candidates.append((neuron_idx, v.VarName))
+                    # if len(candidates) > 100:
+                    #     break
+                    
                 # speed up
                 v.lb, v.ub = -np.inf, np.inf
                     
@@ -232,10 +240,6 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
             if len(candidates):
                 print('#candidates =', len(candidates))
                 MULTIPROCESS_MODEL = self.model.copy()
-                # global N_THREAD, N_PROC
-                # if len(candidates) < os.cpu_count():
-                #     N_PROC = len(candidates)
-                #     N_THREAD = max(1, os.cpu_count() // N_PROC)
                 
                 if (N_PROC > 1) and (len(candidates) > 1):
                     with multiprocessing.Pool(min(N_PROC, len(candidates))) as pool:
@@ -247,19 +251,26 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 MULTIPROCESS_MODEL = None
                     
                 # update bounds
-                for (vlb, vub, refined), neuron_idx in zip(solver_result, candidate_neuron_ids):
+                refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
+                refine_node_upper = refine_node.upper.clone().detach().cpu().flatten(1)
+                for neuron_idx, vlb, vub, refined in solver_result:
                     if refined:
                         if vlb >= 0:
                             unstable_to_stable.append((neuron_idx, 1))
                         if vub <= 0:
                             unstable_to_stable.append((neuron_idx, -1))
-                        refine_node.lower[0, neuron_idx] = max(vlb, refine_node.lower[0, neuron_idx])
-                        refine_node.upper[0, neuron_idx] = min(vub, refine_node.upper[0, neuron_idx])
+                        refine_node_lower[0, neuron_idx] = max(vlb, refine_node_lower[0, neuron_idx])
+                        refine_node_upper[0, neuron_idx] = min(vub, refine_node_upper[0, neuron_idx])
                     
             # restore bounds
-            for neuron_idx, v in enumerate(refine_node.solver_vars):
-                v.lb = refine_node.lower[0, neuron_idx]
-                v.ub = refine_node.upper[0, neuron_idx]
+            for neuron_idx in range(refine_node.lower.numel()):
+                v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
+                v.lb = refine_node_lower[0, neuron_idx]
+                v.ub = refine_node_upper[0, neuron_idx]
+            
+            shape = refine_node.lower.shape
+            refine_node.lower = refine_node_lower.view(shape).to(self.device)
+            refine_node.upper = refine_node_upper.view(shape).to(self.device)
             self.model.update()
 
 
@@ -267,7 +278,6 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 reference_bounds = self.get_refined_intermediate_bounds()
                 # lb_, _ = self.compute_bounds(x=x, C=C, method="backward", reference_bounds=reference_bounds)
                 # print('w/o optimized        :', lb_)
-                
                 
                 # self.set_bound_opts({
                 #     'optimize_bound_args': {'enable_beta_crown': True},
@@ -302,6 +312,9 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
             # TODO: refine for general activation
             pass
         
+        # if DEBUG:
+        #     print('[+] Build layer:', node.name)
+            
         inp = [n_pre.solver_vars for n_pre in node.inputs]
         if C is not None and isinstance(node, BoundLinear) and \
                 not node.is_input_perturbed(1) and self.final_name == node.name:

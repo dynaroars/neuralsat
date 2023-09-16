@@ -363,6 +363,7 @@ def _update_best_beta(
     """
     Update best beta by given idx.
     """
+    # print('update best')
     if enable_opt_interm_bounds and betas:
         for node in optimizable_activations:
             for key in node.sparse_beta.keys():
@@ -830,11 +831,11 @@ def get_optimized_bounds(
             print(f'****** iter [{i}] \t loss: {loss.item()}, lr: {opt.param_groups[0]["lr"]}')
             # print('best_intermediate_bounds:', sum([(v[1] - v[0]).sum().item() for _, v in self.get_refined_intermediate_bounds().items()]))
             # print('refined_intermediate_bounds:', sum([(v[1] - v[0]).sum().item() for _, v in arg_ilb.items()])) if arg_ilb is not None else None
-            print('unstable neurons:', sum([(v[1] * v[0] < 0).sum().item() for _, v in self.get_refined_intermediate_bounds().items()]))
+            # print('unstable neurons:', sum([(v[1] * v[0] < 0).sum().item() for _, v in self.get_refined_intermediate_bounds().items()]))
             # print('best_alphas:', sum([v_.sum() for (k, v) in best_alphas.items() for (k_, v_) in v.items()]))
             # print('full_ret_l:', full_ret_l.flatten().detach())
-            print('stop_criterion:', stop_criterion)
-            print()
+            # print('stop_criterion:', stop_criterion)
+            # print()
 
         if stop_criterion_final:
             if verbosity > 0:

@@ -44,6 +44,12 @@ def _mip_attack(self, reference_bounds):
 def _preprocess(self, objectives):
     # determine search algorithm
     self.refined_betas = None
+    
+    if Settings.test:
+        print(Settings)
+        self.input_split = False
+        return objectives, None
+    
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
     perturbed = (diff > 0).numel()
@@ -138,9 +144,11 @@ def _preprocess(self, objectives):
             
         # mip tightener
         if Settings.use_mip_tightening:
-            self.tightener = Tightener(self.abstractor)
+            self.tightener = Tightener(
+                abstractor=self.abstractor,
+                objectives=objectives, 
+            )
             
-        
     logger.info(f'Remain {len(objectives)} objectives')
     return objectives, refined_intermediate_bounds
 

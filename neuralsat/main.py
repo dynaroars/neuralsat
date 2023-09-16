@@ -10,6 +10,7 @@ from util.spec.read_vnnlib import read_vnnlib
 from util.network.read_onnx import parse_onnx
 from util.misc.export import get_adv_string
 from verifier.verifier import Verifier 
+from setting import Settings
 
 if __name__ == '__main__':
     START_TIME = time.time()
@@ -20,7 +21,7 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--batch', type=int, default=3000,
+    parser.add_argument('--batch', type=int, default=1000,
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
@@ -32,6 +33,8 @@ if __name__ == '__main__':
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
                         help="export counter-example to result file.")
+    parser.add_argument('--test', action='store_true',
+                        help="test on small example with specific settings.")
     args = parser.parse_args()   
     
     # set device
@@ -50,6 +53,9 @@ if __name__ == '__main__':
         
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
+    
+    if args.test:
+        Settings.setup_test()
     
     # verifier
     verifier = Verifier(
