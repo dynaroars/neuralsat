@@ -17,7 +17,7 @@ class GlobalSettings:
         # MIP refinement
         self.use_mip_refine = 0
         self.use_mip_refine_domain_bounds = 0
-        self.use_mip_tightening = 1
+        self.use_mip_tightening = 0
         
         # attack
         self.use_attack = 1

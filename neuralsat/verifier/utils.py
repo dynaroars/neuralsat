@@ -7,6 +7,7 @@ import copy
 from heuristic.restart_heuristics import get_restart_strategy
 from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.tightener import Tightener
+from heuristic.util import compute_masks
 
 from attacker.pgd_attack.general import general_attack
 from attacker.mip_attack import MIPAttacker
@@ -20,15 +21,6 @@ from util.misc.logger import logger
 from setting import Settings
 
 DEBUG = False
-
-
-def new_slopes(slopes, keep_name):
-    new_slope = {}
-    for relu_layer, alphas in slopes.items():
-        new_slope[relu_layer] = {}
-        if keep_name in alphas:
-            new_slope[relu_layer][keep_name] = alphas[keep_name]
-    return new_slope
 
 
 def _mip_attack(self, reference_bounds):
@@ -270,3 +262,62 @@ def _get_learned_conflict_clauses(self):
         return self.domains_list.all_conflict_clauses
     return []
 
+
+def _check_invoke_tightening(self):
+    if not Settings.use_mip_tightening:
+        return False
+    
+    if self.input_split:
+        return False
+    
+    if self.tightening_patience <= 20:
+        return False
+    
+    if len(self.domains_list) <= self.batch:
+        return False
+    
+    return True
+    
+
+def _update_tightening_patience(self, minimum_lowers, old_domains_length):
+    current_domains_length = len(self.domains_list)
+    if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= old_domains_length) or (current_domains_length <= self.batch):
+        self.tightening_patience = 0
+    elif minimum_lowers == self.last_minimum_lowers:
+        self.tightening_patience += 1
+    else:
+        self.tightening_patience += 3
+    self.last_minimum_lowers = minimum_lowers
+            
+    
+def _check_full_assignment(self, domain_params):
+    if domain_params.lower_bounds is None:
+        return None
+    
+    new_masks = compute_masks(lower_bounds=domain_params.lower_bounds, upper_bounds=domain_params.upper_bounds, device='cpu')
+    remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
+
+    for idx_ in remaining_index:
+        if sum([layer_mask[idx_].sum() for layer_mask in new_masks]) == 0:
+            self.abstractor.build_lp_solver(
+                model_type='lp', 
+                input_lower=domain_params.input_lowers[idx_][None], 
+                input_upper=domain_params.input_uppers[idx_][None], 
+                c=domain_params.cs[idx_][None],
+                refine=False,
+            )
+
+            feasible, adv = self.abstractor.solve_full_assignment(
+                input_lower=domain_params.input_lowers[idx_], 
+                input_upper=domain_params.input_uppers[idx_], 
+                lower_bounds=[l[idx_] for l in domain_params.lower_bounds],
+                upper_bounds=[u[idx_] for u in domain_params.upper_bounds],
+                c=domain_params.cs[idx_],
+                rhs=domain_params.rhs[idx_]
+            )
+            
+            if feasible:
+                return adv
+    return None
+
+    

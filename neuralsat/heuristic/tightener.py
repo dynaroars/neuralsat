@@ -8,7 +8,6 @@ import time
 import sys
 import os
 
-from auto_LiRPA.bound_ops import BoundRelu
 from util.misc.logger import logger
 from setting import Settings
 
@@ -25,14 +24,17 @@ def _bound_improvement(orig, refined, bound_type):
     assert all([(i >= ii).all() for (i, ii) in zip(orig, refined)])
     return [(i - ii).sum() for (i, ii) in zip(orig, refined)]
         
+        
 def handle_gurobi_error(message):
     print(f'Gurobi error: {message}')
     raise
+  
   
 def _get_prefix_constr_name(name):
     if name.startswith('lay'):
         return ''.join(name.split('_')[:-2])
     return ''.join(name.split('_')[:-3])
+
 
 def _get_prefix_var_name(name):
     return ''.join(name.split('_')[:-1])

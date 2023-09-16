@@ -1,22 +1,18 @@
+import warnings
+warnings.filterwarnings(action='ignore')
 import numpy as np
+import logging
 import torch
 import time
 import copy
 
-from auto_LiRPA.utils import stop_criterion_batch_any
-
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
-from heuristic.util import compute_masks
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
-
-from .utils import new_slopes
 from setting import Settings
-
-import warnings
-warnings.filterwarnings(action='ignore')
 
 
 class Verifier:
@@ -181,7 +177,7 @@ class Verifier:
         
         # main loop
         while len(self.domains_list) > 0:
-            self._branch_and_bound()
+            self._parallel_dpll()
             
             # check adv founded
             if self.adv is not None:
@@ -199,109 +195,66 @@ class Verifier:
         return ReturnStatus.UNSAT
             
             
-    def _branch_and_bound(self):        
+    def _parallel_dpll(self):        
+        # step 1: MIP attack
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, self.device))
         
-        # if Settings.use_mip_tightening and self.iteration == 2:
-        if Settings.use_mip_tightening and self.tightening_patience >= 0 and self.iteration == 0:
-            # self.tightener(self.domains_list, topk=32, timeout=10.0, largest=False, solve_both=True)
+        # step 2: stabilizing
+        old_domains_length = len(self.domains_list)
+        if self._check_invoke_tightening():
             self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
-            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
-            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
-            # exit()
             
-        # step 1: pick out
+        # step 3: selection
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
-        # step 2: attack
+        # step 4: PGD attack
         is_attacked, self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
         if is_attacked:
             return
 
-        # step 3: branching
+        # step 5: branching
         decisions = self.decision(self.abstractor, pick_ret)
 
-        # step 4: abstraction 
+        # step 6: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         
-        # step 5: pruning
-        # 5.1: full assignment
+        # step 7: pruning complete assignments
         self.adv = self._check_full_assignment(abstraction_ret)
         if self.adv is not None:
             return
         
-        # 5.2: unverified domains
+        # step 8: pruning unverified branches
         self.domains_list.add(decisions, abstraction_ret)
-        
-        # step 6: tighten bounds
-        # check patience
-        minimum_lowers = self.domains_list.minimum_lowers
-        if minimum_lowers > self.last_minimum_lowers:
-            self.tightening_patience = 0
-        elif minimum_lowers == self.last_minimum_lowers:
-            self.tightening_patience += 1
-        else:
-            self.tightening_patience += 5
-        self.last_minimum_lowers = minimum_lowers
-            
-        
-        
         # TODO: check full assignment after bcp
 
-        # logging
+        # statistics
         self.iteration += 1
-        logger.info(
+        minimum_lowers = self.domains_list.minimum_lowers
+        self._update_tightening_patience(minimum_lowers, old_domains_length)
+        
+        # logging
+        msg = (
             f'[{"Input" if self.input_split else "Hidden"} domain]     '
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
             f'Bound: {minimum_lowers:<15.04f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f}'
-            f'Tighteing patience: {self.tightening_patience:<10}'
-            f'last_minimum_lowers: {self.last_minimum_lowers:<10.04f}'
         )
-        # print(tighten_ret.histories)
-        
-        # print((pick_ret.input_uppers - pick_ret.input_lowers).sum().detach().cpu(), abstraction_ret.output_lbs.detach().cpu().flatten())
-        
-        
-    def _check_full_assignment(self, domain_params):
-        if domain_params.lower_bounds is None:
-            return None
-        
-        new_masks = compute_masks(lower_bounds=domain_params.lower_bounds, upper_bounds=domain_params.upper_bounds, device='cpu')
-        remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-
-        for idx_ in remaining_index:
-            if sum([layer_mask[idx_].sum() for layer_mask in new_masks]) == 0:
-                self.abstractor.build_lp_solver(
-                    model_type='lp', 
-                    input_lower=domain_params.input_lowers[idx_][None], 
-                    input_upper=domain_params.input_uppers[idx_][None], 
-                    c=domain_params.cs[idx_][None],
-                    refine=False,
-                )
-
-                feasible, adv = self.abstractor.solve_full_assignment(
-                    input_lower=domain_params.input_lowers[idx_], 
-                    input_upper=domain_params.input_uppers[idx_], 
-                    lower_bounds=[l[idx_] for l in domain_params.lower_bounds],
-                    upper_bounds=[u[idx_] for u in domain_params.upper_bounds],
-                    c=domain_params.cs[idx_],
-                    rhs=domain_params.rhs[idx_]
-                )
-                
-                if feasible:
-                    return adv
-        return None
-
-        
+        if logger.isEnabledFor(logging.DEBUG):
+            msg += (
+                f'Tightening patience: {self.tightening_patience:<10}'
+            )
+        logger.info(msg)
+    
+    
     from .utils import (
         _preprocess, _init_abstractor,
         _check_timeout,
         _setup_restart,
         _pre_attack, _attack, _mip_attack,
-        _get_learned_conflict_clauses,
+        _get_learned_conflict_clauses, _check_full_assignment,
+        _check_invoke_tightening, _update_tightening_patience
     )
     

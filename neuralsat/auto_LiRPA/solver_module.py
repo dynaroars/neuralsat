@@ -113,7 +113,6 @@ def mip_solver_worker(candidate):
     return neuron_idx, vlb, vub, neuron_refined
 
 
-
 def build_solver_module(self, x=None, C=None, intermediate_layer_bounds=None, final_node_name=None, 
                         model_type="mip", solver_pkg="gurobi", timeout=None, timeout_per_neuron=None, refine=False):
     r"""build lp/mip solvers in general graph.
