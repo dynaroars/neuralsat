@@ -263,19 +263,21 @@ def _get_learned_conflict_clauses(self):
     return []
 
 
-def _check_invoke_tightening(self):
+def _check_invoke_tightening(self, patience_limit=10):
     if not Settings.use_mip_tightening:
         return False
     
     if self.input_split:
         return False
     
-    if self.tightening_patience <= 20:
+    if self.tightening_patience < patience_limit:
         return False
     
     if len(self.domains_list) <= self.batch:
         return False
     
+    # reset counter
+    self.tightening_patience = 0
     return True
     
 

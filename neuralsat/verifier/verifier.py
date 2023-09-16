@@ -202,7 +202,7 @@ class Verifier:
         
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
-        if self._check_invoke_tightening():
+        if self._check_invoke_tightening(patience_limit=10):
             self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
             
         # step 3: selection
