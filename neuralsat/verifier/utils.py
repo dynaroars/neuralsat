@@ -37,16 +37,20 @@ def _preprocess(self, objectives):
     # determine search algorithm
     self.refined_betas = None
     
-    if Settings.test:
-        print(Settings)
-        self.input_split = False
-        return objectives, None
+    # if Settings.test:
+    #     print(Settings)
+    #     self.input_split = False
+    #     self._init_abstractor('backward', objectives)
+    #     self.tightener = Tightener(abstractor=self.abstractor, objectives=objectives)
+    #     return objectives, None
     
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
     perturbed = (diff > 0).numel()
     logger.info(f'[!] eps = {eps:.06f}, perturbed={perturbed}')
-    if eps > Settings.safety_property_threshold: # safety properties
+    if Settings.test:
+        self.input_split = False
+    elif eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= 200: # small inputs
         self.input_split = True
@@ -64,7 +68,7 @@ def _preprocess(self, objectives):
             return objectives, None
     else:
         self.input_split = False
-        
+    
     try:
         # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
@@ -79,7 +83,7 @@ def _preprocess(self, objectives):
     tmp_objective = copy.deepcopy(objectives)
     tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1] # raise errors if using beta, use full objectives instead
     tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1] # raise errors if using beta, use full objectives instead
-        
+    
     # forward
     ret = self.abstractor.initialize(tmp_objective)
 
@@ -180,6 +184,7 @@ def _setup_restart(self, nth_restart, objective):
         decision_topk=decision_topk, 
         input_split=self.input_split,
         random_selection=random_selection,
+        seed=nth_restart+2,
     )
     
     # abstractor
@@ -234,7 +239,7 @@ def _attack(self, domain_params, n_sample=50, n_interval=1):
         only_replicate_restarts=True,
         use_gama=False,
     )
-    if (attack_images is None) and (n_interval == 1):
+    if (attack_images is None) and (self.iteration % (3 * n_interval) == 0) and 0:
         attack_images = general_attack(
             model=self.net, 
             X=adv_example, 
@@ -265,6 +270,9 @@ def _get_learned_conflict_clauses(self):
 
 
 def _check_invoke_tightening(self, patience_limit=10):
+    if Settings.test:
+        return True
+    
     if not Settings.use_mip_tightening:
         return False
     

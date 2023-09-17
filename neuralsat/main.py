@@ -12,6 +12,15 @@ from util.misc.export import get_adv_string
 from verifier.verifier import Verifier 
 from setting import Settings
 
+
+def print_w_b(model):
+    for layer in model.modules():
+        if hasattr(layer, 'weight'):
+            print(layer)
+            print('\t[+] w:', layer.weight.data)
+            print('\t[+] b:', layer.bias.data)
+            print()
+            
 if __name__ == '__main__':
     START_TIME = time.time()
 
@@ -50,6 +59,8 @@ if __name__ == '__main__':
     vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
+        print_w_b(model)
+        # exit()
         
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')

@@ -35,7 +35,6 @@ class Verifier:
         self.iteration = 0
         self.last_minimum_lowers = -1e9
         self.tightening_patience = 0
-        self.patience_limit = 10
         
     def get_objective(self, dnf_objectives):
         if self.input_split:
@@ -203,7 +202,7 @@ class Verifier:
         
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
-        if self._check_invoke_tightening(patience_limit=self.patience_limit):
+        if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
             self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
             
         # step 3: selection
@@ -216,7 +215,8 @@ class Verifier:
 
         # step 5: branching
         decisions = self.decision(self.abstractor, pick_ret)
-
+        print(decisions)
+        
         # step 6: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         
@@ -245,7 +245,7 @@ class Verifier:
         )
         if logger.isEnabledFor(logging.DEBUG):
             msg += (
-                f'Tightening patience: {self.tightening_patience}/{self.patience_limit:<10}'
+                f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
             )
         logger.info(msg)
     

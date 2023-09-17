@@ -5,21 +5,27 @@ import random
 import torch
 
 from .util import _compute_babsr_scores
+from setting import Settings
 
 LARGE = 1e6
 SMALL = 1.0 / LARGE
 
 class DecisionHeuristic:
     
-    def __init__(self, decision_topk, input_split, decision_reduceop=torch.max, random_selection=False):
+    def __init__(self, decision_topk, input_split, decision_reduceop=torch.max, random_selection=False, seed=0):
         self.decision_topk = decision_topk
         self.input_split = input_split
         self.decision_reduceop = decision_reduceop
         self.random_selection = random_selection
         
+        # if Settings.test:
+        #     random.seed(seed)
 
     @torch.no_grad()
     def __call__(self, abstractor, domain_params):
+        # if Settings.test:
+        #     return self.naive_randomized_branching(domain_params=domain_params, mode=random.choice(['scale', 'distance', 'polarity']))
+        
         if self.input_split:
             return self.input_branching(domain_params=domain_params)
         
@@ -224,6 +230,8 @@ class DecisionHeuristic:
         assert len(layer_ids) == batch
         # print(layer_ids)
         decisions = [[layer_ids[b], best_scores_all_layers_indices[b, layer_ids[b]]] for b in range(batch)]
+        print('decisions:', mode, decisions)
+        
         return decisions
 
         # print()

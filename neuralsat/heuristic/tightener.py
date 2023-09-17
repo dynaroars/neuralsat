@@ -163,7 +163,7 @@ def mip_solver_worker(candidate):
     if DEBUG:
         # print(model)
         if neuron_refined:
-            print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
+            print(f"Solving MIP for {v.VarName:<10} (n[{l_id}, {n_id}]): [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
         else:
             pass
             # print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s")
@@ -202,7 +202,7 @@ class Tightener:
         # self.orig_mip_model = abstractor.net.model.copy()
         
         # self.pre_relu_indices = [i for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
-        assert len(abstractor.net.relus) == len(abstractor.net.perturbed_optimizable_activations), print('[!] Error: Support ReLU only')
+        assert len(abstractor.net.relus) == len(abstractor.net.perturbed_optimizable_activations), print('[!] Error: Support ReLU only', len(abstractor.net.relus), len(abstractor.net.perturbed_optimizable_activations))
         self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.relu_names = {i: layer.name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.black_list = []
@@ -296,7 +296,7 @@ class Tightener:
         
         for s_idx in selected_indices:
             l_id, n_id = unified_indices[s_idx]
-            if l_id != selected_layer:
+            if (l_id != selected_layer) and (not Settings.test):
                 continue
             
             var_name = f"lay{self.pre_relu_names[l_id]}_{n_id}"
