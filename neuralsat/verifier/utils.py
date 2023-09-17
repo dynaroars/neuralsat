@@ -270,11 +270,11 @@ def _get_learned_conflict_clauses(self):
 
 
 def _check_invoke_tightening(self, patience_limit=10):
-    if Settings.test:
-        return True
-    
     if not Settings.use_mip_tightening:
         return False
+    
+    if Settings.test:
+        return True
     
     if self.input_split:
         return False

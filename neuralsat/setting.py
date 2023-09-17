@@ -49,7 +49,7 @@ class GlobalSettings:
         self.__dict__[key] = value
         
     def setup_test(self):
-        self.max_hidden_branches = 2
+        self.max_hidden_branches = 1
         self.max_hidden_visited_branches = 2
         self.use_mip_refine = 0
         self.use_mip_tightening = 1

@@ -17,8 +17,8 @@ def print_w_b(model):
     for layer in model.modules():
         if hasattr(layer, 'weight'):
             print(layer)
-            print('\t[+] w:', layer.weight.data)
-            print('\t[+] b:', layer.bias.data)
+            print('\t[+] w:', layer.weight.data.detach().flatten())
+            print('\t[+] b:', layer.bias.data.detach().flatten())
             print()
             
 if __name__ == '__main__':
@@ -43,12 +43,15 @@ if __name__ == '__main__':
     parser.add_argument('--export_cex', action='store_true',
                         help="export counter-example to result file.")
     parser.add_argument('--test', action='store_true',
-                        help="test on small example with specific settings.")
+                        help="test on small example with special settings.")
     args = parser.parse_args()   
     
     # set device
     if not torch.cuda.is_available():
         args.device = 'cpu'
+        
+    if args.test:
+        Settings.setup_test()
         
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
@@ -59,14 +62,12 @@ if __name__ == '__main__':
     vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
-        # print_w_b(model)
-        # exit()
+        if Settings.test:
+            print_w_b(model)
         
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     
-    if args.test:
-        Settings.setup_test()
     
     # verifier
     verifier = Verifier(

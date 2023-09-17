@@ -23,8 +23,8 @@ class DecisionHeuristic:
 
     @torch.no_grad()
     def __call__(self, abstractor, domain_params):
-        # if Settings.test:
-        #     return self.naive_randomized_branching(domain_params=domain_params, mode=random.choice(['scale', 'distance', 'polarity']))
+        if Settings.test:
+            return self.naive_randomized_branching(domain_params=domain_params, mode=random.choice(['scale', 'distance', 'polarity']))
         
         if self.input_split:
             return self.input_branching(domain_params=domain_params)
