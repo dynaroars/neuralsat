@@ -296,7 +296,7 @@ class Tightener:
         
         for s_idx in selected_indices:
             l_id, n_id = unified_indices[s_idx]
-            if (l_id != selected_layer) and (not Settings.test):
+            if (l_id != selected_layer) and (not Settings.test) and (selected_layer not in self.tightened_layers):
                 continue
             
             var_name = f"lay{self.pre_relu_names[l_id]}_{n_id}"
