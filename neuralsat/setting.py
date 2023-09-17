@@ -18,12 +18,11 @@ class GlobalSettings:
         self.use_mip_refine = 0
         self.use_mip_refine_domain_bounds = 0
         
-        self.use_mip_tightening = 0
+        self.use_mip_tightening = 1
         self.mip_tightening_patience = 10
         
-        
         # attack
-        self.use_attack = 0
+        self.use_attack = 1
         self.attack_interval = 10
         
         self.use_mip_attack = 0

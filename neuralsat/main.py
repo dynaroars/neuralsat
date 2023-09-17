@@ -59,7 +59,7 @@ if __name__ == '__main__':
     vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
-        print_w_b(model)
+        # print_w_b(model)
         # exit()
         
     logger.info(f'[!] Input shape: {input_shape}')

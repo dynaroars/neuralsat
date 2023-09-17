@@ -91,7 +91,7 @@ class BoundMul(Bound):
         elif isinstance(x, Patches):
             # Multiplies patches by a const. Assuming const is a tensor, and it must be in nchw format.
             assert isinstance(const, torch.Tensor) and const.ndim == 4
-            if const.size(0) == x.patches.size(1) and const.size(1) == x.patches.size(-3) and const.size(2) == const.size(3) == 1:
+            if const.size(1) == x.patches.size(-3) and const.size(2) == const.size(3) == 1: # and const.size(0) == x.patches.size(1):
                 # The case that we can do channel-wise broadcasting multiplication
                 # Shape of const: (batch, in_c, 1, 1)
                 # Shape of patches when unstable_idx is None: (spec, batch, in_c, patch_h, patch_w)
@@ -444,9 +444,27 @@ class BoundDiv(Bound):
         return reciprocal, mul, y_r
 
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
-        for vi in v:
-            assert isinstance(vi, Tensor), "build solver for BoundDiv only with tensors for now"
-        self.solver_vars = v[0] / v[1]
+        # for vi in v:
+        #     print(isinstance(vi, Tensor), "build solver for BoundDiv only with tensors for now")
+
+        if isinstance(v[0], Tensor):
+            self.solver_vars = self.forward(*v)
+            return
+        
+        gvar_array = np.array(v[0])
+        gvar_array = gvar_array / v[1][0].detach().cpu().numpy()
+        
+        new_layer_gurobi_vars = []
+        for neuron_idx, expr in enumerate(gvar_array.reshape(-1)):
+            var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0,
+                            vtype=grb.GRB.CONTINUOUS,
+                            name=f'lay{self.name}_{neuron_idx}')
+            model.addConstr(var == expr, name=f'lay{self.name}_{neuron_idx}_eq')
+            new_layer_gurobi_vars.append(var)
+   
+        self.solver_vars = np.array(new_layer_gurobi_vars).reshape(gvar_array.shape).tolist()
+        model.update()
+        
 
 class BoundAdd(Bound):
     def __init__(self, attr, inputs, output_index, options):
@@ -580,8 +598,21 @@ class BoundSub(Bound):
             return
         # we have both gurobi vars as inputs
         this_layer_shape = self.output_shape
-        gvar_array1 = np.array(v[0])
-        gvar_array2 = np.array(v[1])
+        if isinstance(v[0], Tensor):
+            gvar_array1 = np.array(v[0].detach().cpu())
+        else:
+            gvar_array1 = np.array(v[0])
+            
+        if isinstance(v[1], Tensor):
+            # v[1] = v[1].detach().cpu()
+            v1 = v[1].detach().cpu()
+            if v1.numel() == gvar_array1.shape[0]: # batchnorm (1, N, 1, 1)
+                v1 = v1[0].expand(gvar_array1.shape)
+            gvar_array2 = np.array(v1)
+        else:
+            gvar_array2 = np.array(v[1])
+            
+        # print(gvar_array1.shape, gvar_array2.shape, this_layer_shape)
         assert gvar_array1.shape == gvar_array2.shape and gvar_array1.shape == this_layer_shape[1:]
 
         # flatten to create vars and constrs first

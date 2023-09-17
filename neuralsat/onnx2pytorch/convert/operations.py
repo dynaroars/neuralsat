@@ -287,7 +287,8 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                 filter(lambda x: x.name == node.input[1], onnx_graph.initializer)
             )
             shape = np.copy(numpy_helper.to_array(shape[0])) if shape else None
-            if all(shape == (1, -1)):
+            # print(shape)
+            if (shape is not None) and all(shape == (1, -1)):
                 op = Flatten()
                 for n_idx, n_name in enumerate(node.input):
                     if n_name in onnx_initializers:
