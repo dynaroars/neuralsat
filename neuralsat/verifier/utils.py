@@ -92,7 +92,7 @@ def _preprocess(self, objectives):
     
     # refine
     refined_intermediate_bounds = None
-    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack or Settings.use_mip_tightening) \
+    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack) \
             and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
@@ -134,7 +134,8 @@ def _preprocess(self, objectives):
                 objectives=objectives, 
             )
             
-        # mip tightener
+    # mip tightener
+    if len(objectives):
         if Settings.use_mip_tightening:
             self.tightener = Tightener(
                 abstractor=self.abstractor,
@@ -283,12 +284,16 @@ def _check_invoke_tightening(self, patience_limit=10):
 
 def _update_tightening_patience(self, minimum_lowers, old_domains_length):
     current_domains_length = len(self.domains_list)
-    if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= old_domains_length) or (current_domains_length <= self.batch):
+    if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= self.batch):
         self.tightening_patience = 0
+    elif (current_domains_length <= old_domains_length):
+        self.tightening_patience -= 1
     elif minimum_lowers == self.last_minimum_lowers:
         self.tightening_patience += 1
     else:
         self.tightening_patience += 3
+        
+    self.tightening_patience = max(0, self.tightening_patience)
     self.last_minimum_lowers = minimum_lowers
             
     

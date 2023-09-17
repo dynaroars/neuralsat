@@ -327,8 +327,8 @@ class Tightener:
         # step 3: rebuild mip model
         # assert all([(i==ii).all() for (i, ii) in zip(unified_upper_bounds, unified_upper_bounds_cl)])
         # assert all([(i==ii).all() for (i, ii) in zip(unified_lower_bounds, unified_lower_bounds_cl)])
-        
-        current_model = self.rebuild_mip_model(unified_lower_bounds, unified_upper_bounds)
+        unified_bound_shapes = [_.size() for _ in worst_domains.lower_bounds[:-1]]
+        current_model = self.rebuild_mip_model(unified_lower_bounds, unified_upper_bounds, unified_bound_shapes)
         current_model.setParam('TimeLimit', timeout)
         global MULTIPROCESS_MODEL
         MULTIPROCESS_MODEL = current_model.copy()
@@ -379,16 +379,19 @@ class Tightener:
         return
         
         
-    def rebuild_mip_model(self, refined_lower_bounds, refined_upper_bounds):
+    def rebuild_mip_model(self, refined_lower_bounds, refined_upper_bounds, shapes):
         intermediate_layer_bounds = {}
-        for l_id, l_name in self.pre_relu_names.items():
-            intermediate_layer_bounds[l_name] = [
-                refined_lower_bounds[l_id].to(self.abstractor.device), 
-                refined_upper_bounds[l_id].to(self.abstractor.device)
-            ]
+        assert len(shapes) == len(refined_lower_bounds) == len(refined_upper_bounds)
         
+        for idx, (l_id, l_name) in enumerate(self.pre_relu_names.items()):
+            
+            intermediate_layer_bounds[l_name] = [
+                refined_lower_bounds[l_id].to(self.abstractor.device).view(1, *shapes[idx][1:]), 
+                refined_upper_bounds[l_id].to(self.abstractor.device).view(1, *shapes[idx][1:])
+            ]
         # for name, (lbs, ubs) in intermediate_layer_bounds.items():
         #     print(name, lbs.shape)
+        # exit()
             
         self.abstractor.build_lp_solver(
             model_type='mip', 

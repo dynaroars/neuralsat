@@ -287,7 +287,14 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                 filter(lambda x: x.name == node.input[1], onnx_graph.initializer)
             )
             shape = np.copy(numpy_helper.to_array(shape[0])) if shape else None
-            op = Reshape(enable_pruning, shape, quirks=quirks.get("Reshape"))
+            if all(shape == (1, -1)):
+                op = Flatten()
+                for n_idx, n_name in enumerate(node.input):
+                    if n_name in onnx_initializers:
+                        node.input.pop(n_idx)
+            else:
+                op = Reshape(enable_pruning, shape, quirks=quirks.get("Reshape"))
+            # exit()
         elif node.op_type == "Resize":
             op = Resize(**extract_attributes(node))
         elif node.op_type == "Scatter":
