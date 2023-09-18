@@ -114,7 +114,7 @@ class Verifier:
                         break
                     
                 # handle returning status
-                if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT]:
+                if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
                     return status 
                 if status == ReturnStatus.UNSAT:
                     break # objective is verified
@@ -193,7 +193,8 @@ class Verifier:
                 if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
                 
-            if psutil.virtual_memory()[2] > 90.0:
+            if psutil.virtual_memory()[2] > 70.0:
+                print('OOM')
                 return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
