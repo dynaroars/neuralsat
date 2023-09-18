@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings(action='ignore')
 import numpy as np
 import logging
+import psutil
 import torch
 import time
 import copy
@@ -191,6 +192,9 @@ class Verifier:
             if Settings.use_restart:
                 if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
+                
+            if psutil.virtual_memory()[2] > 90.0:
+                return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
             
