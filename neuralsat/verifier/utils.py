@@ -96,8 +96,7 @@ def _preprocess(self, objectives):
     
     # refine
     refined_intermediate_bounds = None
-    if len(objectives) and (Settings.use_mip_refine or Settings.use_mip_attack) \
-            and self.abstractor.method == 'backward':
+    if len(objectives) and (Settings.use_mip_refine) and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
         tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -131,19 +130,19 @@ def _preprocess(self, objectives):
             
             self.refined_betas = self.abstractor.net.get_betas()
         
+    # mip tightener
+    if len(objectives):
         # mip attacker
         if Settings.use_mip_attack:
             self.mip_attacker = MIPAttacker(
                 abstractor=self.abstractor, 
-                objectives=objectives, 
+                objectives=objectives, # full objectives
             )
             
-    # mip tightener
-    if len(objectives):
         if Settings.use_mip_tightening:
             self.tightener = Tightener(
                 abstractor=self.abstractor,
-                objectives=objectives, 
+                objectives=objectives,
             )
             
     logger.info(f'Remain {len(objectives)} objectives')

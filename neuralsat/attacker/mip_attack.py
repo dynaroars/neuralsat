@@ -5,6 +5,7 @@ import random
 import torch
 import time
 import math
+import copy
 
 from util.misc.result import AbstractResults
 from util.misc.check import check_solution
@@ -157,11 +158,11 @@ def mip_solver_worker(candidate, n_inputs):
     if multiprocess_stop:
         return None
     
-    # print('[!] Attacking:', candidate)
+    print('[!] Attacking:', candidate)
     tmp_model = multiprocess_mip_attack_model.copy()
     
     v = tmp_model.getVarByName(candidate)
-    vlb = out_lb = v.lb
+    # vlb = out_lb = v.lb
     vub = out_ub = v.ub
     adv = None
     
@@ -173,7 +174,7 @@ def mip_solver_worker(candidate, n_inputs):
         print(f'Gurobi error: {e.message}')
         return None
 
-    vlb = max(tmp_model.objbound, out_lb)
+    # vlb = max(tmp_model.objbound, out_lb)
     if tmp_model.solcount > 0:
         vub = min(tmp_model.objval, out_ub)
     if vub < 0:
@@ -186,20 +187,53 @@ def mip_solver_worker(candidate, n_inputs):
 class MIPAttacker:
 
     def __init__(self, abstractor, objectives):
-        self.objectives = objectives
-        assert self.objectives.cs.shape[1] == 1 # c shape: [#props, 1, #outputs]
-
         self.net = abstractor.pytorch_model
         self.input_shape = abstractor.input_shape
         self.device = abstractor.device
-        self.output_names = [v.VarName for v in abstractor.net[abstractor.net.final_name].solver_vars]
+        
+        assert objectives.cs.shape[1] == 1 # c shape: [#props, 1, #outputs]
+        self.objectives = copy.deepcopy(objectives)
+        self.objectives.lower_bounds = self.objectives.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        self.objectives.upper_bounds = self.objectives.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        self.objectives.cs = self.objectives.cs.to(self.device)
+        self.objectives.rhs = self.objectives.rhs.to(self.device)
                 
-        assert abstractor.net.model.ModelName == 'mip', print(f'Model error: "{abstractor.net.model.ModelName}" != "mip"')
-        self.mip_model = abstractor.net.model.copy()
+        self.abstractor = abstractor
+        
+        if (not hasattr(self.abstractor, 'model')) or ('mip' not in self.abstractor.net.model.ModelName):
+            self.init_mip_model(
+                input_lowers=self.objectives.lower_bounds[0:1],
+                input_uppers=self.objectives.upper_bounds[0:1],
+                cs=self.objectives.cs.transpose(0, 1),
+            )
+            
+        self.mip_model = self.abstractor.net.model.copy()
         self.mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
         self.mip_model.setParam('BestObjStop', -1e-5)  # Terminiate as long as we find a adversarial example.
+        self.mip_model.setParam('TimeLimit', 10.0)
+        # self.mip_model.setParam('Threads', 1)
+        self.mip_model.update()
         
-        self.abstractor = abstractor
+        self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
+        # print(self.output_names)
+        # exit()
+        
+        
+    def init_mip_model(self, input_lowers, input_uppers, cs):
+        # print(input_lowers.shape)
+        # print(cs.shape)
+        print('Initialize new MIP model')
+        
+        self.abstractor.build_lp_solver(
+            model_type='mip', 
+            input_lower=input_lowers, 
+            input_upper=input_uppers, 
+            c=cs,
+            refine=False,
+            timeout=None,
+        )
+        
+        
         
         
     def manual_seed(self, seed):
@@ -214,7 +248,9 @@ class MIPAttacker:
         multiprocess_stop = False
         
         for var_name in self.output_names:
+            tic = time.time()
             adv = mip_solver_worker(var_name, np.prod(self.input_shape))
+            print('attacking:', var_name, time.time() - tic)
             if adv is not None:
                 adv = torch.tensor(adv, device=self.device).view(self.input_shape)
                 if check_solution(net=self.net, adv=adv, cs=self.objectives.cs, rhs=self.objectives.rhs, data_min=self.objectives.lower_bounds, data_max=self.objectives.upper_bounds):
