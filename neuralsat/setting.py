@@ -53,7 +53,7 @@ class GlobalSettings:
         self.max_hidden_visited_branches = 2
         self.use_mip_refine = 0
         self.use_mip_tightening = 1
-        self.use_restart = 1
+        self.use_restart = 0
         self.use_attack = 1
         self.test = 1
         

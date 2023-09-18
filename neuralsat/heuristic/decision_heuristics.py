@@ -230,7 +230,7 @@ class DecisionHeuristic:
         assert len(layer_ids) == batch
         # print(layer_ids)
         decisions = [[layer_ids[b], best_scores_all_layers_indices[b, layer_ids[b]]] for b in range(batch)]
-        print('decisions:', mode, decisions)
+        # print('decisions:', mode, decisions)
         
         return decisions
 

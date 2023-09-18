@@ -52,7 +52,7 @@ def mip_solver_worker(candidate):
         # print('current_layer_name:', current_layer_name)
         # print('current_layer_id:', current_layer_id)
         
-        remove_pre_activation_patterns = [f'lay{k}' for k, v in pre_activation_names.items() if v >= current_layer_id]
+        remove_pre_activation_patterns = [f'lay{k}' for k, v in pre_activation_names.items() if v > current_layer_id]
         remove_pre_activation_patterns += [f'lay{final_name}']
         remove_activation_patterns = [f'ReLU{v}' for k, v in activation_names.items() if k >= current_layer_id]
         remove_activation_patterns += [f'aReLU{v}' for k, v in activation_names.items() if k >= current_layer_id]
@@ -238,6 +238,8 @@ class Tightener:
         
         # assert all([(u_lb <= o_lb.data.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, domain_list.all_lower_bounds[:-1])])
         # assert all([(u_ub >= o_ub.data.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, domain_list.all_upper_bounds[:-1])])
+        # print('lower:', worst_domains.lower_bounds)
+        # print('upper:', worst_domains.upper_bounds)
         
         # unified_lower_bounds_cl = [_.clone() for _ in unified_lower_bounds]
         # unified_upper_bounds_cl = [_.clone() for _ in unified_upper_bounds]

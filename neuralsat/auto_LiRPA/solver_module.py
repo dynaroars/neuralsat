@@ -373,16 +373,16 @@ def _build_solver_input(self, node):
         
     if x_L.ndim == 1:
         # This is a linear input.
-        if DEBUG:
-            print('[+] Linear Input')
+        # if DEBUG:
+        #     print('[+] Linear Input')
         for dim, (lb, ub) in enumerate(zip(x_L, x_U)):
             v = self.model.addVar(lb=lb, ub=ub, obj=0,
                                     vtype=grb.GRB.CONTINUOUS,
                                     name=f'inp_{dim}')
             inp_gurobi_vars.append(v)
     elif x_L.ndim == 3:
-        if DEBUG:
-            print('[+] Convolution Input')
+        # if DEBUG:
+        #     print('[+] Convolution Input')
         assert x_L.ndim == 3, f"x_L ndim  {x_L.ndim}"
         dim = 0
         for chan in range(x_L.shape[0]):
