@@ -58,7 +58,7 @@ class Verifier:
             return ReturnStatus.SAT  
 
         # refine
-        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives)
+        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, forced_input_split=None)
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -203,12 +203,12 @@ class Verifier:
     def _parallel_dpll(self):        
         # step 1: MIP attack
         if Settings.use_mip_attack:
-            self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, self.device))
+            self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, 'cpu'))
         
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
-            self.tightener(self.domains_list, topk=64, timeout=15.0, largest=False, solve_both=True)
+            self.tightener(self.domains_list, topk=64, timeout=10.0, largest=False, solve_both=True)
             
         # step 3: selection
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
@@ -245,9 +245,9 @@ class Verifier:
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
             f'Bound: {minimum_lowers:<15.04f} '
-            f'Time elapsed: {time.time() - self.start_time:<10.02f}'
+            f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
-        if logger.isEnabledFor(logging.DEBUG):
+        if Settings.use_mip_tightening:
             msg += (
                 f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
             )

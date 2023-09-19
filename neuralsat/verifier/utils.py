@@ -20,8 +20,6 @@ from util.misc.logger import logger
 
 from setting import Settings
 
-DEBUG = False
-
 
 def _mip_attack(self, reference_bounds):
     if not Settings.use_attack:
@@ -33,23 +31,19 @@ def _mip_attack(self, reference_bounds):
     return self.mip_attacker.run(reference_bounds)
     
     
-def _preprocess(self, objectives):
+def _preprocess(self, objectives, forced_input_split=None):
     # determine search algorithm
     self.refined_betas = None
-    
-    # if Settings.test:
-    #     print(Settings)
-    #     self.input_split = False
-    #     self._init_abstractor('backward', objectives)
-    #     self.tightener = Tightener(abstractor=self.abstractor, objectives=objectives)
-    #     return objectives, None
     
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
     perturbed = (diff > 0).numel()
     logger.info(f'[!] eps = {eps:.06f}, perturbed={perturbed}')
+    
     if Settings.test:
         self.input_split = False
+    elif forced_input_split is not None:
+        self.input_split = forced_input_split
     elif eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= 200: # small inputs
@@ -63,11 +57,8 @@ def _preprocess(self, objectives):
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None
     
-    if not DEBUG:
-        if self.input_split and len(objectives) < 50:
-            return objectives, None
-    else:
-        self.input_split = False
+    if self.input_split and len(objectives) < 50:
+        return objectives, None
     
     try:
         # self._init_abstractor('crown-optimized', objectives)
@@ -130,6 +121,8 @@ def _preprocess(self, objectives):
             
             self.refined_betas = self.abstractor.net.get_betas()
         
+        # torch.save(refined_intermediate_bounds, 'refined.pt')
+        
     # mip tightener
     if len(objectives):
         # mip attacker
@@ -146,6 +139,7 @@ def _preprocess(self, objectives):
             )
             
     logger.info(f'Remain {len(objectives)} objectives')
+    # refined_intermediate_bounds = torch.load('refined.pt')
     return objectives, refined_intermediate_bounds
 
 

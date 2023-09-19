@@ -1,7 +1,7 @@
 
 
 INPUT_SPLIT_RESTART_STRATEGIES = [
-    # {'abstract_method': 'forward',        'split_method': 'naive'},
+    # {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
     {'abstract_method': 'backward',        'split_method': 'naive'},
     {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
     {'abstract_method': 'crown-optimized', 'split_method': 'gradient'},

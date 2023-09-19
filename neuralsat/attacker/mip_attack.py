@@ -9,7 +9,9 @@ import copy
 
 from util.misc.result import AbstractResults
 from util.misc.check import check_solution
-from heuristic.util import compute_masks
+
+from util.misc.logger import logger
+from setting import Settings
 
 multiprocess_mip_attack_model = None
 multiprocess_stop = False
@@ -158,11 +160,10 @@ def mip_solver_worker(candidate, n_inputs):
     if multiprocess_stop:
         return None
     
-    print('[!] Attacking:', candidate)
     tmp_model = multiprocess_mip_attack_model.copy()
     
     v = tmp_model.getVarByName(candidate)
-    # vlb = out_lb = v.lb
+    vlb = out_lb = v.lb
     vub = out_ub = v.ub
     adv = None
     
@@ -173,14 +174,25 @@ def mip_solver_worker(candidate, n_inputs):
     except grb.GurobiError as e:
         print(f'Gurobi error: {e.message}')
         return None
+    except KeyboardInterrupt:
+        multiprocess_stop = True
+        return None
+        
 
-    # vlb = max(tmp_model.objbound, out_lb)
+    vlb = max(tmp_model.objbound, out_lb)
     if tmp_model.solcount > 0:
         vub = min(tmp_model.objval, out_ub)
     if vub < 0:
         input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(n_inputs)]
         adv = [var.X for var in input_vars]
         multiprocess_stop = True
+        
+        
+    print(f'[!] Attacking {candidate} [{vlb, vub}], status: {tmp_model.status}, #vars: {tmp_model.NumVars}, #constrs: {tmp_model.NumConstrs}')
+    
+    if tmp_model.status in [3, 11]: # infeasible
+        multiprocess_stop = True
+        
     return adv    
     
     
@@ -199,22 +211,24 @@ class MIPAttacker:
         self.objectives.rhs = self.objectives.rhs.to(self.device)
                 
         self.abstractor = abstractor
+        self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(self.abstractor.net.perturbed_optimizable_activations)}
+        self.relu_names = {i: layer.name for (i, layer) in enumerate(self.abstractor.net.perturbed_optimizable_activations)}
         
-        if (not hasattr(self.abstractor, 'model')) or ('mip' not in self.abstractor.net.model.ModelName):
-            self.init_mip_model(
-                input_lowers=self.objectives.lower_bounds[0:1],
-                input_uppers=self.objectives.upper_bounds[0:1],
-                cs=self.objectives.cs.transpose(0, 1),
-            )
+        # if (not hasattr(self.abstractor, 'model')) or ('mip' not in self.abstractor.net.model.ModelName):
+        #     self.init_mip_model(
+        #         input_lowers=self.objectives.lower_bounds[0:1],
+        #         input_uppers=self.objectives.upper_bounds[0:1],
+        #         cs=self.objectives.cs.transpose(0, 1),
+        #     )
             
-        self.mip_model = self.abstractor.net.model.copy()
-        self.mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
-        self.mip_model.setParam('BestObjStop', -1e-5)  # Terminiate as long as we find a adversarial example.
-        self.mip_model.setParam('TimeLimit', 10.0)
-        # self.mip_model.setParam('Threads', 1)
-        self.mip_model.update()
+        # self.mip_model = self.abstractor.net.model.copy()
+        # self.mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
+        # self.mip_model.setParam('BestObjStop', -1e-5)  # Terminiate as long as we find a adversarial example.
+        # self.mip_model.setParam('TimeLimit', 5.0)
+        # # self.mip_model.setParam('Threads', 1)
+        # self.mip_model.update()
         
-        self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]
+        # self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars][-1:]
         # print(self.output_names)
         # exit()
         
@@ -222,8 +236,8 @@ class MIPAttacker:
     def init_mip_model(self, input_lowers, input_uppers, cs):
         # print(input_lowers.shape)
         # print(cs.shape)
-        print('Initialize new MIP model')
         
+        tic = time.time()
         self.abstractor.build_lp_solver(
             model_type='mip', 
             input_lower=input_lowers, 
@@ -232,7 +246,7 @@ class MIPAttacker:
             refine=False,
             timeout=None,
         )
-        
+        print(f'Initialize new MIP model in {time.time() - tic} seconds')
         
         
         
@@ -242,7 +256,8 @@ class MIPAttacker:
         torch.manual_seed(self.seed)
         
         
-    def run(self, reference_bounds=None, timeout=1.0):
+    def run(self, reference_bounds=None, timeout=5.0):
+        return False, None
         global multiprocess_mip_attack_model, multiprocess_stop
         multiprocess_mip_attack_model = self.mip_model.copy()
         multiprocess_stop = False
@@ -259,7 +274,88 @@ class MIPAttacker:
         return False, None
     
     
-    def attack_domains(self, domain_params):
+    def attack_domains(self, domain_params, concretize_percent=0.5):
+        batch = len(domain_params.lower_bounds[0])
+        logger.debug(f'MIP Attacking: {batch}')
+        
+        if batch == 0:
+            return
+        
+        # worst bounds
+        unified_lower_bounds = [_.min(dim=0).values.flatten() for _ in domain_params.lower_bounds[:-1]]
+        unified_upper_bounds = [_.max(dim=0).values.flatten() for _ in domain_params.upper_bounds[:-1]]
+        
+        unified_bound_shapes = [_.size() for _ in domain_params.lower_bounds[:-1]]
+        
+        
+        assert all([(u_lb <= o_lb.flatten(1)).all() for u_lb, o_lb in zip(unified_lower_bounds, domain_params.lower_bounds[:-1])])
+        assert all([(u_ub >= o_ub.flatten(1)).all() for u_ub, o_ub in zip(unified_upper_bounds, domain_params.upper_bounds[:-1])])
+        
+        print([_.shape for _ in unified_lower_bounds])
+        
+        unified_masks = [torch.where(lb_ * ub_ < 0)[0].numpy() for (lb_, ub_) in zip(unified_lower_bounds, unified_upper_bounds)]
+        unified_indices = [(l_id, n_id) for l_id in range(len(unified_masks)) for n_id in unified_masks[l_id]]
+        
+        tic_start = time.time()
+        cac = 0
+        while cac < 100:
+            concrete_indices = random.sample(unified_indices, int(concretize_percent * len(unified_indices)))
+            
+            unified_lower_bounds_cl = [_.clone() for _ in unified_lower_bounds]
+            unified_upper_bounds_cl = [_.clone() for _ in unified_upper_bounds]
+            
+            for l_id, n_id in concrete_indices:
+                assert (unified_lower_bounds_cl[l_id][n_id] < 0) and (unified_upper_bounds_cl[l_id][n_id] > 0)
+                if unified_lower_bounds_cl[l_id][n_id] + unified_upper_bounds_cl[l_id][n_id] > 0: # toward active
+                    unified_lower_bounds_cl[l_id][n_id] = 0.0
+                else:
+                    unified_upper_bounds_cl[l_id][n_id] = 0.0
+            current_model = self.rebuild_mip_model(unified_lower_bounds_cl, unified_upper_bounds_cl, unified_bound_shapes)
+            if current_model is None:
+                continue
+            
+            global multiprocess_mip_attack_model, multiprocess_stop
+            multiprocess_mip_attack_model = current_model.copy()
+            multiprocess_stop = False
+            
+            
+            # for l_id, n_id in concrete_indices:
+            #     assert (unified_lower_bounds[l_id][n_id] < 0) and (unified_upper_bounds[l_id][n_id] > 0)
+            #     var = multiprocess_mip_attack_model.getVarByName(f"lay{self.pre_relu_names[l_id]}_{n_id}")
+            #     a_var = multiprocess_mip_attack_model.getVarByName(f"aReLU{self.relu_names[l_id]}_{n_id}")
+            #     assert (var is not None) and (a_var is not None)
+            #     if unified_lower_bounds[l_id][n_id] + unified_upper_bounds[l_id][n_id] > 0: # toward active
+            #         var.LB = 0.0
+            #         # a_var.LB = 1
+            #         # a_var.UB = 1
+            #     else: # toward inactive
+            #         var.UB = 0.0
+            #         # a_var.LB = 0
+            #         # a_var.UB = 0
+                    
+            # multiprocess_mip_attack_model.update()
+
+            # print(concrete_indices)
+            
+            for var_name in self.output_names:
+                tic = time.time()
+                adv = mip_solver_worker(var_name, np.prod(self.input_shape))
+                print('Attacking:', var_name, time.time() - tic)
+            
+            multiprocess_mip_attack_model = None
+            current_model = None
+            if adv is not None:
+                print('\n\n[!] attacked\n\n')
+                exit()
+            cac += 1
+        
+        
+        
+        print('attacked failed:', time.time() - tic_start)
+        
+        
+        exit()
+        
         return None
         # exit()
         # print('mip attack', self.run()[0])
@@ -273,7 +369,7 @@ class MIPAttacker:
         print(f'Selected {len(select_domain_params.lower_bounds[0])} domains from {len(domain_params.lower_bounds[0])} domains for MIP hidden attack')
         # for h in domain_params.histories:
         #     print(h)
-        # exit()
+        
         
         
     def select_domains(self, domain_params, n_candidates=1):
@@ -327,3 +423,46 @@ class MIPAttacker:
             'upper_bounds': [ub[select_ids] for ub in domain_params.upper_bounds], 
         })
         
+        
+    
+        
+    def rebuild_mip_model(self, refined_lower_bounds, refined_upper_bounds, shapes):
+        print('rebuild model')
+        intermediate_layer_bounds = {}
+        assert len(shapes) == len(refined_lower_bounds) == len(refined_upper_bounds)
+        
+        for idx, (l_id, l_name) in enumerate(self.pre_relu_names.items()):
+            
+            intermediate_layer_bounds[l_name] = [
+                refined_lower_bounds[l_id].to(self.abstractor.device).view(1, *shapes[idx][1:]), 
+                refined_upper_bounds[l_id].to(self.abstractor.device).view(1, *shapes[idx][1:])
+            ]
+        # for name, (lbs, ubs) in intermediate_layer_bounds.items():
+        #     print(name, lbs.shape)
+        # exit()
+            
+        self.abstractor.build_lp_solver(
+            model_type='mip', 
+            input_lower=self.objectives.lower_bounds[0:1],
+            input_upper=self.objectives.upper_bounds[0:1],
+            c=self.objectives.cs.transpose(0, 1),
+            rhs=self.objectives.rhs,
+            refine=False,
+            intermediate_layer_bounds=intermediate_layer_bounds,
+        )
+        
+        if not hasattr(self.abstractor.net[self.abstractor.net.final_name], 'solver_vars'):
+            return None
+
+        self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars][-1:]
+        
+        current_model = self.abstractor.net.model.copy()
+        # current_model.setParam('Threads', 1)
+        current_model.setParam('MIPGap', 0.01)
+        current_model.setParam('MIPGapAbs', 0.01)
+        current_model.setParam('BestBdStop', 1e-5)
+        current_model.setParam('BestObjStop', -1e-5) 
+        current_model.setParam('TimeLimit', 5.0) 
+        current_model.update()
+        
+        return current_model

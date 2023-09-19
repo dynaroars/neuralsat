@@ -15,6 +15,8 @@ from util.misc.logger import logger
 
 def update_refined_beta(self, betas, batch):
     if betas is not None:
+        if not len(betas['sparse_beta']):
+            return
         self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
         assert len(self.net.relus) == len(betas['sparse_beta'])
         for relu_idx, relu_layer in enumerate(self.net.relus):
@@ -274,7 +276,7 @@ def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
     return cpu_net
 
     
-def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
+def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
@@ -301,7 +303,12 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, inter
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
-    self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
+    lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
+    print(lb)
+    if rhs is not None:
+        if (lb > rhs).all():
+            return None
+        
     
     # self.net.set_bound_opts({'optimize_bound_args': {
     #             'enable_beta_crown': False, 
