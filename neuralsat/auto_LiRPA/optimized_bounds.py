@@ -944,7 +944,8 @@ def get_optimized_bounds(
                 node.inputs[0].upper.data = best_intermediate[1].data
                 if beta:
                     if (single_node_split and hasattr(node, 'sparse_beta')
-                            and node.sparse_beta is not None):
+                            and (node.sparse_beta is not None) and node.sparse_beta.numel()):
+                        # print(node.sparse_beta, len(node.sparse_beta))
                         if enable_opt_interm_bounds:
                             for key in node.sparse_beta.keys():
                                 node.sparse_beta[key].copy_(

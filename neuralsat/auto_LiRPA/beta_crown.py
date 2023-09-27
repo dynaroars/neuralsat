@@ -8,6 +8,11 @@ def get_betas(self):
             betas['sparse_beta'].append(relu_layer.sparse_beta.clone())
             betas['sparse_beta_loc'].append(relu_layer.sparse_beta_loc.clone())
             betas['sparse_beta_sign'].append(relu_layer.sparse_beta_sign.clone())
+        else:
+            betas['sparse_beta'].append(torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True))
+            betas['sparse_beta_loc'].append(torch.zeros(size=(1, 0), dtype=torch.int64, device=self.device, requires_grad=False))
+            betas['sparse_beta_sign'].append(torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False))
+        # print('added beta', relu_layer, betas['sparse_beta'][-1].shape)
     return betas
 
 def beta_bias(self):

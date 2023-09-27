@@ -42,6 +42,10 @@ if __name__ == '__main__':
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
                         help="export counter-example to result file.")
+    parser.add_argument('--disable_restart', action='store_false',
+                        help="disable RESTART heuristic.")
+    parser.add_argument('--disable_stabilize', action='store_false',
+                        help="disable STABILIZE heuristic.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
     args = parser.parse_args()   
@@ -52,6 +56,8 @@ if __name__ == '__main__':
         
     if args.test:
         Settings.setup_test()
+    else:
+        Settings.setup(args)
         
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])

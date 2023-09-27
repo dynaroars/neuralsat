@@ -10,23 +10,21 @@ class GlobalSettings:
         # restart
         self.use_restart = 1
         
-        self.max_hidden_branches = 10000
-        self.max_hidden_visited_branches = 100000
+        self.max_hidden_branches = 5000
+        self.max_hidden_visited_branches = 20000
         
         self.max_input_branches  = 1e5
         self.max_input_visited_branches = 5e6
         
-        # refinement
-        self.use_mip_refine = 1
+        # stabilize
         self.use_mip_tightening = 1
         self.mip_tightening_patience = 10
         
         # attack
         self.use_attack = 1
-        self.attack_interval = 10
-        
         self.use_mip_attack = 0
         
+        self.attack_interval = 10
         
         # optimization
         self.use_hidden_bounds_optimization = 0
@@ -49,13 +47,15 @@ class GlobalSettings:
     def setup_test(self):
         self.max_hidden_branches = 1
         self.max_hidden_visited_branches = 2
-        self.use_mip_refine = 0
         self.use_mip_tightening = 1
         self.use_restart = 0
         self.use_attack = 1
         self.test = 1
+    
+    def setup(self, args):
+        self.use_restart = args.disable_restart
+        self.use_mip_tightening = args.disable_stabilize
         
-
     def __repr__(self):
         return (
             '\n[!] Current settings:\n'
@@ -65,9 +65,8 @@ class GlobalSettings:
             # f'\t- max_input_visited_branches    : {int(self.max_input_visited_branches)}\n'
             f'\t- use_attack                    : {bool(self.use_attack)}\n'
             f'\t- use_restart                   : {bool(self.use_restart)}\n'
-            f'\t- use_mip_refine                : {bool(self.use_mip_refine)}\n'
-            f'\t- use_mip_tightening            : {bool(self.use_mip_tightening)}\n'
-            f'\t- test                          : {bool(self.test)}\n'
+            f'\t- use_stabilize                 : {bool(self.use_mip_tightening)}\n'
+            # f'\t- test                          : {bool(self.test)}\n'
             f'\n'
         )
 

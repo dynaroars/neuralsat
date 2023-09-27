@@ -87,7 +87,7 @@ def _preprocess(self, objectives, forced_input_split=None):
     
     # refine
     refined_intermediate_bounds = None
-    if len(objectives) and (Settings.use_mip_refine) and self.abstractor.method == 'backward':
+    if len(objectives) and (Settings.use_mip_tightening) and self.abstractor.method == 'backward':
         logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
         tmp_objective = copy.deepcopy(objectives)
         tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -95,7 +95,12 @@ def _preprocess(self, objectives, forced_input_split=None):
         
         tic = time.time()
         c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
-        use_refined = Settings.use_mip_refine and not Settings.use_restart
+
+        use_refined = not Settings.use_restart
+        if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
+            # TODO: skip refine for Conv layers
+            use_refined = False
+
         self.abstractor.build_lp_solver(
             model_type='mip', 
             input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
@@ -183,12 +188,16 @@ def _setup_restart(self, nth_restart, objective):
     )
     
     refined_intermediate_bounds = None
-    if Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_refine:
+    if Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_tightening:
         if abstract_method == 'forward':
             return None
         if not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
             return None
         
+        if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
+            # TODO: skip refine for Conv layers
+            return None
+            
         self._init_abstractor('backward', objective)
         
         tmp_objective = copy.deepcopy(objective)
@@ -318,7 +327,8 @@ def _check_invoke_tightening(self, patience_limit=10):
 def _update_tightening_patience(self, minimum_lowers, old_domains_length):
     current_domains_length = len(self.domains_list)
     if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= self.batch):
-        self.tightening_patience = 0
+        self.tightening_patience -= 1
+        # self.tightening_patience = 0
     elif (current_domains_length <= old_domains_length):
         self.tightening_patience -= 1
     elif minimum_lowers == self.last_minimum_lowers:

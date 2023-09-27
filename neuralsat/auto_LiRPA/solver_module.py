@@ -10,8 +10,8 @@ MULTIPROCESS_MODEL = None
 START_TIME = None
 TIMEOUT = None
 
-TIMEOUT_PER_NEURON = 15
-N_THREAD = 1
+TIMEOUT_PER_NEURON = 15 # timeout per neuron
+N_THREAD = 1 # 1 typically gives best performance
 N_REFINE_LAYER = 10
 N_PROC = os.cpu_count() // N_THREAD
 EAGER_OPTIMIZE = False
@@ -206,7 +206,6 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
         # refine from second relu layer
         # print('Timeout:', check_timeout(time.time()))
         if refine and isinstance(node, BoundRelu) and (node in self.relus[1:1+N_REFINE_LAYER]) and not check_timeout(time.time()):
-            # TODO: refined node is not Linear
             global MULTIPROCESS_MODEL
             
             refine_node = node.inputs[0]
@@ -215,98 +214,100 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
             if DEBUG:
                 print('[+] Refine layer:', refine_node.name)
                 # print(refine_node.solver_vars)
-                # print()
                 
-            candidates = []
-            # candidate_neuron_ids = []
-            unstable_to_stable = []
-            
+            if isinstance(refine_node, (BoundConv, BoundConvTranspose)):
+                # TODO: refine for Conv layers
+                print('\t- Skip:', refine_node)
+            else:
+                candidates = []
+                # candidate_neuron_ids = []
+                unstable_to_stable = []
+                    
+                for neuron_idx in range(refine_node.lower.numel()):
+                    v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
+                    if v.ub * v.lb < 0: # unstable neuron
+                        # print(v.VarName, v.lb==refine_node.lower.flatten(1)[0, neuron_idx], v.ub==refine_node.upper.flatten(1)[0, neuron_idx] if refine_node.upper is not None else None)
+                        candidates.append((neuron_idx, v.VarName))
+                        # if len(candidates) > 100:
+                        #     break
+                        
+                    # speed up
+                    v.lb, v.ub = -np.inf, np.inf
+                        
+                self.model.update()
                 
-            for neuron_idx in range(refine_node.lower.numel()):
-                v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
-                if v.ub * v.lb < 0: # unstable neuron
-                    # print(v.VarName, v.lb==refine_node.lower.flatten(1)[0, neuron_idx], v.ub==refine_node.upper.flatten(1)[0, neuron_idx] if refine_node.upper is not None else None)
-                    candidates.append((neuron_idx, v.VarName))
-                    # if len(candidates) > 100:
-                    #     break
+                # tighten bounds
+                if len(candidates):
+                    print('#candidates =', len(candidates))
+                    MULTIPROCESS_MODEL = self.model.copy()
                     
-                # speed up
-                v.lb, v.ub = -np.inf, np.inf
-                    
-            self.model.update()
-            
-            # tighten bounds
-            if len(candidates):
-                print('#candidates =', len(candidates))
-                MULTIPROCESS_MODEL = self.model.copy()
+                    if (N_PROC > 1) and (len(candidates) > 1):
+                        with multiprocessing.Pool(min(N_PROC, len(candidates))) as pool:
+                            solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
+                    else:
+                        solver_result = []
+                        for can in candidates:
+                            solver_result.append(mip_solver_worker(can))
+                    MULTIPROCESS_MODEL = None
+                        
+                    # update bounds
+                    refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
+                    refine_node_upper = refine_node.upper.clone().detach().cpu().flatten(1)
+                    for neuron_idx, vlb, vub, refined in solver_result:
+                        if refined:
+                            if vlb >= 0:
+                                unstable_to_stable.append((neuron_idx, 1))
+                            if vub <= 0:
+                                unstable_to_stable.append((neuron_idx, -1))
+                            refine_node_lower[0, neuron_idx] = max(vlb, refine_node_lower[0, neuron_idx])
+                            refine_node_upper[0, neuron_idx] = min(vub, refine_node_upper[0, neuron_idx])
+                        
+                # restore bounds
+                for neuron_idx in range(refine_node.lower.numel()):
+                    v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
+                    v.lb = refine_node_lower[0, neuron_idx]
+                    v.ub = refine_node_upper[0, neuron_idx]
                 
-                if (N_PROC > 1) and (len(candidates) > 1):
-                    with multiprocessing.Pool(min(N_PROC, len(candidates))) as pool:
-                        solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
-                else:
-                    solver_result = []
-                    for can in candidates:
-                        solver_result.append(mip_solver_worker(can))
-                MULTIPROCESS_MODEL = None
-                    
-                # update bounds
-                refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
-                refine_node_upper = refine_node.upper.clone().detach().cpu().flatten(1)
-                for neuron_idx, vlb, vub, refined in solver_result:
-                    if refined:
-                        if vlb >= 0:
-                            unstable_to_stable.append((neuron_idx, 1))
-                        if vub <= 0:
-                            unstable_to_stable.append((neuron_idx, -1))
-                        refine_node_lower[0, neuron_idx] = max(vlb, refine_node_lower[0, neuron_idx])
-                        refine_node_upper[0, neuron_idx] = min(vub, refine_node_upper[0, neuron_idx])
-                    
-            # restore bounds
-            for neuron_idx in range(refine_node.lower.numel()):
-                v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
-                v.lb = refine_node_lower[0, neuron_idx]
-                v.ub = refine_node_upper[0, neuron_idx]
-            
-            shape = refine_node.lower.shape
-            refine_node.lower = refine_node_lower.view(shape).to(self.device)
-            refine_node.upper = refine_node_upper.view(shape).to(self.device)
-            self.model.update()
+                shape = refine_node.lower.shape
+                refine_node.lower = refine_node_lower.view(shape).to(self.device)
+                refine_node.upper = refine_node_upper.view(shape).to(self.device)
+                self.model.update()
 
 
-            if 1:
-                reference_bounds = self.get_refined_intermediate_bounds()
-                # lb_, _ = self.compute_bounds(x=x, C=C, method="backward", reference_bounds=reference_bounds)
-                # print('w/o optimized        :', lb_)
-                
-                # self.set_bound_opts({
-                #     'optimize_bound_args': {'enable_beta_crown': True},
-                # })
-                # lb_, _ = self.compute_bounds(x=x, C=C, method="CROWN-optimized", reference_bounds=reference_bounds)
-                # print('optimized  (w/o beta):', lb_)
-                
-                # add beta constraints
-                if node == self.relus[1]:
-                    for relu_layer in self.relus:
-                        relu_layer.sparse_beta = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
-                        relu_layer.sparse_beta_loc = torch.zeros(size=(1, 0), dtype=torch.int64, device=self.device, requires_grad=False)
-                        relu_layer.sparse_beta_sign = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
+                if 1:
+                    reference_bounds = self.get_refined_intermediate_bounds()
+                    # lb_, _ = self.compute_bounds(x=x, C=C, method="backward", reference_bounds=reference_bounds)
+                    # print('w/o optimized        :', lb_)
+                    
+                    # self.set_bound_opts({
+                    #     'optimize_bound_args': {'enable_beta_crown': True},
+                    # })
+                    # lb_, _ = self.compute_bounds(x=x, C=C, method="CROWN-optimized", reference_bounds=reference_bounds)
+                    # print('optimized  (w/o beta):', lb_)
+                    
+                    # add beta constraints
+                    if node == self.relus[1]:
+                        for relu_layer in self.relus:
+                            relu_layer.sparse_beta = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
+                            relu_layer.sparse_beta_loc = torch.zeros(size=(1, 0), dtype=torch.int64, device=self.device, requires_grad=False)
+                            relu_layer.sparse_beta_sign = torch.zeros(size=(1, 0), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
 
-                # print('unstable_to_stable:', unstable_to_stable)
-                max_splits_per_layer = len(unstable_to_stable)
-                node.sparse_beta = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
-                node.sparse_beta_loc = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.int64, device=self.device, requires_grad=False)
-                node.sparse_beta_sign = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
-                # assign split constraint into regular betas
-                for neuron_idx, (refined_neuron, sign) in enumerate(unstable_to_stable):
-                    node.sparse_beta_loc[0, neuron_idx] = refined_neuron
-                    node.sparse_beta_sign[0, neuron_idx] = sign
-                
-                self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
-                lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds)
-                if DEBUG:
-                    print('optimized  (w/ beta):', lb_)
-                
-            # TODO: check spec here?
+                    # print('unstable_to_stable:', unstable_to_stable)
+                    max_splits_per_layer = len(unstable_to_stable)
+                    node.sparse_beta = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.get_default_dtype(), device=self.device, requires_grad=True)
+                    node.sparse_beta_loc = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.int64, device=self.device, requires_grad=False)
+                    node.sparse_beta_sign = torch.zeros(size=(1, max_splits_per_layer), dtype=torch.get_default_dtype(), device=self.device, requires_grad=False)
+                    # assign split constraint into regular betas
+                    for neuron_idx, (refined_neuron, sign) in enumerate(unstable_to_stable):
+                        node.sparse_beta_loc[0, neuron_idx] = refined_neuron
+                        node.sparse_beta_sign[0, neuron_idx] = sign
+                    
+                    self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
+                    lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds)
+                    if DEBUG:
+                        print('optimized  (w/ beta):', lb_)
+                    
+                # TODO: check spec here?
         else:
             # TODO: refine for general activation
             pass
