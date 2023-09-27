@@ -167,6 +167,9 @@ def mip_solver_worker(candidate, n_inputs):
     vub = out_ub = v.ub
     adv = None
     
+    if vlb > 0:
+        return None
+    
     tmp_model.setObjective(v, grb.GRB.MINIMIZE)
     tmp_model.update()
     try:
@@ -274,7 +277,7 @@ class MIPAttacker:
         return False, None
     
     
-    def attack_domains(self, domain_params, concretize_percent=0.5):
+    def attack_domains(self, domain_params, concretize_percent=0.7):
         batch = len(domain_params.lower_bounds[0])
         logger.debug(f'MIP Attacking: {batch}')
         
@@ -454,7 +457,7 @@ class MIPAttacker:
         if not hasattr(self.abstractor.net[self.abstractor.net.final_name], 'solver_vars'):
             return None
 
-        self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars][-1:]
+        self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]#[-1:]
         
         current_model = self.abstractor.net.model.copy()
         # current_model.setParam('Threads', 1)

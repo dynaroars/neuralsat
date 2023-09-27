@@ -4,7 +4,7 @@ import torch
 import time
 import copy
 
-from heuristic.restart_heuristics import get_restart_strategy
+from heuristic.restart_heuristics import get_restart_strategy, HIDDEN_SPLIT_RESTART_STRATEGIES
 from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.tightener import Tightener
 from heuristic.util import compute_masks
@@ -95,19 +95,20 @@ def _preprocess(self, objectives, forced_input_split=None):
         
         tic = time.time()
         c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
+        use_refined = Settings.use_mip_refine and not Settings.use_restart
         self.abstractor.build_lp_solver(
             model_type='mip', 
             input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
             input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
             c=c_to_use,
-            refine=Settings.use_mip_refine,
+            refine=use_refined,
             timeout=None,
         )
         logger.debug(f'MIP: {time.time() - tic:.04f}')
         
         # self.abstractor.net.print_betas()
 
-        if Settings.use_mip_refine:
+        if use_refined:
             # forward with refinement
             refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
             ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
@@ -160,9 +161,10 @@ def _init_abstractor(self, method, objective):
     
     
 def _setup_restart(self, nth_restart, objective):
+    self.num_restart = nth_restart + 1
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
-        return False
+        raise
     
     if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         params['abstract_method'] = 'forward'
@@ -180,11 +182,38 @@ def _setup_restart(self, nth_restart, objective):
         seed=nth_restart+2,
     )
     
+    refined_intermediate_bounds = None
+    if Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_refine:
+        if abstract_method == 'forward':
+            return None
+        if not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
+            return None
+        
+        self._init_abstractor('backward', objective)
+        
+        tmp_objective = copy.deepcopy(objective)
+        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
+        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
+        
+        ret = self.abstractor.initialize(tmp_objective)
+        
+        c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
+        self.abstractor.build_lp_solver(
+            model_type='mip', 
+            input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
+            input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
+            c=c_to_use,
+            refine=True,
+            timeout=None,
+        )
+        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
+        del self.abstractor
+    
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
         self._init_abstractor(abstract_method, objective)
         
-    return True
+    return refined_intermediate_bounds
 
 
 def _pre_attack(self, dnf_objectives, timeout=0.5):
@@ -276,6 +305,9 @@ def _check_invoke_tightening(self, patience_limit=10):
         return False
     
     if len(self.domains_list) <= self.batch:
+        return False
+    
+    if Settings.use_restart and self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES):
         return False
     
     # reset counter

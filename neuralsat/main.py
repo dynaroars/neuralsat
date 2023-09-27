@@ -90,6 +90,7 @@ if __name__ == '__main__':
         is_nhwc=is_nhwc,
     )
     
+    print(Settings)
     # verify
     timeout = args.timeout - (time.time() - START_TIME)
     status = verifier.verify(objectives, timeout=timeout)

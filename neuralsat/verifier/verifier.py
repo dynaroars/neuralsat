@@ -7,6 +7,7 @@ import torch
 import time
 import copy
 
+from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
@@ -38,12 +39,16 @@ class Verifier:
         self.tightening_patience = 0
         
     def get_objective(self, dnf_objectives):
+        # FIXME later
+        objective = dnf_objectives.pop(max(10, self.batch))
+        return objective
+    
         if self.input_split:
-            objective = dnf_objectives.pop(self.batch)
+            objective = dnf_objectives.pop(max(10, self.batch))
         elif Settings.use_restart:
             objective = dnf_objectives.pop(1)
         else:
-            objective = dnf_objectives.pop(self.batch)
+            objective = dnf_objectives.pop(max(10, self.batch))
         return objective
     
     
@@ -77,11 +82,8 @@ class Verifier:
             
             # verify objective (multiple times if RESTART is returned)
             while True:
-                # get strategy
-                if not self._setup_restart(nth_restart, objective):
-                    return ReturnStatus.UNKNOWN
-                
-                # TODO: refinement
+                # get strategy + refinement
+                new_reference_bounds = self._setup_restart(nth_restart, objective)
                 
                 # adaptive batch size
                 while True: 
@@ -91,7 +93,7 @@ class Verifier:
                         status = self._verify(
                             objective=objective, 
                             preconditions=preconditions+learned_clauses, 
-                            reference_bounds=reference_bounds,
+                            reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
                             timeout=timeout
                         )
                     except RuntimeError as exception:
@@ -189,7 +191,7 @@ class Verifier:
                 return ReturnStatus.TIMEOUT
             
             # check restart
-            if Settings.use_restart:
+            if Settings.use_restart and (self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES)):
                 if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
                 
@@ -208,7 +210,7 @@ class Verifier:
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
-            self.tightener(self.domains_list, topk=64, timeout=10.0, largest=False, solve_both=True)
+            self.tightener(self.domains_list, topk=64, timeout=20.0, largest=False, solve_both=True)
             
         # step 3: selection
         pick_ret = self.domains_list.pick_out(self.batch, self.device)

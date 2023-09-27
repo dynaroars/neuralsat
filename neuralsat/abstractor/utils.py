@@ -304,7 +304,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
     lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
-    print(lb)
+    # print(lb)
     if rhs is not None:
         if (lb > rhs).all():
             return None

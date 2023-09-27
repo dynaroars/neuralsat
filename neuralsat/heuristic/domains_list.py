@@ -23,7 +23,8 @@ class DomainsList:
                  cs, rhs, 
                  input_split=False, preconditions=[]):
         
-        self.use_restart = Settings.use_restart and (lower_bounds is not None) # and len(preconditions)
+        # FIXME: len(input_lowers) > 1
+        self.use_restart = Settings.use_restart and (lower_bounds is not None) and (len(input_lowers) == 1) # and len(preconditions)
         if self.use_restart:
             tic = time.time()
             stat = self.init_sat_solver(

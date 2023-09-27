@@ -268,6 +268,7 @@ class NetworkAbstractor:
         self.net.set_bound_opts(get_beta_opt_params(use_beta, stop_criterion_batch_any(double_rhs)))
         
         if Settings.use_hidden_bounds_optimization and (self.iteration % Settings.hidden_bounds_optimization_interval == 0):
+            # print('vao day')
             new_output_lbs, _ = self.net.compute_bounds(
                 x=(new_x,), 
                 C=double_cs, 
