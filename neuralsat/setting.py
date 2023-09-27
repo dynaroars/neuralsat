@@ -17,8 +17,8 @@ class GlobalSettings:
         self.max_input_visited_branches = 5e6
         
         # refinement
-        self.use_mip_refine = 0
-        self.use_mip_tightening = 0
+        self.use_mip_refine = 1
+        self.use_mip_tightening = 1
         self.mip_tightening_patience = 10
         
         # attack
