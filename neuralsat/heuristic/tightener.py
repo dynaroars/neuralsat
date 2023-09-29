@@ -315,8 +315,8 @@ class Tightener:
             # print('added:', l_id, n_id, var_name)
             
             # TODO: should tighten all neurons in 1st time
-            # if selected_layer not in self.tightened_layers: 
-            #     continue
+            if selected_layer not in self.tightened_layers: 
+                continue
             
             if len(candidates) == topk: # 2nd time, tighten topk neurons
                 break
