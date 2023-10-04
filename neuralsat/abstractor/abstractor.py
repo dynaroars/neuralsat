@@ -188,6 +188,34 @@ class NetworkAbstractor:
             raise NotImplementedError()
         
 
+    def compute_stability(self, objective):
+        cs = objective.cs.to(self.device)
+        rhs = objective.rhs.to(self.device)
+        
+        # input property
+        input_lowers = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        input_uppers = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+       
+        self.x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
+        
+        assert self.method in ['forward', 'backward']
+        with torch.no_grad():
+            lb, _ = self.net.compute_bounds(
+                x=(self.x,), 
+                C=cs, 
+                method=self.method, 
+            )
+            lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb)
+            
+        # print(lb)
+        n_unstable = sum([torch.logical_and(lower_bounds[j] < 0, upper_bounds[j] > 0).sum().detach().cpu() for j in range(len(lower_bounds) - 1)])
+        n_total = sum([lower_bounds[j].numel() for j in range(len(lower_bounds) - 1)])
+        # print(lower_bounds)
+        # print(upper_bounds)
+        # print(n_unstable, n_total)
+        return n_total - n_unstable, n_unstable, lower_bounds, upper_bounds
+    
+    
     def _naive_forward_hidden(self, domain_params, decisions):
         assert len(domain_params.cs) == len(domain_params.rhs) == len(domain_params.input_lowers) == len(domain_params.input_uppers)
         decision_np = np.array(decisions)

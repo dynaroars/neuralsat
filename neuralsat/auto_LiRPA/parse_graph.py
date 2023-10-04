@@ -1,7 +1,8 @@
 import os
 import torch
 from torch.onnx.utils import _optimize_graph
-from torch.onnx.symbolic_helper import _set_opset_version, _node_get
+from torch.onnx.symbolic_helper import _set_opset_version
+# from torch.onnx.symbolic_helper import _set_opset_version, _node_get
 from collections import OrderedDict
 from collections import namedtuple
 import re
@@ -42,8 +43,8 @@ def parse_graph(graph, inputs, params):
 
     nodesOP = []
     for n in graph.nodes():
-        # attrs = {k: n[k] for k in n.attributeNames()}
-        attrs = {k: _node_get(n, k) for k in n.attributeNames()}
+        attrs = {k: n[k] for k in n.attributeNames()}
+        # attrs = {k: _node_get(n, k) for k in n.attributeNames()}
         n_inputs = [name_with_scope(i) for i in n.inputs()]
         for i, out in enumerate(list(n.outputs())):
             # print(i, name_with_scope(out))

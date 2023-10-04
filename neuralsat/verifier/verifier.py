@@ -52,6 +52,13 @@ class Verifier:
         return objective
     
     
+    def compute_stability(self, dnf_objectives):
+        print('compute_stability')
+        if not (hasattr(self, 'abstractor')):
+            self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
+            
+        return self.abstractor.compute_stability(dnf_objectives)
+    
     def verify(self, dnf_objectives, preconditions=[], timeout=3600):
         self.start_time = time.time()
         if not len(dnf_objectives):
