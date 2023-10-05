@@ -299,7 +299,6 @@ class BoundConv(Bound):
         h_L, h_U = v[0]
         weight = v[1][0]
         bias = v[2][0] if self.has_bias else None
-
         if norm == np.inf:
             mid = (h_U + h_L) / 2.0
             diff = (h_U - h_L) / 2.0
@@ -307,7 +306,8 @@ class BoundConv(Bound):
             if self.is_conv1d:
                 deviation = F.conv2d(diff[..., None], weight_abs[..., None], None, self.stride, self.padding, self.dilation, self.groups)
             else:
-                deviation = F.conv2d(diff, weight_abs, None, self.stride, self.padding, self.dilation, self.groups)
+                deviation = F.conv2d(diff, weight_abs, None, self.stride, self.padding, self.dilation, self.groups).to(torch.get_default_dtype())
+                
         elif norm > 0:
             norm, eps = Interval.get_perturbation(v[0])
             # L2 norm, h_U and h_L are the same.
