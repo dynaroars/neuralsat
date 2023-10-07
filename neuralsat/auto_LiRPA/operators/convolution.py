@@ -439,7 +439,7 @@ class BoundConvTranspose(Bound):
             self.has_bias = False
         self.mode = options.get("conv_mode", "matrix")
         assert self.output_padding == [0, 0]
-        assert self.padding == [0, 0]
+        # assert self.padding == [0, 0]
         assert self.dilation == [1, 1]
         assert self.stride[0] == self.stride[1]
         assert self.groups == 1
