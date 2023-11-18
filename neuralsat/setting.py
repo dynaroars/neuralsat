@@ -1,5 +1,13 @@
 import torch
 
+try:
+    import gurobipy as grb
+    grb.Model('test')
+    USE_GUROBI = True
+except:
+    USE_GUROBI = False
+    
+
 class GlobalSettings:
 
     def __init__(self):
@@ -47,14 +55,18 @@ class GlobalSettings:
     def setup_test(self):
         self.max_hidden_branches = 1
         self.max_hidden_visited_branches = 2
-        self.use_mip_tightening = 1
+        self.use_mip_tightening = 1 and USE_GUROBI
         self.use_restart = 0
         self.use_attack = 1
         self.test = 1
     
     def setup(self, args):
-        self.use_restart = args.disable_restart
-        self.use_mip_tightening = args.disable_stabilize
+        if args is not None:
+            self.use_restart = args.disable_restart
+            self.use_mip_tightening = args.disable_stabilize and USE_GUROBI
+        else:
+            self.use_mip_tightening = USE_GUROBI
+            
         
     def __repr__(self):
         return (

@@ -11,6 +11,8 @@ from util.network.read_onnx import parse_onnx
 from verifier.verifier import Verifier 
 from util.misc.result import ReturnStatus
 from util.misc.logger import logger
+from setting import Settings
+
 
 
 def extract_instance(net_path, vnnlib_path):
@@ -310,6 +312,9 @@ class TestVerifier(unittest.TestCase):
         
         
 if __name__ == '__main__':
+    Settings.setup(args=None)
+    print(Settings)
+    
     logger.setLevel(1)
     unittest.main()
     
