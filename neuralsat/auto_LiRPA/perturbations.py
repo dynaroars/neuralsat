@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import numpy as np
 import torch
 from .utils import logger, eyeC
@@ -67,8 +68,12 @@ class Perturbation:
         raise NotImplementedError
 
 
-"""Perturbation constrained by the L_0 norm (assuming input data is in the range of 0-1)."""
 class PerturbationL0Norm(Perturbation):
+    """Perturbation constrained by the L_0 norm.
+
+    Assuming input data is in the range of 0-1.
+    """
+
     def __init__(self, eps, x_L=None, x_U=None, ratio=1.0):
         self.eps = eps
         self.x_U = x_U
@@ -123,11 +128,11 @@ class PerturbationL0Norm(Perturbation):
         return 'PerturbationLpNorm(norm=0, eps={})'.format(self.eps)
 
 
-"""Perturbation constrained by the L_p norm."""
 class PerturbationLpNorm(Perturbation):
-    
-    def __init__(self, eps=None, norm=np.inf, x_L=None, x_U=None):
+    """Perturbation constrained by the L_p norm."""
+    def __init__(self, eps=0, norm=np.inf, x_L=None, x_U=None, eps_min=0):
         self.eps = eps
+        self.eps_min = eps_min
         self.norm = norm
         self.dual_norm = 1 if (norm == np.inf) else (np.float64(1.0) / (1 - 1.0 / self.norm))
         self.x_L = x_L
@@ -146,26 +151,11 @@ class PerturbationLpNorm(Perturbation):
             x_U = x + self.eps if self.x_U is None else self.x_U
         return x_L, x_U
 
-    # If A is an identity matrix, we will handle specially.
-    def concretize_matrix(self, x, A, sign, extra_constr):
+    def concretize_matrix(self, x, A, sign):
+        # If A is an identity matrix, we will handle specially.
         if not isinstance(A, eyeC):
             # A has (Batch, spec, *input_size). For intermediate neurons, spec is *neuron_size.
             A = A.reshape(A.shape[0], A.shape[1], -1)
-
-            if extra_constr is not None:
-                # For each neuron, we have a beta, so beta size is (Batch, *neuron_size, n_beta) (in A, spec is *neuron_size).
-                # For intermediate layer neurons, A has *neuron_size specifications.
-                beta = extra_constr['beta']
-                beta = beta.view(beta.size(0), -1, beta.size(-1))
-                # coeffs are linear relationships between split neurons and x. They have size (batch, n_beta, *input_size), and unreated to neuron_size.
-                beta_coeffs = extra_constr['coeffs']
-                beta_coeffs = beta_coeffs.view(beta_coeffs.size(0), beta_coeffs.size(1), -1)
-                # biases are added for each batch each spec, size is (batch, n_beta), and unrelated to neuron_size.
-                beta_bias = extra_constr['bias']
-                # Merge beta into extra A and bias. Extra A has size (batch, spec, *input_size). For intermediate neurons, spec is *neuron_size.
-                extra_A = torch.einsum('ijk,ikl->ijl', beta, beta_coeffs)
-                # Merge beta into the bias term. Output has size (batch, spec).
-                extra_bias = torch.einsum('ijk,ik->ij', beta, beta_bias)
 
         if self.norm == np.inf:
             # For Linfinity distortion, when an upper and lower bound is given, we use them instead of eps.
@@ -176,21 +166,11 @@ class PerturbationLpNorm(Perturbation):
             center = (x_ub + x_lb) / 2.0
             diff = (x_ub - x_lb) / 2.0
             if not isinstance(A, eyeC):
-                if extra_constr is not None:
-                    # Extra linear and bias terms from constraints.
-                    print(
-                        f'A extra: {(sign * extra_A).abs().sum().item()}, '
-                        f'b extra: {(sign * extra_bias).abs().sum().item()}')
-                    A = A - sign * extra_A
-                    bound = A.matmul(center) - sign * extra_bias.unsqueeze(-1) + sign * A.abs().matmul(diff)
-                else:
-                    bound = A.matmul(center) + sign * A.abs().matmul(diff)
+                bound = A.matmul(center) + sign * A.abs().matmul(diff)
             else:
-                assert extra_constr is None
                 # A is an identity matrix. No need to do this matmul.
                 bound = center + sign * diff
         else:
-            assert extra_constr is None
             x = x.reshape(x.shape[0], -1, 1)
             if not isinstance(A, eyeC):
                 # Find the upper and lower bounds via dual norm.
@@ -202,7 +182,7 @@ class PerturbationLpNorm(Perturbation):
         bound = bound.squeeze(-1)
         return bound
 
-    def concretize_patches(self, x, A, sign, extra_constr):
+    def concretize_patches(self, x, A, sign):
         if self.norm == np.inf:
             x_L, x_U = self.get_input_bounds(x, A)
 
@@ -221,12 +201,7 @@ class PerturbationLpNorm(Perturbation):
                     bound -= bound_diff
                 else:
                     raise ValueError("Unsupported Sign")
-
-                # The extra bias term from beta term.
-                if extra_constr is not None:
-                    bound += extra_constr
             else:
-                assert extra_constr is None
                 # A is an identity matrix. No need to do this matmul.
                 bound = center + sign * diff
             return bound
@@ -234,36 +209,43 @@ class PerturbationLpNorm(Perturbation):
             input_shape = x.shape
             if not A.identity:
                 # Find the upper and lower bounds via dual norm.
-                # matrix has shape (batch_size, out_c * out_h * out_w, input_c, input_h, input_w) or (batch_size, unstable_size, input_c, input_h, input_w)
-                matrix = patches_to_matrix(A.patches, input_shape, A.stride, A.padding, A.output_shape, A.unstable_idx)
-                # Note that we should avoid reshape the matrix. Due to padding, matrix cannot be reshaped without copying.
+                # matrix has shape
+                # (batch_size, out_c * out_h * out_w, input_c, input_h, input_w)
+                # or (batch_size, unstable_size, input_c, input_h, input_w)
+                matrix = patches_to_matrix(
+                    A.patches, input_shape, A.stride, A.padding, A.output_shape,
+                    A.unstable_idx)
+                # Note that we should avoid reshape the matrix.
+                # Due to padding, matrix cannot be reshaped without copying.
                 deviation = matrix.norm(p=self.dual_norm, dim=(-3,-2,-1)) * self.eps
                 # Bound has shape (batch, out_c * out_h * out_w) or (batch, unstable_size).
                 bound = torch.einsum('bschw,bchw->bs', matrix, x) + sign * deviation
                 if A.unstable_idx is None:
                     # Reshape to (batch, out_c, out_h, out_w).
-                    bound = bound.view(matrix.size(0), A.patches.size(0), A.patches.size(2), A.patches.size(3))
+                    bound = bound.view(matrix.size(0), A.patches.size(0),
+                                       A.patches.size(2), A.patches.size(3))
             else:
                 # A is an identity matrix. Its norm is all 1.
                 bound = x + sign * self.eps
             return bound
 
-    """Given an variable x and its bound matrix A, compute worst case bound according to Lp norm."""
-    def concretize(self, x, A, sign=-1, aux=None, extra_constr=None):
+    def concretize(self, x, A, sign=-1, aux=None):
+        """Given an variable x and its bound matrix A, compute worst case bound according to Lp norm."""
         if A is None:
             return None
         if isinstance(A, eyeC) or isinstance(A, torch.Tensor):
-            return self.concretize_matrix(x, A, sign, extra_constr)
+            return self.concretize_matrix(x, A, sign)
         elif isinstance(A, Patches):
-            return self.concretize_patches(x, A, sign, extra_constr)
+            return self.concretize_patches(x, A, sign)
         else:
             raise NotImplementedError()
 
-    """ Sparse Linf perturbation where only a few dimensions are actually perturbed"""
     def init_sparse_linf(self, x, x_L, x_U):
+        """ Sparse Linf perturbation where only a few dimensions are actually perturbed"""
         self.sparse = True
         batch_size = x_L.shape[0]
         perturbed = (x_U > x_L).int()
+        logger.debug(f'Perturbed: {perturbed.sum()}')
         lb = ub = x_L * (1 - perturbed) # x_L=x_U holds when perturbed=0
         perturbed = perturbed.view(batch_size, -1)
         index = torch.cumsum(perturbed, dim=-1)
@@ -277,8 +259,8 @@ class PerturbationLpNorm(Perturbation):
         perturbed = perturbed.to(torch.get_default_dtype())
         lw.scatter_(dim=1, index=index.unsqueeze(1), src=perturbed.unsqueeze(1))
         lw = uw = lw[:, 1:, :].view(batch_size, dim, *x.shape[1:])
-        logger.debug(f'Using Linf sparse perturbation. Perturbed dimensions: {dim}.')
-        # logger.info(f'Avg perturbation: {(self.x_U_sparse - self.x_L_sparse).mean()}')
+        print(f'Using Linf sparse perturbation. Perturbed dimensions: {dim}.')
+        print(f'Avg perturbation: {(self.x_U_sparse - self.x_L_sparse).mean()}')
         return LinearBound(
             lw, lb, uw, ub, x_L, x_U), x, None
 
@@ -287,14 +269,20 @@ class PerturbationLpNorm(Perturbation):
         if self.norm == np.inf:
             x_L = x - self.eps if self.x_L is None else self.x_L
             x_U = x + self.eps if self.x_U is None else self.x_U
-            # print(f'Perturbed: {(x_U > x_L).int().sum()}')
         else:
-            # For other norms, we pass in the BoundedTensor objects directly.
-            x_L = x_U = x
+            if int(os.environ.get('AUTOLIRPA_L2_DEBUG', 0)) == 1:
+                # FIXME Experimental code. Need to change the IBP code also.
+                x_L = x - self.eps if self.x_L is None else self.x_L
+                x_U = x + self.eps if self.x_U is None else self.x_U
+            else:
+                # FIXME This causes confusing lower bound and upper bound
+                # For other norms, we pass in the BoundedTensor objects directly.
+                x_L = x_U = x
         if not forward:
             return LinearBound(
                 None, None, None, None, x_L, x_U), x, None
-        if self.norm == np.inf and x_L.numel() > 1 and (x_L == x_U).sum() > 0.5 * x_L.numel():
+        if (self.norm == np.inf and x_L.numel() > 1
+                and (x_L == x_U).sum() > 0.5 * x_L.numel()):
             return self.init_sparse_linf(x, x_L, x_U)
 
         batch_size = x.shape[0]
@@ -308,11 +296,12 @@ class PerturbationLpNorm(Perturbation):
     def __repr__(self):
         if self.norm == np.inf:
             if self.x_L is None and self.x_U is None:
-                return 'PerturbationLpNorm(norm=inf, eps={})'.format(self.eps)
+                return f'PerturbationLpNorm(norm=inf, eps={self.eps})'
             else:
-                return 'PerturbationLpNorm(norm=inf, eps={}, x_L={}, x_U={})'.format(self.eps, self.x_L, self.x_U)
+                return f'PerturbationLpNorm(norm=inf, eps={self.eps}, x_L={self.x_L}, x_U={self.x_U})'
         else:
-            return 'PerturbationLpNorm(norm={}, eps={})'.format(self.norm, self.eps)
+            return f'PerturbationLpNorm(norm={self.norm}, eps={self.eps})'
+
 
 class PerturbationSynonym(Perturbation):
     def __init__(self, budget, eps=1.0, use_simple=False):
@@ -325,8 +314,8 @@ class PerturbationSynonym(Perturbation):
         self.train = False
 
     def __repr__(self):
-        return 'perturbation(Synonym-based word substitution budget={}, eps={})'.format(
-            self.budget, self.eps)
+        return (f'perturbation(Synonym-based word substitution '
+                f'budget={self.budget}, eps={self.eps})')
 
     def _load_synonyms(self, path='data/synonyms.json'):
         with open(path) as file:
@@ -344,7 +333,7 @@ class PerturbationSynonym(Perturbation):
         dim_out = A.shape[1]
         max_num_cand = x_rep.shape[2]
 
-        mask_rep = torch.tensor(can_be_replaced, dtype=torch.float32, device=A.device)
+        mask_rep = torch.tensor(can_be_replaced, dtype=torch.get_default_dtype(), device=A.device)
 
         num_pos = int(np.max(np.sum(can_be_replaced, axis=-1)))
         update_A = A.shape[-1] > num_pos * dim_word
@@ -427,7 +416,7 @@ class PerturbationSynonym(Perturbation):
         batch_size, length, dim_word = x.shape[0], x.shape[1], x.shape[2]
 
         max_pos = 1
-        can_be_replaced = np.zeros((batch_size, length), dtype=np.bool)
+        can_be_replaced = np.zeros((batch_size, length), dtype=bool)
 
         self._build_substitution(batch)
 
@@ -453,7 +442,6 @@ class PerturbationSynonym(Perturbation):
             eye = torch.eye(dim_word).to(x.device)
             lw = torch.zeros(batch_size, dim, length, dim_word).to(x.device)
             lb = torch.zeros_like(x).to(x.device)
-        x_new = []
         word_embeddings = self.model.word_embeddings.weight
         vocab = self.model.vocab
         x_rep = [[[] for i in range(length)] for t in range(batch_size)]
@@ -493,7 +481,7 @@ class PerturbationSynonym(Perturbation):
                 x_rep_ += x_rep[t][i] + [zeros] * (max_num_cand - len(x_rep[t][i]))
                 mask += [1] * len(x_rep[t][i]) + [0] * (max_num_cand - len(x_rep[t][i]))
         x_rep_ = torch.cat(x_rep_).reshape(batch_size, length, max_num_cand, dim_word)
-        mask = torch.tensor(mask, dtype=torch.float32, device=x.device)\
+        mask = torch.tensor(mask, dtype=torch.get_default_dtype(), device=x.device)\
             .reshape(batch_size, length, max_num_cand)
         x_rep_ = x_rep_ * self.eps + x.unsqueeze(2) * (1 - self.eps)
 
@@ -506,7 +494,7 @@ class PerturbationSynonym(Perturbation):
         return LinearBound(lw, lb, uw, ub, lower, upper), x, (x_rep_, mask, can_be_replaced)
 
     def _build_substitution(self, batch):
-        for t, example in enumerate(batch):
+        for example in batch:
             if not 'candidates' in example or example['candidates'] is None:
                 candidates = []
                 tokens = example['sentence'].strip().lower().split(' ')
@@ -520,3 +508,4 @@ class PerturbationSynonym(Perturbation):
                         _cand = [tokens[i]] + _cand
                     candidates.append(_cand)
                 example['candidates'] = candidates
+

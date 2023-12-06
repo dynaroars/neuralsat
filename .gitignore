@@ -1,6 +1,7 @@
 benchmark/
 benchmark
 ref/
+old/
 neuralsat/example/*/*.csv
 neuralsat/example/*.csv
 neuralsat/example/vgg*.onnx

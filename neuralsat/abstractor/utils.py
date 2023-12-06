@@ -34,6 +34,14 @@ def new_slopes(slopes, keep_name):
     return new_slope
 
 
+def _transfer(self, tensor, device=None, half=False):
+    if half:
+        tensor = tensor.half()
+    if device:
+        tensor = tensor.to(device)
+    return tensor
+
+
 def get_slope(self, model):
     if len(model.perturbed_optimizable_activations) == 0:
         return {}
@@ -75,6 +83,11 @@ def get_hidden_bounds(self, model, lb):
     ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
     lower_bounds = [layer.inputs[0].lower.detach() for layer in model.perturbed_optimizable_activations]
     upper_bounds = [layer.inputs[0].upper.detach() for layer in model.perturbed_optimizable_activations]
+    # print([_.shape for _ in lower_bounds])
+    # model.get_split_nodes(input_split=False)
+    # print([_.name for _ in model.layers_requiring_bounds])
+    # print([_.name for _ in model.split_nodes])
+    
     lower_bounds.append(lb.flatten(1).detach())
     upper_bounds.append(ub.flatten(1).detach())
     self.pre_relu_indices = [i for (i, layer) in enumerate(model.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]

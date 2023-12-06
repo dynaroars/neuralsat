@@ -66,6 +66,10 @@ class GlobalSettings:
             self.use_mip_tightening = args.disable_stabilize and USE_GUROBI
         else:
             self.use_mip_tightening = USE_GUROBI
+        
+        self.use_attack = 0
+        self.use_restart = 0
+        self.use_mip_tightening = 0
             
         
     def __repr__(self):

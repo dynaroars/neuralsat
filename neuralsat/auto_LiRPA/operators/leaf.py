@@ -1,6 +1,8 @@
 """ Leaf nodes (indepedent nodes in the auto_LiRPA paper).
 
 Including input, parameter, buffer, etc."""
+
+from itertools import chain
 from .base import *
 
 
@@ -129,7 +131,7 @@ class BoundInput(Bound):
     def bound_forward(self, dim_in):
         assert 0
 
-    def bound_backward(self, last_lA, last_uA):
+    def bound_backward(self, last_lA, last_uA, **kwargs):
         raise ValueError('{} is a BoundInput node and should not be visited here'.format(
             self.name))
 
@@ -137,16 +139,8 @@ class BoundInput(Bound):
         raise ValueError('{} is a BoundInput node and should not be visited here'.format(
             self.name))
 
-    def infer_batch_dim(self, batch_size, *x):
-        shape = self.forward_value.shape
-        for i in range(len(shape)):
-            if shape[i] == batch_size:
-                return i
-        return -1
-
-
 class BoundParams(BoundInput):
-    def __init__(self, ori_name, value, perturbation=None):
+    def __init__(self, ori_name, value, perturbation=None, options=None):
         super().__init__(ori_name, None, perturbation)
         self.register_parameter('param', value)
         self.from_input = False
@@ -169,14 +163,11 @@ class BoundParams(BoundInput):
         else:
             return self.param.requires_grad_(self.training)
 
-    def infer_batch_dim(self, batch_size, *x):
-        return -1
-
-
 class BoundBuffers(BoundInput):
-    def __init__(self, ori_name, value, perturbation=None):
+    def __init__(self, ori_name, value, perturbation=None, options=None):
         super().__init__(ori_name, None, perturbation)
         self.register_buffer('buffer', value.clone().detach())
+        self.from_input = not options.get('buffers', {}).get('no_batchdim', False)
 
     def forward(self):
         return self.buffer

@@ -2,9 +2,13 @@ from .base import *
 from .linear import *
 from .convolution import *
 from .pooling import *
-from .activation import *
+from .activation_base import *
+from .activations import *
 from .nonlinear import *
+from .relu import *
+from .tanh import *
 from .bivariate import *
+from .add_sub import *
 from .normalization import *
 from .shape import *
 from .reduce import *
@@ -15,7 +19,10 @@ from .leaf import *
 from .logical import *
 from .dropout import *
 from .dtype import *
+from .trigonometric import *
 from .cut_ops import *
+from .gradient_bounds import *
+from .gradient_modules import *
 from .solver_utils import grb
-
-from .scatter import *
+from .resize import *
+from .jacobian import *

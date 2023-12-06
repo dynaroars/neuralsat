@@ -1,6 +1,11 @@
 """ Normalization operators"""
+import copy
+
+import torch
+
 from .base import *
 from .solver_utils import grb
+
 
 class BoundBatchNormalization(Bound):
     def __init__(self, attr, inputs, output_index, options, training):
@@ -19,7 +24,7 @@ class BoundBatchNormalization(Bound):
         self.patches_start = True
         self.mode = options.get("conv_mode", "matrix")
         if not self.use_mean or not self.use_var:
-            logger.debug(f'Batch normalization node {self.name}: use_mean {self.use_mean}, use_var {self.use_var}')
+            logger.info(f'Batch normalization node {self.name}: use_mean {self.use_mean}, use_var {self.use_var}')
 
     def _check_unused_mean_or_var(self):
         # Check if either mean or var is opted out
@@ -51,25 +56,51 @@ class BoundBatchNormalization(Bound):
             shape = (1, -1) + (1,) * (x.ndim - 2)
             result = w.view(*shape) * x + b.view(*shape)
         return result
-    
-    # def bound_forward(self, dim_in, x, w, b, m, v):
-    #     print('self.use_mean', self.use_mean)
-    #     print('self.use_var', self.use_var)
-    #     print('self.training', self.training)
-    #     print('self.momentum', self.momentum)
-    #     print('self.use_affine', self.use_affine)
-    #     print('self.current_mean', self.current_mean)
-    #     print('self.current_var', self.current_var)
-    #     print('self.eps', self.eps)
-    #     print('w', torch.equal(w.lower, w.upper))
-    #     print('b', torch.equal(b.lower, b.upper))
-    #     print('m', torch.equal(m.lower, m.upper))
-    #     print('m', torch.equal(m.lower, self.current_mean))
-    #     print('v', torch.equal(v.lower, v.upper))
-    #     print('v', torch.equal(v.lower, self.current_var))
-    #     exit(0)
 
-    def bound_backward(self, last_lA, last_uA, *x):
+    def bound_forward(self, dim_in, *x):
+        inp = x[0]
+        assert (x[1].lower == x[1].upper).all(), "unsupported forward bound with perturbed mean"
+        assert (x[2].lower == x[2].upper).all(), "unsupported forward bound with perturbed var"
+        weight, bias = x[1].lower, x[2].lower
+        if not self.training:
+            assert (x[3].lower == x[3].upper).all(), "unsupported forward bound with perturbed mean"
+            assert (x[4].lower == x[4].upper).all(), "unsupported forward bound with perturbed var"
+            self.current_mean = x[3].lower
+            self.current_var = x[4].lower
+        self._check_unused_mean_or_var()
+        if not self.use_affine:
+            weight = torch.ones_like(weight)
+            bias = torch.zeros_like(bias)
+
+
+        tmp_bias = bias - self.current_mean / torch.sqrt(self.current_var + self.eps) * weight
+        tmp_weight = weight / torch.sqrt(self.current_var + self.eps)
+
+        # for debug: this checking is passed, i.e., we derived the forward bound
+        # from the following correct computation procedure
+        # tmp_x = ((x[0].lb + x[0].ub) / 2.).detach()
+        # expect_output = self(tmp_x, *[_.lower for _ in x[1:]])
+        # tmp_weight = tmp_weight.view(*((1, -1) + (1,) * (tmp_x.ndim - 2)))
+        # tmp_bias = tmp_bias.view(*((1, -1) + (1,) * (tmp_x.ndim - 2)))
+        # computed_output = tmp_weight * tmp_x + tmp_bias
+        # assert torch.allclose(expect_output, computed_output, 1e-5, 1e-5)
+
+        tmp_weight = tmp_weight.view(*((1, 1, -1) + (1,) * (inp.lw.ndim - 3)))
+        new_lw = torch.clamp(tmp_weight, min=0.) * inp.lw + torch.clamp(tmp_weight, max=0.) * inp.uw
+        new_uw = torch.clamp(tmp_weight, min=0.) * inp.uw + torch.clamp(tmp_weight, max=0.) * inp.lw
+
+        tmp_weight = tmp_weight.view(*((1, -1) + (1,) * (inp.lb.ndim - 2)))
+        tmp_bias = tmp_bias.view(*((1, -1) + (1,) * (inp.lb.ndim - 2)))
+        new_lb = torch.clamp(tmp_weight, min=0.) * inp.lb + torch.clamp(tmp_weight, max=0.) * inp.ub + tmp_bias
+        new_ub = torch.clamp(tmp_weight, min=0.) * inp.ub + torch.clamp(tmp_weight, max=0.) * inp.lb + tmp_bias
+
+        return LinearBound(
+            lw = new_lw,
+            lb = new_lb,
+            uw = new_uw,
+            ub = new_ub)
+
+    def bound_backward(self, last_lA, last_uA, *x, **kwargs):
         assert not self.is_input_perturbed(1) and not self.is_input_perturbed(2), \
             'Weight perturbation is not supported for BoundBatchNormalization'
 
@@ -90,9 +121,6 @@ class BoundBatchNormalization(Bound):
             if last_A is None:
                 return None, 0
             if type(last_A) == Tensor:
-                # print(last_A.shape)
-                # print(tmp_weight.view(*((1, 1, -1) + (1,) * (last_A.ndim - 3))).shape)
-                # print()
                 next_A = last_A * tmp_weight.view(*((1, 1, -1) + (1,) * (last_A.ndim - 3)))
                 if last_A.ndim > 3:
                     sum_bias = (last_A.sum(tuple(range(3, last_A.ndim))) * tmp_bias).sum(2)
@@ -100,42 +128,27 @@ class BoundBatchNormalization(Bound):
                     sum_bias = (last_A * tmp_bias).sum(2)
             elif type(last_A) == Patches:
                 # TODO Only 4-dim BN supported in the Patches mode
-                # print('\t\t\t zeros:', last_A.inserted_zeros, 'padding', last_A.output_padding)
-                # print('\t\t\t unstable_idx:', last_A.unstable_idx)
                 if last_A.identity == 0:
                     # FIXME (09/17): Need to check if it has already been padding.
                     # Patch has dimension (out_c, batch, out_h, out_w, c, h, w) or (unstable_size, batch, c, h, w)
                     patches = last_A.patches
-                    
+
                     # tmp_weight has shape (c,), it will be applied on the (c,) dimension.
                     patches = patches * tmp_weight.view(*([1] * (patches.ndim - 3)), -1, 1, 1)  # Match with sparse or non-sparse patches.
-                    next_A = Patches(patches, last_A.stride, last_A.padding, last_A.shape, 
-                                     identity=0, unstable_idx=last_A.unstable_idx, output_shape=last_A.output_shape,
-                                     inserted_zeros=last_A.inserted_zeros)
+                    next_A = last_A.create_similar(patches)
 
                     # bias to size (c,), need expansion before unfold.
                     bias = tmp_bias.view(-1,1,1).expand(self.input_shape[1:]).unsqueeze(0)
                     # Unfolded bias has shape (1, out_h, out_w, in_c, H, W).
                     bias_unfolded = inplace_unfold(bias, kernel_size=last_A.patches.shape[-2:], padding=last_A.padding, stride=last_A.stride,
                             inserted_zeros=last_A.inserted_zeros, output_padding=last_A.output_padding)
-                    # print('\t\t\t bias:', bias.shape)
-                    # print('\t\t\t kernel_size:', last_A.patches.shape[-2:])
-                    # print('\t\t\t stride:', last_A.stride)
-                    # print('\t\t\t output_padding:', last_A.output_padding)
-                    # print('\t\t\t bias_unfolded:', bias_unfolded.shape)
                     if last_A.unstable_idx is not None:
                         # Sparse bias has shape (unstable_size, batch, in_c, H, W).
-                        # print(last_A.unstable_idx[1])
-                        assert len(last_A.unstable_idx) >= 3
-                        assert last_A.unstable_idx[1].max() < bias_unfolded.shape[1]
-                        assert last_A.unstable_idx[2].max() < bias_unfolded.shape[2]
                         bias_unfolded = bias_unfolded[:, last_A.unstable_idx[1], last_A.unstable_idx[2]]
                         sum_bias = torch.einsum('bschw,sbchw->sb', bias_unfolded, last_A.patches)
                         # Output sum_bias has shape (unstable_size, batch).
                     else:
                         # Patch has dimension (out_c, batch, out_h, out_w, c, h, w).
-                        assert len(bias_unfolded.shape) == 6 and len(last_A.patches.shape) == 7
-                        assert bias_unfolded.shape[1] == last_A.patches.shape[2]
                         sum_bias = torch.einsum('bijchw,sbijchw->sbij', bias_unfolded, last_A.patches)
                         # Output sum_bias has shape (out_c, batch, out_h, out_w).
                 else:
@@ -150,8 +163,7 @@ class BoundBatchNormalization(Bound):
                         patches = patches[last_A.unstable_idx[0], :, last_A.unstable_idx[1], last_A.unstable_idx[2]]
                     # Expand the batch dimension.
                     patches = patches.expand(-1, last_A.shape[1], *([-1] * (patches.ndim - 2)))
-                    next_A = Patches(patches, 1, 0, last_A.shape, unstable_idx=last_A.unstable_idx, output_shape=last_A.output_shape,
-                                     inserted_zeros=last_A.inserted_zeros)
+                    next_A = last_A.create_similar(patches, stride=1, padding=0, identity=0)
                     if last_A.unstable_idx is not None:
                         # Need to expand the bias and choose the selected ones.
                         bias = tmp_bias.view(-1,1,1,1).expand(-1, 1, last_A.output_shape[2], last_A.output_shape[3])
@@ -203,7 +215,7 @@ class BoundBatchNormalization(Bound):
 
         # interval_propagate() of the Linear layer may encounter input with different norms.
         norm, eps = Interval.get_perturbation(v[0])[:2]
-        if norm == np.inf:
+        if norm == torch.inf:
             center = tmp_weight.view(*shape) * mid + tmp_bias.view(*shape)
             deviation = tmp_weight_abs.view(*shape) * diff
         elif norm > 0:
@@ -264,5 +276,7 @@ class BoundBatchNormalization(Bound):
             new_layer_gurobi_vars.append(out_chan_vars)
 
         self.solver_vars = new_layer_gurobi_vars
-        # self.solver_constrs = new_layer_gurobi_constrs
         model.update()
+
+    def update_requires_input_bounds(self):
+        self._check_weight_perturbation()

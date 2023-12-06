@@ -60,6 +60,18 @@ def _preprocess(self, objectives, forced_input_split=None):
     if self.input_split and len(objectives) < 50:
         return objectives, None
     
+    
+    
+    
+    
+    return objectives, None
+
+
+
+
+
+
+    
     try:
         # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)

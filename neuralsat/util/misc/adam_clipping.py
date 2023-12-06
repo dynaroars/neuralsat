@@ -53,7 +53,7 @@ class AdamClipping(Optimizer):
 
     @staticmethod
     @torch.no_grad()
-    @torch.jit.script
+    # @torch.jit.script
     def _clip_update(exp_avg : torch.Tensor, denom : torch.Tensor, step_size : float, clipping_step_eps : float, lower_limit : torch.Tensor, upper_limit : torch.Tensor, p : torch.Tensor):
         # Compute the Adam update.
         update = exp_avg / denom * step_size
