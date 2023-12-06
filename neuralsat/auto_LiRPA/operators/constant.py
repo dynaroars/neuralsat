@@ -1,23 +1,19 @@
 """ Constant operators, including operators that are usually fixed nodes and not perturbed """
 from .base import *
 
-
 class BoundConstant(Bound):
-    def __init__(self, attr=None, inputs=None, output_index=0, options=None):
+    def __init__(self, attr, inputs, output_index, options):
         super().__init__(attr, inputs, output_index, options)
         self.value = attr['value'].to(self.device)
         self.use_default_ibp = True
 
-    def __repr__(self):
-        if self.value.numel() == 1:
-            return f'BoundConstant(name={self.name}, value={self.value})'
-        else:
-            return super().__repr__()
-
     def forward(self):
         return self.value.to(self.device)
 
-    def bound_backward(self, last_lA, last_uA, **kwargs):
+    def infer_batch_dim(self, batch_size, *x):
+        return -1
+
+    def bound_backward(self, last_lA, last_uA):
         def _bound_oneside(A):
             if A is None:
                 return 0.0
@@ -44,23 +40,30 @@ class BoundConstant(Bound):
 
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
         self.solver_vars = self.value
-
+        
 
 class BoundPrimConstant(Bound):
+    def __init__(self, attr, input, output_index, options):
+        super().__init__(attr, input, output_index, options)
+
     def forward(self):
         return torch.tensor([], device=self.device)
 
 class BoundConstantOfShape(Bound):
-    def __init__(self, attr=None, inputs=None, output_index=0, options=None):
+    def __init__(self, attr, inputs, output_index, options):
         super().__init__(attr, inputs, output_index, options)
+        # print(attr)
         self.value = attr['value'].to(self.device)
 
     def forward(self, x):
         self.x = x
         self.from_input = True
+        # print(x, x.ndim)
+        if isinstance(x, torch.Tensor) and x.ndim == 0:
+            x = [x]
         return self.value.expand(*list(x))
 
-    def bound_backward(self, last_lA, last_uA, x, **kwargs):
+    def bound_backward(self, last_lA, last_uA, x):
         if last_lA is not None:
             lower_sum_b = last_lA * self.value
             while lower_sum_b.ndim > 2:
@@ -85,14 +88,22 @@ class BoundConstantOfShape(Bound):
 
     def interval_propagate(self, *v):
         self.x = v[0][0]
-        value = torch.ones(tuple(v[0][0]), device=self.device) * self.value
+        size = int(v[0][0].item()) if isinstance(v[0][0], Tensor) else v[0][0]
+        value = torch.ones(size, device=self.device) * self.value
         return value, value
 
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
         self.solver_vars = self.forward(v)
 
+    def infer_batch_dim(self, batch_size, *x):
+        # FIXME Should avoid referring to batch_size; Treat `torch.Size` results differently
+        if self.x[0] == batch_size:
+            return 0
+        else:
+            return -1
+
 class BoundRange(Bound):
-    def __init__(self, attr=None, inputs=None, output_index=0, options=None):
+    def __init__(self, attr, inputs, output_index, options):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
 
@@ -102,8 +113,12 @@ class BoundRange(Bound):
         else:
             return torch.arange(start, end, step, device=self.device)
 
+    def infer_batch_dim(self, batch_size, *x):
+        assert x[0] == x[1] == x[2] == -1
+        return -1
+
 class BoundATenDiag(Bound):
-    def __init__(self, attr=None, inputs=None, output_index=0, options=None):
+    def __init__(self, attr, inputs, output_index, options):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
 
@@ -113,8 +128,11 @@ class BoundATenDiag(Bound):
     def interval_propagate(self, *v):
         return Interval.make_interval(torch.diag(v[0][0], v[1][0]), torch.diag(v[0][1], v[1][0]), v[0])
 
+    def infer_batch_dim(self, batch_size, *x):
+        return 1  # This is not a batch operation.
+
 class BoundATenDiagonal(Bound):
-    def __init__(self, attr=None, inputs=None, output_index=0, options=None):
+    def __init__(self, attr, inputs, output_index, options):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
 

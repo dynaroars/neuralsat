@@ -36,7 +36,16 @@ class NetworkAbstractor:
         
     def setup(self, objective):
         assert self.select_params(objective), print('Initialization failed')
+        
         logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}"')
+
+        # check conversion correctness
+        dummy = objective.lower_bounds[0].view(self.input_shape).to(self.device)
+        try:
+            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-5, rtol=1e-5)
+        except AssertionError:
+            print(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
+            exit()
             
             
     def select_params(self, objective):
@@ -64,7 +73,7 @@ class NetworkAbstractor:
     def _init_module(self, mode):
         bound_opts = {'relu': 'adaptive', 'conv_mode': mode}
         
-        logger.debug(f'Trying bound_opts: {bound_opts}, input_split={self.input_split}')
+        # logger.debug(f'Trying bound_opts: {bound_opts}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.randn(self.input_shape, device=self.device),
@@ -74,33 +83,24 @@ class NetworkAbstractor:
         )
         self.net.eval()
         
-        # check conversion correctness
-        dummy = torch.zeros(self.input_shape).to(self.device)
-        try:
-            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-5, rtol=1e-5)
-        except AssertionError:
-            print(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
-            exit()
-        
         
     def _check_module(self, method, objective):
+        if np.prod(self.input_shape) >= 100000:
+            return True
+        # return True
+        
         # at least can run with batch=1
         x_L = objective.lower_bounds[0].view(self.input_shape)
         x_U = objective.upper_bounds[0].view(self.input_shape)
         x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
-
-        if np.prod(self.input_shape) >= 100000:
-            self.net(x) # have to forward to save architectural information
-            return True
         
         try:
-            self.net.set_bound_opts({'optimize_bound_args': {'iteration': 1}})
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:
             exit()
         except:
-            raise
-            traceback.print_exc()
+            # traceback.print_exc()
+            # raise
             return False
         else:
             return True
@@ -117,21 +117,17 @@ class NetworkAbstractor:
         # stop function used when optimizing abstraction
         stop_criterion_func = stop_criterion_batch_any(objective.rhs)
         
-        x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
+        self.x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
         
         # update initial reference bounds for later use
         self.init_reference_bounds = reference_bounds
-        
-        # get split nodes
-        # self._get_split_nodes(verbose=True)
-        self.net.get_split_nodes(input_split=True)
         
         if self.method == 'crown-optimized':
             # setup optimization parameters
             self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
 
             # initial bounds
-            lb, _, aux_reference_bounds = self.net.init_alpha((x,), share_alphas=share_slopes, c=objective.cs)
+            lb, _, aux_reference_bounds = self.net.init_slope((self.x,), share_slopes=share_slopes, c=objective.cs)
             logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
@@ -140,7 +136,7 @@ class NetworkAbstractor:
             self.update_refined_beta(init_betas, batch=len(objective.cs))
             
             lb, _ = self.net.compute_bounds(
-                x=(x,), 
+                x=(self.x,), 
                 C=objective.cs, 
                 method=self.method,
                 aux_reference_bounds=aux_reference_bounds, 
@@ -149,9 +145,10 @@ class NetworkAbstractor:
             logger.info(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
-            
+
             # reorganize tensors
             lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb)
+
             return AbstractResults(**{
                 'output_lbs': lower_bounds[-1], 
                 'lAs': self.get_lAs(self.net), 
@@ -168,7 +165,7 @@ class NetworkAbstractor:
         elif self.method in ['forward', 'backward']:
             with torch.no_grad():
                 lb, _ = self.net.compute_bounds(
-                    x=(x,), 
+                    x=(self.x,), 
                     C=objective.cs, 
                     method=self.method, 
                     reference_bounds=reference_bounds,
@@ -199,12 +196,12 @@ class NetworkAbstractor:
         input_lowers = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
         input_uppers = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
        
-        x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
+        self.x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
         
         assert self.method in ['forward', 'backward']
         with torch.no_grad():
             lb, _ = self.net.compute_bounds(
-                x=(x,), 
+                x=(self.x,), 
                 C=cs, 
                 method=self.method, 
             )
@@ -254,7 +251,7 @@ class NetworkAbstractor:
                 C=double_cs, 
                 method='backward', 
                 reuse_alpha=True,
-                interm_bounds=new_intermediate_layer_bounds
+                intermediate_layer_bounds=new_intermediate_layer_bounds
             )
         return AbstractResults(**{'output_lbs': lb})
     
@@ -313,7 +310,7 @@ class NetworkAbstractor:
                 C=double_cs, 
                 method=self.method,
                 decision_thresh=double_rhs,
-                interm_bounds=new_intermediate_layer_bounds,
+                intermediate_layer_bounds=new_intermediate_layer_bounds,
             )
 
         # reorganize output

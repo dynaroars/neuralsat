@@ -31,3 +31,14 @@ class LinearBound:
                 and self.x_L is not None and self.x_U is not None)
         else:
             return True
+
+
+    def __repr__(self):
+        return (f'LinearBound('
+                f'\nlower={self.lower.detach().cpu().numpy() if self.lower is not None else None},'
+                f'\nupper={self.upper.detach().cpu().numpy() if self.upper is not None else None},'
+                f'\nlw={self.lw.detach().cpu().numpy() if self.lw is not None else None},'
+                f'\nlb={self.lb.detach().cpu().numpy() if self.lb is not None else None},'
+                f'\nuw={self.uw.detach().cpu().numpy() if self.uw is not None else None},'
+                f'\nub={self.ub.detach().cpu().numpy() if self.ub is not None else None})\n'
+            )
