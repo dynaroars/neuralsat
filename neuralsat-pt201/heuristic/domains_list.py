@@ -239,9 +239,6 @@ class DomainsList:
             [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
             [v.append(domain_params.upper_bounds[k][remaining_index]) for k, v in self.all_upper_bounds.items()]
             [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()]
-            # [lb.append(new_lb[remaining_index]) for lb, new_lb in zip(self.all_lower_bounds, domain_params.lower_bounds)]
-            # [ub.append(new_ub[remaining_index]) for ub, new_ub in zip(self.all_upper_bounds, domain_params.upper_bounds)]
-            # [lA.append(new_lA[remaining_index]) for lA, new_lA in zip(self.all_lAs, domain_params.lAs)]
         
         # input bounds
         self.all_input_lowers.append(domain_params.input_lowers[remaining_index])

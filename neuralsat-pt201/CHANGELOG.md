@@ -1,2 +1,0 @@
-- Comment out all `@torch.jit.script` occurrences (in `auto_LiRPA`) because they seem to degrade performance when using `torch.compile()` (https://github.com/karpathy/nanoGPT/issues/11).
-- Change the number of iterations for the initialization step from 100 to 1 (in `abstractor/abstractor.py`)
