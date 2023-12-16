@@ -9,33 +9,41 @@ from auto_LiRPA.bound_ops import *
 
 
 def compute_masks(lower_bounds, upper_bounds, device):
-    new_masks = [torch.logical_and(
+    new_masks = {
+        j: torch.logical_and(
                     lower_bounds[j] < 0, 
                     upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=True)
-                for j in range(len(lower_bounds) - 1)]
+        for j in lower_bounds
+    }
     return new_masks
 
 
 def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, masks, reduce_op, number_bounds):
     score = []
     intercept_tb = []
-    relu_idx = -1
     
     # last to first layer
-    for layer in reversed(abstractor.net.relus):
-        this_layer_mask = masks[abstractor.pre_relu_indices[relu_idx]].unsqueeze(1)
-        ratio = lAs[abstractor.pre_relu_indices[relu_idx]]
-        ratio_temp_0, ratio_temp_1 = _compute_ratio(lower_bounds[abstractor.pre_relu_indices[relu_idx]], upper_bounds[abstractor.pre_relu_indices[relu_idx]])
+    for layer in reversed(abstractor.net.split_nodes):
+        assert len(abstractor.net.split_activations[layer.name]) == 1
+        # layer data
+        this_layer_mask = masks[layer.name].unsqueeze(1)
+        pre_act_layer = abstractor.net.split_activations[layer.name][0][0]
+        assert len(pre_act_layer.inputs) == 1
+        ratio = lAs[pre_act_layer.name]
+        
+        # ratio
+        ratio_temp_0, ratio_temp_1 = _compute_ratio(lower_bounds[layer.name], upper_bounds[layer.name])
 
         # intercept scores, backup scores, lower score is better
         intercept_temp = torch.clamp(ratio, max=0)
         intercept_candidate = intercept_temp * ratio_temp_1.unsqueeze(1)
+        
         # (batch, neuron)
         reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1)) 
 
         # bias
-        b_temp = _get_bias_term(layer.inputs[0], ratio)
+        b_temp = _get_bias_term(pre_act_layer.inputs[0], ratio)
         
         # branching scores, higher score is better
         ratio_temp_0 = ratio_temp_0.unsqueeze(1)
@@ -43,16 +51,15 @@ def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, ma
         bias_candidate_2 = b_temp * ratio_temp_0
         bias_candidate = reduce_op(bias_candidate_1, bias_candidate_2)
         score_candidate = bias_candidate + intercept_candidate
+        
         # (batch, neuron)
         score_candidate = score_candidate.abs().view(batch, number_bounds, -1) * this_layer_mask
         score.insert(0, score_candidate.mean(1)) 
-
-        relu_idx -= 1
-
     return score, intercept_tb
 
 
 def _histories_to_clauses(histories, var_mapping):
+    raise
     clauses = []
     for history in histories:
         literals = []
@@ -123,6 +130,7 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
 
 def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     # variables mapping from variable to (lid, nid)
+    raise
     tic = time.time()
     assert lower_bounds[0].shape[0] == 1
     layer_sizes = [_.flatten(start_dim=1).shape[-1] for _ in lower_bounds[:-1]]
@@ -143,7 +151,6 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
             if nstatus != 0:
                 literal = int(nstatus * var_mapping[lid, nid])
                 literals_to_assign.append(literal)
-            
             
     # create sat solver
     new_sat_solver = SATSolver(clauses)
@@ -170,8 +177,9 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     return True
     
     
-def boolean_propagation(self, domain_params, decisions, new_history, batch_idx):
-    batch = len(decisions)
+def boolean_propagation(self, domain_params, batch_idx):
+    raise
+    batch = len(domain_params.input_lowers)
     idx = batch_idx % batch
     
     # new solver
@@ -206,7 +214,8 @@ def boolean_propagation(self, domain_params, decisions, new_history, batch_idx):
     return new_sat_solver
 
 
-def save_conflict_clauses(self, decisions, domain_params, remaining_index):
+def save_conflict_clauses(self, domain_params, remaining_index):
+    raise
     batch = len(decisions)
     for idx_ in range(2*batch):
         if idx_ in remaining_index:

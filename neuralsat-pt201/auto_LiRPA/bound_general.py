@@ -64,14 +64,20 @@ class BoundedModule(nn.Module):
             'sparse_intermediate_bounds_with_ibp': True,
             'sparse_features_alpha': True,
             'sparse_spec_alpha': True,
+            'deterministic': False,
+            'tanh': {'loose_threshold': None},
+            'fixed_reducemax_index': True,
+            'matmul': {'share_alphas': False},
             'minimum_sparsity': 0.9,
             'enable_opt_interm_bounds': False,
-            'crown_batch_size': np.inf,
+            'crown_batch_size': int(1e9),
             'forward_refinement': False,
             'dynamic_forward': False,
             'forward_max_dim': int(1e9),
             # Do not share alpha for conv layers.
             'use_full_conv_alpha': True,
+            'max_crown_size': 1000000000,
+            'disable_optimization': [],
             'disabled_optimization': [],
             # Threshold for number of unstable neurons for each layer to disable
             #  use_full_conv_alpha.
@@ -82,8 +88,7 @@ class BoundedModule(nn.Module):
         default_bound_opts.update(bound_opts)
         self.bound_opts = default_bound_opts
         optimize_bound_args = default_optimize_bound_args
-        optimize_bound_args.update(
-            self.bound_opts.get('optimize_bound_args', {}))
+        optimize_bound_args.update(self.bound_opts.get('optimize_bound_args', {}))
         self.bound_opts.update({'optimize_bound_args': optimize_bound_args})
 
         self.verbose = verbose

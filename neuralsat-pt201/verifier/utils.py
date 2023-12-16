@@ -360,7 +360,7 @@ def _check_full_assignment(self, domain_params):
     remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
 
     for idx_ in remaining_index:
-        if sum([layer_mask[idx_].sum() for layer_mask in new_masks]) == 0:
+        if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
             self.abstractor.build_lp_solver(
                 model_type='lp', 
                 input_lower=domain_params.input_lowers[idx_][None], 

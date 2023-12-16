@@ -5,6 +5,7 @@ import time
 
 from util.misc.tensor_storage import TensorStorage
 from util.misc.result import AbstractResults
+from abstractor.utils import _copy_history
 from .util import compute_masks
 from setting import Settings
 
@@ -15,6 +16,7 @@ class DomainsList:
     "List of unverified branches"
 
     def __init__(self, 
+                 net,
                  output_lbs,
                  input_lowers, input_uppers, 
                  lower_bounds, upper_bounds, 
@@ -22,7 +24,9 @@ class DomainsList:
                  slopes, histories, 
                  cs, rhs, 
                  input_split=False, preconditions=[]):
-        
+
+        self.net = net
+                
         # FIXME: len(input_lowers) > 1
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and (len(input_lowers) == 1) # and len(preconditions)
         if self.use_restart:
@@ -65,12 +69,12 @@ class DomainsList:
         if self.input_split:
             self.all_lower_bounds = self.all_upper_bounds = self.all_lAs = self.all_histories = self.all_betas = None
         else: # hidden spliting 
-            self.all_lAs = [TensorStorage(item.cpu()) for item in lAs]
+            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items()}
             # hidden bounds
-            self.all_lower_bounds = [TensorStorage(item.cpu()) for item in lower_bounds]
-            self.all_upper_bounds = [TensorStorage(item.cpu()) for item in upper_bounds]
+            self.all_lower_bounds = {k: TensorStorage(v.cpu()) for k, v in lower_bounds.items()}
+            self.all_upper_bounds = {k: TensorStorage(v.cpu()) for k, v in upper_bounds.items()}
             # branching
-            self.all_histories = [copy.deepcopy(histories) for _ in range(len(cs))]
+            self.all_histories = [_copy_history(histories) for _ in range(len(cs))]
             # beta
             self.all_betas = [None for i in range(len(cs))]
             
@@ -82,9 +86,9 @@ class DomainsList:
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
-            assert all([len(_) == len(self) for _ in self.all_lower_bounds])
-            assert all([len(_) == len(self) for _ in self.all_upper_bounds])
-            assert all([len(_) == len(self) for _ in self.all_lAs])
+            assert all([len(_) == len(self) for _ in self.all_lower_bounds.values()])
+            assert all([len(_) == len(self) for _ in self.all_upper_bounds.values()])
+            assert all([len(_) == len(self) for _ in self.all_lAs.values()])
             if self.use_restart:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
                 
@@ -93,6 +97,7 @@ class DomainsList:
     def pick_out(self, batch, device='cpu'):
         assert batch > 0
         batch = min(len(self), batch)
+        self.visited += batch
 
         if torch.cuda.is_available(): 
             torch.cuda.synchronize()
@@ -120,11 +125,13 @@ class DomainsList:
             new_sat_solvers = None
         else: 
             # hidden spliting 
-            new_lAs = [lA.pop(batch).to(device=device, non_blocking=True) for lA in self.all_lAs]
-            new_lower_bounds = [lb.pop(batch).to(device=device, non_blocking=True) for lb in self.all_lower_bounds]
-            new_upper_bounds = [ub.pop(batch).to(device=device, non_blocking=True) for ub in self.all_upper_bounds]
+            new_lAs = {k: lA.pop(batch).to(device=device, non_blocking=True) for (k, lA) in self.all_lAs.items()}
+            new_lower_bounds = {k: lb.pop(batch).to(device=device, non_blocking=True) for (k, lb) in self.all_lower_bounds.items()}
+            new_upper_bounds = {k: ub.pop(batch).to(device=device, non_blocking=True) for (k, ub) in self.all_upper_bounds.items()}
+            
+            # pop batch
             new_betas = self.all_betas[-batch:]
-            new_histories = copy.deepcopy(self.all_histories[-batch:])
+            new_histories = self.all_histories[-batch:]
             # remove batch
             self.all_betas = self.all_betas[:-batch]
             self.all_histories = self.all_histories[:-batch]
@@ -142,7 +149,11 @@ class DomainsList:
                 device=device,
             )
             
-            assert len(new_betas) == len(new_histories) == len(new_lower_bounds[0]) == len(new_upper_bounds[0]) == len(new_lAs[0]) == batch 
+            assert len(new_betas) == len(new_histories) == \
+                   len(new_input_lowers) == len(new_input_lowers) == \
+                   len(new_lower_bounds[list(new_lower_bounds.keys())[0]]) == \
+                   len(new_upper_bounds[list(new_upper_bounds.keys())[0]]) == \
+                   len(new_lAs[list(new_lAs.keys())[0]]) == batch 
         
         self._check_consistent()
         
@@ -162,13 +173,12 @@ class DomainsList:
         })
 
 
-    def add(self, decisions, domain_params):
-        assert decisions is not None
-        batch = len(decisions)
+    def add(self, domain_params):
+        # assert decisions is not None
+        batch = len(domain_params.input_lowers)
         assert batch > 0
         
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-        self.visited += 2 * batch
         
         # hidden splitting
         if not self.input_split:
@@ -181,28 +191,26 @@ class DomainsList:
             extra_conflict_index = []
             for idx_ in remaining_index:
                 # check full assignment
-                if sum([layer_mask[idx_].sum() for layer_mask in new_masks]) == 0:
+                if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
                     # already check
                     extra_conflict_index.append(idx_)
                     continue
                                 
-                # new decision
-                idx = idx_ % batch
-                new_history = copy.deepcopy(domain_params.histories[idx])
-                new_history[decisions[idx][0]][0].append(decisions[idx][1])
-                new_history[decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
+                # # new decision
+                # idx = idx_ % batch
+                # new_history = copy.deepcopy(domain_params.histories[idx])
+                # new_history[decisions[idx][0]][0].append(decisions[idx][1])
+                # new_history[decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
 
-                # repetition
-                if decisions[idx][1] in domain_params.histories[idx][decisions[idx][0]][0]:
-                    print(decisions[idx], domain_params.histories[idx])
-                    raise RuntimeError('Repeated split')
+                # # repetition
+                # if decisions[idx][1] in domain_params.histories[idx][decisions[idx][0]][0]:
+                #     print(decisions[idx], domain_params.histories[idx])
+                #     raise RuntimeError('Repeated split')
                 
                 # bcp
                 if self.use_restart:
                     new_sat_solver = self.boolean_propagation(
                         domain_params=domain_params,
-                        decisions=decisions,
-                        new_history=new_history,
                         batch_idx=idx_
                     )
                     if new_sat_solver is None:
@@ -211,7 +219,7 @@ class DomainsList:
                             
                     self.all_sat_solvers.append(new_sat_solver)
 
-                self.all_histories.append(new_history)
+                self.all_histories.append(domain_params.histories[idx_])
                 self.all_betas.append(domain_params.betas[idx_])
                 
             if len(extra_conflict_index):
@@ -223,15 +231,17 @@ class DomainsList:
             # conflict clauses
             if self.use_restart:
                 self.save_conflict_clauses(
-                    decisions=decisions, 
                     domain_params=domain_params, 
                     remaining_index=remaining_index,
                 )
             
             # hidden bounds
-            [lb.append(new_lb[remaining_index]) for lb, new_lb in zip(self.all_lower_bounds, domain_params.lower_bounds)]
-            [ub.append(new_ub[remaining_index]) for ub, new_ub in zip(self.all_upper_bounds, domain_params.upper_bounds)]
-            [lA.append(new_lA[remaining_index]) for lA, new_lA in zip(self.all_lAs, domain_params.lAs)]
+            [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
+            [v.append(domain_params.upper_bounds[k][remaining_index]) for k, v in self.all_upper_bounds.items()]
+            [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()]
+            # [lb.append(new_lb[remaining_index]) for lb, new_lb in zip(self.all_lower_bounds, domain_params.lower_bounds)]
+            # [ub.append(new_ub[remaining_index]) for ub, new_ub in zip(self.all_upper_bounds, domain_params.upper_bounds)]
+            # [lA.append(new_lA[remaining_index]) for lA, new_lA in zip(self.all_lAs, domain_params.lAs)]
         
         # input bounds
         self.all_input_lowers.append(domain_params.input_lowers[remaining_index])
@@ -312,7 +322,6 @@ class DomainsList:
         #     print('before:', [_.size() for _ in current_lower_bounds])
             
         # exit()
-        # for idx, (new_lower_bound, orig_lower_bound) in enumerate(zip(domain_params.lower_bounds, self.all_lower_bounds[:-1])):
         for idx in range(len(domain_params.lower_bounds)):
             # print(idx, domain_params.lower_bounds[idx].shape, self.all_lower_bounds[idx].size())
             # continue

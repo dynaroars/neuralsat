@@ -34,7 +34,9 @@ def new_slopes(slopes, keep_name):
     return new_slope
 
 
-def _transfer(self, tensor, device=None, half=False):
+def _transfer(tensor, device=None, half=False):
+    assert device in ['cpu', 'cuda']
+    assert isinstance(half, bool)
     if half:
         tensor = tensor.half()
     if device:
@@ -42,17 +44,20 @@ def _transfer(self, tensor, device=None, half=False):
     return tensor
 
 
-def get_slope(self, model):
-    if len(model.perturbed_optimizable_activations) == 0:
+def get_slope(self, half=True, device='cpu'):
+    if len(self.net.perturbed_optimizable_activations) == 0:
         return {}
-    slopes = {m.name: {node_name: alpha for (node_name, alpha) in m.alpha.items()}
-                for m in model.perturbed_optimizable_activations} 
+    slopes = {
+        m.name: {
+            node_name: _transfer(alpha, device=device, half=half) for (node_name, alpha) in m.alpha.items()
+        } for m in self.net.perturbed_optimizable_activations
+    } 
     return slopes
 
 
-def set_slope(self, model, slope, set_all=False):
-    assert isinstance(slope, defaultdict)
-    for m in model.perturbed_optimizable_activations:
+def set_slope(self, slope, set_all=False):
+    assert isinstance(slope, defaultdict), print(type(slope))
+    for m in self.net.perturbed_optimizable_activations:
         for node_name in list(m.alpha.keys()):
             if node_name in slope[m.name]:
                 if (node_name == self.net.final_name) or set_all:
@@ -60,92 +65,58 @@ def set_slope(self, model, slope, set_all=False):
                     if slope_len > 0:
                         m.alpha[node_name] = slope[m.name][node_name]
                         m.alpha[node_name] = m.alpha[node_name].repeat(1, 1, 2, *([1] * (m.alpha[node_name].ndim - 3))).detach().requires_grad_() # 2 * batch
+                        # print('setting alpha:', m.name, node_name, m.alpha[node_name].shape, m.alpha[node_name].dtype, m.alpha[node_name].sum().item())
             else:
                 # do not use alphas
                 del m.alpha[node_name]
 
 
-def reset_beta(self, batch, max_splits_per_layer, betas=None):
-    for mi, m in enumerate(self.net.perturbed_optimizable_activations):
-        if isinstance(m, BoundRelu):
-            m.sparse_beta = torch.zeros(size=(batch, max_splits_per_layer[mi]), dtype=torch.get_default_dtype(), device='cpu', requires_grad=False)
-            m.sparse_beta_loc = torch.zeros(size=(batch, max_splits_per_layer[mi]), dtype=torch.int64, device='cpu', requires_grad=False)
-            m.sparse_beta_sign = torch.zeros(size=(batch, max_splits_per_layer[mi]), dtype=torch.get_default_dtype(), device='cpu', requires_grad=False)
-            for bi in range(batch):
-                if betas is not None and betas[bi] is not None:
-                    # [batch, relu layers, betas]
-                    valid_betas = len(betas[bi][mi])
-                    m.sparse_beta[bi, :valid_betas] = betas[bi][mi]
-            m.sparse_beta = m.sparse_beta.repeat(2, 1).detach().to(device=self.net.device, non_blocking=True).requires_grad_()
-
-
-def get_hidden_bounds(self, model, lb):
-    ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
-    lower_bounds = [layer.inputs[0].lower.detach() for layer in model.perturbed_optimizable_activations]
-    upper_bounds = [layer.inputs[0].upper.detach() for layer in model.perturbed_optimizable_activations]
-    # print([_.shape for _ in lower_bounds])
-    # model.get_split_nodes(input_split=False)
-    # print([_.name for _ in model.layers_requiring_bounds])
-    # print([_.name for _ in model.split_nodes])
+def get_hidden_bounds(self, output_lbs, device='cpu'):
+    lower_bounds, upper_bounds = {}, {}
+    output_ubs = output_lbs + torch.inf
     
-    lower_bounds.append(lb.flatten(1).detach())
-    upper_bounds.append(ub.flatten(1).detach())
-    self.pre_relu_indices = [i for (i, layer) in enumerate(model.perturbed_optimizable_activations) if isinstance(layer, BoundRelu)]
-    self.name_dict = {i: layer.inputs[0].name for (i, layer) in enumerate(model.perturbed_optimizable_activations)}
+    # get hidden bounds
+    for layer in self.net.layers_requiring_bounds:
+        lower_bounds[layer.name] = _transfer(layer.lower.detach(), device=device)
+        upper_bounds[layer.name] = _transfer(layer.upper.detach(), device=device)
+    
+    # add output bounds
+    lower_bounds[self.net.final_name] = _transfer(output_lbs.flatten(1).detach(), device=device)
+    upper_bounds[self.net.final_name] = _transfer(output_ubs.flatten(1).detach(), device=device)
+    
     return lower_bounds, upper_bounds
 
 
-def get_batch_hidden_bounds(self, model, lb):
-    batch = len(lb)
-    ub = (torch.zeros_like(lb) + np.inf).to(lb.device)
-    lower_bounds = [layer.inputs[0].lower for layer in model.perturbed_optimizable_activations]
-    upper_bounds = [layer.inputs[0].upper for layer in model.perturbed_optimizable_activations]
-    lower_bounds.append(lb.view(batch, -1).detach())
-    upper_bounds.append(ub.view(batch, -1).detach())
-    return lower_bounds, upper_bounds
+def get_lAs(self, size=None, device='cpu'):
+    lAs = {}
+    for node in self.net.get_splittable_activations():
+        lA = getattr(node, 'lA', None)
+        if lA is None:
+            continue
+        preserve_mask = self.net.last_update_preserve_mask
+        if preserve_mask is not None:
+            assert size is not None
+            new_lA = torch.zeros([size, lA.shape[0]] + list(lA.shape[2:]), dtype=lA.dtype, device=lA.device)
+            new_lA[preserve_mask] = lA.transpose(0, 1)
+            lA = new_lA
+        else:
+            lA = lA.transpose(0, 1)
+        lAs[node.name] = _transfer(lA, device=device)
+    return lAs
 
 
-def get_lAs(self, model):
-    if len(model.perturbed_optimizable_activations) == 0:
-        return [None]
-    lA = [layer.lA.transpose(0, 1) if (hasattr(layer, 'lA') and layer.lA is not None) else None 
-            for layer in model.perturbed_optimizable_activations]
-    return lA
+def get_beta(self, num_splits, device='cpu'):
+    ret = []
+    for i in range(len(num_splits)):
+        betas = {k: _transfer(self.net[k].sparse_betas[0].val[i, :num_splits[i][k]], device) for k in num_splits[i]}
+        ret.append(betas)
+    return ret
 
 
-def get_batch_lAs(self, model, size=None, to_cpu=False):
-    if len(model.perturbed_optimizable_activations) == 0:
-        return [None]
-
-    lA = []
-    preserve_mask = self.net.last_update_preserve_mask
-    if preserve_mask is not None:
-        for this_relu in model.perturbed_optimizable_activations:
-            new_lA = torch.zeros([size, this_relu.lA.shape[0]] + list(this_relu.lA.shape[2:]), dtype=this_relu.lA.dtype, device=this_relu.lA.device)
-            new_lA[preserve_mask] = this_relu.lA.transpose(0, 1)
-            lA.append(new_lA.to(device='cpu', non_blocking=False) if to_cpu else new_lA)
-    else:
-        for this_relu in model.perturbed_optimizable_activations:
-            lA.append(this_relu.lA.transpose(0, 1).to(device='cpu', non_blocking=False) if to_cpu else this_relu.lA.squeeze(0))
-    return lA
-
-
-def get_beta(self, model, num_splits):
-    batch = num_splits.size(0)
-    retb = [[] for _ in range(batch * 2)]
-    for mi, m in enumerate(model.perturbed_optimizable_activations):
-        if hasattr(m, 'sparse_beta'): # discard padding beta.
-            for i in range(batch):
-                retb[i].append(m.sparse_beta[i, :num_splits[i, mi]])
-                retb[i + batch].append(m.sparse_beta[i + batch, :num_splits[i, mi]])
-    return retb
-
-
-def reset_beta2(self, batch, max_splits_per_layer, betas=None, bias=False):
+def reset_beta(self, batch, max_splits_per_layer, betas=None, bias=False):
     for layer_name in max_splits_per_layer:
         layer = self.net[layer_name]
         start_nodes = []
-        # self.split_activations = self..split_activations
         for act in self.net.split_activations[layer_name]:
             start_nodes.extend(list(act[0].alpha.keys()))
         shape = (batch, max_splits_per_layer[layer_name])
@@ -153,126 +124,122 @@ def reset_beta2(self, batch, max_splits_per_layer, betas=None, bias=False):
             betas_ = [(betas[bi][layer_name] if betas[bi] is not None else None) for bi in range(batch)]
         else:
             betas_ = [None for _ in range(batch)]
+        # set betas
         self.net.reset_beta(layer, shape, betas_, bias=bias, start_nodes=list(set(start_nodes)))
 
 
-def set_beta(self, model, betas, histories, decision, use_beta=True):
-    if use_beta:
-        batch = len(decision)
-        # count split nodes 
-        num_splits = torch.zeros((batch, len(model.relus)), dtype=torch.int64, device='cpu') # (batch, num of layers)
-        for bi in range(batch):
-            d = decision[bi][0]
-            for mi, layer_splits in enumerate(histories[bi]):
-                neuron_indices = layer_splits[0]
-                num_splits[bi, mi] = len(neuron_indices) + int(d == mi)
-                
-        # print(histories)
-        splits_per_example = []
-        max_splits_per_layer = {}
-        for bi in range(batch):
-            splits_per_example.append({})
-            for mi, layer_splits in enumerate(histories[bi]):
-                # First element of layer_splits is a list of split neuron IDs.
-                k = self.name_dict[mi]
-                splits_per_example[bi][k] = len(layer_splits[0])
-                max_splits_per_layer[k] = max(max_splits_per_layer.get(k, 0), splits_per_example[bi][k])
-        # print(max_splits_per_layer)
-        # exit()
-        # update beta
-        if 1:
-            self.reset_beta2(batch, max_splits_per_layer, betas=betas, bias=False)
-            
+def _copy_history(history):
+    assert history is not None
+    ret = {}
+    for k, v in history.items():
+        if isinstance(v[0], torch.Tensor):
+            ret[k] = v
+        elif isinstance(v[0], list):
+            ret[k] = tuple(v[i].copy() for i in range(len(v)))
         else:
-            self.reset_beta(
-                batch=batch, 
-                betas=betas, 
-                max_splits_per_layer=num_splits.max(dim=0)[0],
-            )
+            ret[k] = tuple(copy.deepcopy(v[i]) for i in range(len(v)))
+    return ret
 
-        if 1:
-            list_dict_histories = []
-            for h in histories:
-                new_h = [(h_[0], h_[1], [0.]*len(h_[0])) for h_ in h]
-                list_dict_histories.append(dict(zip([self.name_dict[i] for i in range(len(h))], new_h)))
-                print(list_dict_histories[-1])
-            # print(list_dict_histories)
-            # print(model.split_nodes)
-            # exit()
-            for node in self.net.split_nodes:
-                if node.sparse_betas is None:
-                    continue
-                sparse_betas = node.sparse_betas if isinstance(node.sparse_betas, list) else node.sparse_betas.values()
-                for sparse_beta in sparse_betas:
-                    sparse_beta.apply_splits(list_dict_histories, node.name)
-        else:
-            # update new decisions
-            # positive splits in 1st half
-            for bi in range(batch):
-                d, idx = decision[bi][0], decision[bi][1]
-                for mi, (split_locs, split_coeffs) in enumerate(histories[bi]):
-                    split_len = len(split_locs)
-                    model.relus[mi].sparse_beta_sign[bi, :split_len] = torch.as_tensor(split_coeffs, device='cpu', dtype=torch.get_default_dtype())
-                    model.relus[mi].sparse_beta_loc[bi, :split_len] = torch.as_tensor(split_locs, device='cpu', dtype=torch.int64)
-                    if mi == d:
-                        model.relus[mi].sparse_beta_sign[bi, split_len] = 1.0
-                        model.relus[mi].sparse_beta_loc[bi, split_len] = idx
-                        
-            # 2 * batch
-            for m in model.relus:
-                m.sparse_beta_loc = m.sparse_beta_loc.repeat(2, 1).detach()
-                m.sparse_beta_loc = m.sparse_beta_loc.to(device=model.device, non_blocking=True)
-                m.sparse_beta_sign = m.sparse_beta_sign.repeat(2, 1).detach()
-            
-            # negative splits in 2nd half
-            for bi in range(batch):
-                d = decision[bi][0]
-                split_len = len(histories[bi][d][0])
-                model.relus[d].sparse_beta_sign[bi + batch, split_len] = -1.0
+def _append_tensor(tensor, value, dtype=torch.float32):
+    if not isinstance(tensor, torch.Tensor):
+        tensor = torch.tensor(tensor, dtype=dtype)
+    size = len(tensor)
+    res = torch.empty(size=(size+1,), dtype=dtype)
+    res[:size] = tensor
+    res[-1] = value
+    return res
 
-            for m in model.relus:
-                m.sparse_beta_sign = m.sparse_beta_sign.to(device=model.device, non_blocking=True)
-    else:
-        num_splits = None
-        for m in model.relus:
+def update_histories(self, histories, decisions):
+    double_histories = []
+    batch = len(decisions)
+
+    # double the histories
+    for _ in range(2):
+        for h in histories:
+            double_histories.append(_copy_history(h))
+    
+    # add new decisions to histories
+    for i, h in enumerate(double_histories):
+        bi = i % batch
+        l_id, n_id = decisions[bi]
+        l_name = self.net.split_nodes[l_id].name
+        # FIXME: check repeated decisions
+        loc = _append_tensor(h[l_name][0], n_id, dtype=torch.long)
+        sign = _append_tensor(h[l_name][1], +1 if i < batch else -1)
+        beta = _append_tensor(h[l_name][2], 0.0) # FIXME: 0.0 is for ReLU only
+        h[l_name] = (loc, sign, beta)
+        
+    return double_histories
+    
+
+def set_beta(self, betas, histories, decision, use_beta=True):
+    if not use_beta:
+        for m in self.net.splittable_activations:
             m.beta = None
+        return None
+
+    batch = len(histories)
+    splits_per_example = []
+    max_splits_per_layer = {}
+    
+    for bi in range(batch):
+        splits_per_example.append({})
+        for k, v in histories[bi].items():
+            splits_per_example[bi][k] = len(v[0])
+            max_splits_per_layer[k] = max(max_splits_per_layer.get(k, 0), splits_per_example[bi][k])
+
+    # set old betas
+    self.reset_beta(
+        betas=betas,
+        max_splits_per_layer=max_splits_per_layer, 
+        batch=batch, 
+        bias=False,
+    )
+
+    # set new betas
+    for node in self.net.split_nodes:
+        if node.sparse_betas is None:
+            continue
+        sparse_betas = node.sparse_betas if isinstance(node.sparse_betas, list) else node.sparse_betas.values()
+        for sparse_beta in sparse_betas:
+            sparse_beta.apply_splits(histories, node.name)
             
-    return num_splits
+    return splits_per_example
             
             
+@torch.no_grad()
 def hidden_split_idx(self, lower_bounds, upper_bounds, decision):
     batch = len(decision)
-    with torch.no_grad():
-        # split at 0 for ReLU
-        splitting_indices_batch = [[] for _ in range(len(lower_bounds) - 1)]
-        splitting_indices_neuron = [[] for _ in range(len(lower_bounds) - 1)]
-        for i in range(batch):
-            d, idx = decision[i][0], decision[i][1]
-            splitting_indices_batch[d].append(i)
-            splitting_indices_neuron[d].append(idx)
-        splitting_indices_batch = [torch.as_tensor(t).to(device=self.device, non_blocking=True) for t in splitting_indices_batch]
-        splitting_indices_neuron = [torch.as_tensor(t).to(device=self.device, non_blocking=True) for t in splitting_indices_neuron]
+    splitting_indices_batch = {k: [] for k in lower_bounds}
+    splitting_indices_neuron = {k: [] for k in lower_bounds}
+    splitting_points = {k: [] for k in lower_bounds}
 
-        # 2 * batch
-        tmp_ubs = [torch.cat([i[:batch], i[:batch]], dim=0) for i in upper_bounds[:-1]]
-        tmp_lbs = [torch.cat([i[:batch], i[:batch]], dim=0) for i in lower_bounds[:-1]]
+    for i in range(batch):
+        l_id, n_id = decision[i][0], decision[i][1]
+        node = self.net.split_nodes[l_id]
+        splitting_indices_batch[node.name].append(i)
+        splitting_indices_neuron[node.name].append(n_id)
+        splitting_points[node.name].append(0.0) # FIXME: split at 0 for ReLU
+    
+    # convert to tensor
+    splitting_indices_batch = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_indices_batch.items()}
+    splitting_indices_neuron = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_indices_neuron.items()}
+    splitting_points = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_points.items()}
+    
+    # 2 * batch
+    double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()}
+    double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()}
 
-        new_intermediate_layer_bounds = {}
-        for d in range(len(tmp_lbs)):
-            if len(splitting_indices_batch[d]):
-                # set active in 1st half (lower = 0)
-                tmp_lbs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d], splitting_indices_neuron[d]] = 0.0
-                # set inactive in 2nd half (upper = 0)
-                tmp_ubs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d] + batch, splitting_indices_neuron[d]] = 0.0
-                
-                # non-relu activation
-                # l_ = tmp_lbs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d], splitting_indices_neuron[d]]
-                # u_ = tmp_ubs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d], splitting_indices_neuron[d]]
-                # splitting_point = (u_ + l_) / 2
-                # tmp_lbs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d], splitting_indices_neuron[d]] = splitting_point
-                # tmp_ubs[d][:2 * batch].view(2 * batch, -1)[splitting_indices_batch[d] + batch, splitting_indices_neuron[d]] = splitting_point
-                
-            new_intermediate_layer_bounds[self.name_dict[d]] = [tmp_lbs[d], tmp_ubs[d]]
+    # construct new hidden bounds
+    new_intermediate_layer_bounds = {}
+    for key in double_lower_bounds:
+        assert len(double_lower_bounds[key]) == len(double_upper_bounds[key]) == 2 * batch
+        if len(splitting_indices_batch[key]):
+            # set 1st half (set lower)
+            double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
+            # set 2nd half (set upper)
+            double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
+        new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
     return new_intermediate_layer_bounds
 
@@ -303,37 +270,6 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
     new_input_uppers = input_uppers_cp.reshape(-1, *self.input_shape[1:])
 
     return new_input_lowers, new_input_uppers
-
-
-def transfer_to_cpu(self, net, non_blocking=True, slope_only=False):
-    class TMP:
-        pass
-    
-    cpu_net = TMP()
-    cpu_net.perturbed_optimizable_activations = [None] * len (net.perturbed_optimizable_activations)
-    for i in range(len(cpu_net.perturbed_optimizable_activations)):
-        cpu_net.perturbed_optimizable_activations[i] = lambda : None
-        cpu_net.perturbed_optimizable_activations[i].inputs = [lambda : None]
-        cpu_net.perturbed_optimizable_activations[i].name = net.perturbed_optimizable_activations[i].name
-
-    for cpu_layer, layer in zip(cpu_net.perturbed_optimizable_activations, net.perturbed_optimizable_activations):
-        # alphas
-        cpu_layer.alpha = OrderedDict()
-        for node_name, alpha in layer.alpha.items():
-            cpu_layer.alpha[node_name] = alpha.half().to(device='cpu', non_blocking=non_blocking)
-        # skip others
-        if slope_only:
-            continue
-        # hidden bounds
-        cpu_layer.inputs[0].lower = layer.inputs[0].lower.to(device='cpu', non_blocking=non_blocking)
-        cpu_layer.inputs[0].upper = layer.inputs[0].upper.to(device='cpu', non_blocking=non_blocking)
-        # lAs
-        cpu_layer.lA = layer.lA.to(device='cpu', non_blocking=non_blocking)
-        # betas
-        if hasattr(layer, 'sparse_beta') and layer.sparse_beta is not None:
-            cpu_layer.sparse_beta = layer.sparse_beta.to(device='cpu', non_blocking=non_blocking)
-
-    return cpu_net
 
     
 def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):

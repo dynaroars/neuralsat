@@ -145,7 +145,7 @@ class Verifier:
         
         # check verified
         assert len(ret.output_lbs) == len(objective.cs)
-        if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs).all():
+        if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs.to(self.device)).all():
             return []
         
         # keep last layer's alphas for backward propagation
@@ -154,6 +154,7 @@ class Verifier:
         
         # remaining domains
         return DomainsList(
+            net=self.abstractor.net,
             output_lbs=ret.output_lbs,
             input_lowers=ret.input_lowers,
             input_uppers=ret.input_uppers,
@@ -232,15 +233,15 @@ class Verifier:
         
         # step 6: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
-        
+
         # step 7: pruning complete assignments
         self.adv = self._check_full_assignment(abstraction_ret)
         if self.adv is not None:
             return
-        
         # step 8: pruning unverified branches
-        self.domains_list.add(decisions, abstraction_ret)
+        self.domains_list.add(abstraction_ret)
         # TODO: check full assignment after bcp
+        # exit()
 
         # statistics
         self.iteration += 1

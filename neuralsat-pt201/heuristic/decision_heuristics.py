@@ -44,16 +44,16 @@ class DecisionHeuristic:
             pass
         
         topk_decisions = []
-        batch = len(domain_params.masks[0])
+        batch = len(domain_params.input_lowers)
         topk_output_lbs = torch.empty(
             size=(topk, batch * 2), 
-            device=domain_params.lower_bounds[0].device, 
+            device=domain_params.input_lowers.device, 
             requires_grad=False,
         )
         
         # hidden
-        double_lower_bounds = [torch.cat([i, i]) for i in domain_params.lower_bounds]
-        double_upper_bounds = [torch.cat([i, i]) for i in domain_params.upper_bounds]
+        double_lower_bounds = {k: torch.cat([v, v]) for k, v in domain_params.lower_bounds.items()}
+        double_upper_bounds = {k: torch.cat([v, v]) for k, v in domain_params.upper_bounds.items()}
         
         # slope
         double_slopes = defaultdict(dict)
@@ -120,9 +120,9 @@ class DecisionHeuristic:
     
     # hidden branching
     def filtered_smart_branching(self, abstractor, domain_params):
-        batch = len(domain_params.masks[0])
-        topk = min(self.decision_topk, int(sum([i.sum() for i in domain_params.masks]).item()))
-        
+        batch = len(domain_params.input_lowers)
+        topk = min(self.decision_topk, int(sum([i.sum() for (_, i) in domain_params.masks.items()]).item()))
+
         # babsr scores
         scores, backup_scores = _compute_babsr_scores(
             abstractor=abstractor, 
@@ -161,18 +161,18 @@ class DecisionHeuristic:
             best_output_lbs = best.values.cpu().numpy()[0]
             best_output_lbs_indices = best.indices.cpu().numpy()[0]
             
-        # find corresponding decisions
+        # align decisions
         all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
         final_decision = [[] for b in range(batch)]
         for b in range(batch):
-            mask_item = [m[b] for m in domain_params.masks]
+            mask_item = [domain_params.masks[k.name][b] for k in abstractor.net.split_nodes]
             # valid scores
             if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
                 decision = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
                 if mask_item[decision[0]][decision[1]] != 0:
                     final_decision[b].append(decision)
                     mask_item[decision[0]][decision[1]] = 0
-            # if invalid scores
+            # invalid scores
             if len(final_decision[b]) == 0: 
                 # use random decisions 
                 for layer in np.random.choice(len(abstractor.pre_relu_indices), len(abstractor.pre_relu_indices), replace=False):
