@@ -187,6 +187,7 @@ class Verifier:
         max_visited_branches = Settings.max_input_visited_branches if self.input_split else Settings.max_hidden_visited_branches
         
         # main loop
+        start_time = time.time()
         while len(self.domains_list) > 0:
             self._parallel_dpll()
             
@@ -206,6 +207,7 @@ class Verifier:
             if psutil.virtual_memory()[2] > 70.0:
                 print('OOM')
                 return ReturnStatus.UNKNOWN
+        logger.debug(f'Main loop: {time.time() - start_time}')
         
         return ReturnStatus.UNSAT
             

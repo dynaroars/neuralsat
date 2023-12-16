@@ -324,7 +324,7 @@ class NetworkAbstractor:
             # lAs
             double_lAs = self.get_lAs(size=len(double_input_lowers))
             # outputs
-            double_output_lbs = double_output_lbs.to(device='cpu')
+            double_output_lbs = double_output_lbs.detach().to(device='cpu')
             # slopes
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
             # betas
@@ -338,9 +338,9 @@ class NetworkAbstractor:
         assert len(double_histories) == len(double_betas) == 2 * batch
             
         return AbstractResults(**{
+            'output_lbs': double_lower_bounds[self.net.final_name], 
             'input_lowers': double_input_lowers, 
             'input_uppers': double_input_uppers,
-            'output_lbs': double_output_lbs, 
             'lAs': double_lAs, 
             'lower_bounds': double_lower_bounds, 
             'upper_bounds': double_upper_bounds, 
@@ -375,7 +375,7 @@ class NetworkAbstractor:
         
         # set slope again since batch might change
         if len(domain_params.slopes) > 0: 
-            self.set_slope(self.net, domain_params.slopes, set_all=True)
+            self.set_slope(slope=domain_params.slopes, set_all=True)
         
         # set optimization parameters
         self.net.set_bound_opts(get_input_opt_params(stop_criterion_batch_any(double_rhs)))

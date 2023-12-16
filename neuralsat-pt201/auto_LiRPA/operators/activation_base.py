@@ -104,7 +104,8 @@ class BoundActivation(Bound):
         return [(lA, uA)], lbias, ubias
 
     @staticmethod
-    # @torch.jit.script
+    @torch.jit.script
+    # @torch.compile
     def bound_forward_w(
             relax_lw: Tensor, relax_uw: Tensor, x_lw: Tensor, x_uw: Tensor, dim: int):
         lw = (relax_lw.unsqueeze(dim).clamp(min=0) * x_lw +
@@ -114,7 +115,8 @@ class BoundActivation(Bound):
         return lw, uw
 
     @staticmethod
-    # @torch.jit.script
+    @torch.jit.script
+    # @torch.compile
     def bound_forward_b(
             relax_lw: Tensor, relax_uw: Tensor, relax_lb: Tensor,
             relax_ub: Tensor, x_lb: Tensor, x_ub: Tensor):

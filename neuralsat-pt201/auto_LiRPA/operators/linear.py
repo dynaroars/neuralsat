@@ -600,7 +600,7 @@ class BoundLinear(BoundOptimizableActivation):
                 "Unsupported perturbation combination: data={}, weight={}".format(input_norm, weight_norm))
 
     @staticmethod
-    # @torch.jit.script
+    @torch.jit.script
     def bound_forward_mul(x_lw: Tensor, x_lb: Tensor, x_uw: Tensor, x_ub: Tensor, w: Tensor):
         w_pos, w_neg = w.clamp(min=0), w.clamp(max=0)
         lw = x_lw.matmul(w_pos) + x_uw.matmul(w_neg)

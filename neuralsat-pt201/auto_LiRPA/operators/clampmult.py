@@ -12,7 +12,7 @@ torch._C._jit_set_profiling_mode(False)
 class ClampedMultiplication(torch.autograd.Function):
     @staticmethod
     @torch.no_grad()
-    # @torch.jit.script
+    @torch.jit.script
     def clamp_mutiply_forward(A: Tensor, d_pos: Tensor, d_neg: Tensor,
             b_pos: Optional[Tensor], b_neg: Optional[Tensor], patches_mode: bool,
             reduce_bias: bool = False
@@ -43,7 +43,7 @@ class ClampedMultiplication(torch.autograd.Function):
 
     @staticmethod
     @torch.no_grad()
-    # @torch.jit.script
+    @torch.jit.script
     def clamp_mutiply_backward(A: Tensor, d_pos: Tensor, d_neg: Tensor,
             b_pos: Optional[Tensor], b_neg: Optional[Tensor],
             grad_output_A: Tensor, grad_output_bias: Optional[Tensor],
@@ -109,7 +109,7 @@ class ClampedMultiplication(torch.autograd.Function):
             A, d_pos, d_neg, b_pos, b_neg,
             grad_output_A, grad_output_bias)
 
-
+# @torch.compile
 def multiply_by_A_signs(A, d_pos, d_neg, b_pos, b_neg, contiguous='auto',
                         reduce_bias=True):
     if isinstance(A, Tensor):
