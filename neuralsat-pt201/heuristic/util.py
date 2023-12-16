@@ -1,4 +1,3 @@
-from torch.nn import functional as F
 import torch
 import time
 import copy
@@ -75,7 +74,7 @@ def _histories_to_clauses(histories, var_mapping):
     
 def _compute_ratio(lower_bound, upper_bound):
     lower_temp = lower_bound.clamp(max=0)
-    upper_temp = F.relu(upper_bound)
+    upper_temp = upper_bound.clamp(min=0)
     slope_ratio = upper_temp / (upper_temp - lower_temp)
     intercept = -1 * lower_temp * slope_ratio
     return slope_ratio, intercept

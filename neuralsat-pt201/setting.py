@@ -34,12 +34,6 @@ class GlobalSettings:
         
         self.attack_interval = 10
         
-        # optimization
-        self.use_hidden_bounds_optimization = 0
-        self.hidden_bounds_optimization_interval = 1
-        # TODO: haven't worked yet, disable for now
-        # assert (not self.use_hidden_bounds_optimization)
-        
         # threshold for automatically switching between input and hidden splitting
         self.safety_property_threshold = 0.5
         

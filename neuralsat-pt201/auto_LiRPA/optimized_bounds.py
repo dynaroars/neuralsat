@@ -642,6 +642,8 @@ def _get_optimized_bounds(
                 opt.step(lr_scale=[loss_weight, loss_weight])
             else:
                 opt.step()
+                
+            scheduler.step()
 
         if beta:
             for b in betas:
@@ -651,15 +653,13 @@ def _get_optimized_bounds(
                 coeffs[dmi].data = (
                     dense_coeffs_mask[dmi].float() * coeffs[dmi].data)
 
-
         if alpha:
             for m in optimizable_activations:
                 m.clip_alpha()
+                
         if apply_output_constraints_to is not None and len(apply_output_constraints_to) > 0:
             for m in self.nodes():
                 m.clip_gammas()
-
-        scheduler.step()
 
         if pruner:
             pruner.next_iter()

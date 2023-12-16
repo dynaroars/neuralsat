@@ -151,7 +151,8 @@ def get_output_template(out):
 def parse_module(module, inputs, param_exclude=".*AuxLogits.*", param_include=None):
     params = _get_jit_params(module, param_exclude=param_exclude, param_include=param_include)
     trace, out = torch.jit._get_trace_graph(module, inputs)
-    _set_opset_version(12)
+    
+    # _set_opset_version(12) # FIXME: attrs might differ 
 
     # Assuming that the first node in the graph is the primary input node.
     # It must have a batch dimension.

@@ -10,8 +10,8 @@ def get_branching_opt_params():
     
 def get_initialize_opt_params(share_slopes, stop_criterion_func):
     return {'optimize_bound_args': {
-                'enable_beta_crown': False, 
                 'enable_alpha_crown': True,
+                'enable_beta_crown': False, 
                 'use_shared_alpha': share_slopes, 
                 'early_stop': False,
                 'init_alpha': False,
@@ -24,10 +24,10 @@ def get_initialize_opt_params(share_slopes, stop_criterion_func):
             }}
     
     
-def get_beta_opt_params(use_beta, stop_criterion_func):
+def get_beta_opt_params(stop_criterion_func):
     return {'optimize_bound_args': {
-                'enable_beta_crown': use_beta, 
                 'enable_alpha_crown': True,
+                'enable_beta_crown': True, 
                 'fix_intermediate_layer_bounds': True, 
                 'iteration': 20,
                 'lr_alpha': 0.1, 

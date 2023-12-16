@@ -1,10 +1,9 @@
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 import gurobipy as grb
-import numpy as np
 import torch
+import math
 import copy
 
-from auto_LiRPA.bound_ops import BoundRelu, BoundOptimizableActivation
 from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor
 
@@ -14,16 +13,21 @@ from util.misc.logger import logger
 
 
 def update_refined_beta(self, betas, batch):
-    if betas is not None:
-        if not len(betas['sparse_beta']):
-            return
-        self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
-        assert len(self.net.relus) == len(betas['sparse_beta'])
-        for relu_idx, relu_layer in enumerate(self.net.relus):
-            relu_layer.sparse_beta = betas['sparse_beta'][relu_idx].detach().clone().repeat(batch, 1).requires_grad_() # need detach()
-            relu_layer.sparse_beta_loc = betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
-            relu_layer.sparse_beta_sign = betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
+    pass
+    # if betas is not None:
+    #     if not len(betas['sparse_beta']):
+    #         return
+    #     self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
+    #     assert len(self.net.relus) == len(betas['sparse_beta'])
+    #     for relu_idx, relu_layer in enumerate(self.net.relus):
+    #         relu_layer.sparse_beta = betas['sparse_beta'][relu_idx].detach().clone().repeat(batch, 1).requires_grad_() # need detach()
+    #         relu_layer.sparse_beta_loc = betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
+    #         relu_layer.sparse_beta_sign = betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
     
+def new_input(self, x_L, x_U):
+    assert torch.all(x_L <= x_U)
+    return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+
 
 def new_slopes(slopes, keep_name):
     new_slope = {}
@@ -34,9 +38,8 @@ def new_slopes(slopes, keep_name):
     return new_slope
 
 
-def _transfer(tensor, device=None, half=False):
-    assert device in ['cpu', 'cuda']
-    assert isinstance(half, bool)
+def _to_device(tensor, device=None, half=False):
+    assert device in ['cpu', 'cuda'] and isinstance(half, bool)
     if half:
         tensor = tensor.half()
     if device:
@@ -49,23 +52,22 @@ def get_slope(self, half=True, device='cpu'):
         return {}
     slopes = {
         m.name: {
-            node_name: _transfer(alpha, device=device, half=half) for (node_name, alpha) in m.alpha.items()
+            node_name: _to_device(alpha, device=device, half=half) for (node_name, alpha) in m.alpha.items()
         } for m in self.net.perturbed_optimizable_activations
     } 
     return slopes
 
 
-def set_slope(self, slope, set_all=False):
+def set_slope(self, slope):
     assert isinstance(slope, defaultdict), print(type(slope))
     for m in self.net.perturbed_optimizable_activations:
         for node_name in list(m.alpha.keys()):
             if node_name in slope[m.name]:
-                if (node_name == self.net.final_name) or set_all:
-                    slope_len = slope[m.name][node_name].size(2)
-                    if slope_len > 0:
-                        m.alpha[node_name] = slope[m.name][node_name]
-                        m.alpha[node_name] = m.alpha[node_name].repeat(1, 1, 2, *([1] * (m.alpha[node_name].ndim - 3))).detach().requires_grad_() # 2 * batch
-                        # print('setting alpha:', m.name, node_name, m.alpha[node_name].shape, m.alpha[node_name].dtype, m.alpha[node_name].sum().item())
+                slope_len = slope[m.name][node_name].size(2)
+                if slope_len > 0:
+                    m.alpha[node_name] = slope[m.name][node_name]
+                    m.alpha[node_name] = m.alpha[node_name].repeat(1, 1, 2, *([1] * (m.alpha[node_name].ndim - 3))).detach().requires_grad_() # 2 * batch
+                    # print('setting alpha:', m.name, node_name, m.alpha[node_name].shape, m.alpha[node_name].dtype, m.alpha[node_name].sum().item())
             else:
                 # do not use alphas
                 del m.alpha[node_name]
@@ -77,12 +79,12 @@ def get_hidden_bounds(self, output_lbs, device='cpu'):
     
     # get hidden bounds
     for layer in self.net.layers_requiring_bounds:
-        lower_bounds[layer.name] = _transfer(layer.lower.detach(), device=device)
-        upper_bounds[layer.name] = _transfer(layer.upper.detach(), device=device)
+        lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
+        upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
     
     # add output bounds
-    lower_bounds[self.net.final_name] = _transfer(output_lbs.flatten(1).detach(), device=device)
-    upper_bounds[self.net.final_name] = _transfer(output_ubs.flatten(1).detach(), device=device)
+    lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)
+    upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
     
     return lower_bounds, upper_bounds
 
@@ -101,14 +103,14 @@ def get_lAs(self, size=None, device='cpu'):
             lA = new_lA
         else:
             lA = lA.transpose(0, 1)
-        lAs[node.name] = _transfer(lA, device=device)
+        lAs[node.name] = _to_device(lA, device=device)
     return lAs
 
 
 def get_beta(self, num_splits, device='cpu'):
     ret = []
     for i in range(len(num_splits)):
-        betas = {k: _transfer(self.net[k].sparse_betas[0].val[i, :num_splits[i][k]], device) for k in num_splits[i]}
+        betas = {k: _to_device(self.net[k].sparse_betas[0].val[i, :num_splits[i][k]], device=device) for k in num_splits[i]}
         ret.append(betas)
     return ret
 
@@ -140,6 +142,7 @@ def _copy_history(history):
             ret[k] = tuple(copy.deepcopy(v[i]) for i in range(len(v)))
     return ret
 
+
 def _append_tensor(tensor, value, dtype=torch.float32):
     if not isinstance(tensor, torch.Tensor):
         tensor = torch.tensor(tensor, dtype=dtype)
@@ -148,6 +151,7 @@ def _append_tensor(tensor, value, dtype=torch.float32):
     res[:size] = tensor
     res[-1] = value
     return res
+
 
 def update_histories(self, histories, decisions):
     double_histories = []
@@ -172,12 +176,7 @@ def update_histories(self, histories, decisions):
     return double_histories
     
 
-def set_beta(self, betas, histories, decision, use_beta=True):
-    if not use_beta:
-        for m in self.net.splittable_activations:
-            m.beta = None
-        return None
-
+def set_beta(self, betas, histories):
     batch = len(histories)
     splits_per_example = []
     max_splits_per_layer = {}
@@ -208,14 +207,14 @@ def set_beta(self, betas, histories, decision, use_beta=True):
             
             
 @torch.no_grad()
-def hidden_split_idx(self, lower_bounds, upper_bounds, decision):
-    batch = len(decision)
+def hidden_split_idx(self, lower_bounds, upper_bounds, decisions):
+    batch = len(decisions)
     splitting_indices_batch = {k: [] for k in lower_bounds}
     splitting_indices_neuron = {k: [] for k in lower_bounds}
     splitting_points = {k: [] for k in lower_bounds}
 
     for i in range(batch):
-        l_id, n_id = decision[i][0], decision[i][1]
+        l_id, n_id = decisions[i][0], decisions[i][1]
         node = self.net.split_nodes[l_id]
         splitting_indices_batch[node.name].append(i)
         splitting_indices_neuron[node.name].append(n_id)
@@ -273,6 +272,7 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
 
     
 def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
+    raise
     assert model_type in ['lp', 'mip']
 
     if hasattr(self.net, 'model'): 
@@ -331,6 +331,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
+    raise
     logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
@@ -380,7 +381,7 @@ def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bo
             adv = None
             break
         
-        input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(np.prod(self.input_shape))]
+        input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(math.prod(self.input_shape))]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
         if check_solution(net=self.pytorch_model, adv=adv, cs=c, rhs=rhs, data_min=input_lower, data_max=input_upper):
             return True, adv
