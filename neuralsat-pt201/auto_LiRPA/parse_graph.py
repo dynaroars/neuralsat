@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.onnx.utils import _optimize_graph
-from torch.onnx.symbolic_helper import _set_opset_version
+# from torch.onnx.symbolic_helper import _set_opset_version
 from collections import OrderedDict
 from collections import namedtuple
 import re

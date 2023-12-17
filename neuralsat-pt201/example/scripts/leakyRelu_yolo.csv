@@ -1,6 +1,0 @@
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_8758_perturbed_bbox_3_delta_0.001.vnnlib
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_2932_perturbed_bbox_1_delta_0.005.vnnlib
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_10012_perturbed_bbox_0_delta_0.01.vnnlib
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_398_perturbed_bbox_1_delta_0.02.vnnlib
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_14147_perturbed_bbox_3_delta_0.05.vnnlib
-python3 main.py --net ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/onnx/yolov5nano_LRelu_640.onnx --spec ../benchmark/vnncomp23-instances/vnncomp23/leakyRelu_yolo/vnnlib/img_2932_perturbed_bbox_7_delta_0.1.vnnlib
