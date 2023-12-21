@@ -188,11 +188,14 @@ class Verifier:
         
         # main loop
         while len(self.domains_list) > 0:
-            self._parallel_dpll(objective=objective)
+            self._parallel_dpll()
             
             # check adv founded
             if self.adv is not None:
-                return ReturnStatus.SAT
+                if self._check_adv_f64(self.adv, objective):
+                    return ReturnStatus.SAT
+                logger.debug("[!] Invalid counter-example")
+                self.adv = None
             
             # check timeout
             if self._check_timeout(timeout):
@@ -210,7 +213,7 @@ class Verifier:
         return ReturnStatus.UNSAT
             
             
-    def _parallel_dpll(self, objective):        
+    def _parallel_dpll(self):        
         # step 1: MIP attack
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, 'cpu'))
@@ -226,10 +229,7 @@ class Verifier:
         # step 4: PGD attack
         is_attacked, self.adv = self._attack(domain_params=pick_ret, n_interval=Settings.attack_interval)
         if is_attacked:
-            if self._check_adv_f64(self.adv, objective):
-                return
-            logger.debug("[!] Invalid counter-example")
-            self.adv = None
+            return
 
         # step 5: branching
         decisions = self.decision(self.abstractor, pick_ret)
