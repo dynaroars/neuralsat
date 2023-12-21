@@ -144,6 +144,7 @@ class DomainsList:
             
             assert len(new_betas) == len(new_histories) == len(new_lower_bounds[0]) == len(new_upper_bounds[0]) == len(new_lAs[0]) == batch 
         
+        self.visited += batch
         self._check_consistent()
         
         return AbstractResults(**{
@@ -168,7 +169,6 @@ class DomainsList:
         assert batch > 0
         
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-        self.visited += 2 * batch
         
         # hidden splitting
         if not self.input_split:

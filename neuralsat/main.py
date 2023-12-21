@@ -100,6 +100,7 @@ if __name__ == '__main__':
     # verify
     timeout = args.timeout - (time.time() - START_TIME)
     status = verifier.verify(objectives, timeout=timeout)
+    runtime = time.time() - START_TIME
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
@@ -111,9 +112,12 @@ if __name__ == '__main__':
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(f'{status},{time.time() - START_TIME:.06f}', file=fp)
+            print(f'{status},{runtime:.06f}', file=fp)
             # print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv), is_nhwc=is_nhwc), file=fp)
 
-    print(f'{status},{time.time() - START_TIME:.04f}')
+    logger.info(f'[!] Result: {status}')
+    logger.info(f'[!] Runtime: {runtime:.04f}')
+    
+    print(f'{status},{runtime:.04f}')

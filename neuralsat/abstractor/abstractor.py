@@ -193,8 +193,12 @@ class NetworkAbstractor:
         rhs = objective.rhs.to(self.device)
         
         # input property
-        input_lowers = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
-        input_uppers = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        if not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
+            input_lowers = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+            input_uppers = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        else:
+            input_lowers = objective.lower_bounds[0:1].to(self.device)
+            input_uppers = objective.upper_bounds[0:1].to(self.device)
        
         self.x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(self.device)
         
@@ -208,11 +212,10 @@ class NetworkAbstractor:
             lower_bounds, upper_bounds = self.get_hidden_bounds(self.net, lb)
             
         # print(lb)
-        n_unstable = sum([torch.logical_and(lower_bounds[j] < 0, upper_bounds[j] > 0).sum().detach().cpu() for j in range(len(lower_bounds) - 1)])
+        n_unstable = [torch.logical_and(lower_bounds[j] < 0, upper_bounds[j] > 0).sum().detach().cpu() for j in range(len(lower_bounds) - 1)]
+        n_unstable = sum(n_unstable)
         n_total = sum([lower_bounds[j].numel() for j in range(len(lower_bounds) - 1)])
-        # print(lower_bounds)
-        # print(upper_bounds)
-        # print(n_unstable, n_total)
+
         return n_total - n_unstable, n_unstable, lower_bounds, upper_bounds
     
     

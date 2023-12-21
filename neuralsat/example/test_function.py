@@ -30,13 +30,21 @@ def extract_instance(net_path, vnnlib_path):
 
 
 if __name__ == "__main__":
+    
     net_path = 'example/backup/motivation_example_161.onnx'
     vnnlib_path = 'example/motivation_example.vnnlib'
+    
+    net_path = 'example/mnist-net_256x2.onnx'
+    vnnlib_path = 'example/prop_1_0.05.vnnlib'
+    
     device = 'cuda'
+    logger.setLevel(1)
+    Settings.setup(args=None)
     
     print('Running test with', net_path, vnnlib_path)
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     model.to(device)
+    print(model)
 
     verifier = Verifier(
         net=model, 
@@ -48,5 +56,8 @@ if __name__ == "__main__":
     stable, unstable, lbs, ubs = verifier.compute_stability(objectives)
     print('stable:', stable)
     print('unstable:', unstable)
-    print('lbs:', lbs)
-    print('ubs:', ubs)
+    
+    verifier.verify(objectives)
+    print(verifier.get_stats())
+    # print('lbs:', lbs)
+    # print('ubs:', ubs)

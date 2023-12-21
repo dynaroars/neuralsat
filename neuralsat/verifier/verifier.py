@@ -39,6 +39,11 @@ class Verifier:
         self.last_minimum_lowers = -1e9
         self.tightening_patience = 0
         
+        # stats
+        self.all_conflict_clauses = []
+        self.visited = 0
+        
+        
     def get_objective(self, dnf_objectives):
         # FIXME later
         objective = dnf_objectives.pop(max(10, self.batch))
@@ -52,13 +57,6 @@ class Verifier:
             objective = dnf_objectives.pop(max(10, self.batch))
         return objective
     
-    
-    def compute_stability(self, dnf_objectives):
-        print('compute_stability')
-        if not (hasattr(self, 'abstractor')):
-            self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
-            
-        return self.abstractor.compute_stability(dnf_objectives)
     
     def verify(self, dnf_objectives, preconditions=[], timeout=3600):
         self.start_time = time.time()
@@ -123,6 +121,9 @@ class Verifier:
                         gc_cuda()
                         break
                     
+                # stats
+                self._save_stats()
+                
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
                     return status 
@@ -265,7 +266,7 @@ class Verifier:
                 f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
             )
         logger.info(msg)
-    
+        
     
     from .utils import (
         _preprocess, _init_abstractor,
@@ -273,6 +274,7 @@ class Verifier:
         _setup_restart,
         _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
-        _check_invoke_tightening, _update_tightening_patience
+        _check_invoke_tightening, _update_tightening_patience,
+        compute_stability, _save_stats, get_stats,
     )
     
