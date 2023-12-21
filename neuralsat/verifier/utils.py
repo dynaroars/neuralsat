@@ -294,6 +294,17 @@ def _attack(self, domain_params, n_sample=50, n_interval=1):
     return False, None
 
 
+def _check_adv_f64(self, adv, objective):
+    lower_bounds_f64 = objective.lower_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
+    upper_bounds_f64 = objective.upper_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
+    cs_f64 = objective.cs_f64.to(self.device)
+    rhs_f64 = objective.rhs_f64.to(self.device)
+    for i in range(len(lower_bounds_f64)):
+        if check_solution(self.net, adv, cs_f64[i], rhs_f64[i], lower_bounds_f64[i:i+1], upper_bounds_f64[i:i+1]):
+            return True
+    return False
+    
+
 def _get_learned_conflict_clauses(self):
     if hasattr(self.domains_list, 'all_conflict_clauses'):
         return self.domains_list.all_conflict_clauses

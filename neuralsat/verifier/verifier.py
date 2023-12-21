@@ -11,6 +11,7 @@ from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
+from util.misc.check import check_solution
 from util.misc.result import ReturnStatus
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
@@ -187,7 +188,7 @@ class Verifier:
         
         # main loop
         while len(self.domains_list) > 0:
-            self._parallel_dpll()
+            self._parallel_dpll(objective=objective)
             
             # check adv founded
             if self.adv is not None:
@@ -209,7 +210,7 @@ class Verifier:
         return ReturnStatus.UNSAT
             
             
-    def _parallel_dpll(self):        
+    def _parallel_dpll(self, objective):        
         # step 1: MIP attack
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, 'cpu'))
@@ -223,9 +224,12 @@ class Verifier:
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
         # step 4: PGD attack
-        is_attacked, self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
+        is_attacked, self.adv = self._attack(domain_params=pick_ret, n_interval=Settings.attack_interval)
         if is_attacked:
-            return
+            if self._check_adv_f64(self.adv, objective):
+                return
+            logger.debug("[!] Invalid counter-example")
+            self.adv = None
 
         # step 5: branching
         decisions = self.decision(self.abstractor, pick_ret)
@@ -267,7 +271,7 @@ class Verifier:
         _preprocess, _init_abstractor,
         _check_timeout,
         _setup_restart,
-        _pre_attack, _attack, _mip_attack,
+        _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_tightening, _update_tightening_patience
     )

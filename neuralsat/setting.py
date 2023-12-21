@@ -67,6 +67,8 @@ class GlobalSettings:
         else:
             self.use_mip_tightening = USE_GUROBI
             
+        # self.use_restart = 0
+        # self.use_mip_tightening = 0
         
     def __repr__(self):
         return (
