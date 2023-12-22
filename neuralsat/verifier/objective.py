@@ -39,19 +39,6 @@ class DnfObjectives:
         lower_bounds_f64 = self.lower_bounds_f64[self.num_used : self.num_used + batch]
         upper_bounds_f64 = self.upper_bounds_f64[self.num_used : self.num_used + batch]
         
-        if self.is_nhwc:
-            n_, c_, h_, w_ = self.input_shape
-            orig_input_shape = (-1, h_, w_, c_)
-            # f32
-            lower_bounds = lower_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            upper_bounds = upper_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            # f64
-            lower_bounds_f64 = lower_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            upper_bounds_f64 = upper_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            
-            assert torch.all(lower_bounds <= upper_bounds)
-            assert torch.all(lower_bounds_f64 <= upper_bounds_f64)
-        
         objective = TMP()
         # input bounds
         objective.lower_bounds = lower_bounds
@@ -112,6 +99,20 @@ class DnfObjectives:
         self.lower_bounds_f64 = torch.stack(self.lower_bounds_f64)
         self.upper_bounds_f64 = torch.stack(self.upper_bounds_f64)
 
+        if self.is_nhwc:
+            n_, c_, h_, w_ = self.input_shape
+            orig_input_shape = (-1, h_, w_, c_)
+            # f32
+            self.lower_bounds = self.lower_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            self.upper_bounds = self.upper_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            
+            # f64
+            self.lower_bounds_f64 = self.lower_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            self.upper_bounds_f64 = self.upper_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
+            
+        assert torch.all(self.lower_bounds <= self.upper_bounds)
+        assert torch.all(self.lower_bounds_f64 <= self.upper_bounds_f64)
+            
         # properties
         if all([_.shape[0] == self.cs[0].shape[0] for _ in self.cs]):
             self.cs = torch.stack(self.cs)

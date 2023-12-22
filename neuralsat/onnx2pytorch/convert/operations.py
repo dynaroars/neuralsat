@@ -355,7 +355,8 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                         break
                 op = None
                 is_nhwc = True
-            if i == 0 and extract_attributes(node)['dims'] == (0, 2, 3, 1) \
+                
+            elif i == 0 and extract_attributes(node)['dims'] == (0, 2, 3, 1) \
                     and inputs[0].type.tensor_type.shape.dim[1].dim_value == 1 and quirks.get(node.op_type, {}).get('remove_gdvb_transpose', False):
                 next_node = onnx_graph.node[i + 1]
                 for i_, inp in enumerate(next_node.input):

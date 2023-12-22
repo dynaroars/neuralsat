@@ -70,10 +70,9 @@ if __name__ == '__main__':
         print(model)
         if Settings.test:
             print_w_b(model)
-        
-    logger.info(f'[!] Input shape: {input_shape}')
-    logger.info(f'[!] Output shape: {output_shape}')
     
+    logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
+    logger.info(f'[!] Output shape: {output_shape}')
     
     # verifier
     verifier = Verifier(
