@@ -69,6 +69,7 @@ class GlobalSettings:
             
         # self.use_restart = 0
         # self.use_mip_tightening = 0
+        # self.use_attack = 0
         
     def __repr__(self):
         return (

@@ -215,6 +215,10 @@ class Verifier:
             
             
     def _parallel_dpll(self):        
+        n_unstable = self.domains_list.count_unstable_neurons()
+        if n_unstable:
+            logger.debug(f'#unstable = {n_unstable}')
+        
         # step 1: MIP attack
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, 'cpu'))

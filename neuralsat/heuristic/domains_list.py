@@ -254,6 +254,21 @@ class DomainsList:
 
     def __len__(self):
         return len(self.all_input_lowers)
+    
+    @torch.no_grad()
+    def count_unstable_neurons(self):
+        # print([_.data.shape for _ in self.all_lower_bounds])
+        if self.all_lower_bounds is None:
+            return None
+        
+        new_masks = compute_masks(
+            lower_bounds=[_.data for _ in self.all_lower_bounds], 
+            upper_bounds=[_.data for _ in self.all_upper_bounds], 
+            device='cpu',
+        )
+        # print(len(self), [_.shape for _ in new_masks])
+        n_unstable = sum([_.sum() for _ in new_masks]).int()
+        return n_unstable // len(self)
 
 
     @property
