@@ -62,7 +62,7 @@ class GlobalSettings:
             self.use_mip_tightening = USE_GUROBI
         
         # FIXME: remove after debugging
-        self.use_attack = 0
+        self.use_attack = 1
         self.use_restart = 0
         self.use_mip_tightening = 0
             

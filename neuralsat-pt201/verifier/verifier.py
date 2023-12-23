@@ -38,6 +38,11 @@ class Verifier:
         self.last_minimum_lowers = -1e9
         self.tightening_patience = 0
         
+        # stats
+        self.all_conflict_clauses = []
+        self.visited = 0
+        
+        
     def get_objective(self, dnf_objectives):
         # FIXME later
         objective = dnf_objectives.pop(max(10, self.batch))
@@ -122,6 +127,9 @@ class Verifier:
                         gc_cuda()
                         break
                     
+                # stats
+                self._save_stats()
+                
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
                     return status 
@@ -193,7 +201,10 @@ class Verifier:
             
             # check adv founded
             if self.adv is not None:
-                return ReturnStatus.SAT
+                if self._check_adv_f64(self.adv, objective):
+                    return ReturnStatus.SAT
+                logger.debug("[!] Invalid counter-example")
+                self.adv = None
             
             # check timeout
             if self._check_timeout(timeout):
@@ -226,9 +237,9 @@ class Verifier:
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
         # step 4: PGD attack
-        is_attacked, self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
-        if is_attacked:
-            return
+        is_attacked, adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
+        if adv is not None:
+            self.adv = adv
 
         # step 5: branching
         decisions = self.decision(self.abstractor, pick_ret)
@@ -237,13 +248,13 @@ class Verifier:
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
 
         # step 7: pruning complete assignments
-        self.adv = self._check_full_assignment(abstraction_ret)
-        if self.adv is not None:
-            return
+        adv = self._check_full_assignment(abstraction_ret)
+        if adv is not None:
+            self.adv = adv
+
         # step 8: pruning unverified branches
         self.domains_list.add(abstraction_ret)
         # TODO: check full assignment after bcp
-        # exit()
 
         # statistics
         self.iteration += 1
@@ -270,8 +281,9 @@ class Verifier:
         _preprocess, _init_abstractor,
         _check_timeout,
         _setup_restart,
-        _pre_attack, _attack, _mip_attack,
+        _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
-        _check_invoke_tightening, _update_tightening_patience
+        _check_invoke_tightening, _update_tightening_patience,
+        compute_stability, _save_stats, get_stats,
     )
     

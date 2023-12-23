@@ -383,3 +383,35 @@ def _check_full_assignment(self, domain_params):
     return None
 
     
+def compute_stability(self, dnf_objectives):
+    print('compute_stability')
+    if not (hasattr(self, 'abstractor')):
+        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
+        
+    return self.abstractor.compute_stability(dnf_objectives)
+
+        
+def _save_stats(self):
+    self.all_conflict_clauses += self._get_learned_conflict_clauses()
+    self.visited += self.domains_list.visited
+        
+        
+def get_stats(self):
+    if len(self.all_conflict_clauses):
+        depth = max(map(lambda x: sum(len(_[0]) for _ in x), self.all_conflict_clauses))
+    else:
+        depth = 0
+    visited = self.visited
+    return depth, visited
+
+
+def _check_adv_f64(self, adv, objective):
+    lower_bounds_f64 = objective.lower_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
+    upper_bounds_f64 = objective.upper_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
+    cs_f64 = objective.cs_f64.to(self.device)
+    rhs_f64 = objective.rhs_f64.to(self.device)
+    for i in range(len(lower_bounds_f64)):
+        if check_solution(self.net, adv, cs_f64[i], rhs_f64[i], lower_bounds_f64[i:i+1], upper_bounds_f64[i:i+1]):
+            return True
+    return False
+    

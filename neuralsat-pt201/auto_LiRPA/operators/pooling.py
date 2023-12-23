@@ -55,7 +55,7 @@ class BoundMaxPool(BoundOptimizableActivation):
         return alpha
 
     @staticmethod
-    # @torch.jit.script
+    @torch.jit.script
     def jit_mutiply(Apos, Aneg, pos, neg):
         return pos.contiguous() * Apos + neg.contiguous() * Aneg
 
