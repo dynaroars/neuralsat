@@ -18,8 +18,9 @@ HIDDEN_SPLIT_RESTART_STRATEGIES = [
 def get_restart_strategy(nth_restart, input_split=False):
     if input_split:
         if nth_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
-            return None
-        strategy = INPUT_SPLIT_RESTART_STRATEGIES[nth_restart]
+            strategy = INPUT_SPLIT_RESTART_STRATEGIES[-1]
+        else:
+            strategy = INPUT_SPLIT_RESTART_STRATEGIES[nth_restart]
     else:
         if nth_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
             strategy = HIDDEN_SPLIT_RESTART_STRATEGIES[-1]

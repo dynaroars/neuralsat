@@ -7,7 +7,7 @@ import torch
 import time
 import copy
 
-from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES
+from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES, INPUT_SPLIT_RESTART_STRATEGIES
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
@@ -203,7 +203,7 @@ class Verifier:
                 return ReturnStatus.TIMEOUT
             
             # check restart
-            if Settings.use_restart and (self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES)):
+            if Settings.use_restart and (self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES) if not self.input_split else self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)):
                 if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
                 
