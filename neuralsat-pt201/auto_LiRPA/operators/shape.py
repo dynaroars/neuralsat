@@ -156,7 +156,7 @@ class BoundUnsqueeze(Bound):
 class BoundSqueeze(Bound):
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
-        self.axes = attr.get('axes', [0])
+        self.axes = attr['axes']
         assert (len(self.axes) == 1)
         self.axes = self.axes[0]
         self.use_default_ibp = True
@@ -663,7 +663,7 @@ class BoundSplit(Bound):
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.axis = attr['axis']
-        self.split = attr.get('split', 1)
+        self.split = attr['split']
         self.use_default_ibp = True
 
     def forward(self, x):
