@@ -394,7 +394,8 @@ def compute_stability(self, dnf_objectives):
         
 def _save_stats(self):
     self.all_conflict_clauses += self._get_learned_conflict_clauses()
-    self.visited += self.domains_list.visited
+    if hasattr(self.domains_list, 'visited'):
+        self.visited += self.domains_list.visited
         
         
 def get_stats(self):
