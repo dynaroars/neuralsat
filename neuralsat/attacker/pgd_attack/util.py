@@ -39,7 +39,7 @@ def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
         cond = torch.clamp((cs_mat * output).sum(-1) - rhs_mat, min=0.0)
         # [num_example, 1, num_spec]
 
-        group_C = torch.zeros(len(cond_mat[0]), cs_mat.shape[2], device=cond.device) # [num_or_spec, num_total_spec]
+        group_C = torch.zeros(len(cond_mat[0]), cs_mat.shape[2], device=cond.device, dtype=cond.dtype) # [num_or_spec, num_total_spec]
         x_index = []
         y_index = []
         index = 0

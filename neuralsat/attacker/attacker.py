@@ -24,7 +24,8 @@ class Attacker:
         return self._attack(timeout=timeout)
 
     @beartype
-    def _attack(self, timeout: float) -> tuple[bool, None | torch.Tensor]:
+    # def _attack(self, timeout: float) -> tuple[bool, None | torch.Tensor]:
+    def _attack(self, timeout: float):
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
@@ -71,13 +72,14 @@ class PGDAttacker:
         
         
         # TODO: add timeout
+        self.net.to(cs_f64.dtype)
         is_attacked, attack_images = attack(
             model=self.net,
-            x=x, 
-            data_min=data_min,
-            data_max=data_max,
-            cs=cs,
-            rhs=rhs,
+            x=x.to(cs_f64.dtype), 
+            data_min=data_min_f64,
+            data_max=data_max_f64,
+            cs=cs_f64,
+            rhs=rhs_f64,
             attack_iters=iterations, 
             num_restarts=restarts,
         )
@@ -90,7 +92,8 @@ class PGDAttacker:
                         if check_solution(self.net, adv, cs=cs_f64[j], rhs=rhs_f64[j], data_min=data_min_f64[:, j], data_max=data_max_f64[:, j]):
                             return True, adv
             logger.debug("[!] Invalid counter-example")
-            
+        
+        self.net.to(cs.dtype)
         return False, None
 
     

@@ -33,7 +33,8 @@ custom_quirks = {
 }
 
 @beartype
-def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
+# def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
+def inference_onnx(path: str, *inputs: np.ndarray):
     sess = ort.InferenceSession(onnx.load(path).SerializeToString())
     names = [i.name for i in sess.get_inputs()]
     return sess.run(None, dict(zip(names, inputs)))
