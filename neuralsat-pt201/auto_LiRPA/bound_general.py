@@ -1361,7 +1361,7 @@ class BoundedModule(nn.Module):
     from .output_constraints import backward_general_with_output_constraint
     from .optimized_bounds import (
         _get_optimized_bounds, init_alpha, update_best_beta,
-        opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype)
+        opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype, get_refined_interm_bounds)
     from .beta_crown import (beta_crown_backward_bound, reset_beta, set_beta,
                              set_beta_cuts, get_split_nodes)
     from .jacobian import (augment_gradient_graph, compute_jacobian_bounds,
@@ -1371,4 +1371,4 @@ class BoundedModule(nn.Module):
 
 
     from .solver_module import (
-        build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars)
+        build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars, _build_solver_refined)

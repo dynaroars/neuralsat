@@ -38,7 +38,7 @@ def _preprocess(self, objectives, forced_input_split=None):
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
     perturbed = (diff > 0).numel()
-    logger.info(f'[!] eps = {eps:.06f}, perturbed={perturbed}')
+    logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
     
     if Settings.test:
         self.input_split = False
@@ -52,34 +52,23 @@ def _preprocess(self, objectives, forced_input_split=None):
         self.input_split = True
         
     if len(objectives) >= 50:
+        # TODO: fix restart for multiple objectives
         Settings.use_restart = False
         
+    if self.input_split: # and len(objectives) < 50:
+        return objectives, None
+    
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
         return objectives, None
     
-    if self.input_split and len(objectives) < 50:
+    if not torch.allclose(objectives.lower_bounds.mean(dim=0), objectives.lower_bounds[0], 1e-5, 1e-5):
         return objectives, None
-    
-    
-    
-    
-    
-    return objectives, None
-
-
-
-
-
-
     
     try:
         # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
         print('Failed to preprocessing objectives')
-        return objectives, None
-    
-    if not torch.allclose(objectives.lower_bounds.mean(dim=0), objectives.lower_bounds[0], 1e-5, 1e-5):
         return objectives, None
     
     # prune objectives
@@ -110,7 +99,7 @@ def _preprocess(self, objectives, forced_input_split=None):
 
         use_refined = not Settings.use_restart
         if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
-            # TODO: skip refine for Conv layers
+            # skip refine for Conv layers for now
             use_refined = False
 
         self.abstractor.build_lp_solver(
@@ -120,14 +109,13 @@ def _preprocess(self, objectives, forced_input_split=None):
             c=c_to_use,
             refine=use_refined,
             timeout=None,
+            timeout_per_neuron=10.0,
         )
         logger.debug(f'MIP: {time.time() - tic:.04f}')
-        
-        # self.abstractor.net.print_betas()
 
         if use_refined:
             # forward with refinement
-            refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
+            refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
             ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
             
             # pruning
@@ -137,7 +125,8 @@ def _preprocess(self, objectives, forced_input_split=None):
             objectives.cs = objectives.cs[remaining_index]
             objectives.rhs = objectives.rhs[remaining_index]
             
-            self.refined_betas = self.abstractor.net.get_betas()
+            # TODO: fixme
+            # self.refined_betas = self.abstractor.net.get_betas()
         
         # torch.save(refined_intermediate_bounds, 'refined.pt')
         
@@ -227,7 +216,7 @@ def _setup_restart(self, nth_restart, objective):
             refine=True,
             timeout=None,
         )
-        refined_intermediate_bounds = self.abstractor.net.get_refined_intermediate_bounds()
+        refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
         del self.abstractor
     
     # abstractor

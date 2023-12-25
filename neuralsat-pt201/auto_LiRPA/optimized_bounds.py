@@ -832,3 +832,20 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         return init_intermediate_bounds
     else:
         return l, u, init_intermediate_bounds
+
+
+
+def get_refined_interm_bounds(self: 'BoundedModule'):
+    interm_bounds = {
+        node.name: [
+            node.lower.to(self.device) if hasattr(node, 'lower') else None, 
+            node.upper.to(self.device) if hasattr(node, 'upper') else None, 
+        ] for node in self.split_nodes
+    }
+
+    if any([(None in _ ) for _ in interm_bounds.values()]):
+        return None
+    
+    return interm_bounds
+    
+    

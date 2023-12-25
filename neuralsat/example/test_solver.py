@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None)
     # print('MIP refine:', time.time() - tic)
     
-    # intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    # intermediate_layer_bounds = verifier.abstractor.net.get_refined_interm_bounds()
     
     # for k, v in intermediate_layer_bounds.items():
     #     print(k, [_.shape for _ in v])
@@ -115,11 +115,11 @@ if __name__ == "__main__":
     # # print(name_dict)
     # for _ in range(0):
     #     tic = time.time()
-    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_interm_bounds()
     #     verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
     #     print(_, 'MIP refine:', time.time() - tic)
         
-    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_intermediate_bounds()
+    #     intermediate_layer_bounds = verifier.abstractor.net.get_refined_interm_bounds()
     #     verifier.abstractor.initialize(obj, None, intermediate_layer_bounds)
     #     print()
     
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     # verifier.abstractor.build_lp_solver('mip', input_lowers, input_uppers, c=None, intermediate_layer_bounds=intermediate_layer_bounds)
     # print('MIP refine:', time.time() - tic)
     
-    # verifier.abstractor.net.clear_solver_module(verifier.abstractor.net.final_node())
+    # verifier.abstractor.net._reset_solver_vars(verifier.abstractor.net.final_node())
     # del verifier.abstractor.net.model
     
     # verifier.abstractor.build_lp_solver('lp', input_lowers, input_uppers, c)

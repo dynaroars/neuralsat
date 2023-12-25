@@ -272,16 +272,21 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
 
     
 def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
-    raise
     assert model_type in ['lp', 'mip']
 
+    # if hasattr(self.net, 'model'): 
+    #     raise
+    #     if (intermediate_layer_bounds is None) and torch.equal(self.last_c_lp, c) \
+    #         and (self.net.model.ModelName == model_type) \
+    #         and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
+    #         logger.debug('[!] Reuse built LP model')
+    #         return
+    #     self.net._reset_solver_vars(self.net.final_node())
+    #     del self.net.model
+    
+    # delete old LP model
+    self.net._reset_solver_vars(self.net.final_node())
     if hasattr(self.net, 'model'): 
-        if (intermediate_layer_bounds is None) and torch.equal(self.last_c_lp, c) \
-            and (self.net.model.ModelName == model_type) \
-            and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
-            logger.debug('[!] Reuse built LP model')
-            return
-        self.net.clear_solver_module(self.net.final_node())
         del self.net.model
     
     # gurobi solver
@@ -295,24 +300,14 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
 
     # create new inputs
     new_x = BoundedTensor(input_lower, PerturbationLpNorm(x_L=input_lower, x_U=input_upper))
-    # disable beta
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
     lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
-    # print(lb)
     if rhs is not None:
         if (lb > rhs).all():
             return None
         
-    
-    # self.net.set_bound_opts({'optimize_bound_args': {
-    #             'enable_beta_crown': False, 
-    #             'iteration': 100, 
-    #             'lr_alpha': 0.1,
-    #         }} ) 
-    # self.net.compute_bounds(x=(new_x,), C=c, method="crown-optimized")
-    
     # build solver
     self.net.build_solver_module(
         x=(new_x,), 
