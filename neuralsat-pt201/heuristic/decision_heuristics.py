@@ -164,8 +164,9 @@ class DecisionHeuristic:
         # align decisions
         all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
         final_decision = [[] for b in range(batch)]
+            
         for b in range(batch):
-            mask_item = [domain_params.masks[k.name][b] for k in abstractor.net.split_nodes]
+            mask_item = [domain_params.masks[k.name][b].clone() for k in abstractor.net.split_nodes]
             # valid scores
             if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
                 decision = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
@@ -175,11 +176,14 @@ class DecisionHeuristic:
             # invalid scores
             if len(final_decision[b]) == 0: 
                 # use random decisions 
-                for layer in np.random.choice(len(abstractor.pre_relu_indices), len(abstractor.pre_relu_indices), replace=False):
+                selected = False
+                for layer in np.random.choice(len(abstractor.net.split_nodes), len(abstractor.net.split_nodes), replace=False):
                     if len(mask_item[layer].nonzero(as_tuple=False)) != 0:
                         final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item()])
                         mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                        selected = True
                         break
+                assert selected
         
         final_decision = sum(final_decision, [])
             

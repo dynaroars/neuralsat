@@ -187,10 +187,10 @@ def test_load_model():
     
     
     
-class NetReLU(nn.Module):
+class FNNReLU(nn.Module):
     
     def __init__(self):
-        super(NetReLU, self).__init__()
+        super(FNNReLU, self).__init__()
         
         self.layer = nn.Sequential(
             nn.Flatten(),
@@ -208,7 +208,7 @@ class NetReLU(nn.Module):
     
     
 def test_relu3():
-    net = NetReLU()
+    net = FNNReLU()
     x = torch.randn(1, 1, 28, 28)
     print(net(x).shape)
     
@@ -432,6 +432,31 @@ def simplify_network():
             # break
             print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
             
-        
+ 
+def test_cnn():
+    # torch.manual_seed(0)
+    net = nn.Sequential(
+        nn.Conv2d(3, 2, 10, 9), 
+        nn.ReLU(),
+        # nn.Conv2d(5, 7, 5, 3), 
+        # nn.ReLU(),
+        nn.Flatten(), 
+        nn.Linear(18, 10), 
+    )
+    
+    x = torch.randn(1, 3, 32, 32)
+    print(net(x).shape)
+   
+    net.eval()
+    output_name = "example/cifar_relu.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+    )
+    
+    
 if __name__ == '__main__':
-    pass
+    test_cnn()

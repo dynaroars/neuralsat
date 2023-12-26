@@ -326,15 +326,17 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
 
 
 def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
-    raise
     logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
+    
+    # TODO: check all activation layers are ReLU
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     
     for relu_idx, (pre_relu_name, relu_name) in enumerate(zip(pre_relu_layer_names, relu_layer_names)):
-        lbs, ubs = lower_bounds[relu_idx].reshape(-1), upper_bounds[relu_idx].reshape(-1)
+        lbs = lower_bounds[pre_relu_name].reshape(-1)
+        ubs = upper_bounds[pre_relu_name].reshape(-1)
         for neuron_idx in range(lbs.shape[0]):
             pre_var = tmp_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
             pre_var.lb = pre_lb = lbs[neuron_idx]

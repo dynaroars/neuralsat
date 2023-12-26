@@ -26,7 +26,8 @@ class DomainsList:
                  input_split=False, preconditions=[]):
 
         self.net = net
-                
+        self.final_name = self.net.final_node_name
+
         # FIXME: len(input_lowers) > 1
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and (len(input_lowers) == 1) # and len(preconditions)
         if self.use_restart:
@@ -69,10 +70,10 @@ class DomainsList:
         if self.input_split:
             self.all_lower_bounds = self.all_upper_bounds = self.all_lAs = self.all_histories = self.all_betas = None
         else: # hidden spliting 
-            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items()}
+            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items() if k != self.final_name}
             # hidden bounds
-            self.all_lower_bounds = {k: TensorStorage(v.cpu()) for k, v in lower_bounds.items()}
-            self.all_upper_bounds = {k: TensorStorage(v.cpu()) for k, v in upper_bounds.items()}
+            self.all_lower_bounds = {k: TensorStorage(v.cpu()) for k, v in lower_bounds.items() if k != self.final_name}
+            self.all_upper_bounds = {k: TensorStorage(v.cpu()) for k, v in upper_bounds.items() if k != self.final_name}
             # branching
             self.all_histories = [_copy_history(histories) for _ in range(len(cs))]
             # beta
@@ -192,20 +193,10 @@ class DomainsList:
             for idx_ in remaining_index:
                 # check full assignment
                 if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
-                    # already check
+                    # TODO: fixme
+                    raise NotImplementedError()
                     extra_conflict_index.append(idx_)
                     continue
-                                
-                # # new decision
-                # idx = idx_ % batch
-                # new_history = copy.deepcopy(domain_params.histories[idx])
-                # new_history[decisions[idx][0]][0].append(decisions[idx][1])
-                # new_history[decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
-
-                # # repetition
-                # if decisions[idx][1] in domain_params.histories[idx][decisions[idx][0]][0]:
-                #     print(decisions[idx], domain_params.histories[idx])
-                #     raise RuntimeError('Repeated split')
                 
                 # bcp
                 if self.use_restart:

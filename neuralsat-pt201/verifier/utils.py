@@ -240,10 +240,10 @@ def _random_idx(total_samples, num_samples, device='cpu'):
 
 def _attack(self, domain_params, n_sample=50, n_interval=1):
     if not Settings.use_attack:
-        return False, None
+        return None
     
     if self.iteration % n_interval != 0:
-        return False, None
+        return None
 
     # random samples
     indices = _random_idx(len(domain_params.cs), n_sample, device=self.device).long()
@@ -289,10 +289,10 @@ def _attack(self, domain_params, n_sample=50, n_interval=1):
             for j in range(attack_images.shape[2]): # props
                 adv = attack_images[:, i, j]
                 if check_solution(self.net, adv, domain_params.cs[indices][j], domain_params.rhs[indices][j], input_lowers[:, j], input_uppers[:, j]):
-                    return True, adv
+                    return adv
         logger.debug("[!] Invalid counter-example")
         
-    return False, None
+    return None
 
 
 def _get_learned_conflict_clauses(self):
@@ -342,33 +342,54 @@ def _update_tightening_patience(self, minimum_lowers, old_domains_length):
             
     
 def _check_full_assignment(self, domain_params):
+    if self.input_split:
+        return None
+    
     if domain_params.lower_bounds is None:
         return None
     
-    new_masks = compute_masks(lower_bounds=domain_params.lower_bounds, upper_bounds=domain_params.upper_bounds, device='cpu')
-    remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
+    new_masks = compute_masks(
+        lower_bounds=domain_params.lower_bounds, 
+        upper_bounds=domain_params.upper_bounds, 
+        device='cuda',
+    
+    )
+    # print([(k, v.shape) for k, v in new_masks.items()])
+    # print([(k, v) for k, v in new_masks.items()])
+    # print([(k, v.sum(1)) for k, v in new_masks.items()])
+    # print([(k, v) for k, v in new_masks.items()])
+    n_unstables = torch.stack([v.sum(dim=1) for k, v in new_masks.items()]).sum(dim=0)
+    pruning_indices = torch.where(n_unstables == 0)[0]
+    
+    if not len(pruning_indices):
+        return None
+    
+    remaining_index = torch.where(n_unstables > 0)[0]
+    
+    for idx_ in pruning_indices:
+        self.abstractor.build_lp_solver(
+            model_type='lp', 
+            input_lower=domain_params.input_lowers[idx_][None], 
+            input_upper=domain_params.input_uppers[idx_][None], 
+            c=domain_params.cs[idx_][None],
+            refine=False,
+        )
 
-    for idx_ in remaining_index:
-        if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
-            self.abstractor.build_lp_solver(
-                model_type='lp', 
-                input_lower=domain_params.input_lowers[idx_][None], 
-                input_upper=domain_params.input_uppers[idx_][None], 
-                c=domain_params.cs[idx_][None],
-                refine=False,
-            )
-
-            feasible, adv = self.abstractor.solve_full_assignment(
-                input_lower=domain_params.input_lowers[idx_], 
-                input_upper=domain_params.input_uppers[idx_], 
-                lower_bounds=[l[idx_] for l in domain_params.lower_bounds],
-                upper_bounds=[u[idx_] for u in domain_params.upper_bounds],
-                c=domain_params.cs[idx_],
-                rhs=domain_params.rhs[idx_]
-            )
-            
-            if feasible:
-                return adv
+        feasible, adv = self.abstractor.solve_full_assignment(
+            input_lower=domain_params.input_lowers[idx_], 
+            input_upper=domain_params.input_uppers[idx_], 
+            lower_bounds={k: v[idx_] for k, v in domain_params.lower_bounds.items()},
+            upper_bounds={k: v[idx_] for k, v in domain_params.upper_bounds.items()},
+            c=domain_params.cs[idx_],
+            rhs=domain_params.rhs[idx_]
+        )
+        
+        if feasible:
+            return adv
+        
+    # TODO: prune UNSAT domains
+    raise NotImplementedError()
+    
     return None
 
     

@@ -237,24 +237,23 @@ class Verifier:
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
         
         # step 4: PGD attack
-        is_attacked, adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
-        if adv is not None:
-            self.adv = adv
+        self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
+        if self.adv is not None:
+            return
 
-        # step 5: branching
+        # step 5: pruning complete assignments
+        self.adv = self._check_full_assignment(pick_ret)
+        if self.adv is not None:
+            return
+            
+        # step 6: branching
         decisions = self.decision(self.abstractor, pick_ret)
         
-        # step 6: abstraction 
+        # step 7: abstraction 
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
-
-        # step 7: pruning complete assignments
-        adv = self._check_full_assignment(abstraction_ret)
-        if adv is not None:
-            self.adv = adv
 
         # step 8: pruning unverified branches
         self.domains_list.add(abstraction_ret)
-        # TODO: check full assignment after bcp
 
         # statistics
         self.iteration += 1
