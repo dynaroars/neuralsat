@@ -70,7 +70,7 @@ class DomainsList:
         if self.input_split:
             self.all_lower_bounds = self.all_upper_bounds = self.all_lAs = self.all_histories = self.all_betas = None
         else: # hidden spliting 
-            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items() if k != self.final_name}
+            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items()}
             # hidden bounds
             self.all_lower_bounds = {k: TensorStorage(v.cpu()) for k, v in lower_bounds.items() if k != self.final_name}
             self.all_upper_bounds = {k: TensorStorage(v.cpu()) for k, v in upper_bounds.items() if k != self.final_name}
