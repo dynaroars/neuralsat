@@ -375,3 +375,39 @@ def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bo
         
     del tmp_model
     return feasible, adv
+
+
+
+def compute_stability(self, objective):
+    cs = objective.cs.to(self.device)
+    rhs = objective.rhs.to(self.device)
+    
+    # input property
+    if not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
+        input_lowers = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        input_uppers = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+    else:
+        input_lowers = objective.lower_bounds[0:1].to(self.device)
+        input_uppers = objective.upper_bounds[0:1].to(self.device)
+    
+    x = self.new_input(x_L=input_lowers, x_U=input_uppers)
+    
+    assert self.method in ['forward', 'backward']
+    with torch.no_grad():
+        lb, _ = self.net.compute_bounds(
+            x=(x,), 
+            C=cs, 
+            method=self.method, 
+        )
+        lower_bounds, upper_bounds = [], []
+        for node in self.net.relus:
+            lower_bounds.append(node.inputs[0].lower)
+            upper_bounds.append(node.inputs[0].upper)
+        
+    n_unstable = sum([
+        torch.logical_and(lower_bounds[j] < 0, upper_bounds[j] > 0).sum().detach().cpu() 
+            for j in range(len(lower_bounds))
+    ])
+    n_total = sum([lower_bounds[j].numel() for j in range(len(lower_bounds))])
+    
+    return n_total - n_unstable, n_unstable, lower_bounds, upper_bounds

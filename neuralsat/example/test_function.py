@@ -15,7 +15,7 @@ from setting import Settings
 
 
 def extract_instance(net_path, vnnlib_path):
-    vnnlibs = read_vnnlib(vnnlib_path)
+    vnnlibs = read_vnnlib(Path(vnnlib_path))
     model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     
     # objective
@@ -34,8 +34,8 @@ def test_1():
     net_path = 'example/backup/motivation_example_161.onnx'
     vnnlib_path = 'example/motivation_example.vnnlib'
     
-    net_path = 'example/mnist-net_256x2.onnx'
-    vnnlib_path = 'example/prop_1_0.05.vnnlib'
+    # net_path = 'example/mnist-net_256x2.onnx'
+    # vnnlib_path = 'example/prop_1_0.05.vnnlib'
     
     device = 'cuda'
     logger.setLevel(1)
@@ -63,7 +63,7 @@ def test_1():
     # print('ubs:', ubs)
 
 
-if __name__ == "__main__":
+def test_2():
     net_path = 'example/cifar10_2_255_simplified.onnx'
     vnnlib_path = Path('example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib')
     device = 'cuda'
@@ -85,3 +85,6 @@ if __name__ == "__main__":
     
     status = verifier.verify(objectives)
     print(status)
+
+if __name__ == "__main__":
+    test_1()

@@ -231,6 +231,7 @@ class Verifier:
         
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
+        unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
             self.tightener(
                 domain_list=self.domains_list, 
@@ -269,7 +270,7 @@ class Verifier:
         
         # logging
         msg = (
-            f'[{"Input" if self.input_split else "Hidden"} domain]     '
+            f'[{"Input" if self.input_split else "Hidden"} splitting]     '
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
@@ -277,9 +278,11 @@ class Verifier:
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
         if Settings.use_mip_tightening:
-            msg += (
-                f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
-            )
+            msg += f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
+            
+        if (not self.input_split) and (unstable is not None):
+            msg += f'Unstable neurons: {unstable:<10}'
+            
         logger.info(msg)
     
     

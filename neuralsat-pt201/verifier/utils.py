@@ -394,7 +394,6 @@ def _check_full_assignment(self, domain_params):
 
     
 def compute_stability(self, dnf_objectives):
-    print('compute_stability')
     if not (hasattr(self, 'abstractor')):
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
         

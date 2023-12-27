@@ -267,25 +267,13 @@ class DomainsList:
 
         new_lower_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_lower_bounds.items()}
         new_upper_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_upper_bounds.items()}
-        
-        # new_masks = compute_masks(
-        #     lower_bounds=new_lower_bounds, 
-        #     upper_bounds=new_upper_bounds, 
-        #     device=device,
-        # )
-        # new_histories = copy.deepcopy([self.all_histories[idx] for idx in indices])
-        
+
         self._check_consistent()
         
         return AbstractResults(**{
-            # 'masks': new_masks, 
-            # 'histories': new_histories,
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
         })
-        
-        # checking
-        self._check_consistent()
         
         
     def update_refined_bounds(self, domain_params):
@@ -312,5 +300,23 @@ class DomainsList:
         # checking
         self._check_consistent()
         
+    
+    @torch.no_grad()
+    def count_unstable_neurons(self):
+        if self.all_lower_bounds is None:
+            return None
+        
+        if not len(self):
+            return None
+        
+        new_masks = compute_masks(
+            lower_bounds={k: v.data for k, v in self.all_lower_bounds.items()}, 
+            upper_bounds={k: v.data for k, v in self.all_upper_bounds.items()}, 
+            device='cpu',
+        )
+        # print(len(self), [_.shape for _ in new_masks.values()])
+        n_unstable = sum([_.sum() for _ in new_masks.values()]).int()
+        return n_unstable // len(self)
+
         
     from .util import init_sat_solver, update_hidden_bounds_histories, boolean_propagation, save_conflict_clauses
