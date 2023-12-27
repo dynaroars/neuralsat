@@ -273,17 +273,6 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
     
 def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
     assert model_type in ['lp', 'mip']
-
-    # if hasattr(self.net, 'model'): 
-    #     raise
-    #     if (intermediate_layer_bounds is None) and torch.equal(self.last_c_lp, c) \
-    #         and (self.net.model.ModelName == model_type) \
-    #         and torch.equal(self.last_input_lower, input_lower) and torch.equal(self.last_input_upper, input_upper):
-    #         logger.debug('[!] Reuse built LP model')
-    #         return
-    #     self.net._reset_solver_vars(self.net.final_node())
-    #     del self.net.model
-    
     # delete old LP model
     self.net._reset_solver_vars(self.net.final_node())
     if hasattr(self.net, 'model'): 
@@ -303,6 +292,7 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
+    # TODO: use crown-optimized here?
     lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
     if rhs is not None:
         if (lb > rhs).all():

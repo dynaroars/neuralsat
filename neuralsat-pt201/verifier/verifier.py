@@ -231,7 +231,13 @@ class Verifier:
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
-            self.tightener(self.domains_list, topk=64, timeout=20.0, largest=False, solve_both=True)
+            self.tightener(
+                domain_list=self.domains_list, 
+                topk=Settings.mip_tightening_topk, 
+                timeout=Settings.mip_tightening_timeout_per_neuron, 
+                largest=False, # stabilize near-stable neurons
+                solve_both=True, # stabilize both upper and lower bounds
+            )
             
         # step 3: selection
         pick_ret = self.domains_list.pick_out(self.batch, self.device)

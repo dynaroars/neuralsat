@@ -27,6 +27,8 @@ class GlobalSettings:
         # stabilize
         self.use_mip_tightening = 1
         self.mip_tightening_patience = 10
+        self.mip_tightening_timeout_per_neuron = 15.0
+        self.mip_tightening_topk = 64
         
         # attack
         self.use_attack = 1

@@ -52,15 +52,15 @@ class NetworkAbstractor:
         
         for mode, method in params:
             logger.debug(f'Try {mode}, {method}')
-            self._init_module(mode)
-            if self._check_module(method, objective):
+            self._init_module(mode=mode, objective=objective)
+            if self._check_module(method=method, objective=objective):
                 self.mode = mode
                 self.method = method
                 return True
             
         return False
             
-    def _init_module(self, mode):
+    def _init_module(self, mode, objective):
         logger.debug(f'Trying conv_mode: {mode}, input_split={self.input_split}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
@@ -71,12 +71,12 @@ class NetworkAbstractor:
         self.net.eval()
         
         # check conversion correctness
-        dummy = torch.zeros(self.input_shape).to(self.device)
+        dummy = objective.lower_bounds[0].view(1, *self.input_shape[1:]).to(self.device)
         try:
             assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-5, rtol=1e-5)
-        except AssertionError:
-            print(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
-            exit()
+        except:
+            print('[!] Conversion error')
+            raise ValueError(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
         
         
     def _check_module(self, method, objective):
@@ -95,7 +95,7 @@ class NetworkAbstractor:
         except KeyboardInterrupt:
             exit()
         except:
-            raise
+            # raise
             traceback.print_exc()
             return False
         else:
