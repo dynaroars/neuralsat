@@ -118,6 +118,10 @@ class BoundMul(BoundOptimizableActivation):
         elif isinstance(x, Patches):
             # Multiplies patches by a const. Assuming const is a tensor, and it must be in nchw format.
             assert isinstance(const, torch.Tensor) and const.ndim == 4
+            # broadcast const's batch size to x.patches
+            if const.size(0) == 1 and x.patches.size(1) > 1 and const.size(1) == x.patches.size(-3) and const.size(2) == const.size(3) == 1:
+                const = const.expand(x.patches.size(1), *const.shape[1:])
+
             if const.size(0) == x.patches.size(1) and const.size(1) == x.patches.size(-3) and const.size(2) == const.size(3) == 1:
                 # The case that we can do channel-wise broadcasting multiplication
                 # Shape of const: (batch, in_c, 1, 1)

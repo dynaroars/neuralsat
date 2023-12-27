@@ -44,8 +44,9 @@ class Verifier:
         
         
     def get_objective(self, dnf_objectives):
-        # FIXME later
-        objective = dnf_objectives.pop(max(10, self.batch))
+        # FIXME: urgent
+        # objective = dnf_objectives.pop(1)
+        objective = dnf_objectives.pop(max(1, self.batch))
         return objective
     
         if self.input_split:
