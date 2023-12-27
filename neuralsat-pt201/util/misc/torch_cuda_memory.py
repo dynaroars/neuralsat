@@ -49,7 +49,7 @@ def get_cuda_blocked_memory():
                 if current_block <= 0:
                     return available_memory
             else:
-                raise
+                raise NotImplementedError()
     block = None
     gc_cuda()
     return available_memory - current_block

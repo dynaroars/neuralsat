@@ -27,7 +27,7 @@ def _bound_improvement(orig, refined, bound_type):
         
 def handle_gurobi_error(message):
     print(f'Gurobi error: {message}')
-    raise
+    raise NotImplementedError()
   
   
 def _get_prefix_constr_name(name):

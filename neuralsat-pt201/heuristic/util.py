@@ -58,6 +58,7 @@ def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, ma
 
 
 def _histories_to_clauses(histories, var_mapping):
+    # TODO:
     raise
     clauses = []
     for history in histories:
@@ -129,6 +130,7 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
 
 def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     # variables mapping from variable to (lid, nid)
+    # TODO:
     raise
     tic = time.time()
     assert lower_bounds[0].shape[0] == 1
@@ -177,6 +179,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     
     
 def boolean_propagation(self, domain_params, batch_idx):
+    # TODO
     raise
     batch = len(domain_params.input_lowers)
     idx = batch_idx % batch
@@ -214,6 +217,7 @@ def boolean_propagation(self, domain_params, batch_idx):
 
 
 def save_conflict_clauses(self, domain_params, remaining_index):
+    # TODO
     raise
     batch = len(decisions)
     for idx_ in range(2*batch):

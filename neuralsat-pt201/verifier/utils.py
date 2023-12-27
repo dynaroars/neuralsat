@@ -170,7 +170,7 @@ def _setup_restart(self, nth_restart, objective):
     self.num_restart = nth_restart + 1
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
-        raise
+        raise NotImplementedError()
     
     if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         params['abstract_method'] = 'forward'

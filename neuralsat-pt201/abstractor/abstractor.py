@@ -190,6 +190,7 @@ class NetworkAbstractor:
         
 
     def compute_stability(self, objective):
+        # TODO:
         raise
         cs = objective.cs.to(self.device)
         rhs = objective.rhs.to(self.device)

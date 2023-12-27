@@ -21,6 +21,7 @@ class MulHelper:
         pass
 
     @staticmethod
+    # @torch.jit.script
     def interpolated_relaxation(x_l: Tensor, x_u: Tensor,
                                 y_l: Tensor, y_u: Tensor,
                                 r_l: Optional[Tensor] = None,

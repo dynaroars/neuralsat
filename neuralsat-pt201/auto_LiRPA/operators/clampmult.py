@@ -112,6 +112,7 @@ class ClampedMultiplication(torch.autograd.Function):
             grad_output_A, grad_output_bias)
 
 # @torch.compile
+# @torch.jit.script
 def multiply_by_A_signs(A, d_pos, d_neg, b_pos, b_neg, contiguous='auto',
                         reduce_bias=True):
     if isinstance(A, Tensor):
