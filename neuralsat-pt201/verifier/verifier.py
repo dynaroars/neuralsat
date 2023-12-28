@@ -65,8 +65,18 @@ class Verifier:
             
         return self.abstractor.compute_stability(dnf_objectives)
     
+    
     def verify(self, dnf_objectives, preconditions=[], timeout=3600):
         self.start_time = time.time()
+        self.status = self._verify(
+            dnf_objectives=dnf_objectives,
+            preconditions=preconditions,
+            timeout=timeout,
+        )
+        return self.status
+    
+    
+    def _verify(self, dnf_objectives, preconditions=[], timeout=3600):
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -100,10 +110,10 @@ class Verifier:
                 
                 # adaptive batch size
                 while True: 
-                    logger.debug(f'Try batch size {self.batch}')
+                    logger.info(f'Try batch size {self.batch}')
                     try:
                         # main function
-                        status = self._verify(
+                        status = self._verify_one(
                             objective=objective, 
                             preconditions=preconditions+learned_clauses, 
                             reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
@@ -180,7 +190,7 @@ class Verifier:
         )
         
         
-    def _verify(self, objective, preconditions, reference_bounds, timeout):
+    def _verify_one(self, objective, preconditions, reference_bounds, timeout):
         # print('refined bounds:', sum([(v[1] - v[0]).sum().item() for _, v in reference_bounds.items()])) if reference_bounds is not None else None
 
         # initialization
@@ -217,14 +227,17 @@ class Verifier:
                     return ReturnStatus.RESTART
                 
             if psutil.virtual_memory()[2] > 70.0:
-                print('OOM')
+                logger.debug('OOM')
                 return ReturnStatus.UNKNOWN
+            
         logger.debug(f'Main loop: {time.time() - start_time}')
         
         return ReturnStatus.UNSAT
             
             
-    def _parallel_dpll(self):        
+    def _parallel_dpll(self):
+        iter_start = time.time()
+        
         # step 1: MIP attack
         if Settings.use_mip_attack:
             self.mip_attacker.attack_domains(self.domains_list.pick_out_worst_domains(1001, 'cpu'))
@@ -275,6 +288,7 @@ class Verifier:
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
             f'Bound: {minimum_lowers:<15.04f} '
+            f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
         if Settings.use_mip_tightening:
@@ -294,5 +308,6 @@ class Verifier:
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_tightening, _update_tightening_patience,
         compute_stability, _save_stats, get_stats,
+        get_unsat_core,
     )
     

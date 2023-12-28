@@ -16,6 +16,7 @@ from attacker.attacker import Attacker
 from abstractor.abstractor import NetworkAbstractor
 
 from util.misc.check import check_solution
+from util.misc.result import ReturnStatus
 from util.misc.logger import logger
 
 from setting import Settings
@@ -425,3 +426,35 @@ def _check_adv_f64(self, adv, objective):
             return True
     return False
     
+    
+def get_unsat_core(self):
+    if self.status != ReturnStatus.UNSAT:
+        return None
+    
+    def _history_to_clause(h):
+        clause = []
+        for lname, ldata in h.items():
+            assert sum(ldata[2]) == 0 # TODO: fixme
+            # extract data
+            var_names, signs = ldata[0], ldata[1]
+            # convert data
+            var_names = [var_mapping[lname, int(v)] for v in var_names]
+            signs = [-int(s) for s in signs]
+            # append literals
+            clause += [v * s for v, s in zip(var_names, signs)]
+        return clause
+    
+    # mapping from [l_name, n_id] to literal id
+    var_mapping = {}
+    count = 1
+    for layer in self.abstractor.net.split_nodes:
+        for nid in range(layer.lower.flatten(start_dim=1).shape[-1]):
+            var_mapping[layer.name, nid] = count
+            count += 1
+    
+    unsat_core = []
+    for c in self.all_conflict_clauses:
+        unsat_core.append(_history_to_clause(c))
+        
+    return unsat_core
+        

@@ -65,12 +65,13 @@ if __name__ == '__main__':
     # network
     model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
     model.to(args.device)
-    vnnlibs = read_vnnlib(Path(args.spec))
     if args.verbosity:
         print(model)
         if Settings.test:
             print_w_b(model)
     
+    # specification
+    vnnlibs = read_vnnlib(Path(args.spec))
     logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
     logger.info(f'[!] Output shape: {output_shape}')
     
@@ -112,11 +113,11 @@ if __name__ == '__main__':
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
             print(f'{status},{runtime:.06f}', file=fp)
-            # print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv), is_nhwc=is_nhwc), file=fp)
 
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')
+    # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
     
     print(f'{status},{runtime:.04f}')

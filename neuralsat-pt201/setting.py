@@ -51,9 +51,9 @@ class GlobalSettings:
     def setup_test(self):
         self.max_hidden_branches = 1
         self.max_hidden_visited_branches = 2
-        self.use_mip_tightening = 1 and USE_GUROBI
+        self.use_mip_tightening = 0
         self.use_restart = 0
-        self.use_attack = 1
+        self.use_attack = 0
         self.test = 1
     
     def setup(self, args):

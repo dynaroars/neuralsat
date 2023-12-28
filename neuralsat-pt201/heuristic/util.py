@@ -217,15 +217,7 @@ def boolean_propagation(self, domain_params, batch_idx):
 
 
 def save_conflict_clauses(self, domain_params, remaining_index):
-    # TODO
-    raise
-    batch = len(decisions)
-    for idx_ in range(2*batch):
+    for idx_ in range(len(domain_params.histories)):
         if idx_ in remaining_index:
             continue
-        idx = idx_ % batch
-        conflict_history = copy.deepcopy(domain_params.histories[idx])
-        conflict_history[decisions[idx][0]][0].append(decisions[idx][1])
-        conflict_history[decisions[idx][0]][1].append(+1.0 if idx_ < batch else -1.0)
-        # print(conflict_history)
-        self.all_conflict_clauses.append(conflict_history)
+        self.all_conflict_clauses.append(domain_params.histories[idx_])

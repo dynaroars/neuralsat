@@ -51,7 +51,7 @@ class NetworkAbstractor:
         ]
         
         for mode, method in params:
-            logger.debug(f'Try {mode}, {method}')
+            logger.debug(f'Try conv_mode={mode}, method={method}, input_split={self.input_split}')
             self._init_module(mode=mode, objective=objective)
             if self._check_module(method=method, objective=objective):
                 self.mode = mode
@@ -61,7 +61,6 @@ class NetworkAbstractor:
         return False
             
     def _init_module(self, mode, objective):
-        logger.debug(f'Trying conv_mode: {mode}, input_split={self.input_split}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),

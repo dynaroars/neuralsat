@@ -76,11 +76,10 @@ class BoundedModule(nn.Module):
             'forward_max_dim': int(1e9),
             # Do not share alpha for conv layers.
             'use_full_conv_alpha': True,
-            'max_crown_size': 1000000000,
+            'max_crown_size': int(1e9),
             'disable_optimization': [],
             'disabled_optimization': [],
-            # Threshold for number of unstable neurons for each layer to disable
-            #  use_full_conv_alpha.
+            # Threshold for number of unstable neurons for each layer to disable use_full_conv_alpha.
             'use_full_conv_alpha_thresh': 512,
             'verbosity': 1 if verbose else 0,
             'optimize_graph': {'optimizer': None},

@@ -28,6 +28,10 @@ class DomainsList:
         self.net = net
         self.final_name = self.net.final_node_name
 
+        self.input_split = input_split
+        self.visited = 0
+        self.all_conflict_clauses = []
+        
         # FIXME: len(input_lowers) > 1
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and (len(input_lowers) == 1) # and len(preconditions)
         if self.use_restart:
@@ -41,10 +45,6 @@ class DomainsList:
             logger.info(f'Initialize {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
             if not stat:
                 raise ValueError('BCP conflict')
-            self.all_conflict_clauses = []
-        
-        self.input_split = input_split
-        self.visited = 0
         
         # input bounds
         self.all_input_lowers = TensorStorage(input_lowers.cpu())
@@ -183,48 +183,45 @@ class DomainsList:
         
         # hidden splitting
         if not self.input_split:
-            new_masks = compute_masks(
-                lower_bounds=domain_params.lower_bounds, 
-                upper_bounds=domain_params.upper_bounds, 
-                device='cpu',
-            )
-            
-            extra_conflict_index = []
-            for idx_ in remaining_index:
-                # check full assignment
-                if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
-                    # TODO: fixme
-                    raise NotImplementedError()
-                    extra_conflict_index.append(idx_)
-                    continue
+            # bcp
+            if self.use_restart:
+                # TODO: fixme
+                extra_conflict_index = []
+                new_masks = compute_masks(
+                    lower_bounds=domain_params.lower_bounds, 
+                    upper_bounds=domain_params.upper_bounds, 
+                    device='cpu',
+                )
                 
-                # bcp
-                if self.use_restart:
-                    new_sat_solver = self.boolean_propagation(
-                        domain_params=domain_params,
-                        batch_idx=idx_
-                    )
+                for idx_ in remaining_index:
+                    # check full assignment
+                    if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
+                        extra_conflict_index.append(idx_)
+                        continue
+                    
+                    # bcp
+                    new_sat_solver = self.boolean_propagation(domain_params=domain_params, batch_idx=idx_)
                     if new_sat_solver is None:
                         extra_conflict_index.append(idx_)
                         continue
                             
                     self.all_sat_solvers.append(new_sat_solver)
-
-                self.all_histories.append(domain_params.histories[idx_])
-                self.all_betas.append(domain_params.betas[idx_])
-                
-            if len(extra_conflict_index):
-                logger.debug(f'BCP removes {len(extra_conflict_index)} domains')
-                assert len(extra_conflict_index) == len(list(set(extra_conflict_index)))
-                for eci in extra_conflict_index:
-                    remaining_index = remaining_index[remaining_index != eci]
+                    
+                if len(extra_conflict_index):
+                    logger.debug(f'BCP removes {len(extra_conflict_index)} domains')
+                    assert len(extra_conflict_index) == len(list(set(extra_conflict_index)))
+                    for eci in extra_conflict_index:
+                        remaining_index = remaining_index[remaining_index != eci]
+            
+            # decision histories
+            self.all_histories.extend([domain_params.histories[i] for i in remaining_index])
+            self.all_betas.extend([domain_params.betas[i] for i in remaining_index])
             
             # conflict clauses
-            if self.use_restart:
-                self.save_conflict_clauses(
-                    domain_params=domain_params, 
-                    remaining_index=remaining_index,
-                )
+            self.save_conflict_clauses(
+                domain_params=domain_params, 
+                remaining_index=remaining_index,
+            )
             
             # hidden bounds
             [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
@@ -307,6 +304,9 @@ class DomainsList:
             return None
         
         if not len(self):
+            return None
+        
+        if not len(self.net.relus):
             return None
         
         new_masks = compute_masks(
