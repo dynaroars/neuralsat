@@ -203,10 +203,8 @@ class Verifier:
         
         
     def _verify_one(self, objective, preconditions, reference_bounds, timeout):
-        # print('refined bounds:', sum([(v[1] - v[0]).sum().item() for _, v in reference_bounds.items()])) if reference_bounds is not None else None
-
-        Timers.tic('Initialization') if Settings.use_timer else None
         # initialization
+        Timers.tic('Initialization') if Settings.use_timer else None
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         Timers.toc('Initialization') if Settings.use_timer else None
             
@@ -222,7 +220,6 @@ class Verifier:
         # main loop
         start_time = time.time()
         while len(self.domains_list) > 0:
-            
             # search
             Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()

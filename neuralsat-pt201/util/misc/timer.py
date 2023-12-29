@@ -215,7 +215,7 @@ class Timers():
             percent = 100 * td.total_secs / td.parent.total_secs
             percent_str = " ({:.1f}%)".format(percent)
 
-        print_func("{}{} Time ({} calls): {:.2f} sec{}".format(" " * level * 2, \
+        print_func("{}{} ({} calls): {:.2f} sec{}".format(" " * level * 2, \
             td.name.capitalize(), td.num_calls, td.total_secs, percent_str))
 
         if not below_threshold:
@@ -254,8 +254,8 @@ class Timers():
                             'within threshold print function'
 
                             return cprint(text, None)
-
-                percent_str = " ({:.1f}%)".format(other_percent)
-
-                other_print_func("{}Other ({}): {:.2f} sec{}".format(" " * (level + 1) * 2, td.name.capitalize(), \
-                    other, percent_str))
+                
+                if other_percent > 5.0:
+                    percent_str = " ({:.1f}%)".format(other_percent)
+                    other_print_func("{}Other ({}): {:.2f} sec{}".format(" " * (level + 1) * 2, td.name.capitalize(), \
+                        other, percent_str))
