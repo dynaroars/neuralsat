@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings(action='ignore')
 import numpy as np
-import logging
 import psutil
 import torch
 import time
@@ -14,6 +13,7 @@ from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
+from util.misc.timer import Timers
 from setting import Settings
 
 
@@ -81,12 +81,16 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
+        Timers.tic('Pre-attack') if Settings.use_timer else None
         is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
+        Timers.toc('Pre-attack') if Settings.use_timer else None
         if is_attacked:
             return ReturnStatus.SAT  
 
         # refine
+        Timers.tic('Preprocess') if Settings.use_timer else None
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, forced_input_split=None)
+        Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -97,7 +101,9 @@ class Verifier:
         
         # verify
         while len(dnf_objectives):
+            Timers.tic('Get objective') if Settings.use_timer else None
             objective = self.get_objective(dnf_objectives)
+            Timers.toc('Get objective') if Settings.use_timer else None
             
             # restart variables
             learned_clauses = []
@@ -106,19 +112,23 @@ class Verifier:
             # verify objective (multiple times if RESTART is returned)
             while True:
                 # get strategy + refinement
+                Timers.tic('Setup restart') if Settings.use_timer else None
                 new_reference_bounds = self._setup_restart(nth_restart, objective)
+                Timers.toc('Setup restart') if Settings.use_timer else None
                 
                 # adaptive batch size
                 while True: 
                     logger.info(f'Try batch size {self.batch}')
                     try:
                         # main function
+                        Timers.tic('Verify one') if Settings.use_timer else None
                         status = self._verify_one(
                             objective=objective, 
                             preconditions=preconditions+learned_clauses, 
                             reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
                             timeout=timeout
                         )
+                        Timers.toc('Verify one') if Settings.use_timer else None
                     except RuntimeError as exception:
                         if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
@@ -139,7 +149,9 @@ class Verifier:
                         break
                     
                 # stats
+                Timers.tic('Save stats') if Settings.use_timer else None
                 self._save_stats()
+                Timers.toc('Save stats') if Settings.use_timer else None
                 
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
@@ -193,9 +205,11 @@ class Verifier:
     def _verify_one(self, objective, preconditions, reference_bounds, timeout):
         # print('refined bounds:', sum([(v[1] - v[0]).sum().item() for _, v in reference_bounds.items()])) if reference_bounds is not None else None
 
+        Timers.tic('Initialization') if Settings.use_timer else None
         # initialization
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
-        
+        Timers.toc('Initialization') if Settings.use_timer else None
+            
         # cleaning
         torch.cuda.empty_cache()
         if hasattr(self, 'tightener'):
@@ -208,8 +222,12 @@ class Verifier:
         # main loop
         start_time = time.time()
         while len(self.domains_list) > 0:
-            self._parallel_dpll()
             
+            # search
+            Timers.tic('Main loop') if Settings.use_timer else None
+            self._parallel_dpll()
+            Timers.toc('Main loop') if Settings.use_timer else None
+                
             # check adv founded
             if self.adv is not None:
                 if self._check_adv_f64(self.adv, objective):
@@ -246,6 +264,7 @@ class Verifier:
         old_domains_length = len(self.domains_list)
         unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
+            Timers.tic('Tightening') if Settings.use_timer else None
             self.tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.mip_tightening_topk, 
@@ -253,12 +272,17 @@ class Verifier:
                 largest=False, # stabilize near-stable neurons
                 solve_both=True, # stabilize both upper and lower bounds
             )
+            Timers.toc('Tightening') if Settings.use_timer else None
             
         # step 3: selection
+        Timers.tic('Get domains') if Settings.use_timer else None
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
+        Timers.toc('Get domains') if Settings.use_timer else None
         
         # step 4: PGD attack
+        Timers.tic('Loop attack') if Settings.use_timer else None
         self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
+        Timers.toc('Loop attack') if Settings.use_timer else None
         if self.adv is not None:
             return
 
@@ -268,13 +292,19 @@ class Verifier:
             return
             
         # step 6: branching
+        Timers.tic('Decision') if Settings.use_timer else None
         decisions = self.decision(self.abstractor, pick_ret)
+        Timers.toc('Decision') if Settings.use_timer else None
         
         # step 7: abstraction 
+        Timers.tic('Abstraction') if Settings.use_timer else None
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
+        Timers.toc('Abstraction') if Settings.use_timer else None
 
         # step 8: pruning unverified branches
+        Timers.tic('Add domains') if Settings.use_timer else None
         self.domains_list.add(abstraction_ret)
+        Timers.toc('Add domains') if Settings.use_timer else None
 
         # statistics
         self.iteration += 1

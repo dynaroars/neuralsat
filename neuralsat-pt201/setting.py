@@ -36,6 +36,9 @@ class GlobalSettings:
         
         self.attack_interval = 10
         
+        # timing statistic
+        self.use_timer = 1
+        
         # threshold for automatically switching between input and hidden splitting
         self.safety_property_threshold = 0.5
         

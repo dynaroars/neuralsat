@@ -25,3 +25,4 @@ sympy==1.11.1
 tqdm==4.66.1
 typing_extensions==4.8.0
 urllib3==1.26.13
+termcolor==2.4.0

@@ -4,12 +4,15 @@ import torch
 import time
 import os
 
-from verifier.objective import Objective, DnfObjectives
 from util.misc.logger import logger, LOGGER_LEVEL
 from util.spec.read_vnnlib import read_vnnlib
 from util.network.read_onnx import parse_onnx
 from util.misc.export import get_adv_string
+from util.misc.timer import Timers
+
+from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
+
 from setting import Settings
 
 
@@ -50,6 +53,12 @@ if __name__ == '__main__':
                         help="test on small example with special settings.")
     args = parser.parse_args()   
     
+    
+    # setup timers
+    if Settings.use_timer:
+        Timers.reset()
+        Timers.tic('Main')
+        
     # set device
     if not torch.cuda.is_available():
         args.device = 'cpu'
@@ -63,17 +72,22 @@ if __name__ == '__main__':
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
     # network
+    Timers.tic('Load network') if Settings.use_timer else None
     model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
     model.to(args.device)
+    Timers.toc('Load network') if Settings.use_timer else None
+    
     if args.verbosity:
         print(model)
         if Settings.test:
             print_w_b(model)
     
     # specification
+    Timers.tic('Load specification') if Settings.use_timer else None
     vnnlibs = read_vnnlib(Path(args.spec))
     logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
     logger.info(f'[!] Output shape: {output_shape}')
+    Timers.toc('Load specification') if Settings.use_timer else None
     
     # verifier
     verifier = Verifier(
@@ -97,10 +111,13 @@ if __name__ == '__main__':
     )
     
     print(Settings)
+    
     # verify
+    Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
     status = verifier.verify(objectives, timeout=timeout)
     runtime = time.time() - START_TIME
+    Timers.toc('Verify') if Settings.use_timer else None
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
@@ -120,4 +137,8 @@ if __name__ == '__main__':
     logger.info(f'[!] Runtime: {runtime:.04f}')
     # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
     
+    if Settings.use_timer:
+        Timers.toc('Main')
+        Timers.print_stats()
+        
     print(f'{status},{runtime:.04f}')
