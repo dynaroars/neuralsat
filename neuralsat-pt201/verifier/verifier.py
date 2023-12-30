@@ -284,7 +284,7 @@ class Verifier:
         if self.adv is not None:
             return
 
-        # step 5: pruning complete assignments
+        # step 5: complete assignments
         self.adv, remain_idx = self._check_full_assignment(pick_ret)
         if (self.adv is not None): 
             return

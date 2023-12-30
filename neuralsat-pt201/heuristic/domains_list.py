@@ -209,20 +209,9 @@ class DomainsList:
             if self.use_restart:
                 assert len(domain_params.sat_solvers) == batch
                 assert decisions is not None
-                # TODO: fixme
-                extra_conflict_index = []
-                new_masks = compute_masks(
-                    lower_bounds=domain_params.lower_bounds, 
-                    upper_bounds=domain_params.upper_bounds, 
-                    device='cpu',
-                )
                 
+                extra_conflict_index = []
                 for idx_ in remaining_index:
-                    # check full assignment
-                    if sum([layer_mask[idx_].sum() for layer_mask in new_masks.values()]) == 0:
-                        extra_conflict_index.append(idx_)
-                        continue
-                    
                     # bcp
                     new_sat_solver = self.boolean_propagation(
                         domain_params=domain_params, 
@@ -268,8 +257,7 @@ class DomainsList:
         self.all_rhs.append(domain_params.rhs[remaining_index])
         
         # alpha
-        if domain_params.slopes is not None:
-            [vv.append(domain_params.slopes[k][kk][:,:,remaining_index]) for (k, v) in self.all_slopes.items() for (kk, vv) in v.items()]
+        [vv.append(domain_params.slopes[k][kk][:,:,remaining_index]) for (k, v) in self.all_slopes.items() for (kk, vv) in v.items()]
             
         # checking
         self._check_consistent()
