@@ -27,8 +27,7 @@ class DecisionHeuristic:
             return self.naive_randomized_branching(
                 domain_params=domain_params, 
                 abstractor=abstractor, 
-                # mode=random.choice(['scale', 'distance', 'polarity'])
-                mode='scale'
+                mode=random.choice(['scale', 'distance', 'polarity']),
             )
         
         if self.input_split:

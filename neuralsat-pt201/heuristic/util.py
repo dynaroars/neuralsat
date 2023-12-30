@@ -65,6 +65,7 @@ def _history_to_clause(h, name_mapping):
         var_names, signs = ldata[0], ldata[1]
         # convert data
         var_names = [name_mapping[lname, int(v)] for v in var_names]
+        # negation
         signs = [-int(s) for s in signs]
         # append literals
         clause += [v * s for v, s in zip(var_names, signs)]
@@ -135,7 +136,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     # variables mapping from variable to (lid, nid)
     tic = time.time()
     
-    # TODO: fixme
+    # TODO: fix batch > 1
     assert all([v.shape[0] == 1 for v in lower_bounds.values()])
  
     # initial learned conflict clauses
@@ -147,6 +148,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
             for k in lower_bounds if k != self.net.final_name
     }
     
+    # assign
     literals_to_assign = []
     for lname, lmask in masks.items():
         for nid, nstatus in enumerate(lmask):
@@ -163,7 +165,8 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     bcp_stat, bcp_vars = new_sat_solver.bcp()
     if not bcp_stat: # conflict
         return False
-                
+          
+    # TODO: fix batch > 1
     # save
     self.all_sat_solvers = [copy.deepcopy(new_sat_solver)]
     
