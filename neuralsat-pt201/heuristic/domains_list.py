@@ -82,6 +82,25 @@ class DomainsList:
         self._check_consistent()
         
         
+    @property
+    def var_mapping(self):
+        if not hasattr(self, '_var_mapping'):
+            self._var_mapping = {}
+            count = 1
+            for layer in self.net.split_nodes:
+                for nid in range(layer.lower.flatten(start_dim=1).shape[-1]):
+                    self._var_mapping[layer.name, nid] = count
+                    count += 1
+        return self._var_mapping
+    
+    
+    @property
+    def reversed_var_mapping(self):
+        if not hasattr(self, '_reversed_var_mapping'):
+            self._reversed_var_mapping = {v: k for k, v in self.var_mapping.items()}
+        return self._reversed_var_mapping
+    
+        
     def _check_consistent(self):
         assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_cs) == len(self.all_rhs) == len(self.all_output_lowers) == len(self)
         if not self.input_split:
@@ -92,7 +111,6 @@ class DomainsList:
             assert all([len(_) == len(self) for _ in self.all_lAs.values()])
             if self.use_restart:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
-                
 
 
     def pick_out(self, batch, device='cpu'):
@@ -108,7 +126,7 @@ class DomainsList:
         new_input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
         
         # output bounds
-        new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
+        # new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
         
         # properties
         new_cs = self.all_cs.pop(batch).to(device=device, non_blocking=True)
@@ -174,17 +192,20 @@ class DomainsList:
         })
 
 
-    def add(self, domain_params):
+    def add(self, domain_params, decisions=None):
         # assert decisions is not None
         batch = len(domain_params.input_lowers)
         assert batch > 0
         
+        # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
         
         # hidden splitting
         if not self.input_split:
             # bcp
             if self.use_restart:
+                assert len(domain_params.sat_solvers) == batch
+                assert decisions is not None
                 # TODO: fixme
                 extra_conflict_index = []
                 new_masks = compute_masks(
@@ -200,7 +221,7 @@ class DomainsList:
                         continue
                     
                     # bcp
-                    new_sat_solver = self.boolean_propagation(domain_params=domain_params, batch_idx=idx_)
+                    new_sat_solver = self.boolean_propagation(domain_params=domain_params, decisions=decisions, batch_idx=idx_)
                     if new_sat_solver is None:
                         extra_conflict_index.append(idx_)
                         continue

@@ -31,15 +31,18 @@ def extract_instance(net_path, vnnlib_path):
 
     
 def test_1():
-    net_path = 'example/backup/motivation_example_161.onnx'
-    vnnlib_path = 'example/motivation_example.vnnlib'
+    net_path = 'example/backup/motivation_example_159.onnx'
+    vnnlib_path = 'example/backup/motivation_example_159.vnnlib'
     
     # net_path = 'example/mnist-net_256x2.onnx'
     # vnnlib_path = 'example/prop_1_0.05.vnnlib'
     
-    device = 'cuda'
+    device = 'cpu'
     logger.setLevel(1)
-    Settings.setup(args=None)
+    # Settings.setup(args=None)
+    Settings.setup_test()
+    
+    print(Settings)
     
     print('Running test with', net_path, vnnlib_path)
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
@@ -53,12 +56,24 @@ def test_1():
         device=device,
     )
     
-    stable, unstable, lbs, ubs = verifier.compute_stability(objectives)
-    print('stable:', stable)
-    print('unstable:', unstable)
+    # stable, unstable, lbs, ubs = verifier.compute_stability(objectives)
+    # print('stable:', stable)
+    # print('unstable:', unstable)
     
-    verifier.verify(objectives)
-    print(verifier.get_stats())
+    preconditions = [
+        # {'/input': (torch.tensor([0]), torch.tensor([-1.]), torch.tensor([0.])), '/input.3': ([], [], [])},
+        # {'/input': (torch.tensor([0, 1]), torch.tensor([1., 1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0]), torch.tensor([1.]), torch.tensor([0.]))},
+        {'/input': (torch.tensor([0, 1]), torch.tensor([ 1., -1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0, 1]), torch.tensor([-1.,  1.]), torch.tensor([0., 0.]))},
+    ]
+    # preconditions = []
+    
+    print(preconditions)
+    
+    verifier.verify(objectives, preconditions=preconditions)
+    print(verifier.get_unsat_core())
+    
+    for c in verifier._get_learned_conflict_clauses():
+        print(c)
     # print('lbs:', lbs)
     # print('ubs:', ubs)
 

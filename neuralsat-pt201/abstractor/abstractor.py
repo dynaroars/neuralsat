@@ -35,7 +35,7 @@ class NetworkAbstractor:
         
     def setup(self, objective):
         assert self.select_params(objective), print('Initialization failed')
-        logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}"')
+        logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}')
             
             
     def select_params(self, objective):
@@ -241,6 +241,7 @@ class NetworkAbstractor:
         double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
+        double_sat_solvers = domain_params.sat_solvers * 2 if domain_params.sat_solvers is not None else None
         
         # update histories with new decisions
         double_betas = domain_params.betas * 2
@@ -311,7 +312,7 @@ class NetworkAbstractor:
             'histories': double_histories,
             'cs': double_cs,
             'rhs': double_rhs,
-            'sat_solvers': domain_params.sat_solvers,
+            'sat_solvers': double_sat_solvers,
         })
         
         

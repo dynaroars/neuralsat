@@ -11,6 +11,7 @@ from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
 from util.misc.result import ReturnStatus
+from verifier.utils import _prune_domains
 from abstractor.utils import new_slopes
 from util.misc.logger import logger
 from util.misc.timer import Timers
@@ -284,23 +285,23 @@ class Verifier:
             return
 
         # step 5: pruning complete assignments
-        self.adv = self._check_full_assignment(pick_ret)
-        if self.adv is not None:
-            return
+        self.adv, remain_idx = self._check_full_assignment(pick_ret)
+        if (self.adv is not None): return
+        pruned_ret = _prune_domains(pick_ret, remain_idx) if remain_idx is not None else pick_ret
             
         # step 6: branching
         Timers.tic('Decision') if Settings.use_timer else None
-        decisions = self.decision(self.abstractor, pick_ret)
+        decisions = self.decision(self.abstractor, pruned_ret)
         Timers.toc('Decision') if Settings.use_timer else None
         
         # step 7: abstraction 
         Timers.tic('Abstraction') if Settings.use_timer else None
-        abstraction_ret = self.abstractor.forward(decisions, pick_ret)
+        abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
         Timers.toc('Abstraction') if Settings.use_timer else None
 
         # step 8: pruning unverified branches
         Timers.tic('Add domains') if Settings.use_timer else None
-        self.domains_list.add(abstraction_ret)
+        self.domains_list.add(abstraction_ret, decisions)
         Timers.toc('Add domains') if Settings.use_timer else None
 
         # statistics

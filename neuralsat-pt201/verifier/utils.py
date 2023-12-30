@@ -1,3 +1,4 @@
+from collections import defaultdict
 import numpy as np
 import random
 import torch
@@ -5,9 +6,9 @@ import time
 import copy
 
 from heuristic.restart_heuristics import get_restart_strategy, HIDDEN_SPLIT_RESTART_STRATEGIES
+from heuristic.util import compute_masks, _history_to_clause
 from heuristic.decision_heuristics import DecisionHeuristic
 from heuristic.tightener import Tightener
-from heuristic.util import compute_masks
 
 from attacker.pgd_attack.general import general_attack
 from attacker.mip_attack import MIPAttacker
@@ -15,11 +16,29 @@ from attacker.attacker import Attacker
 
 from abstractor.abstractor import NetworkAbstractor
 
+from util.misc.result import AbstractResults, ReturnStatus
 from util.misc.check import check_solution
-from util.misc.result import ReturnStatus
 from util.misc.logger import logger
 
 from setting import Settings
+
+
+def _prune_domains(domain_params, remaining_indices):
+    return AbstractResults(**{
+        'output_lbs': domain_params.output_lbs[remaining_indices] if domain_params.output_lbs is not None else None, 
+        'masks': {k: v[remaining_indices] for k, v in domain_params.masks.items()} if domain_params.masks is not None else None, 
+        'lAs': {k: v[remaining_indices] for k, v in domain_params.lAs.items()}, 
+        'histories': [domain_params.histories[_] for _ in remaining_indices], 
+        'lower_bounds': {k: v[remaining_indices] for k, v in domain_params.lower_bounds.items()}, 
+        'upper_bounds': {k: v[remaining_indices] for k, v in domain_params.upper_bounds.items()}, 
+        'input_lowers': domain_params.input_lowers[remaining_indices], 
+        'input_uppers': domain_params.input_uppers[remaining_indices],
+        'betas': [domain_params.betas[_] for _ in remaining_indices], 
+        'cs': domain_params.cs[remaining_indices], 
+        'rhs': domain_params.rhs[remaining_indices], 
+        'sat_solvers': [domain_params.sat_solvers[_] for _ in remaining_indices] if domain_params.sat_solvers is not None else None, 
+        'slopes': defaultdict(dict, {k: {kk: vv[:, :, remaining_indices] for kk, vv in v.items()} for k, v in domain_params.slopes.items()}), 
+    })
 
 
 def _mip_attack(self, reference_bounds):
@@ -344,15 +363,15 @@ def _update_tightening_patience(self, minimum_lowers, old_domains_length):
     
 def _check_full_assignment(self, domain_params):
     if self.input_split:
-        return None
+        return None, None
     
     if domain_params.lower_bounds is None:
-        return None
+        return None, None
     
     new_masks = compute_masks(
         lower_bounds=domain_params.lower_bounds, 
         upper_bounds=domain_params.upper_bounds, 
-        device='cuda',
+        device='cpu',
     
     )
     # print([(k, v.shape) for k, v in new_masks.items()])
@@ -363,9 +382,8 @@ def _check_full_assignment(self, domain_params):
     pruning_indices = torch.where(n_unstables == 0)[0]
     
     if not len(pruning_indices):
-        return None
+        return None, None
     
-    remaining_index = torch.where(n_unstables > 0)[0]
     
     for idx_ in pruning_indices:
         self.abstractor.build_lp_solver(
@@ -386,12 +404,12 @@ def _check_full_assignment(self, domain_params):
         )
         
         if feasible:
-            return adv
+            return adv, None
         
-    # TODO: prune UNSAT domains
-    raise NotImplementedError()
+    # TODO: save pruned domains
+    remaining_indices = torch.where(n_unstables > 0)[0]
     
-    return None
+    return None, remaining_indices
 
     
 def compute_stability(self, dnf_objectives):
@@ -425,36 +443,15 @@ def _check_adv_f64(self, adv, objective):
         if check_solution(self.net, adv, cs_f64[i], rhs_f64[i], lower_bounds_f64[i:i+1], upper_bounds_f64[i:i+1]):
             return True
     return False
-    
-    
+
+
 def get_unsat_core(self):
     if self.status != ReturnStatus.UNSAT:
         return None
     
-    def _history_to_clause(h):
-        clause = []
-        for lname, ldata in h.items():
-            assert sum(ldata[2]) == 0 # TODO: fixme
-            # extract data
-            var_names, signs = ldata[0], ldata[1]
-            # convert data
-            var_names = [var_mapping[lname, int(v)] for v in var_names]
-            signs = [-int(s) for s in signs]
-            # append literals
-            clause += [v * s for v, s in zip(var_names, signs)]
-        return clause
-    
-    # mapping from [l_name, n_id] to literal id
-    var_mapping = {}
-    count = 1
-    for layer in self.abstractor.net.split_nodes:
-        for nid in range(layer.lower.flatten(start_dim=1).shape[-1]):
-            var_mapping[layer.name, nid] = count
-            count += 1
-    
     unsat_core = []
     for c in self.all_conflict_clauses:
-        unsat_core.append(_history_to_clause(c))
+        unsat_core.append(_history_to_clause(c, self.domains_list.var_mapping))
         
     return unsat_core
         

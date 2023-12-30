@@ -2,10 +2,10 @@ import torch
 import time
 import copy
 
+from abstractor.utils import _append_tensor
 from solver.sat_solver import SATSolver
 from util.misc.logger import logger
 from auto_LiRPA.bound_ops import *
-
 
 def compute_masks(lower_bounds, upper_bounds, device):
     new_masks = {
@@ -57,22 +57,20 @@ def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, ma
     return score, intercept_tb
 
 
-def _histories_to_clauses(histories, var_mapping):
-    # TODO:
-    raise
-    clauses = []
-    for history in histories:
-        literals = []
-        for lid, lds in enumerate(history):
-            var_names, signs = lds
-            var_names = [var_mapping[lid, v] for v in var_names]
-            signs = [-int(s) for s in signs]
-            literals += [v * s for v, s in zip(var_names, signs)]
-        clauses.append(literals)
-    # clauses += [[i+1, -(i+1)] for i in range(len(var_mapping))] # init clauses
-    return clauses
-    
-    
+def _history_to_clause(h, name_mapping):
+    clause = []
+    for lname, ldata in h.items():
+        assert sum(ldata[2]) == 0 # TODO: fixme
+        # extract data
+        var_names, signs = ldata[0], ldata[1]
+        # convert data
+        var_names = [name_mapping[lname, int(v)] for v in var_names]
+        signs = [-int(s) for s in signs]
+        # append literals
+        clause += [v * s for v, s in zip(var_names, signs)]
+    return clause
+
+
 def _compute_ratio(lower_bound, upper_bound):
     lower_temp = lower_bound.clamp(max=0)
     upper_temp = upper_bound.clamp(min=0)
@@ -113,10 +111,15 @@ def _get_bias_term(input_node, ratio):
 def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, literal, batch_idx):
     assert literal != 0
     assert lower_bounds is not None
+    # extract decision
     lid, nid = self.reversed_var_mapping[abs(literal)]
+
     # update histories
-    histories[lid][0].append(nid)
-    histories[lid][1].append(1.0 if literal > 0 else -1.0)
+    loc = _append_tensor(histories[lid][0], nid, dtype=torch.long)
+    sign = _append_tensor(histories[lid][1], +1 if literal > 0 else -1)
+    beta = _append_tensor(histories[lid][2], 0.0) # FIXME: 0.0 is for ReLU only
+    histories[lid] = (loc, sign, beta)
+    
     # update bounds
     if literal > 0: # active neuron
         lower_bounds[lid][batch_idx].flatten()[nid] = 0.0
@@ -130,27 +133,25 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
 
 def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     # variables mapping from variable to (lid, nid)
-    # TODO:
-    raise
     tic = time.time()
-    assert lower_bounds[0].shape[0] == 1
-    layer_sizes = [_.flatten(start_dim=1).shape[-1] for _ in lower_bounds[:-1]]
-    var_mapping = {}
-    for lid, layer_size in enumerate(layer_sizes):
-        for nid in range(layer_size):
-            var_mapping[lid, nid] = 1 + nid + sum(layer_sizes[:lid])
     
+    # TODO: fixme
+    assert all([v.shape[0] == 1 for v in lower_bounds.values()])
+ 
     # initial learned conflict clauses
-    clauses = _histories_to_clauses(preconditions, var_mapping)
+    clauses = [_history_to_clause(c, self.var_mapping) for c in preconditions]
     
     # masks: 1 for active, -1 for inactive, 0 for unstable
-    masks = [((lower_bounds[j] > 0).flatten().to(torch.get_default_dtype()) - (upper_bounds[j] < 0).flatten().to(torch.get_default_dtype())).detach().cpu() 
-                for j in range(len(lower_bounds) - 1)]
+    masks = {
+        k: ((lower_bounds[k] > 0).flatten().int() - (upper_bounds[k] < 0).flatten().int()).detach().cpu() 
+            for k in lower_bounds if k != self.net.final_name
+    }
+    
     literals_to_assign = []
-    for lid, lmask in enumerate(masks):
+    for lname, lmask in masks.items():
         for nid, nstatus in enumerate(lmask):
             if nstatus != 0:
-                literal = int(nstatus * var_mapping[lid, nid])
+                literal = int(nstatus * self.var_mapping[lname, nid])
                 literals_to_assign.append(literal)
             
     # create sat solver
@@ -164,9 +165,6 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
         return False
                 
     # save
-    self.var_mapping = var_mapping
-    self.reversed_var_mapping = {v: k for k, v in var_mapping.items()}
-    assert len(self.var_mapping) == len(self.reversed_var_mapping)
     self.all_sat_solvers = [copy.deepcopy(new_sat_solver)]
     
     # update bcp variables
@@ -178,19 +176,20 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     return True
     
     
-def boolean_propagation(self, domain_params, batch_idx):
-    # TODO
-    raise
-    batch = len(domain_params.input_lowers)
-    idx = batch_idx % batch
+def boolean_propagation(self, domain_params, decisions, batch_idx):
+    assert len(decisions) * 2 == len(domain_params.input_lowers) 
     
     # new solver
-    new_sat_solver = copy.deepcopy(domain_params.sat_solvers[idx])
+    new_sat_solver = copy.deepcopy(domain_params.sat_solvers[batch_idx])
+    
+    # TODO: Fixme: generalize this
+    lid, nid = decisions[batch_idx % len(decisions)]
+    lname = self.net.split_nodes[lid].name
     
     # new decision
-    variable = self.var_mapping[decisions[idx][0], decisions[idx][1]]
-    literal = variable if batch_idx < batch else -variable
-    
+    variable = self.var_mapping[lname, nid]
+    literal = variable if batch_idx < len(decisions) else -variable
+
     # assign
     if not new_sat_solver.assign(literal):
         logger.debug('[!] Assign conflicted')
@@ -200,15 +199,16 @@ def boolean_propagation(self, domain_params, batch_idx):
     bcp_stat, bcp_vars = new_sat_solver.bcp()
     if not bcp_stat: # conflict
         return None
-    
+
     if len(bcp_vars):
         # print('BCP', bcp_vars)
         update_stats = [self.update_hidden_bounds_histories(
                             lower_bounds=domain_params.lower_bounds, 
                             upper_bounds=domain_params.upper_bounds, 
-                            histories=new_history, 
+                            histories=domain_params.histories[batch_idx], 
                             literal=lit, 
-                            batch_idx=batch_idx) for lit in bcp_vars]
+                            batch_idx=batch_idx) 
+                        for lit in bcp_vars]
         if not all(update_stats):
             logger.debug('[!] BCP assign conflicted')
             return None

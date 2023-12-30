@@ -1,4 +1,3 @@
-from collections import deque, Counter
 import random
 import torch
 import copy
