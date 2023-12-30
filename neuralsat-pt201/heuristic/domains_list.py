@@ -102,7 +102,9 @@ class DomainsList:
     
         
     def _check_consistent(self):
-        assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_cs) == len(self.all_rhs) == len(self.all_output_lowers) == len(self)
+        assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_output_lowers) == len(self), \
+            print(len(self.all_input_lowers), len(self.all_input_uppers), len(self.all_output_lowers), len(self))
+        assert len(self.all_cs) == len(self.all_rhs) == len(self)
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
@@ -126,7 +128,7 @@ class DomainsList:
         new_input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
         
         # output bounds
-        # new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
+        new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
         
         # properties
         new_cs = self.all_cs.pop(batch).to(device=device, non_blocking=True)
@@ -168,15 +170,16 @@ class DomainsList:
                 device=device,
             )
             
-            assert len(new_betas) == len(new_histories) == \
-                   len(new_input_lowers) == len(new_input_lowers) == \
-                   len(new_lower_bounds[list(new_lower_bounds.keys())[0]]) == \
-                   len(new_upper_bounds[list(new_upper_bounds.keys())[0]]) == \
-                   len(new_lAs[list(new_lAs.keys())[0]]) == batch 
+            assert len(new_betas) == len(new_histories) == batch
+            assert len(new_input_lowers) == len(new_input_lowers) == batch
+            assert len(new_lower_bounds[list(new_lower_bounds.keys())[0]]) == batch
+            assert len(new_upper_bounds[list(new_upper_bounds.keys())[0]]) == batch
+            assert len(new_lAs[list(new_lAs.keys())[0]]) == batch 
         
         self._check_consistent()
         
         return AbstractResults(**{
+            'output_lbs': new_output_lowers,
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers, 
             'masks': new_masks, 
@@ -199,7 +202,7 @@ class DomainsList:
         
         # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-        
+
         # hidden splitting
         if not self.input_split:
             # bcp
@@ -221,7 +224,11 @@ class DomainsList:
                         continue
                     
                     # bcp
-                    new_sat_solver = self.boolean_propagation(domain_params=domain_params, decisions=decisions, batch_idx=idx_)
+                    new_sat_solver = self.boolean_propagation(
+                        domain_params=domain_params, 
+                        decisions=decisions, 
+                        batch_idx=idx_,
+                    )
                     if new_sat_solver is None:
                         extra_conflict_index.append(idx_)
                         continue

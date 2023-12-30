@@ -134,7 +134,9 @@ class SATSolver:
     
     
     def multiple_assign_python(self, literals):
-        logger.debug('[!] Parallel assign using Python')
+        if not len(literals):
+            return True
+        logger.debug(f'[!] Parallel assign using Python: {literals}')
         
         remain_mask = torch.ones(self.clauses.size(0), dtype=torch.bool, device=self.clauses.device)
         for lit in literals:
@@ -151,8 +153,10 @@ class SATSolver:
     
     
     def multiple_assign_cpp(self, literals):
+        if not len(literals):
+            return True
         import haioc
-        logger.debug('[!] Parallel assign using C++')
+        logger.debug(f'[!] Parallel assign using C++: {literals}')
         
         xs = torch.tensor(literals).int()#.cuda()
         # self.clauses = self.clauses.cuda()

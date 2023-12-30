@@ -114,12 +114,14 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
     assert lower_bounds is not None
     # extract decision
     lid, nid = self.reversed_var_mapping[abs(literal)]
+    
+    history = histories[batch_idx] if isinstance(histories, list) else histories
 
     # update histories
-    loc = _append_tensor(histories[lid][0], nid, dtype=torch.long)
-    sign = _append_tensor(histories[lid][1], +1 if literal > 0 else -1)
-    beta = _append_tensor(histories[lid][2], 0.0) # FIXME: 0.0 is for ReLU only
-    histories[lid] = (loc, sign, beta)
+    loc = _append_tensor(history[lid][0], nid, dtype=torch.long)
+    sign = _append_tensor(history[lid][1], +1 if literal > 0 else -1)
+    beta = _append_tensor(history[lid][2], 0.0) # FIXME: 0.0 is for ReLU only
+    history[lid] = (loc, sign, beta)
     
     # update bounds
     if literal > 0: # active neuron
@@ -141,6 +143,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
  
     # initial learned conflict clauses
     clauses = [_history_to_clause(c, self.var_mapping) for c in preconditions]
+    # print(clauses)
     
     # masks: 1 for active, -1 for inactive, 0 for unstable
     masks = {
@@ -181,6 +184,7 @@ def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
     
 def boolean_propagation(self, domain_params, decisions, batch_idx):
     assert len(decisions) * 2 == len(domain_params.input_lowers) 
+    assert len(decisions) * 2 == len(domain_params.sat_solvers) 
     
     # new solver
     new_sat_solver = copy.deepcopy(domain_params.sat_solvers[batch_idx])
@@ -204,18 +208,19 @@ def boolean_propagation(self, domain_params, decisions, batch_idx):
         return None
 
     if len(bcp_vars):
-        # print('BCP', bcp_vars)
+        # print('BCP', bcp_vars, 'batch_idx', batch_idx)
         update_stats = [self.update_hidden_bounds_histories(
                             lower_bounds=domain_params.lower_bounds, 
                             upper_bounds=domain_params.upper_bounds, 
-                            histories=domain_params.histories[batch_idx], 
+                            histories=domain_params.histories, 
                             literal=lit, 
                             batch_idx=batch_idx) 
                         for lit in bcp_vars]
+
         if not all(update_stats):
             logger.debug('[!] BCP assign conflicted')
             return None
-        
+
     return new_sat_solver
 
 

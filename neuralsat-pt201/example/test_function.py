@@ -62,7 +62,7 @@ def test_1():
     
     preconditions = [
         # {'/input': (torch.tensor([0]), torch.tensor([-1.]), torch.tensor([0.])), '/input.3': ([], [], [])},
-        # {'/input': (torch.tensor([0, 1]), torch.tensor([1., 1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0]), torch.tensor([1.]), torch.tensor([0.]))},
+        {'/input': (torch.tensor([0, 1]), torch.tensor([1., 1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0]), torch.tensor([1.]), torch.tensor([0.]))},
         {'/input': (torch.tensor([0, 1]), torch.tensor([ 1., -1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0, 1]), torch.tensor([-1.,  1.]), torch.tensor([0., 0.]))},
     ]
     # preconditions = []
@@ -70,10 +70,11 @@ def test_1():
     print(preconditions)
     
     verifier.verify(objectives, preconditions=preconditions)
-    print(verifier.get_unsat_core())
+    print('status:', verifier.status)
+    print('unsat core:', verifier.get_unsat_core())
     
-    for c in verifier._get_learned_conflict_clauses():
-        print(c)
+    # for c in verifier._get_learned_conflict_clauses():
+    #     print(c)
     # print('lbs:', lbs)
     # print('ubs:', ubs)
 

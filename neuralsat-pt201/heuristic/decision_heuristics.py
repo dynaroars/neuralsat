@@ -28,6 +28,7 @@ class DecisionHeuristic:
                 domain_params=domain_params, 
                 abstractor=abstractor, 
                 mode=random.choice(['scale', 'distance', 'polarity']),
+                # mode='scale',
             )
         
         if self.input_split:

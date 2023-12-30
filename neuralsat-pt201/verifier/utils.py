@@ -374,10 +374,7 @@ def _check_full_assignment(self, domain_params):
         device='cpu',
     
     )
-    # print([(k, v.shape) for k, v in new_masks.items()])
-    # print([(k, v) for k, v in new_masks.items()])
-    # print([(k, v.sum(1)) for k, v in new_masks.items()])
-    # print([(k, v) for k, v in new_masks.items()])
+    
     n_unstables = torch.stack([v.sum(dim=1) for k, v in new_masks.items()]).sum(dim=0)
     pruning_indices = torch.where(n_unstables == 0)[0]
     
@@ -406,7 +403,10 @@ def _check_full_assignment(self, domain_params):
         if feasible:
             return adv, None
         
-    # TODO: save pruned domains
+    # save pruned domains
+    [self.domains_list.all_conflict_clauses.append(domain_params.histories[i]) for i in pruning_indices]
+    
+    # unverified indices
     remaining_indices = torch.where(n_unstables > 0)[0]
     
     return None, remaining_indices

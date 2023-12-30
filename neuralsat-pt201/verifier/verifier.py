@@ -286,8 +286,13 @@ class Verifier:
 
         # step 5: pruning complete assignments
         self.adv, remain_idx = self._check_full_assignment(pick_ret)
-        if (self.adv is not None): return
+        if (self.adv is not None): 
+            return
+        
+        # pruning
         pruned_ret = _prune_domains(pick_ret, remain_idx) if remain_idx is not None else pick_ret
+        if not len(pruned_ret.input_lowers): 
+            return
             
         # step 6: branching
         Timers.tic('Decision') if Settings.use_timer else None
