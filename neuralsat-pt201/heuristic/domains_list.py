@@ -17,6 +17,7 @@ class DomainsList:
 
     def __init__(self, 
                  net,
+                 objective_ids,
                  output_lbs,
                  input_lowers, input_uppers, 
                  lower_bounds, upper_bounds, 
@@ -45,6 +46,9 @@ class DomainsList:
             logger.info(f'Initialize {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
             if not stat:
                 raise ValueError('BCP conflict')
+        
+        # objective indices
+        self.all_objective_ids = TensorStorage(objective_ids.cpu())
         
         # input bounds
         self.all_input_lowers = TensorStorage(input_lowers.cpu())
@@ -104,7 +108,8 @@ class DomainsList:
     def _check_consistent(self):
         assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_output_lowers) == len(self), \
             print(len(self.all_input_lowers), len(self.all_input_uppers), len(self.all_output_lowers), len(self))
-        assert len(self.all_cs) == len(self.all_rhs) == len(self)
+        assert len(self.all_cs) == len(self.all_rhs) == len(self.all_objective_ids) == len(self), \
+            print(len(self.all_cs), len(self.all_rhs), len(self.all_objective_ids))
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
@@ -126,6 +131,9 @@ class DomainsList:
         # input bounds
         new_input_lowers = self.all_input_lowers.pop(batch).to(device=device, non_blocking=True)
         new_input_uppers = self.all_input_uppers.pop(batch).to(device=device, non_blocking=True)
+        
+        # objective indices
+        new_objective_ids = self.all_objective_ids.pop(batch).to(device='cpu')
         
         # output bounds
         new_output_lowers = self.all_output_lowers.pop(batch).to(device=device, non_blocking=True)
@@ -179,6 +187,7 @@ class DomainsList:
         self._check_consistent()
         
         return AbstractResults(**{
+            'objective_ids': new_objective_ids,
             'output_lbs': new_output_lowers,
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers, 
@@ -202,7 +211,7 @@ class DomainsList:
         
         # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-
+        
         # hidden splitting
         if not self.input_split:
             # bcp
@@ -244,6 +253,9 @@ class DomainsList:
             [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
             [v.append(domain_params.upper_bounds[k][remaining_index]) for k, v in self.all_upper_bounds.items()]
             [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()]
+        
+        # objective indices
+        self.all_objective_ids.append(domain_params.objective_ids[remaining_index])
         
         # input bounds
         self.all_input_lowers.append(domain_params.input_lowers[remaining_index])

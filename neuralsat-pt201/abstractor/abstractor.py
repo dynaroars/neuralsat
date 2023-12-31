@@ -150,6 +150,7 @@ class NetworkAbstractor:
                 lower_bounds, upper_bounds = self.get_hidden_bounds(lb)
 
             return AbstractResults(**{
+                'objective_ids': objective.ids,
                 'output_lbs': lower_bounds[self.net.final_name], 
                 'lAs': self.get_lAs(), 
                 'lower_bounds': lower_bounds, 
@@ -175,6 +176,7 @@ class NetworkAbstractor:
                 return AbstractResults(**{'output_lbs': lb})
             
             return AbstractResults(**{
+                'objective_ids': getattr(objective, 'ids', None),
                 'output_lbs': lb, 
                 'slopes': self.get_slope(), 
                 'cs': objective.cs,
@@ -237,6 +239,7 @@ class NetworkAbstractor:
         assert batch > 0
         
         # 2 * batch
+        double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
         double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
@@ -301,6 +304,7 @@ class NetworkAbstractor:
         assert len(double_histories) == len(double_betas) == 2 * batch
             
         return AbstractResults(**{
+            'objective_ids': double_objective_ids,
             'output_lbs': double_lower_bounds[self.net.final_name], 
             'input_lowers': double_input_lowers, 
             'input_uppers': double_input_uppers,
@@ -334,6 +338,7 @@ class NetworkAbstractor:
         new_x = self.new_input(x_L=new_input_lowers, x_U=new_input_uppers)
         
         # 2 * batch
+        double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
         double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
         
@@ -357,6 +362,7 @@ class NetworkAbstractor:
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
 
         return AbstractResults(**{
+            'objective_ids': double_objective_ids,
             'output_lbs': double_output_lbs, 
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers,

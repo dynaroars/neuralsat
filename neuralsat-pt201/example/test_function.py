@@ -80,16 +80,20 @@ def test_1():
 
 
 def test_2():
-    net_path = 'example/cifar10_2_255_simplified.onnx'
-    vnnlib_path = Path('example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib')
+    net_path = 'example/mnist-net_256x2.onnx'
+    vnnlib_path = Path('example/prop_1_0.03.vnnlib')
     device = 'cuda'
 
     print('\n\nRunning test with', net_path, vnnlib_path)
+    
+    preconditions = [eval(l.replace('tensor', 'torch.tensor')) for l in open('log.txt').read().strip().split('\n')][:400]
+    # print(preconditions)
     
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     model.to(device)
     
     Settings.setup(args=None)
+    print(Settings)
     logger.setLevel(1)
     
     verifier = Verifier(
@@ -99,8 +103,11 @@ def test_2():
         device=device,
     )
     
-    status = verifier.verify(objectives)
-    print(status)
+    
+    status = verifier.verify(objectives, preconditions=preconditions)
+    
+    # for c in verifier._get_learned_conflict_clauses():
+    #     print(c)
 
 if __name__ == "__main__":
-    test_1()
+    test_2()

@@ -1,6 +1,4 @@
-import numpy as np
 import torch
-import time
 
 from util.network.read_onnx import custom_quirks
 
@@ -40,6 +38,10 @@ class DnfObjectives:
         upper_bounds_f64 = self.upper_bounds_f64[self.num_used : self.num_used + batch]
         
         objective = TMP()
+        
+        # indices for distinguishing restart
+        objective.ids = torch.arange(0, batch)
+        
         # input bounds
         objective.lower_bounds = lower_bounds
         objective.upper_bounds = upper_bounds

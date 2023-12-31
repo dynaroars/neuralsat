@@ -174,7 +174,7 @@ class Verifier:
     def _initialize(self, objective, preconditions, reference_bounds):
         # initialization params
         ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, init_betas=self.refined_betas)
-        
+
         # check verified
         assert len(ret.output_lbs) == len(objective.cs)
         if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs.to(self.device)).all():
@@ -187,6 +187,7 @@ class Verifier:
         # remaining domains
         return DomainsList(
             net=self.abstractor.net,
+            objective_ids=ret.objective_ids,
             output_lbs=ret.output_lbs,
             input_lowers=ret.input_lowers,
             input_uppers=ret.input_uppers,
