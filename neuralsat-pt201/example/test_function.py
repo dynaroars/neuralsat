@@ -65,7 +65,7 @@ def test_1():
         {'/input': (torch.tensor([0, 1]), torch.tensor([1., 1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0]), torch.tensor([1.]), torch.tensor([0.]))},
         {'/input': (torch.tensor([0, 1]), torch.tensor([ 1., -1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0, 1]), torch.tensor([-1.,  1.]), torch.tensor([0., 0.]))},
     ]
-    preconditions = []
+    # preconditions = []
     
     print(preconditions)
     
@@ -77,6 +77,8 @@ def test_1():
     #     print(c)
     # print('lbs:', lbs)
     # print('ubs:', ubs)
+    
+    print(verifier.get_stats())
 
 
 def test_2():

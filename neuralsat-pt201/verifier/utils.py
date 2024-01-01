@@ -25,6 +25,7 @@ from setting import Settings
 
 def _prune_domains(domain_params, remaining_indices):
     return AbstractResults(**{
+        'objective_ids': domain_params.objective_ids[remaining_indices], 
         'output_lbs': domain_params.output_lbs[remaining_indices] if domain_params.output_lbs is not None else None, 
         'masks': {k: v[remaining_indices] for k, v in domain_params.masks.items()} if domain_params.masks is not None else None, 
         'lAs': {k: v[remaining_indices] for k, v in domain_params.lAs.items()}, 
@@ -287,7 +288,7 @@ def _attack(self, domain_params, n_sample=50, n_interval=1):
         only_replicate_restarts=True,
         use_gama=False,
     )
-    if (attack_images is None) and (self.iteration % (3 * n_interval) == 0) and 0:
+    if (attack_images is None) and (self.iteration % (5 * n_interval) == 0):
         attack_images = general_attack(
             model=self.net, 
             X=adv_example, 
@@ -377,7 +378,6 @@ def _check_full_assignment(self, domain_params):
     if not len(pruning_indices):
         return None, None
     
-    
     for idx_ in pruning_indices:
         self.abstractor.build_lp_solver(
             model_type='lp', 
@@ -425,13 +425,11 @@ def _save_stats(self):
         
         
 def get_stats(self):
-    # TODO: fix
-    if len(self.all_conflict_clauses):
-        depth = max(map(lambda x: sum(len(_[0]) for _ in x), self.all_conflict_clauses))
-    else:
-        depth = 0
-    visited = self.visited
-    return depth, visited
+    depths = {}
+    for k, v in self.all_conflict_clauses.items():
+        depth = max(map(lambda x: sum(len(_[0]) for _ in x.values()), v)) if len(v) else 0
+        depths[k] = depth
+    return max(list(depths.values())), self.visited
 
 
 def _check_adv_f64(self, adv, objective):

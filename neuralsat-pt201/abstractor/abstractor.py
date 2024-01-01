@@ -232,7 +232,7 @@ class NetworkAbstractor:
 
     def _forward_hidden(self, domain_params, decisions):
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
-               len(domain_params.input_lowers) == len(domain_params.input_uppers), \
+               len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids), \
                print(f'len(decisions)={len(decisions)}, len(domain_params.input_lowers)={len(domain_params.input_lowers)}')
 
         batch = len(decisions)
@@ -322,7 +322,7 @@ class NetworkAbstractor:
         
     def _forward_input(self, domain_params, decisions):
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
-               len(domain_params.input_lowers) == len(domain_params.input_uppers)
+               len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids)
                
         batch = len(decisions)
         assert batch > 0

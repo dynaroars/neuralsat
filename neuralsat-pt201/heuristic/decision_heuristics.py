@@ -18,8 +18,6 @@ class DecisionHeuristic:
         self.decision_reduceop = decision_reduceop
         self.random_selection = random_selection
         
-        # if Settings.test:
-        #     random.seed(seed)
 
     @torch.no_grad()
     def __call__(self, abstractor, domain_params):
@@ -28,7 +26,6 @@ class DecisionHeuristic:
                 domain_params=domain_params, 
                 abstractor=abstractor, 
                 mode=random.choice(['scale', 'distance', 'polarity']),
-                # mode='scale',
             )
         
         if self.input_split:

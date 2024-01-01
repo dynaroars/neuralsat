@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings(action='ignore')
 import numpy as np
-import psutil
 import torch
 import time
 import copy
@@ -45,17 +44,8 @@ class Verifier:
         
         
     def get_objective(self, dnf_objectives):
-        # FIXME: urgent
         # objective = dnf_objectives.pop(1)
         objective = dnf_objectives.pop(max(1, self.batch))
-        return objective
-    
-        if self.input_split:
-            objective = dnf_objectives.pop(max(10, self.batch))
-        elif Settings.use_restart:
-            objective = dnf_objectives.pop(1)
-        else:
-            objective = dnf_objectives.pop(max(10, self.batch))
         return objective
     
     
@@ -211,8 +201,7 @@ class Verifier:
         if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs.to(self.device)).all():
             return []
         
-        # keep last layer's alphas for backward propagation
-        # FIXME: full slopes uses too much memory
+        # full slopes uses too much memory
         slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
         
         # remaining domains
@@ -225,8 +214,7 @@ class Verifier:
             lower_bounds=ret.lower_bounds, 
             upper_bounds=ret.upper_bounds, 
             lAs=ret.lAs, 
-            # slopes=ret.slopes, # full slopes
-            slopes=slopes, # last layer's slopes
+            slopes=slopes, # pruned slopes
             histories=copy.deepcopy(ret.histories), 
             cs=ret.cs,
             rhs=ret.rhs,
@@ -273,10 +261,6 @@ class Verifier:
             if Settings.use_restart and (self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES)):
                 if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
                     return ReturnStatus.RESTART
-                
-            if psutil.virtual_memory()[2] > 70.0:
-                logger.debug('OOM')
-                return ReturnStatus.UNKNOWN
             
         logger.debug(f'Main loop: {time.time() - start_time}')
         

@@ -153,7 +153,6 @@ class Objective:
         self.lower_bound_f64 = bounds_f64[:, 0]
         self.upper_bound_f64 = bounds_f64[:, 1]
         assert torch.all(self.lower_bound_f64 <= self.upper_bound_f64)
-        # FIXME: unsound errors
         
         self._extract(mat)
         
