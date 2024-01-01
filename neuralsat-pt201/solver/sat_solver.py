@@ -7,8 +7,6 @@ from util.misc.logger import logger
 
 class SATSolver:
     
-    # __slots__ = '_literal_to_clause', '_variable_to_watched_clause', 'clauses', '_last_assigned_literals', 'assignment'
-
     def __init__(self, clauses):
 
         self._last_assigned_literals = False
@@ -136,7 +134,7 @@ class SATSolver:
     def multiple_assign_python(self, literals):
         if not len(literals):
             return True
-        logger.debug(f'[!] Parallel assign using Python: {literals}')
+        logger.debug(f'[!] Parallel assign using Python: {len(literals)}')
         
         remain_mask = torch.ones(self.clauses.size(0), dtype=torch.bool, device=self.clauses.device)
         for lit in literals:
@@ -156,7 +154,7 @@ class SATSolver:
         if not len(literals):
             return True
         import haioc
-        logger.debug(f'[!] Parallel assign using C++: {literals}')
+        logger.debug(f'[!] Parallel assign using C++: {len(literals)}')
         
         xs = torch.tensor(literals).int()#.cuda()
         # self.clauses = self.clauses.cuda()

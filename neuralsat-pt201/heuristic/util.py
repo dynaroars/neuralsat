@@ -112,12 +112,12 @@ def _get_bias_term(input_node, ratio):
 def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, literal, batch_idx):
     assert literal != 0
     assert lower_bounds is not None
+    assert isinstance(histories, list)
     # extract decision
     lid, nid = self.reversed_var_mapping[abs(literal)]
-    
-    history = histories[batch_idx] if isinstance(histories, list) else histories
 
     # update histories
+    history = histories[batch_idx]
     loc = _append_tensor(history[lid][0], nid, dtype=torch.long)
     sign = _append_tensor(history[lid][1], +1 if literal > 0 else -1)
     beta = _append_tensor(history[lid][2], 0.0) # FIXME: 0.0 is for ReLU only
@@ -134,52 +134,71 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
     return True
 
 
-def init_sat_solver(self, lower_bounds, upper_bounds, histories, preconditions):
-    # variables mapping from variable to (lid, nid)
-    tic = time.time()
-    
-    # TODO: fix batch > 1
-    assert all([v.shape[0] == 1 for v in lower_bounds.values()])
- 
-    # initial learned conflict clauses
-    clauses = [_history_to_clause(c, self.var_mapping) for c in preconditions]
-    # print(clauses)
-    
-    # masks: 1 for active, -1 for inactive, 0 for unstable
-    masks = {
-        k: ((lower_bounds[k] > 0).flatten().int() - (upper_bounds[k] < 0).flatten().int()).detach().cpu() 
-            for k in lower_bounds if k != self.net.final_name
-    }
-    
-    # assign
+def create_one(masks, clauses, var_mapping):
+    # literals
     literals_to_assign = []
     for lname, lmask in masks.items():
-        for nid, nstatus in enumerate(lmask):
+        for nid, nstatus in enumerate(lmask.flatten()):
             if nstatus != 0:
-                literal = int(nstatus * self.var_mapping[lname, nid])
+                literal = int(nstatus * var_mapping[lname, nid])
                 literals_to_assign.append(literal)
             
     # create sat solver
     new_sat_solver = SATSolver(clauses)
-    if not new_sat_solver.multiple_assign(literals_to_assign):
-        return False
+    
+    # assign
+    if not new_sat_solver.multiple_assign(literals_to_assign): 
+        return None, [] # conflict
     
     # propagation
     bcp_stat, bcp_vars = new_sat_solver.bcp()
-    if not bcp_stat: # conflict
-        return False
-          
-    # TODO: fix batch > 1
-    # save
-    self.all_sat_solvers = [copy.deepcopy(new_sat_solver)]
+    if not bcp_stat: 
+        return None, [] # conflict
     
-    # update bcp variables
-    for literal in bcp_vars:
-        if not self.update_hidden_bounds_histories(lower_bounds, upper_bounds, histories, literal, batch_idx=0):
-            return False
+    return new_sat_solver, bcp_vars
+
+
+def init_sat_solver(self, objective_ids, lower_bounds, upper_bounds, histories, preconditions):
+    tic = time.time()
+ 
+    # initial learned conflict clauses
+    clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
+    # pprint(clauses_per_objective)
+    
+    # masks: 1 for active, -1 for inactive, 0 for unstable
+    masks = {
+        k: ((lower_bounds[k] > 0).flatten(1).int() - (upper_bounds[k] < 0).flatten(1).int()).detach().cpu() 
+            for k in lower_bounds if k != self.net.final_name
+    }
+    
+    masks_per_objective = {int(objective_id): {k: v[batch_id] for k, v in masks.items()} for (batch_id, objective_id) in enumerate(objective_ids)}
+    # print(masks_per_objective)
+    
+    self.all_sat_solvers = []
+    remain_idx = []
+    for (batch_id, objective_id) in enumerate(objective_ids):
+        new_sat_solver, bcp_vars = create_one(
+            masks=masks_per_objective[int(objective_id)], 
+            clauses=clauses_per_objective[int(objective_id)], 
+            var_mapping=self.var_mapping,
+        )
         
+        update_stats = [self.update_hidden_bounds_histories(
+            lower_bounds=lower_bounds, 
+            upper_bounds=upper_bounds, 
+            histories=histories, 
+            literal=literal, 
+            batch_idx=batch_id,
+        ) for literal in bcp_vars] + [True]
+            
+        # print(batch_id, bcp_vars)
+        if (new_sat_solver is not None) and all(update_stats):
+            # save
+            self.all_sat_solvers.append(new_sat_solver)    
+            remain_idx.append(batch_id)
+                    
     logger.debug('Create SAT solver:', time.time() - tic)
-    return True
+    return torch.tensor(remain_idx)
     
     
 def boolean_propagation(self, domain_params, decisions, batch_idx):
@@ -225,7 +244,8 @@ def boolean_propagation(self, domain_params, decisions, batch_idx):
 
 
 def save_conflict_clauses(self, domain_params, remaining_index):
-    for idx_ in range(len(domain_params.histories)):
-        if idx_ in remaining_index:
+    assert domain_params.objective_ids is not None
+    for i in range(len(domain_params.histories)):
+        if i in remaining_index:
             continue
-        self.all_conflict_clauses.append(domain_params.histories[idx_])
+        self.all_conflict_clauses[int(domain_params.objective_ids[i])].append(domain_params.histories[i])

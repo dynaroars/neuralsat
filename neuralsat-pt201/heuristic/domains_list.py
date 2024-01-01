@@ -31,35 +31,40 @@ class DomainsList:
 
         self.input_split = input_split
         self.visited = 0
-        self.all_conflict_clauses = []
+        self.all_conflict_clauses = {int(_): [] for _ in objective_ids}
+        self.use_restart = Settings.use_restart and (lower_bounds is not None) and (not input_split)
         
-        # FIXME: len(input_lowers) > 1
-        self.use_restart = Settings.use_restart and (lower_bounds is not None) and (len(input_lowers) == 1) # and len(preconditions)
-        if self.use_restart:
+        # decisions
+        remain_idx = torch.arange(len(cs))
+        all_histories = [_copy_history(histories) for _ in range(len(cs))] if not input_split else None
+        all_betas = [None for i in range(len(cs))] if not input_split else None
+        
+        # sat solvers
+        self.all_sat_solvers = None
+        if self.use_restart and any([len(_) > 0 for _ in preconditions.values()]):
             tic = time.time()
-            stat = self.init_sat_solver(
+            remain_idx = self.init_sat_solver(
+                objective_ids=objective_ids,
                 lower_bounds=lower_bounds, 
                 upper_bounds=upper_bounds, 
-                histories=histories, 
+                histories=all_histories, 
                 preconditions=preconditions
             )
             logger.info(f'Initialize {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
-            if not stat:
-                raise ValueError('BCP conflict')
         
         # objective indices
-        self.all_objective_ids = TensorStorage(objective_ids.cpu())
+        self.all_objective_ids = TensorStorage(objective_ids[remain_idx].cpu())
         
         # input bounds
-        self.all_input_lowers = TensorStorage(input_lowers.cpu())
-        self.all_input_uppers = TensorStorage(input_uppers.cpu())
+        self.all_input_lowers = TensorStorage(input_lowers[remain_idx].cpu())
+        self.all_input_uppers = TensorStorage(input_uppers[remain_idx].cpu())
         
         # output bounds
-        self.all_output_lowers = TensorStorage(output_lbs.cpu())
+        self.all_output_lowers = TensorStorage(output_lbs[remain_idx].cpu())
         
         # properties
-        self.all_cs = TensorStorage(cs.cpu())
-        self.all_rhs = TensorStorage(rhs.cpu())
+        self.all_cs = TensorStorage(cs[remain_idx].cpu())
+        self.all_rhs = TensorStorage(rhs[remain_idx].cpu())
     
         # alpha
         self.all_slopes = defaultdict(dict)
@@ -67,21 +72,20 @@ class DomainsList:
             self.all_slopes[k] = {}
             for kk, v in slopes[k].items():
                 if kk not in self.all_slopes[k]:
-                    self.all_slopes[k][kk] = TensorStorage(v.cpu(), concat_dim=2)
+                    self.all_slopes[k][kk] = TensorStorage(v[:, :, remain_idx].cpu(), concat_dim=2)
                 else:
-                    self.all_slopes[k][kk].append(v.cpu())
+                    self.all_slopes[k][kk].append(v[:, :, remain_idx].cpu())
 
         if self.input_split:
             self.all_lower_bounds = self.all_upper_bounds = self.all_lAs = self.all_histories = self.all_betas = None
         else: # hidden spliting 
-            self.all_lAs = {k: TensorStorage(v.cpu()) for k, v in lAs.items()}
+            self.all_lAs = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lAs.items()}
             # hidden bounds
-            self.all_lower_bounds = {k: TensorStorage(v.cpu()) for k, v in lower_bounds.items() if k != self.final_name}
-            self.all_upper_bounds = {k: TensorStorage(v.cpu()) for k, v in upper_bounds.items() if k != self.final_name}
-            # branching
-            self.all_histories = [_copy_history(histories) for _ in range(len(cs))]
-            # beta
-            self.all_betas = [None for i in range(len(cs))]
+            self.all_lower_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lower_bounds.items() if k != self.final_name}
+            self.all_upper_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in upper_bounds.items() if k != self.final_name}
+            # decisions
+            self.all_histories = [all_histories[_] for _ in remain_idx]
+            self.all_betas = [all_betas[_] for _ in remain_idx]
             
         self._check_consistent()
         
@@ -106,17 +110,20 @@ class DomainsList:
     
         
     def _check_consistent(self):
+        # print('Checking domains:', len(self))
         assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_output_lowers) == len(self), \
             print(len(self.all_input_lowers), len(self.all_input_uppers), len(self.all_output_lowers), len(self))
         assert len(self.all_cs) == len(self.all_rhs) == len(self.all_objective_ids) == len(self), \
             print(len(self.all_cs), len(self.all_rhs), len(self.all_objective_ids))
+        assert all([vv.data.shape[2] == len(self) for v in self.all_slopes.values() for vv in v.values()]), \
+            print([vv.data.shape[2] for v in self.all_slopes.values() for vv in v.values()], len(self))
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
             assert all([len(_) == len(self) for _ in self.all_lower_bounds.values()])
             assert all([len(_) == len(self) for _ in self.all_upper_bounds.values()])
             assert all([len(_) == len(self) for _ in self.all_lAs.values()])
-            if self.use_restart:
+            if self.all_sat_solvers is not None:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
 
 
@@ -165,7 +172,7 @@ class DomainsList:
             self.all_betas = self.all_betas[:-batch]
             self.all_histories = self.all_histories[:-batch]
             
-            if self.use_restart:
+            if self.all_sat_solvers is not None:
                 new_sat_solvers = self.all_sat_solvers[-batch:]
                 # new_sat_solvers = copy.deepcopy(self.all_sat_solvers[-batch:])
                 self.all_sat_solvers = self.all_sat_solvers[:-batch]
@@ -214,8 +221,8 @@ class DomainsList:
         
         # hidden splitting
         if not self.input_split:
-            # bcp
-            if self.use_restart:
+            # using restart
+            if self.all_sat_solvers is not None:
                 assert len(domain_params.sat_solvers) == batch
                 assert decisions is not None
                 

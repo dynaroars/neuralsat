@@ -65,7 +65,7 @@ def test_1():
         {'/input': (torch.tensor([0, 1]), torch.tensor([1., 1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0]), torch.tensor([1.]), torch.tensor([0.]))},
         {'/input': (torch.tensor([0, 1]), torch.tensor([ 1., -1.]), torch.tensor([0., 0.])), '/input.3': (torch.tensor([0, 1]), torch.tensor([-1.,  1.]), torch.tensor([0., 0.]))},
     ]
-    # preconditions = []
+    preconditions = []
     
     print(preconditions)
     
@@ -86,8 +86,9 @@ def test_2():
 
     print('\n\nRunning test with', net_path, vnnlib_path)
     
-    preconditions = [eval(l.replace('tensor', 'torch.tensor')) for l in open('log.txt').read().strip().split('\n')][:400]
+    # preconditions = [eval(l.replace('tensor', 'torch.tensor')) for l in open('log.txt').read().strip().split('\n')][:400]
     # print(preconditions)
+    preconditions = []
     
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     model.to(device)
@@ -105,9 +106,13 @@ def test_2():
     
     
     status = verifier.verify(objectives, preconditions=preconditions)
+    print('status:', status, verifier.status)
+    print('unsat core')
+    from pprint import pprint
+    print(verifier.get_unsat_core())
     
     # for c in verifier._get_learned_conflict_clauses():
     #     print(c)
 
 if __name__ == "__main__":
-    test_2()
+    test_1()

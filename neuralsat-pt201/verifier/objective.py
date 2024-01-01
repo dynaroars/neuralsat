@@ -40,7 +40,7 @@ class DnfObjectives:
         objective = TMP()
         
         # indices for distinguishing restart
-        objective.ids = torch.arange(0, batch)
+        objective.ids = torch.arange(0, batch) + self.num_used + 3
         
         # input bounds
         objective.lower_bounds = lower_bounds

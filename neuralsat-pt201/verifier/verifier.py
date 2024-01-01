@@ -40,7 +40,7 @@ class Verifier:
         self.tightening_patience = 0
         
         # stats
-        self.all_conflict_clauses = []
+        self.all_conflict_clauses = {}
         self.visited = 0
         
         
@@ -107,8 +107,10 @@ class Verifier:
             Timers.toc('Get objective') if Settings.use_timer else None
             
             # restart variables
-            learned_clauses = []
             nth_restart = 0 
+            learned_clauses = {int(k): [] for k in objective.ids}
+            if len(preconditions): # add to all objective ids
+                [learned_clauses[k].extend(preconditions) for k in learned_clauses]
             
             # verify objective (multiple times if RESTART is returned)
             while True:
@@ -125,7 +127,7 @@ class Verifier:
                         Timers.tic('Verify one') if Settings.use_timer else None
                         status = self._verify_one(
                             objective=objective, 
-                            preconditions=preconditions+learned_clauses, 
+                            preconditions=learned_clauses, 
                             reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
                             timeout=timeout
                         )
@@ -161,18 +163,47 @@ class Verifier:
                     break # objective is verified
                 if status == ReturnStatus.RESTART:
                     logger.debug('Restarting')
-                    learned_clauses += self._get_learned_conflict_clauses()
+                    for k, v in self._get_learned_conflict_clauses().items():
+                        learned_clauses[k].extend(v)
                     nth_restart += 1
+                    objective = self._prune_objective(objective)
                     continue
                 raise NotImplementedError()
             
             logger.info(f'Verified: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
             
         return ReturnStatus.UNSAT  
+    
+    
+    def _prune_objective(self, objective):
+        assert self.domains_list is not None
+        all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
+        indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
+        
+        # pruning
+        objective.ids = objective.ids[indices]
+        
+        objective.lower_bounds = objective.lower_bounds[indices]
+        objective.upper_bounds = objective.upper_bounds[indices]
+        
+        objective.lower_bounds_f64 = objective.lower_bounds_f64[indices]
+        objective.upper_bounds_f64 = objective.upper_bounds_f64[indices]
+        
+        objective.cs = objective.cs[indices]
+        objective.rhs = objective.rhs[indices]
+        
+        objective.cs_f64 = objective.cs_f64[indices]
+        objective.rhs_f64 = objective.rhs_f64[indices]
+        
+        # assert torch.equal(objective.ids, all_remaining_ids)
+        return objective
+                
+        
         
         
     def _initialize(self, objective, preconditions, reference_bounds):
         # initialization params
+        # TODO: fix init_betas
         ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, init_betas=self.refined_betas)
 
         # check verified

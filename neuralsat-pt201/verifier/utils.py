@@ -71,11 +71,7 @@ def _preprocess(self, objectives, forced_input_split=None):
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
-    if len(objectives) >= 50:
-        # TODO: fix restart for multiple objectives
-        Settings.use_restart = False
-        
-    if self.input_split: # and len(objectives) < 50:
+    if self.input_split: 
         return objectives, None
     
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
@@ -318,7 +314,7 @@ def _attack(self, domain_params, n_sample=50, n_interval=1):
 def _get_learned_conflict_clauses(self):
     if hasattr(self.domains_list, 'all_conflict_clauses'):
         return self.domains_list.all_conflict_clauses
-    return []
+    return {}
 
 
 def _check_invoke_tightening(self, patience_limit=10):
@@ -404,7 +400,7 @@ def _check_full_assignment(self, domain_params):
             return adv, None
         
     # save pruned domains
-    [self.domains_list.all_conflict_clauses.append(domain_params.histories[i]) for i in pruning_indices]
+    [self.domains_list.all_conflict_clauses[int(domain_params.objective_ids[i])].append(domain_params.histories[i]) for i in pruning_indices]
     
     # unverified indices
     remaining_indices = torch.where(n_unstables > 0)[0]
@@ -420,12 +416,16 @@ def compute_stability(self, dnf_objectives):
 
         
 def _save_stats(self):
-    self.all_conflict_clauses += self._get_learned_conflict_clauses()
+    for k, v in self._get_learned_conflict_clauses().items():
+        if k not in self.all_conflict_clauses:
+            self.all_conflict_clauses[k] = []
+        self.all_conflict_clauses[k].extend(v)
     if hasattr(self.domains_list, 'visited'):
         self.visited += self.domains_list.visited
         
         
 def get_stats(self):
+    # TODO: fix
     if len(self.all_conflict_clauses):
         depth = max(map(lambda x: sum(len(_[0]) for _ in x), self.all_conflict_clauses))
     else:
@@ -449,9 +449,9 @@ def get_unsat_core(self):
     if self.status != ReturnStatus.UNSAT:
         return None
     
-    unsat_core = []
-    for c in self.all_conflict_clauses:
-        unsat_core.append(_history_to_clause(c, self.domains_list.var_mapping))
+    unsat_cores = {k: [] for k in self.all_conflict_clauses}
+    for k, v in self.all_conflict_clauses.items():
+        [unsat_cores[k].append(_history_to_clause(c, self.domains_list.var_mapping)) for c in v]
         
-    return unsat_core
+    return unsat_cores
         
