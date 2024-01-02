@@ -1,7 +1,13 @@
+from beartype import beartype
 import torch
 
+from onnx2pytorch.convert.model import ConvertModel
+
+@beartype
 @torch.no_grad()
-def check_solution(net, adv, cs, rhs, data_min, data_max):
+def check_solution(net: ConvertModel, adv: torch.Tensor, 
+                   cs: torch.Tensor, rhs: torch.Tensor, 
+                   data_min: torch.Tensor, data_max: torch.Tensor) -> torch.Tensor:
     old_dtype = adv.dtype
     adv = adv.to(data_min.dtype)
     adv = torch.clamp(torch.clamp(adv, max=data_max), min=data_min)

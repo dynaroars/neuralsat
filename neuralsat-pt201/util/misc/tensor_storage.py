@@ -1,3 +1,4 @@
+from beartype import beartype
 import torch
 
 class TensorStorage:
@@ -6,7 +7,10 @@ class TensorStorage:
     Fast managed dynamic sized tensor storage
     """
     
-    def __init__(self, full_shape, initial_size=1024, switching_size=65536, device='cpu', concat_dim=0):
+    @beartype
+    def __init__(self: 'TensorStorage', full_shape: torch.Tensor, 
+                 initial_size: int = 1024, switching_size: int = 65536, 
+                 device: str = 'cpu', concat_dim: int = 0) -> None:
        
         if isinstance(full_shape, torch.Tensor):
             data = full_shape
@@ -27,7 +31,8 @@ class TensorStorage:
             self.append(data)
 
 
-    def _allocate(self, new_size):
+    @beartype
+    def _allocate(self: 'TensorStorage', new_size: int) -> torch.Tensor:
         allocate_shape = self.shape.copy()
         allocate_shape[self.concat_dim] = new_size
         if self.device == 'cpu' and torch.cuda.is_available():
@@ -37,7 +42,8 @@ class TensorStorage:
             return torch.empty(allocate_shape, dtype=self.dtype, device=self.device)
 
 
-    def _get_new_size(self, request_size):
+    @beartype
+    def _get_new_size(self: 'TensorStorage', request_size: int) -> int:
         """Compute new size of storage given the current request."""
         if self._storage.size(self.concat_dim) < self.switching_size:
             # exponential growth with small tensor
@@ -46,8 +52,9 @@ class TensorStorage:
         return self._storage.size(self.concat_dim) + request_size * 32
 
 
+    @beartype
     @torch.no_grad()
-    def append(self, appended_tensor):
+    def append(self: 'TensorStorage', appended_tensor: torch.Tensor) -> 'TensorStorage':
         """Append a new tensor to the storage object."""
         if self.num_used + appended_tensor.size(self.concat_dim) > self._storage.size(self.concat_dim):
             # Reallocate a new tensor, copying the existing contents over.
@@ -63,8 +70,9 @@ class TensorStorage:
         return self
     
     
+    @beartype
     @torch.no_grad()
-    def pop(self, size):
+    def pop(self: 'TensorStorage', size: int) -> torch.Tensor:
         """Remove tensors with 'size' at the end of the storage."""
         size = max(min(size, self.num_used), 0)
         ret = self._storage.narrow(self.concat_dim, self.num_used - size, size)

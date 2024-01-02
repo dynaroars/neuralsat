@@ -1,7 +1,8 @@
+from beartype import beartype
+import torch
 
-
-
-def get_adv_string(inputs, outputs, is_nhwc=False):
+@beartype
+def get_adv_string(inputs: torch.Tensor, outputs: torch.Tensor, is_nhwc: bool = False) -> str:
     if is_nhwc:
         assert inputs.ndim == 4
         inputs = inputs.permute(0, 2, 3, 1)

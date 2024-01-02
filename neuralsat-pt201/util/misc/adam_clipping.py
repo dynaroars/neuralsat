@@ -1,4 +1,6 @@
 from torch.optim import Optimizer
+from beartype import beartype
+import typing
 import torch
 import math
 
@@ -29,8 +31,9 @@ class AdamClipping(Optimizer):
         https://openreview.net/forum?id=ryQu7f-RZ
     """
 
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0, amsgrad=False):
+    @beartype
+    def __init__(self: 'AdamClipping', params: list[torch.Tensor], lr: float = 1e-3, betas: tuple[float, float] = (0.9, 0.999), 
+                 eps: float = 1e-8, weight_decay: float = 0.0, amsgrad: bool = False) -> None:
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -51,10 +54,11 @@ class AdamClipping(Optimizer):
             group.setdefault('amsgrad', False)
 
 
+    # @beartype
     @staticmethod
     @torch.no_grad()
     @torch.jit.script
-    def _clip_update(exp_avg : torch.Tensor, denom : torch.Tensor, step_size : float, clipping_step_eps : float, lower_limit : torch.Tensor, upper_limit : torch.Tensor, p : torch.Tensor):
+    def _clip_update(exp_avg: torch.Tensor, denom: torch.Tensor, step_size: float, clipping_step_eps: float, lower_limit: torch.Tensor, upper_limit: torch.Tensor, p: torch.Tensor) -> None:
         # Compute the Adam update.
         update = exp_avg / denom * step_size
         # update = p.grad
@@ -66,18 +70,15 @@ class AdamClipping(Optimizer):
         d = torch.max(torch.min(d, upper_limit), lower_limit)
         p.copy_(d)
 
+    @beartype
     @torch.no_grad()
-    def step(self, clipping=None, lower_limit=None, upper_limit=None, sign=None, closure=None):
+    def step(self: 'AdamClipping', clipping: bool = False, lower_limit: torch.Tensor | None = None, upper_limit: torch.Tensor | None = None, sign: int | None = None) -> None:
         """Performs a single optimization step.
 
         Arguments:
             closure (callable, optional): A closure that reevaluates the model
                 and returns the loss.
         """
-        loss = None
-        if closure is not None:
-            with torch.enable_grad():
-                loss = closure()
 
         # Currently we only deal with 1 parameter group.
         assert len(self.param_groups) == 1
@@ -135,4 +136,4 @@ class AdamClipping(Optimizer):
                     # No clipping. Original Adam update.
                     p.addcdiv_(exp_avg, denom, value=-step_size)
 
-        return loss
+        return None
