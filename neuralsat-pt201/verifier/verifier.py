@@ -1,19 +1,29 @@
+from __future__ import annotations
 import warnings
 warnings.filterwarnings(action='ignore')
+from beartype import beartype
 import numpy as np
 import torch
 import time
 import copy
 
+from onnx2pytorch.convert.model import ConvertModel
+
 from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from auto_LiRPA.utils import stop_criterion_batch_any
 from heuristic.domains_list import DomainsList
-from util.misc.result import ReturnStatus
+
+from auto_LiRPA.utils import stop_criterion_batch_any
+
+from verifier.objective import DnfObjectives
 from verifier.utils import _prune_domains
+
 from abstractor.utils import new_slopes
+
+from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from util.misc.result import ReturnStatus
 from util.misc.logger import logger
 from util.misc.timer import Timers
+
 from setting import Settings
 
 
@@ -21,7 +31,8 @@ class Verifier:
     
     "Branch-and-Bound verifier"
     
-    def __init__(self, net, input_shape, batch=1000, device='cpu'):
+    @beartype
+    def __init__(self: 'Verifier', net: 'ConvertModel', input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device
@@ -43,13 +54,15 @@ class Verifier:
         self.visited = 0
         
         
-    def get_objective(self, dnf_objectives):
+    @beartype
+    def get_objective(self: 'Verifier', dnf_objectives: 'DnfObjectives'):
         # objective = dnf_objectives.pop(1)
         objective = dnf_objectives.pop(max(1, self.batch))
         return objective
     
     
-    def compute_stability(self, dnf_objectives):
+    @beartype
+    def compute_stability(self: 'Verifier', dnf_objectives: 'DnfObjectives'):
         print('compute_stability')
         if not (hasattr(self, 'abstractor')):
             self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
@@ -57,7 +70,8 @@ class Verifier:
         return self.abstractor.compute_stability(dnf_objectives)
     
     
-    def verify(self, dnf_objectives, preconditions=[], timeout=3600):
+    @beartype
+    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0) -> str:
         self.start_time = time.time()
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
@@ -67,7 +81,8 @@ class Verifier:
         return self.status
     
     
-    def _verify(self, dnf_objectives, preconditions=[], timeout=3600):
+    @beartype
+    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0) -> str:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -165,7 +180,7 @@ class Verifier:
         return ReturnStatus.UNSAT  
     
     
-    def _prune_objective(self, objective):
+    def _prune_objective(self: 'Verifier', objective):
         assert self.domains_list is not None
         all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
         indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
@@ -189,9 +204,8 @@ class Verifier:
         return objective
                 
         
-        
-        
-    def _initialize(self, objective, preconditions, reference_bounds):
+    @beartype
+    def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
         # initialization params
         # TODO: fix init_betas
         ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, init_betas=self.refined_betas)
@@ -223,7 +237,8 @@ class Verifier:
         )
         
         
-    def _verify_one(self, objective, preconditions, reference_bounds, timeout):
+    @beartype
+    def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: float) -> str:
         # initialization
         Timers.tic('Initialization') if Settings.use_timer else None
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
@@ -267,7 +282,8 @@ class Verifier:
         return ReturnStatus.UNSAT
             
             
-    def _parallel_dpll(self):
+    @beartype
+    def _parallel_dpll(self: 'Verifier') -> None:
         iter_start = time.time()
         
         # step 1: MIP attack

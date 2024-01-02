@@ -1,5 +1,4 @@
 import torch
-import time
 import copy
 
 from abstractor.utils import _append_tensor
@@ -159,8 +158,7 @@ def create_one(masks, clauses, var_mapping):
 
 
 def init_sat_solver(self, objective_ids, lower_bounds, upper_bounds, histories, preconditions):
-    tic = time.time()
- 
+    assert torch.equal(objective_ids, torch.unique(objective_ids))
     # initial learned conflict clauses
     clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
     # pprint(clauses_per_objective)
@@ -197,7 +195,6 @@ def init_sat_solver(self, objective_ids, lower_bounds, upper_bounds, histories, 
             self.all_sat_solvers.append(new_sat_solver)    
             remain_idx.append(batch_id)
                     
-    logger.debug('Create SAT solver:', time.time() - tic)
     return torch.tensor(remain_idx)
     
     

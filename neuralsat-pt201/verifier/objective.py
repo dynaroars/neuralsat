@@ -1,12 +1,65 @@
+from beartype import beartype
+import numpy as np
 import torch
 
 from util.network.read_onnx import custom_quirks
+
+
+class Objective:
+    
+    "Single objective in CNF"
+    
+    @beartype
+    def __init__(self: 'Objective', prop: tuple[list, tuple[np.ndarray, np.ndarray]]) -> None:
+        input_bounds, mat = prop
+        self.dtype = torch.get_default_dtype()
+        
+        bounds = torch.tensor(input_bounds, dtype=self.dtype)
+        self.lower_bound = bounds[:, 0]
+        self.upper_bound = bounds[:, 1]
+        assert torch.all(self.lower_bound <= self.upper_bound)
+        
+        bounds_f64 = torch.tensor(input_bounds, dtype=torch.float64)
+        self.lower_bound_f64 = bounds_f64[:, 0]
+        self.upper_bound_f64 = bounds_f64[:, 1]
+        assert torch.all(self.lower_bound_f64 <= self.upper_bound_f64)
+        
+        self._extract(mat)
+        
+        
+    @beartype
+    def _extract(self: 'Objective', mat: tuple[np.ndarray, np.ndarray]) -> None:
+        assert len(mat) == 2, print(len(mat))
+        prop_mat, prop_rhs = mat
+
+        # f32
+        self.cs = torch.tensor(prop_mat, dtype=self.dtype)
+        self.rhs = torch.tensor(prop_rhs, dtype=self.dtype)
+        
+        # f64
+        self.cs_f64 = torch.tensor(prop_mat, dtype=torch.float64)
+        self.rhs_f64 = torch.tensor(prop_rhs, dtype=torch.float64)
+        
+        if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
+            assert (self.rhs == 0).all()
+    
+    
+    @beartype
+    def get_info(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.cs, self.rhs
+    
+
+    @beartype
+    def get_info_f64(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.cs_f64, self.rhs_f64
+        
 
 class DnfObjectives:
     
     "List of objectives"
     
-    def __init__(self, objectives, input_shape, is_nhwc) -> None:
+    @beartype
+    def __init__(self, objectives: list[Objective], input_shape: tuple, is_nhwc: bool) -> None:
         self.objectives = objectives
         self.is_nhwc = is_nhwc
         self.input_shape = input_shape
@@ -16,11 +69,13 @@ class DnfObjectives:
         self.num_used = 0
         
         
-    def __len__(self):
+    @beartype
+    def __len__(self: 'DnfObjectives') -> int:
         return len(self.lower_bounds[self.num_used:])
     
     
-    def pop(self, batch):
+    @beartype
+    def pop(self: 'DnfObjectives', batch: int):
         if isinstance(self.cs, torch.Tensor):
             batch = min(batch, len(self))
         else:
@@ -70,7 +125,8 @@ class DnfObjectives:
         return objective
         
     
-    def _extract(self):
+    @beartype
+    def _extract(self: 'DnfObjectives') -> None:
         self.cs, self.rhs = [], []
         self.lower_bounds, self.upper_bounds = [], []
         
@@ -124,59 +180,7 @@ class DnfObjectives:
             self.rhs_f64 = torch.stack(self.rhs_f64)
             
             
-    def add(self, objective):
+    @beartype
+    def add(self: 'DnfObjectives', objective) -> None:
         self.num_used -= len(objective.cs)
-        
-
-    def get_info(self):
-        return self.cs, self.rhs
-    
-
-    def get_info_f64(self):
-        return self.cs_f64, self.rhs_f64
-    
-    
-class Objective:
-    
-    "Single objective in CNF"
-    
-    def __init__(self, prop) -> None:
-        input_bounds, mat = prop
-        self.dtype = torch.get_default_dtype()
-        
-        bounds = torch.tensor(input_bounds, dtype=self.dtype)
-        self.lower_bound = bounds[:, 0]
-        self.upper_bound = bounds[:, 1]
-        assert torch.all(self.lower_bound <= self.upper_bound)
-        
-        bounds_f64 = torch.tensor(input_bounds, dtype=torch.float64)
-        self.lower_bound_f64 = bounds_f64[:, 0]
-        self.upper_bound_f64 = bounds_f64[:, 1]
-        assert torch.all(self.lower_bound_f64 <= self.upper_bound_f64)
-        
-        self._extract(mat)
-        
-        
-    def _extract(self, mat) -> None:
-        # print('preprocess vnnlib spec')
-        assert len(mat) == 2, print(len(mat))
-        prop_mat, prop_rhs = mat
-
-        # f32
-        self.cs = torch.tensor(prop_mat, dtype=self.dtype)
-        self.rhs = torch.tensor(prop_rhs, dtype=self.dtype)
-        
-        # f64
-        self.cs_f64 = torch.tensor(prop_mat, dtype=torch.float64)
-        self.rhs_f64 = torch.tensor(prop_rhs, dtype=torch.float64)
-        
-        if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
-            assert (self.rhs == 0).all()
-    
-    def get_info(self):
-        return self.cs, self.rhs
-    
-    
-    def get_info_f64(self):
-        return self.cs_f64, self.rhs_f64
         
