@@ -215,7 +215,6 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
         decision_topk=decision_topk, 
         input_split=self.input_split,
         random_selection=random_selection,
-        seed=nth_restart+2,
     )
     
     refined_intermediate_bounds = None

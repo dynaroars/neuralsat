@@ -1,3 +1,5 @@
+from __future__ import annotations
+from beartype import beartype
 import random
 import torch
 import copy
@@ -7,7 +9,8 @@ from util.misc.logger import logger
 
 class SATSolver:
     
-    def __init__(self, clauses):
+    @beartype
+    def __init__(self: 'SATSolver', clauses: list[list]) -> None:
 
         self._last_assigned_literals = False
         self.assignment = {}
@@ -22,7 +25,8 @@ class SATSolver:
             self.clauses = torch.zeros(0)
             
             
-    def assign(self, literal):
+    @beartype
+    def assign(self: 'SATSolver', literal: int | torch.Tensor) -> bool:
         if len(self.clauses) == 0:
             return True
         
@@ -59,7 +63,8 @@ class SATSolver:
         # print(self.clauses)
         return True
         
-    def _bcp_step(self):
+    @beartype
+    def _bcp_step(self: 'SATSolver') -> tuple[bool, list]:
         if len(self.clauses) == 0:
             return True, []
             
@@ -80,7 +85,8 @@ class SATSolver:
         
         return True, inferred_variables
         
-    def bcp(self):
+    @beartype
+    def bcp(self: 'SATSolver') -> tuple[bool, list]:
         if len(self.clauses) == 0:
             return True, []
 
@@ -113,7 +119,8 @@ class SATSolver:
         print()
         
         
-    def __deepcopy__(self, memo):
+    @beartype
+    def __deepcopy__(self: 'SATSolver', memo: dict) -> SATSolver:
         new_solver = SATSolver([])
         new_solver.clauses = self.clauses.clone()
         new_solver.assignment = copy.deepcopy(self.assignment)
@@ -121,7 +128,8 @@ class SATSolver:
         return new_solver
 
 
-    def multiple_assign(self, literals):
+    @beartype
+    def multiple_assign(self: 'SATSolver', literals: list[int]) -> bool:
         if len(self.clauses) == 0:
             return True
         
@@ -131,7 +139,8 @@ class SATSolver:
             return self.multiple_assign_python(literals)
     
     
-    def multiple_assign_python(self, literals):
+    @beartype
+    def multiple_assign_python(self: 'SATSolver', literals: list[int]) -> bool:
         if not len(literals):
             return True
         logger.debug(f'[!] Parallel assign using Python: {len(literals)}')
@@ -150,7 +159,8 @@ class SATSolver:
         return True
     
     
-    def multiple_assign_cpp(self, literals):
+    @beartype
+    def multiple_assign_cpp(self: 'SATSolver', literals: list[int]) -> bool:
         if not len(literals):
             return True
         import haioc
