@@ -1,7 +1,13 @@
+from __future__ import annotations
 from collections import defaultdict
+from beartype import beartype
+import typing
 import torch
 import copy
 import time
+
+if typing.TYPE_CHECKING:
+    import auto_LiRPA
 
 from util.misc.tensor_storage import TensorStorage
 from util.misc.result import AbstractResults
@@ -15,16 +21,22 @@ class DomainsList:
     
     "List of unverified branches"
 
-    def __init__(self, 
-                 net,
-                 objective_ids,
-                 output_lbs,
-                 input_lowers, input_uppers, 
-                 lower_bounds, upper_bounds, 
-                 lAs, 
-                 slopes, histories, 
-                 cs, rhs, 
-                 input_split=False, preconditions=[]):
+    @beartype
+    def __init__(self: 'DomainsList', 
+                 net: 'auto_LiRPA.BoundedModule',
+                 objective_ids: torch.Tensor,
+                 output_lbs: torch.Tensor,
+                 input_lowers: torch.Tensor, 
+                 input_uppers: torch.Tensor, 
+                 lower_bounds: dict | None, 
+                 upper_bounds: dict | None, 
+                 lAs: dict | None, 
+                 histories: dict | None, 
+                 slopes: dict, 
+                 cs: torch.Tensor, 
+                 rhs: torch.Tensor, 
+                 input_split: bool = False, 
+                 preconditions: dict = {}) -> None:
 
         self.net = net
         self.final_name = self.net.final_node_name
@@ -90,8 +102,9 @@ class DomainsList:
         self._check_consistent()
         
         
+    @beartype
     @property
-    def var_mapping(self):
+    def var_mapping(self: 'DomainsList') -> dict:
         if not hasattr(self, '_var_mapping'):
             self._var_mapping = {}
             count = 1
@@ -102,14 +115,16 @@ class DomainsList:
         return self._var_mapping
     
     
+    @beartype
     @property
-    def reversed_var_mapping(self):
+    def reversed_var_mapping(self: 'DomainsList') -> dict:
         if not hasattr(self, '_reversed_var_mapping'):
             self._reversed_var_mapping = {v: k for k, v in self.var_mapping.items()}
         return self._reversed_var_mapping
     
         
-    def _check_consistent(self):
+    @beartype
+    def _check_consistent(self: 'DomainsList') -> None:
         # print('Checking domains:', len(self))
         assert len(self.all_input_lowers) == len(self.all_input_uppers) == len(self.all_output_lowers) == len(self), \
             print(len(self.all_input_lowers), len(self.all_input_uppers), len(self.all_output_lowers), len(self))
@@ -127,7 +142,8 @@ class DomainsList:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
 
 
-    def pick_out(self, batch, device='cpu'):
+    @beartype
+    def pick_out(self: 'DomainsList', batch: int, device: str = 'cpu') -> AbstractResults:
         assert batch > 0
         batch = min(len(self), batch)
         self.visited += batch
@@ -211,7 +227,8 @@ class DomainsList:
         })
 
 
-    def add(self, domain_params, decisions=None):
+    @beartype
+    def add(self: 'DomainsList', domain_params: AbstractResults, decisions: list | torch.Tensor) -> None:
         # assert decisions is not None
         batch = len(domain_params.input_lowers)
         assert batch > 0
@@ -282,19 +299,22 @@ class DomainsList:
         self._check_consistent()
         
 
-    def __len__(self):
+    @beartype
+    def __len__(self: 'DomainsList') -> int:
         return len(self.all_input_lowers)
 
 
+    @beartype
     @property
-    def minimum_lowers(self):
+    def minimum_lowers(self: 'DomainsList') -> float:
         indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()
         if len(indices):
             return self.all_output_lowers[indices[0]].max().detach().item()
         return 1e-6
 
 
-    def pick_out_worst_domains(self, batch, device='cpu'):
+    @beartype
+    def pick_out_worst_domains(self: 'DomainsList', batch: int, device: str = 'cpu') -> AbstractResults:
         indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()[:batch]
 
         new_lower_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_lower_bounds.items()}
@@ -308,7 +328,8 @@ class DomainsList:
         })
         
         
-    def update_refined_bounds(self, domain_params):
+    @beartype
+    def update_refined_bounds(self: 'DomainsList', domain_params: AbstractResults) -> None:
         # updating
         for key in domain_params.lower_bounds:
             orig_shape = self.all_lower_bounds[key].size()[1:] # skip batch dim
@@ -333,8 +354,9 @@ class DomainsList:
         self._check_consistent()
         
     
+    @beartype
     @torch.no_grad()
-    def count_unstable_neurons(self):
+    def count_unstable_neurons(self: 'DomainsList') -> torch.Tensor | None:
         if self.all_lower_bounds is None:
             return None
         
