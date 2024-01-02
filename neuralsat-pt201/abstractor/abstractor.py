@@ -1,13 +1,15 @@
-import torch.nn as nn
+from beartype import beartype
 import traceback
-import random
+import typing
 import torch
 import copy
 import math
 
+
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
 
+from onnx2pytorch.convert.model import ConvertModel
 from util.misc.result import AbstractResults
 from util.misc.logger import logger
 from setting import Settings
@@ -18,7 +20,8 @@ class NetworkAbstractor:
     
     "Over-approximation method alpha-beta-CROWN"
 
-    def __init__(self, pytorch_model, input_shape, method, input_split=False, device='cpu'):
+    @beartype
+    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
 
         self.pytorch_model = copy.deepcopy(pytorch_model)
         self.device = device
@@ -33,12 +36,14 @@ class NetworkAbstractor:
         # debug
         self.iteration = 0
         
-    def setup(self, objective):
+    @beartype
+    def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
         assert self.select_params(objective), print('Initialization failed')
         logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}')
             
             
-    def select_params(self, objective):
+    @beartype
+    def select_params(self: 'NetworkAbstractor', objective: typing.Any) -> bool:
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
@@ -60,7 +65,8 @@ class NetworkAbstractor:
             
         return False
             
-    def _init_module(self, mode, objective):
+    @beartype
+    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any) -> None:
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
@@ -78,7 +84,8 @@ class NetworkAbstractor:
             raise ValueError(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
         
         
-    def _check_module(self, method, objective):
+    @beartype
+    def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
         # at least can run with batch=1
         x_L = objective.lower_bounds[0].view(self.input_shape)
         x_U = objective.upper_bounds[0].view(self.input_shape)
@@ -101,7 +108,8 @@ class NetworkAbstractor:
             return True
         
 
-    def initialize(self, objective, share_slopes=False, reference_bounds=None, init_betas=None):
+    @beartype
+    def initialize(self: 'NetworkAbstractor', objective: typing.Any, share_slopes: bool = False, reference_bounds: dict | None = None, init_betas: typing.Any = None) -> AbstractResults:
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -190,7 +198,8 @@ class NetworkAbstractor:
             raise NotImplementedError()
     
     
-    def _naive_forward_hidden(self, domain_params, decisions):
+    @beartype
+    def _naive_forward_hidden(self: 'NetworkAbstractor', domain_params: typing.Any, decisions: list) -> AbstractResults:
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
                len(domain_params.input_lowers) == len(domain_params.input_uppers)
         batch = len(decisions)
@@ -230,7 +239,8 @@ class NetworkAbstractor:
         return AbstractResults(**{'output_lbs': lb})
     
 
-    def _forward_hidden(self, domain_params, decisions):
+    @beartype
+    def _forward_hidden(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: list) -> AbstractResults:
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
                len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids), \
                print(f'len(decisions)={len(decisions)}, len(domain_params.input_lowers)={len(domain_params.input_lowers)}')
@@ -320,7 +330,8 @@ class NetworkAbstractor:
         })
         
         
-    def _forward_input(self, domain_params, decisions):
+    @beartype
+    def _forward_input(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: torch.Tensor) -> AbstractResults:
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
                len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids)
                
@@ -372,7 +383,8 @@ class NetworkAbstractor:
         })
         
         
-    def forward(self, decisions, domain_params):
+    @beartype
+    def forward(self: 'NetworkAbstractor', decisions: list | torch.Tensor, domain_params: AbstractResults) -> AbstractResults:
         self.iteration += 1
         forward_func = self._forward_input if self.input_split else self._forward_hidden
         return forward_func(domain_params=domain_params, decisions=decisions)
@@ -380,6 +392,7 @@ class NetworkAbstractor:
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.mode}, {self.method})'
+        
         
     from .utils import (
         new_input,

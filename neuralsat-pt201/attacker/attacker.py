@@ -1,6 +1,5 @@
 from beartype import beartype
 import random
-import typing
 import torch
 
 from onnx2pytorch.convert.model import ConvertModel

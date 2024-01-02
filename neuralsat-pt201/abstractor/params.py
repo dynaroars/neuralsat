@@ -1,6 +1,10 @@
+from beartype import beartype
+import typing
 import torch
 
-def get_branching_opt_params():
+
+@beartype
+def get_branching_opt_params() -> dict:
     return {'optimize_bound_args': {
                 'enable_beta_crown': False, 
                 'fix_intermediate_layer_bounds': True,
@@ -8,7 +12,8 @@ def get_branching_opt_params():
             }}   
     
     
-def get_initialize_opt_params(share_slopes, stop_criterion_func):
+@beartype
+def get_initialize_opt_params(share_slopes: bool, stop_criterion_func: typing.Callable) -> dict:
     return {'optimize_bound_args': {
                 'enable_alpha_crown': True,
                 'enable_beta_crown': False, 
@@ -24,7 +29,8 @@ def get_initialize_opt_params(share_slopes, stop_criterion_func):
             }}
     
     
-def get_beta_opt_params(stop_criterion_func):
+@beartype
+def get_beta_opt_params(stop_criterion_func: typing.Callable) -> dict:
     return {'optimize_bound_args': {
                 'enable_alpha_crown': True,
                 'enable_beta_crown': True, 
@@ -39,7 +45,8 @@ def get_beta_opt_params(stop_criterion_func):
             }}
     
     
-def get_input_opt_params(stop_criterion_func):
+@beartype
+def get_input_opt_params(stop_criterion_func: typing.Callable) -> dict:
     return {'optimize_bound_args': {
                 'enable_beta_crown': False, 
                 'fix_intermediate_layer_bounds': True, 

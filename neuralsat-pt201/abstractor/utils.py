@@ -1,5 +1,8 @@
 from collections import defaultdict
+from beartype import beartype
 import gurobipy as grb
+import numpy as np
+import typing
 import torch
 import math
 import copy
@@ -11,8 +14,10 @@ from .params import get_branching_opt_params
 from util.misc.check import check_solution
 from util.misc.logger import logger
 
+if typing.TYPE_CHECKING:
+    import abstractor
 
-def update_refined_beta(self, betas, batch):
+def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, batch):
     pass
     # if betas is not None:
     #     if not len(betas['sparse_beta']):
@@ -24,12 +29,14 @@ def update_refined_beta(self, betas, batch):
     #         relu_layer.sparse_beta_loc = betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
     #         relu_layer.sparse_beta_sign = betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
     
-def new_input(self, x_L, x_U):
+@beartype
+def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
     assert torch.all(x_L <= x_U)
     return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
 
 
-def new_slopes(slopes, keep_name):
+@beartype
+def new_slopes(slopes: dict, keep_name: str) -> dict:
     new_slope = {}
     for relu_layer, alphas in slopes.items():
         new_slope[relu_layer] = {}
@@ -38,7 +45,8 @@ def new_slopes(slopes, keep_name):
     return new_slope
 
 
-def _to_device(tensor, device=None, half=False):
+@beartype
+def _to_device(tensor: torch.Tensor, device: str = 'cpu', half: bool = False) -> torch.Tensor:
     assert device in ['cpu', 'cuda'] and isinstance(half, bool)
     if half:
         tensor = tensor.half()
@@ -47,7 +55,8 @@ def _to_device(tensor, device=None, half=False):
     return tensor
 
 
-def get_slope(self, half=True, device='cpu'):
+@beartype
+def get_slope(self: 'abstractor.abstractor.NetworkAbstractor', half=True, device='cpu') -> dict:
     if len(self.net.perturbed_optimizable_activations) == 0:
         return {}
     slopes = {
@@ -58,8 +67,8 @@ def get_slope(self, half=True, device='cpu'):
     return slopes
 
 
-def set_slope(self, slope):
-    assert isinstance(slope, defaultdict), print(type(slope))
+@beartype
+def set_slope(self: 'abstractor.abstractor.NetworkAbstractor', slope: dict) -> None:
     for m in self.net.perturbed_optimizable_activations:
         for node_name in list(m.alpha.keys()):
             if node_name in slope[m.name]:
@@ -73,7 +82,8 @@ def set_slope(self, slope):
                 del m.alpha[node_name]
 
 
-def get_hidden_bounds(self, output_lbs, device='cpu'):
+@beartype
+def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lbs: torch.Tensor, device: str = 'cpu') -> tuple[dict, dict]:
     lower_bounds, upper_bounds = {}, {}
     output_ubs = output_lbs + torch.inf
     
@@ -89,7 +99,8 @@ def get_hidden_bounds(self, output_lbs, device='cpu'):
     return lower_bounds, upper_bounds
 
 
-def get_lAs(self, size=None, device='cpu'):
+@beartype
+def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = None, device: str = 'cpu') -> dict:
     lAs = {}
     for node in self.net.get_splittable_activations():
         lA = getattr(node, 'lA', None)
@@ -107,7 +118,8 @@ def get_lAs(self, size=None, device='cpu'):
     return lAs
 
 
-def get_beta(self, num_splits, device='cpu'):
+@beartype
+def get_beta(self: 'abstractor.abstractor.NetworkAbstractor', num_splits: list[dict], device: str = 'cpu') -> list:
     ret = []
     for i in range(len(num_splits)):
         betas = {k: _to_device(self.net[k].sparse_betas[0].val[i, :num_splits[i][k]], device=device) for k in num_splits[i]}
@@ -115,7 +127,8 @@ def get_beta(self, num_splits, device='cpu'):
     return ret
 
 
-def reset_beta(self, batch, max_splits_per_layer, betas=None, bias=False):
+@beartype
+def reset_beta(self: 'abstractor.abstractor.NetworkAbstractor', batch: int, max_splits_per_layer: dict, betas: list | None = None, bias: bool = False) -> None:
     for layer_name in max_splits_per_layer:
         layer = self.net[layer_name]
         start_nodes = []
@@ -130,8 +143,8 @@ def reset_beta(self, batch, max_splits_per_layer, betas=None, bias=False):
         self.net.reset_beta(layer, shape, betas_, bias=bias, start_nodes=list(set(start_nodes)))
 
 
-def _copy_history(history):
-    assert history is not None
+@beartype
+def _copy_history(history: dict) -> dict:
     ret = {}
     for k, v in history.items():
         if isinstance(v[0], torch.Tensor):
@@ -143,7 +156,8 @@ def _copy_history(history):
     return ret
 
 
-def _append_tensor(tensor, value, dtype=torch.float32):
+@beartype
+def _append_tensor(tensor: torch.Tensor | list, value: int | float | np.int64, dtype: torch.dtype = torch.float32) -> torch.Tensor:
     if not isinstance(tensor, torch.Tensor):
         tensor = torch.tensor(tensor, dtype=dtype)
     size = len(tensor)
@@ -153,7 +167,8 @@ def _append_tensor(tensor, value, dtype=torch.float32):
     return res
 
 
-def update_histories(self, histories, decisions):
+@beartype
+def update_histories(self: 'abstractor.abstractor.NetworkAbstractor', histories: list[dict], decisions: list[list]) -> list[dict]:
     double_histories = []
     batch = len(decisions)
 
@@ -176,7 +191,8 @@ def update_histories(self, histories, decisions):
     return double_histories
     
 
-def set_beta(self, betas, histories):
+@beartype
+def set_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas: list, histories: list[dict]) -> list[dict]:
     batch = len(histories)
     splits_per_example = []
     max_splits_per_layer = {}
@@ -206,8 +222,10 @@ def set_beta(self, betas, histories):
     return splits_per_example
             
             
+@beartype
 @torch.no_grad()
-def hidden_split_idx(self, lower_bounds, upper_bounds, decisions):
+def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_bounds: dict, upper_bounds: dict, 
+                     decisions: list[list]) -> dict:
     batch = len(decisions)
     splitting_indices_batch = {k: [] for k in lower_bounds}
     splitting_indices_neuron = {k: [] for k in lower_bounds}
@@ -243,8 +261,10 @@ def hidden_split_idx(self, lower_bounds, upper_bounds, decisions):
     return new_intermediate_layer_bounds
 
 
+@beartype
 @torch.no_grad()
-def input_split_idx(self, input_lowers, input_uppers, split_idx):
+def input_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', input_lowers: torch.Tensor, input_uppers: torch.Tensor, 
+                    split_idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     input_lowers = input_lowers.flatten(1)
     input_uppers = input_uppers.flatten(1)
 
@@ -271,7 +291,12 @@ def input_split_idx(self, input_lowers, input_uppers, split_idx):
     return new_input_lowers, new_input_uppers
 
     
-def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=None, intermediate_layer_bounds=None, timeout=None, timeout_per_neuron=None):
+@beartype
+def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type: str, 
+                    input_lower: torch.Tensor, input_upper: torch.Tensor, 
+                    c: torch.Tensor, rhs: torch.Tensor | None = None, 
+                    refine: bool = True, intermediate_layer_bounds: dict | None = None, 
+                    timeout: float | None = None, timeout_per_neuron: float | None = None) -> None:
     assert model_type in ['lp', 'mip']
     # delete old LP model
     self.net._reset_solver_vars(self.net.final_node())
@@ -315,7 +340,9 @@ def build_lp_solver(self, model_type, input_lower, input_upper, c, refine, rhs=N
     self.last_input_upper = input_upper.clone()
 
 
-def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bounds, c, rhs):
+@beartype
+def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input_lower: torch.Tensor, input_upper: torch.Tensor, 
+                          lower_bounds: dict, upper_bounds: dict, c: torch.Tensor, rhs: torch.Tensor) -> tuple[bool, torch.Tensor | None]:
     logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
@@ -378,7 +405,8 @@ def solve_full_assignment(self, input_lower, input_upper, lower_bounds, upper_bo
 
 
 
-def compute_stability(self, objective):
+@beartype
+def compute_stability(self: 'abstractor.abstractor.NetworkAbstractor', objective):
     cs = objective.cs.to(self.device)
     rhs = objective.rhs.to(self.device)
     
