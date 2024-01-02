@@ -1,14 +1,15 @@
-import torch.optim as optim
-import torch.nn as nn
-import numpy as np
+from beartype import beartype
 import torch
-import time
+
+from onnx2pytorch.convert.model import ConvertModel
 
 from .util import get_loss, check_adv_multi, serialize_specs
 from util.misc.adam_clipping import AdamClipping
 
 
-def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts=30):
+@beartype
+def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor, 
+           cs: torch.Tensor, rhs: torch.Tensor, attack_iters: int = 100, num_restarts: int = 30) -> tuple[bool, torch.Tensor | None]:
     # set all parameters without gradient, this can speedup things significantly.
     grad_status = {}
     for p in model.parameters():
@@ -64,12 +65,14 @@ def attack(model, x, data_min, data_max, cs, rhs, attack_iters=100, num_restarts
 
 
 
-def general_attack(model, X, data_min, data_max, serialized_conditions, 
-                   use_gama=False, num_restarts=10, attack_iters=100, 
-                   only_replicate_restarts=False):
+@beartype
+def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor, 
+                   serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], use_gama: bool = False, 
+                   num_restarts: int = 10, attack_iters: int = 100, 
+                   only_replicate_restarts: bool = False) -> torch.Tensor | None:
     # hyper params
     lr_decay = 0.99
-    gama_lambda = 10
+    gama_lambda = 10.0
 
     # shapes
     input_shape = (X.shape[0], *X.shape[2:]) if only_replicate_restarts else X.size()

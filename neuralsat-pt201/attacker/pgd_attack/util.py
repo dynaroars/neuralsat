@@ -1,6 +1,8 @@
+from beartype import beartype
 import torch
 
-def serialize_specs(x, cs, rhs):
+@beartype
+def serialize_specs(x: torch.Tensor, cs: torch.Tensor, rhs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, list[list[int]]]:
     assert x.shape[0] == 1, print(f'Invalid batch size: {x.shape[0]}')
     cs_mat, rhs_mat, cond_mat = [], [], []
     for cs_i, rhs_i in zip(cs, rhs):
@@ -12,7 +14,10 @@ def serialize_specs(x, cs, rhs):
     return cs_mat, rhs_mat, [cond_mat]
     
     
-def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
+@beartype
+def check_adv_multi(input: torch.Tensor, output: torch.Tensor, 
+                    serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], 
+                    data_max: torch.Tensor, data_min: torch.Tensor) -> torch.Tensor:
     cs_mat, rhs_mat, cond_mat = serialized_conditions
     if len(cond_mat[0]) == rhs_mat.shape[-1]:
         assert all([cond_mat[0][0] == i for i in cond_mat[0]])
@@ -68,7 +73,10 @@ def check_adv_multi(input, output, serialized_conditions, data_max, data_min):
     return res.all()
 
 
-def get_loss(origin_out, output, serialized_conditions, gama_lambda=0, threshold=-1e-5):
+@beartype
+def get_loss(origin_out: torch.Tensor | None, output: torch.Tensor, 
+             serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], 
+             gama_lambda: float = 0.0, threshold: float = -1e-5) -> torch.Tensor:
     cs_mat, rhs_mat, cond_mat = serialized_conditions
     if rhs_mat.shape[-1] == len(cond_mat[0]):
         assert all([cond_mat[0][0] == i for i in cond_mat[0]])
