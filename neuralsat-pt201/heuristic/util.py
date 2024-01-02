@@ -1,12 +1,22 @@
+from __future__ import annotations
+from beartype import beartype
+import typing
 import torch
 import copy
 
 from abstractor.utils import _append_tensor
 from solver.sat_solver import SATSolver
 from util.misc.logger import logger
+from util.misc.result import AbstractResults
 from auto_LiRPA.bound_ops import *
 
-def compute_masks(lower_bounds, upper_bounds, device):
+if typing.TYPE_CHECKING:
+    import abstractor
+    import heuristic
+
+    
+@beartype
+def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str) -> dict:
     new_masks = {
         j: torch.logical_and(
                     lower_bounds[j] < 0, 
@@ -16,7 +26,12 @@ def compute_masks(lower_bounds, upper_bounds, device):
     return new_masks
 
 
-def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, masks, reduce_op, number_bounds):
+@beartype
+def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor', 
+                          lower_bounds: dict, upper_bounds: dict, 
+                          lAs: dict, masks: dict, 
+                          reduce_op: typing.Callable, 
+                          batch: int, number_bounds: int) -> tuple[list, list]:
     score = []
     intercept_tb = []
     
@@ -56,7 +71,8 @@ def _compute_babsr_scores(abstractor, lower_bounds, upper_bounds, lAs, batch, ma
     return score, intercept_tb
 
 
-def _history_to_clause(h, name_mapping):
+@beartype
+def _history_to_clause(h: dict, name_mapping: dict) -> list:
     clause = []
     for lname, ldata in h.items():
         assert sum(ldata[2]) == 0 # TODO: fixme
@@ -70,8 +86,8 @@ def _history_to_clause(h, name_mapping):
         clause += [v * s for v, s in zip(var_names, signs)]
     return clause
 
-
-def _compute_ratio(lower_bound, upper_bound):
+@beartype
+def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     lower_temp = lower_bound.clamp(max=0)
     upper_temp = upper_bound.clamp(min=0)
     slope_ratio = upper_temp / (upper_temp - lower_temp)
@@ -79,7 +95,8 @@ def _compute_ratio(lower_bound, upper_bound):
     return slope_ratio, intercept
 
     
-def _get_bias_term(input_node, ratio):
+@beartype
+def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
     if type(input_node) == BoundConv:
         if len(input_node.inputs) > 2:
             bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
@@ -108,10 +125,10 @@ def _get_bias_term(input_node, ratio):
     return bias * ratio
     
     
-def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, literal, batch_idx):
+@beartype
+def update_hidden_bounds_histories(self: 'heuristic.domains_list.DomainsList', lower_bounds: dict, upper_bounds: dict, 
+                                   histories: list, literal: int, batch_idx: int | torch.Tensor) -> bool:
     assert literal != 0
-    assert lower_bounds is not None
-    assert isinstance(histories, list)
     # extract decision
     lid, nid = self.reversed_var_mapping[abs(literal)]
 
@@ -133,7 +150,8 @@ def update_hidden_bounds_histories(self, lower_bounds, upper_bounds, histories, 
     return True
 
 
-def create_one(masks, clauses, var_mapping):
+@beartype
+def create_one(masks: dict, clauses: list, var_mapping: dict) -> tuple[SATSolver | None, list]:
     # literals
     literals_to_assign = []
     for lname, lmask in masks.items():
@@ -157,7 +175,8 @@ def create_one(masks, clauses, var_mapping):
     return new_sat_solver, bcp_vars
 
 
-def init_sat_solver(self, objective_ids, lower_bounds, upper_bounds, histories, preconditions):
+@beartype
+def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: torch.Tensor, lower_bounds: dict, upper_bounds: dict, histories: list, preconditions: dict) -> torch.Tensor:
     assert torch.equal(objective_ids, torch.unique(objective_ids))
     # initial learned conflict clauses
     clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
@@ -198,7 +217,8 @@ def init_sat_solver(self, objective_ids, lower_bounds, upper_bounds, histories, 
     return torch.tensor(remain_idx)
     
     
-def boolean_propagation(self, domain_params, decisions, batch_idx):
+@beartype
+def boolean_propagation(self: 'heuristic.domains_list.DomainsList', domain_params: AbstractResults, decisions: list, batch_idx: int | torch.Tensor) -> SATSolver | None:
     assert len(decisions) * 2 == len(domain_params.input_lowers) 
     assert len(decisions) * 2 == len(domain_params.sat_solvers) 
     
@@ -240,7 +260,8 @@ def boolean_propagation(self, domain_params, decisions, batch_idx):
     return new_sat_solver
 
 
-def save_conflict_clauses(self, domain_params, remaining_index):
+@beartype
+def save_conflict_clauses(self: 'heuristic.domains_list.DomainsList', domain_params: AbstractResults, remaining_index: torch.Tensor) -> None:
     assert domain_params.objective_ids is not None
     for i in range(len(domain_params.histories)):
         if i in remaining_index:

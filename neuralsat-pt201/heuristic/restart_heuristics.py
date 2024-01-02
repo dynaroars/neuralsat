@@ -1,4 +1,4 @@
-
+from beartype import beartype
 
 INPUT_SPLIT_RESTART_STRATEGIES = [
     # {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
@@ -15,7 +15,8 @@ HIDDEN_SPLIT_RESTART_STRATEGIES = [
 ]
 
 
-def get_restart_strategy(nth_restart, input_split=False):
+@beartype
+def get_restart_strategy(nth_restart: int, input_split: bool = False) -> dict:
     if input_split:
         if nth_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[-1]
