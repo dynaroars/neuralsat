@@ -1,11 +1,17 @@
+from beartype import beartype
 import numpy as np
+import typing
 import random
 import torch
 import time
 
+from onnx2pytorch.convert.model import ConvertModel
+from verifier.objective import DnfObjectives
+
 class RandomAttacker:
 
-    def __init__(self, net, objective, input_shape, device):
+    @beartype
+    def __init__(self: 'RandomAttacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape
@@ -25,13 +31,15 @@ class RandomAttacker:
         # print(self.direction)
 
 
-    def manual_seed(self, seed):
+    @beartype
+    def manual_seed(self: 'RandomAttacker', seed: int) -> None:
         self.seed = seed
         random.seed(self.seed)
         torch.manual_seed(self.seed)
         
         
-    def get_target_and_direction(self):
+    @beartype
+    def get_target_and_direction(self: 'RandomAttacker') -> tuple[int, str]:
         target_dict = dict.fromkeys(range(np.prod(self.output_shape)), 0)
         obj_dict = dict.fromkeys(range(np.prod(self.output_shape)), 0)
         for arr in self.objective.cs:
@@ -52,7 +60,8 @@ class RandomAttacker:
         return target, direction
 
 
-    def _attack(self, input_lowers, input_uppers):
+    @beartype
+    def _attack(self: 'RandomAttacker', input_lowers: torch.Tensor, input_uppers: torch.Tensor) -> torch.Tensor | None:
         adv = self._sampling(
             input_lowers=input_lowers, 
             input_uppers=input_uppers, 
@@ -62,7 +71,8 @@ class RandomAttacker:
         return adv
 
 
-    def run(self, timeout=1.0):
+    @beartype
+    def run(self: 'RandomAttacker', timeout: float = 1.0) -> tuple[bool, torch.Tensor | None]:
         if np.prod(self.input_shape) >= 200:
             return False, None
         
@@ -86,7 +96,8 @@ class RandomAttacker:
                 return False, None
 
 
-    def _sampling(self, input_lowers, input_uppers, target, direction):
+    @beartype
+    def _sampling(self: 'RandomAttacker', input_lowers: torch.Tensor, input_uppers: torch.Tensor, target: int, direction: str) -> torch.Tensor | None:
         old_pos_samples = []
 
         for it in range(self.n_runs):
@@ -126,7 +137,9 @@ class RandomAttacker:
         return None
 
 
-    def _learning(self, input_lowers, input_uppers, pos_samples, neg_samples):
+    @beartype
+    def _learning(self: 'RandomAttacker', input_lowers: torch.Tensor, input_uppers: torch.Tensor, 
+                  pos_samples: list[tuple[torch.Tensor, torch.Tensor]], neg_samples: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
         new_input_lowers = input_lowers.clone().flatten()
         new_input_uppers = input_uppers.clone().flatten()
         random.shuffle(neg_samples)
@@ -148,7 +161,8 @@ class RandomAttacker:
         return new_input_lowers.view(self.input_shape), new_input_uppers.view(self.input_shape)
 
 
-    def _split_samples(self, samples, target, direction):
+    @beartype
+    def _split_samples(self: 'RandomAttacker', samples: list[tuple[torch.Tensor, torch.Tensor]], target: int, direction: str) -> tuple:
         if direction == 'minimize':
             sorted_samples = sorted(samples, key=lambda tup: tup[1][target])
         else:
@@ -160,7 +174,8 @@ class RandomAttacker:
         return pos_samples, neg_samples
 
 
-    def _make_samples(self, input_lowers, input_uppers):
+    @beartype
+    def _make_samples(self: 'RandomAttacker', input_lowers: torch.Tensor, input_uppers: torch.Tensor) -> tuple[bool, list[tuple[torch.Tensor, torch.Tensor]]]:
         s_in = (input_uppers - input_lowers) * torch.rand(self.n_samples, *self.input_shape[1:], device=self.device) + input_lowers
         assert torch.all(input_lowers <= s_in) and torch.all(s_in <= input_uppers)
         s_out = self.net(s_in)

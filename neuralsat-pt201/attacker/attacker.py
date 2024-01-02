@@ -1,31 +1,35 @@
 from beartype import beartype
-import torch
 import random
+import typing
+import torch
 
+from onnx2pytorch.convert.model import ConvertModel
+from verifier.objective import DnfObjectives
 from util.misc.check import check_solution
-from .random_attack import RandomAttacker
-from .pgd_attack.general import attack
 from util.misc.logger import logger
 
+from .random_attack import RandomAttacker
+from .pgd_attack.general import attack
+
+    
 import pdb
 DBG = pdb.set_trace
 
 class Attacker:
     
     @beartype
-    def __init__(self, net, objective, input_shape, device) -> None:
+    def __init__(self: 'Attacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
         self.attackers = [
             RandomAttacker(net, objective, input_shape, device=device),
             PGDAttacker(net, objective, input_shape, device=device),
         ]
  
     @beartype
-    def run(self, timeout=0.5):
+    def run(self: 'Attacker', timeout: float = 0.5) -> tuple[bool, torch.Tensor | None]:
         return self._attack(timeout=timeout)
 
     @beartype
-    # def _attack(self, timeout: float) -> tuple[bool, None | torch.Tensor]:
-    def _attack(self, timeout: float):
+    def _attack(self: 'Attacker', timeout: float) -> tuple[bool, torch.Tensor | None]:
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
@@ -38,20 +42,23 @@ class Attacker:
 
 class PGDAttacker:
 
-    def __init__(self, net, objective, input_shape, device='cpu'):
+    @beartype
+    def __init__(self: 'PGDAttacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str = 'cpu') -> None:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape
         self.device = device
         self.seed = None
 
-    def manual_seed(self, seed):
+    @beartype
+    def manual_seed(self: 'PGDAttacker', seed: int) -> None:
         self.seed = seed
         random.seed(self.seed)
         torch.manual_seed(self.seed)
 
 
-    def run(self, iterations=50, restarts=20, timeout=1.0):
+    @beartype
+    def run(self: 'PGDAttacker', iterations: int = 50, restarts: int = 20, timeout: float = 1.0) -> tuple[bool, torch.Tensor | None]:
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         
