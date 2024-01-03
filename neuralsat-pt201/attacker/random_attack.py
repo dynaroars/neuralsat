@@ -1,6 +1,5 @@
 from beartype import beartype
 import numpy as np
-import typing
 import random
 import torch
 import time

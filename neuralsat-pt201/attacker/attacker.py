@@ -4,11 +4,12 @@ import torch
 
 from onnx2pytorch.convert.model import ConvertModel
 from verifier.objective import DnfObjectives
+
 from util.misc.check import check_solution
 from util.misc.logger import logger
 
-from .random_attack import RandomAttacker
-from .pgd_attack.general import attack
+from attacker.random_attack import RandomAttacker
+from attacker.pgd_attack.general import attack
 
     
 import pdb

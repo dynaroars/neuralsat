@@ -384,7 +384,7 @@ class MIPAttacker:
         #     ((domain_params.lower_bounds[j] > 0).int() - (domain_params.upper_bounds[j] < 0).int()).flatten(1).cpu()
         #         for j in range(len(domain_params.lower_bounds) - 1)
         # ]
-        
+        return
         if n_candidates >= len(domain_params.lower_bounds[0]):
             return domain_params
 

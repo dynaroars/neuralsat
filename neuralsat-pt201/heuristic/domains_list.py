@@ -3,7 +3,6 @@ from collections import defaultdict
 from beartype import beartype
 import typing
 import torch
-import copy
 import time
 
 if typing.TYPE_CHECKING:
@@ -12,7 +11,7 @@ if typing.TYPE_CHECKING:
 from util.misc.tensor_storage import TensorStorage
 from util.misc.result import AbstractResults
 from abstractor.utils import _copy_history
-from .util import compute_masks
+from heuristic.util import compute_masks
 from setting import Settings
 
 from util.misc.logger import logger

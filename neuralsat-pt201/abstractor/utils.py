@@ -10,7 +10,7 @@ import copy
 from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor
 
-from .params import get_branching_opt_params
+from abstractor.params import get_branching_opt_params
 from util.misc.check import check_solution
 from util.misc.logger import logger
 

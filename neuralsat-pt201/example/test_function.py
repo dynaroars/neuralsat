@@ -34,8 +34,8 @@ def test_1():
     net_path = 'example/backup/motivation_example_159.onnx'
     vnnlib_path = 'example/backup/motivation_example_159.vnnlib'
     
-    # net_path = 'example/mnist-net_256x2.onnx'
-    # vnnlib_path = 'example/prop_1_0.03.vnnlib'
+    # net_path = 'example/onnx/mnist-net_256x2.onnx'
+    # vnnlib_path = 'example/vnnlib/prop_1_0.05.vnnlib'
     
     device = 'cpu'
     logger.setLevel(1)

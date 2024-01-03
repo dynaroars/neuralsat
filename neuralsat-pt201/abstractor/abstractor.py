@@ -12,8 +12,7 @@ from auto_LiRPA import BoundedModule
 from onnx2pytorch.convert.model import ConvertModel
 from util.misc.result import AbstractResults
 from util.misc.logger import logger
-from setting import Settings
-from .params import *
+from abstractor.params import *
 
 
 class NetworkAbstractor:

@@ -448,9 +448,9 @@ def _save_stats(self: verifier.verifier.Verifier) -> None:
 def get_stats(self: verifier.verifier.Verifier) -> tuple[int, int]:
     depths = {}
     for k, v in self.all_conflict_clauses.items():
-        depth = max(map(lambda x: sum(len(_[0]) for _ in x.values()), v)) if len(v) else 0
-        depths[k] = depth
-    return max(list(depths.values())), self.visited
+        depths[k] = max(map(lambda x: sum(len(_[0]) for _ in x.values()), v)) if len(v) else 0
+    depth = max(list(depths.values())) if len(depths) else 0
+    return depth, self.visited
 
 
 @beartype

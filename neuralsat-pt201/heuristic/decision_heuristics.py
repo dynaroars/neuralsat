@@ -1,7 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
 from beartype import beartype
-from torch import nn
 import numpy as np
 import typing
 import random
@@ -10,8 +9,8 @@ import torch
 if typing.TYPE_CHECKING:
     import abstractor
     
+from heuristic.util import _compute_babsr_scores
 from util.misc.result import AbstractResults
-from .util import _compute_babsr_scores
 from setting import Settings
 
 LARGE = 1e6
