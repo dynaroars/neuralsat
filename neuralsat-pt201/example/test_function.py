@@ -15,7 +15,7 @@ from setting import Settings
 
 
 def extract_instance(net_path, vnnlib_path):
-    vnnlibs = read_vnnlib(Path(vnnlib_path))
+    vnnlibs = read_vnnlib(vnnlib_path)
     model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     
     # objective

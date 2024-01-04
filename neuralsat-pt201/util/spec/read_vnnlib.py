@@ -131,11 +131,11 @@ def make_input_box_dict(num_inputs):
 
 
 @beartype
-def read_vnnlib(vnnlib_filename: Path, regression: bool = False) -> list:
+def read_vnnlib(vnnlib_filename: str, regression: bool = False) -> list:
     return _read_vnnlib(vnnlib_filename=vnnlib_filename, regression=regression, mismatch_input_output=True)
 
 @beartype
-def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input_output: bool = False) -> list:
+def _read_vnnlib(vnnlib_filename: str, regression: bool = False, mismatch_input_output: bool = False) -> list:
     '''process in a vnnlib file
 
     this is not a general parser, and assumes files are provided in a 'nice' format. Only a single disjunction
@@ -152,7 +152,7 @@ def _read_vnnlib(vnnlib_filename: Path, regression: bool = False, mismatch_input
         1. For the first time loading, it will parse the entire file and generate a cache file with md5 code of original file into *.compiled.
         2. For the later loading, it will check *.compiled and see if the stored md5 matches the original one. If not, regeneration is needed for vnnlib changing cases. Otherwise return the cache file.
     '''
-
+    vnnlib_filename = Path(vnnlib_filename)
     assert vnnlib_filename.is_file() and vnnlib_filename.suffix == ".vnnlib", vnnlib_filename
     
     # example: "(declare-const X_0 Real)"

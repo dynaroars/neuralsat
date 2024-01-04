@@ -1,4 +1,3 @@
-from collections import defaultdict
 from beartype import beartype
 import gurobipy as grb
 import numpy as np
@@ -313,7 +312,7 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
         self.net.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
 
     # create new inputs
-    new_x = BoundedTensor(input_lower, PerturbationLpNorm(x_L=input_lower, x_U=input_upper))
+    new_x = self.new_input(input_lower, input_upper)
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 

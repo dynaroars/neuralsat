@@ -1,4 +1,3 @@
-from pathlib import Path
 import argparse
 import torch
 import time
@@ -84,7 +83,7 @@ if __name__ == '__main__':
     
     # specification
     Timers.tic('Load specification') if Settings.use_timer else None
-    vnnlibs = read_vnnlib(Path(args.spec))
+    vnnlibs = read_vnnlib(args.spec)
     logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
     logger.info(f'[!] Output shape: {output_shape}')
     Timers.toc('Load specification') if Settings.use_timer else None
