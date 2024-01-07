@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings(action='ignore')
+
 from beartype import beartype
 import traceback
 import typing
@@ -98,6 +101,8 @@ class NetworkAbstractor:
             self.net.set_bound_opts({'optimize_bound_args': {'iteration': 1}})
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:
+            exit()
+        except SystemExit:
             exit()
         except:
             # raise

@@ -1,3 +1,4 @@
+import warnings
 import os
 import torch
 from torch.onnx.utils import _optimize_graph
@@ -151,7 +152,9 @@ def get_output_template(out):
 
 def parse_module(module, inputs, param_exclude=".*AuxLogits.*", param_include=None):
     params = _get_jit_params(module, param_exclude=param_exclude, param_include=param_include)
-    trace, out = torch.jit._get_trace_graph(module, inputs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace, out = torch.jit._get_trace_graph(module, inputs)
     
     # _set_opset_version(12) # FIXME: attrs might differ 
     GLOBALS._export_onnx_opset_version = 12
