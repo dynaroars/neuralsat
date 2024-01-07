@@ -45,8 +45,10 @@ class DomainsList:
         self.all_conflict_clauses = {int(_): [] for _ in objective_ids}
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and (not input_split)
         
+        # unverified indices 
+        remain_idx = torch.where((output_lbs.detach().cpu() <= rhs.detach().cpu()).all(1))[0]
+        
         # decisions
-        remain_idx = torch.arange(len(cs))
         all_histories = [_copy_history(histories) for _ in range(len(cs))] if not input_split else None
         all_betas = [None for i in range(len(cs))] if not input_split else None
         

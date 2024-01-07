@@ -37,7 +37,10 @@ class DecisionHeuristic:
             )
         
         if self.input_split:
-            return self.input_branching(domain_params=domain_params)
+            return self.input_branching(
+                domain_params=domain_params,
+                abstractor=abstractor, 
+            )
         
         if self.random_selection:
             if random.uniform(0, 1) > 0.7:
@@ -55,9 +58,8 @@ class DecisionHeuristic:
 
     @beartype
     def get_topk_scores(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults, 
-                        topk_scores: torch.return_types.topk, topk_backup_scores: torch.return_types.topk, score_length: np.ndarray, topk: int) -> tuple[torch.Tensor, list]:
-        class TMP:
-            pass
+                        topk_scores: torch.return_types.topk, topk_backup_scores: torch.return_types.topk, score_length: np.ndarray, 
+                        topk: int) -> tuple[torch.Tensor, list]:
         
         topk_decisions = []
         batch = len(domain_params.input_lowers)
@@ -109,18 +111,20 @@ class DecisionHeuristic:
             # top-k candidates
             topk_decisions.append(decision_max + decision_min)
 
-            k_domain_params = TMP()
-            k_domain_params.input_lowers = double_input_lowers # input bounds
-            k_domain_params.input_uppers = double_input_uppers # input bounds
-            k_domain_params.lower_bounds = double_lower_bounds # hidden bounds
-            k_domain_params.upper_bounds = double_upper_bounds # hidden bounds
-            k_domain_params.slopes = double_slopes if k == 0 else []
-            k_domain_params.cs = double_cs
-            k_domain_params.rhs = double_rhs
+            k_domain_params = AbstractResults(**{
+                'input_lowers': double_input_lowers,
+                'input_uppers': double_input_uppers,
+                'lower_bounds': double_lower_bounds,
+                'upper_bounds': double_upper_bounds,
+                'slopes': double_slopes if k == 0 else [],
+                'cs': double_cs,
+                'rhs': double_rhs,
+            })
             
-            abs_ret = abstractor._naive_forward_hidden(
+            abs_ret = abstractor._forward_hidden(
                 domain_params=k_domain_params,
                 decisions=topk_decisions[-1], 
+                simplify=True
             )
             # improvements over specification
             k_output_lbs = (abs_ret.output_lbs - torch.cat([double_rhs, double_rhs])).max(-1).values
@@ -136,7 +140,8 @@ class DecisionHeuristic:
     
     # hidden branching
     @beartype
-    def filtered_smart_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults) -> list[list]:
+    def filtered_smart_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', 
+                                 domain_params: AbstractResults) -> list[list]:
         batch = len(domain_params.input_lowers)
         topk = min(self.decision_topk, int(sum([i.sum() for (_, i) in domain_params.masks.items()]).item()))
 
@@ -208,8 +213,36 @@ class DecisionHeuristic:
 
 
     @beartype
-    def input_branching(self: 'DecisionHeuristic', domain_params: AbstractResults, topk: int = 1) -> torch.Tensor:
-        final_decision = torch.topk(domain_params.input_uppers.flatten(1) - domain_params.input_lowers.flatten(1), topk, -1).indices
+    def input_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', 
+                        domain_params: AbstractResults, topk: int = 1) -> torch.Tensor:
+        n_inputs = domain_params.input_uppers.flatten(1).shape[1]
+        topk = min(topk, n_inputs)
+        topk_decisions = torch.topk(domain_params.input_uppers.flatten(1) - domain_params.input_lowers.flatten(1), topk, -1).indices
+        if topk == 1:
+            return topk_decisions
+    
+        batch = len(domain_params.input_lowers)
+        topk_output_lbs = torch.empty(
+            size=(topk, batch), 
+            device=domain_params.input_lowers.device, 
+            requires_grad=False,
+        )
+        
+        for i in range(topk):
+            tmp_decision = topk_decisions[:, i:i+1]
+            abs_ret = abstractor._forward_input(
+                domain_params=domain_params,
+                decisions=tmp_decision,
+                simplify=True,
+            )
+            output_lbs_tmp = abs_ret.output_lbs.flatten()
+            topk_output_lbs[i] = torch.min(output_lbs_tmp[:batch], output_lbs_tmp[batch:])
+        
+        topk_output_lbs[topk_output_lbs >= 0] = -LARGE
+        # print(topk_output_lbs.transpose(0, 1))
+        # print(topk_output_lbs.min())
+        best_indices = torch.topk(topk_output_lbs, 1, 0).indices.transpose(0, 1)
+        final_decision = topk_decisions[0, best_indices]
         return final_decision
         
 

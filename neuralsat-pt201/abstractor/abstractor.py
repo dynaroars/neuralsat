@@ -198,69 +198,19 @@ class NetworkAbstractor:
     
     
     @beartype
-    def _naive_forward_hidden(self: 'NetworkAbstractor', domain_params: typing.Any, decisions: list) -> AbstractResults:
+    def _forward_hidden(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: list, simplify: bool) -> AbstractResults:
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
-               len(domain_params.input_lowers) == len(domain_params.input_uppers)
-        batch = len(decisions)
-        assert batch > 0
-        
-        # update layer bounds with new decisions (perform splitting)
-        new_intermediate_layer_bounds = self.hidden_split_idx(
-            lower_bounds=domain_params.lower_bounds, 
-            upper_bounds=domain_params.upper_bounds, 
-            decisions=decisions
-        )
-        
-        # sample-wise for supporting handling multiple targets in one batch
-        double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
-        double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
-        double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
-        assert torch.all(double_input_lowers <= double_input_uppers)
-        
-        # create new inputs
-        new_x = self.new_input(x_L=double_input_lowers, x_U=double_input_uppers)
-        
-        # set slope here again
-        if len(domain_params.slopes) > 0: 
-            self.set_slope(domain_params.slopes)
-
-        # setup optimization parameters
-        self.net.set_bound_opts(get_branching_opt_params())
-
-        with torch.no_grad():
-            lb, _, = self.net.compute_bounds(
-                x=(new_x,), 
-                C=double_cs, 
-                method='backward', 
-                reuse_alpha=True,
-                interm_bounds=new_intermediate_layer_bounds
-            )
-        return AbstractResults(**{'output_lbs': lb})
-    
-
-    @beartype
-    def _forward_hidden(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: list) -> AbstractResults:
-        assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
-               len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids), \
+               len(domain_params.input_lowers) == len(domain_params.input_uppers), \
                print(f'len(decisions)={len(decisions)}, len(domain_params.input_lowers)={len(domain_params.input_lowers)}')
-
+            
         batch = len(decisions)
         assert batch > 0
         
         # 2 * batch
-        double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
-        double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
-        double_sat_solvers = domain_params.sat_solvers * 2 if domain_params.sat_solvers is not None else None
-        
-        # update histories with new decisions
-        double_betas = domain_params.betas * 2
-        double_histories = self.update_histories(
-            histories=domain_params.histories,
-            decisions=decisions, 
-        ) 
+        assert torch.all(double_input_lowers <= double_input_uppers)
         
         # update hidden bounds with new decisions (perform splitting)
         new_intermediate_layer_bounds = self.hidden_split_idx(
@@ -269,23 +219,44 @@ class NetworkAbstractor:
             decisions=decisions
         )
         
-        # update betas with new decisions
-        num_splits = self.set_beta(
-            betas=double_betas, 
-            histories=double_histories, 
-        )
-        
         # create new inputs
         new_x = self.new_input(x_L=double_input_lowers, x_U=double_input_uppers)
         
         # update slopes
         if len(domain_params.slopes) > 0: 
             self.set_slope(domain_params.slopes)
+            
+        # simplify for decision heuristics
+        if simplify:
+            # setup optimization parameters
+            self.net.set_bound_opts(get_branching_opt_params())
+            
+            # compute outputs
+            with torch.no_grad():
+                double_output_lbs, _, = self.net.compute_bounds(
+                    x=(new_x,), 
+                    C=double_cs, 
+                    method='backward', 
+                    reuse_alpha=True,
+                    interm_bounds=new_intermediate_layer_bounds
+                )
+            return AbstractResults(**{'output_lbs': double_output_lbs})
 
+        # 2 * batch
+        assert len(decisions) == len(domain_params.objective_ids)
+        double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
+        double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
+        double_sat_solvers = domain_params.sat_solvers * 2 if domain_params.sat_solvers is not None else None
+         
+        # update new decisions
+        double_histories = self.update_histories(histories=domain_params.histories, decisions=decisions)
+        double_betas = domain_params.betas * 2
+        num_splits = self.set_beta(betas=double_betas, histories=double_histories)
+        
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(stop_criterion_batch_any(double_rhs)))
         
-        # del new_intermediate_layer_bounds[self.net.final_name]
+        # compute outputs
         double_output_lbs, _ = self.net.compute_bounds(
             x=(new_x,), 
             C=double_cs, 
@@ -330,7 +301,7 @@ class NetworkAbstractor:
         
         
     @beartype
-    def _forward_input(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: torch.Tensor) -> AbstractResults:
+    def _forward_input(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: torch.Tensor, simplify: bool) -> AbstractResults:
         assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
                len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids)
                
@@ -386,7 +357,7 @@ class NetworkAbstractor:
     def forward(self: 'NetworkAbstractor', decisions: list | torch.Tensor, domain_params: AbstractResults) -> AbstractResults:
         self.iteration += 1
         forward_func = self._forward_input if self.input_split else self._forward_hidden
-        return forward_func(domain_params=domain_params, decisions=decisions)
+        return forward_func(domain_params=domain_params, decisions=decisions, simplify=False)
 
 
     def __repr__(self):
