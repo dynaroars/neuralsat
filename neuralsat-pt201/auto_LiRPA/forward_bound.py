@@ -294,6 +294,10 @@ def init_forward(self: 'BoundedModule', roots, dim_in):
                     *([batch_size] + [1] * self.forward_value.ndim))
             prev_dim_in += shape[1]
         else:
+            # FIXME: double check
+            if roots[i].forward_value.ndim == 0:
+                roots[i].forward_value = roots[i].forward_value.unsqueeze(0)
+            
             b = fv = roots[i].forward_value
             shape = fv.shape
             if roots[i].from_input:
