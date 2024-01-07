@@ -128,49 +128,7 @@ class NetworkAbstractor:
         # get split nodes
         self.net.get_split_nodes(input_split=False)
         
-        if self.method == 'crown-optimized':
-            # setup optimization parameters
-            self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
-
-            # initial bounds
-            lb, _, aux_reference_bounds = self.net.init_alpha(x=(x,), share_alphas=share_slopes, c=objective.cs)
-            logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
-            
-            if stop_criterion_func(lb).all().item():
-                return AbstractResults(**{'output_lbs': lb})
-
-            self.update_refined_beta(init_betas, batch=len(objective.cs))
-            
-            lb, _ = self.net.compute_bounds(
-                x=(x,), 
-                C=objective.cs, 
-                method='crown-optimized',
-                aux_reference_bounds=aux_reference_bounds, 
-                reference_bounds=reference_bounds,
-            )
-            logger.info(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
-            if stop_criterion_func(lb).all().item():
-                return AbstractResults(**{'output_lbs': lb})
-            
-            # reorganize tensors
-            with torch.no_grad():
-                lower_bounds, upper_bounds = self.get_hidden_bounds(lb)
-
-            return AbstractResults(**{
-                'objective_ids': objective.ids,
-                'output_lbs': lower_bounds[self.net.final_name], 
-                'lAs': self.get_lAs(), 
-                'lower_bounds': lower_bounds, 
-                'upper_bounds': upper_bounds, 
-                'slopes': self.get_slope(), 
-                'histories': {_.name: ([], [], []) for _ in self.net.split_nodes}, 
-                'cs': objective.cs,
-                'rhs': objective.rhs,
-                'input_lowers': input_lowers,
-                'input_uppers': input_uppers,
-            })
-                
-        elif self.method in ['forward', 'backward']:
+        if self.method not in ['crown-optimized']:
             with torch.no_grad():
                 lb, _ = self.net.compute_bounds(
                     x=(x,), 
@@ -192,9 +150,48 @@ class NetworkAbstractor:
                 'input_uppers': input_uppers,
             })
             
-        else:
-            print(self.method)
-            raise NotImplementedError()
+        # setup optimization parameters
+        self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
+
+        # initial bounds
+        lb, _, aux_reference_bounds = self.net.init_alpha(x=(x,), share_alphas=share_slopes, c=objective.cs)
+        logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
+        
+        if stop_criterion_func(lb).all().item():
+            return AbstractResults(**{'output_lbs': lb})
+
+        self.update_refined_beta(init_betas, batch=len(objective.cs))
+        
+        lb, _ = self.net.compute_bounds(
+            x=(x,), 
+            C=objective.cs, 
+            method='crown-optimized',
+            aux_reference_bounds=aux_reference_bounds, 
+            reference_bounds=reference_bounds,
+        )
+        logger.info(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
+        if stop_criterion_func(lb).all().item():
+            return AbstractResults(**{'output_lbs': lb})
+        
+        # reorganize tensors
+        with torch.no_grad():
+            lower_bounds, upper_bounds = self.get_hidden_bounds(lb)
+
+        return AbstractResults(**{
+            'objective_ids': objective.ids,
+            'output_lbs': lower_bounds[self.net.final_name], 
+            'lAs': self.get_lAs(), 
+            'lower_bounds': lower_bounds, 
+            'upper_bounds': upper_bounds, 
+            'slopes': self.get_slope(), 
+            'histories': {_.name: ([], [], []) for _ in self.net.split_nodes}, 
+            'cs': objective.cs,
+            'rhs': objective.rhs,
+            'input_lowers': input_lowers,
+            'input_uppers': input_uppers,
+        })
+            
+        
     
     
     @beartype

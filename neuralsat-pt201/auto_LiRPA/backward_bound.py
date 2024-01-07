@@ -537,7 +537,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 unstable_idx = None
                 del ref_intermediate_lb, ref_intermediate_ub
         if not reduced_dim:
-            if dim > 1000:
+            if dim > 1000 and self.verbose:
                 warnings.warn(
                     f"Creating an identity matrix with size {dim}x{dim} for node {node}. "
                     "This may indicate poor performance for bound computation. "
@@ -944,7 +944,8 @@ def get_alpha_crown_start_nodes(
 
 def merge_A(batch_A, ret_A):
     for key0 in batch_A:
-        if key0 not in ret_A: ret_A[key0] = {}
+        if key0 not in ret_A: 
+            ret_A[key0] = {}
         for key1 in batch_A[key0]:
             value = batch_A[key0][key1]
             if key1 not in ret_A[key0]:
@@ -958,7 +959,8 @@ def merge_A(batch_A, ret_A):
                         "unstable_idx": value["unstable_idx"]
                     }
                 })
-            elif key0 == node.name:
+            # elif key0 == node.name:
+            else:
                 # merge:
                 # the batch splitting only happens for current node, i.e.,
                 # for other nodes the returned lA should be the same across different batches

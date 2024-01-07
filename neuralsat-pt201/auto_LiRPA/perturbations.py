@@ -259,10 +259,10 @@ class PerturbationLpNorm(Perturbation):
         perturbed = perturbed.to(torch.get_default_dtype())
         lw.scatter_(dim=1, index=index.unsqueeze(1), src=perturbed.unsqueeze(1))
         lw = uw = lw[:, 1:, :].view(batch_size, dim, *x.shape[1:])
-        print(f'Using Linf sparse perturbation. Perturbed dimensions: {dim}.')
-        print(f'Avg perturbation: {(self.x_U_sparse - self.x_L_sparse).mean()}')
-        return LinearBound(
-            lw, lb, uw, ub, x_L, x_U), x, None
+        if 0:
+            print(f'Using Linf sparse perturbation. Perturbed dimensions: {dim}, batch={batch_size}.')
+            print(f'Avg perturbation: {(self.x_U_sparse - self.x_L_sparse).mean()}')
+        return LinearBound(lw, lb, uw, ub, x_L, x_U), x, None
 
     def init(self, x, aux=None, forward=False):
         self.sparse = False

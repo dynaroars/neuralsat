@@ -69,7 +69,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives, forced_input_split
     
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
-    perturbed = (diff > 0).numel()
+    perturbed = (diff > 0).int().sum()
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
     
     if Settings.test:
