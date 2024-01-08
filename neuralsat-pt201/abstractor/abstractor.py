@@ -76,6 +76,7 @@ class NetworkAbstractor:
             device=self.device,
         )
         self.net.eval()
+        self.net.get_split_nodes(input_split=False)
         
         # check conversion correctness
         dummy = objective.lower_bounds[0].view(1, *self.input_shape[1:]).to(self.device)
@@ -92,13 +93,20 @@ class NetworkAbstractor:
         x_L = objective.lower_bounds[0].view(self.input_shape)
         x_U = objective.upper_bounds[0].view(self.input_shape)
         x = self.new_input(x_L=x_L, x_U=x_U)
-
+        
+        # forward to save architectural information
+        self.net(x) 
+    
         if math.prod(self.input_shape) >= 100000:
-            self.net(x) # have to forward to save architectural information
             return True
         
         try:
-            self.net.set_bound_opts({'optimize_bound_args': {'iteration': 1}})
+            self.net.set_bound_opts({'optimize_bound_args': {
+                'iteration': 1,
+                'stop_criterion_func': lambda x: False,
+                'enable_beta_crown': False
+            }})
+            self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:
             exit()
@@ -159,7 +167,7 @@ class NetworkAbstractor:
         self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
 
         # initial bounds
-        lb, _, aux_reference_bounds = self.net.init_alpha(x=(x,), share_alphas=share_slopes, c=objective.cs)
+        lb, _, aux_reference_bounds = self.net.init_alpha(x=(x,), share_alphas=share_slopes, c=objective.cs, bound_upper=False)
         logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
         
         if stop_criterion_func(lb).all().item():

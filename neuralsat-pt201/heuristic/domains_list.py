@@ -330,7 +330,7 @@ class DomainsList:
         
         
     @beartype
-    def update_refined_bounds(self: 'DomainsList', domain_params: AbstractResults) -> None:
+    def update_refined_bounds(self: 'DomainsList', domain_params: typing.Any) -> None:
         # updating
         for key in domain_params.lower_bounds:
             orig_shape = self.all_lower_bounds[key].size()[1:] # skip batch dim

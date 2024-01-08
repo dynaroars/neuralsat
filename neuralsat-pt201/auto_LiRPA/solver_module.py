@@ -4,6 +4,9 @@ import os
 from .beta_crown import SparseBeta
 from .bound_ops import *
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .bound_general import BoundedModule
 
 MULTIPROCESS_MODEL = None
 N_REFINE_LAYER = 10

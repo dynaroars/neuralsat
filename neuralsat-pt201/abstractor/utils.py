@@ -316,6 +316,7 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
     
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
+    self.net.init_alpha(x=(new_x,), c=c)
     # TODO: use crown-optimized here?
     lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
     if rhs is not None:

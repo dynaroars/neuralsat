@@ -122,26 +122,26 @@ def _preprocess(self: verifier.verifier.Verifier, objectives, forced_input_split
         tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
         tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
-        tic = time.time()
-        c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
-
         use_refined = not Settings.use_restart
         if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
             # skip refine for Conv layers for now
             use_refined = False
 
-        self.abstractor.build_lp_solver(
-            model_type='mip', 
-            input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
-            input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
-            c=c_to_use,
-            refine=use_refined,
-            timeout=None,
-            timeout_per_neuron=10.0,
-        )
-        logger.debug(f'MIP: {time.time() - tic:.04f}')
-
         if use_refined:
+            # build solver
+            tic = time.time()
+            c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
+            self.abstractor.build_lp_solver(
+                model_type='mip', 
+                input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
+                input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
+                c=c_to_use,
+                refine=use_refined,
+                timeout=None,
+                timeout_per_neuron=Settings.mip_tightening_timeout_per_neuron,
+            )
+            logger.debug(f'MIP: {time.time() - tic:.04f}')
+            
             # forward with refinement
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
             ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
@@ -159,7 +159,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives, forced_input_split
         # torch.save(refined_intermediate_bounds, 'refined.pt')
         
     # mip tightener
-    if len(objectives):
+    if len(objectives) and (not self.input_split):
         # mip attacker
         if Settings.use_mip_attack:
             self.mip_attacker = MIPAttacker(
@@ -184,6 +184,10 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: float) -> bool:
 
 @beartype
 def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective) -> None:
+    if hasattr(self, 'abstractor'):
+        # del self.abstractor.net
+        del self.abstractor
+
     self.abstractor = NetworkAbstractor(
         pytorch_model=self.net, 
         input_shape=self.input_shape, 
@@ -218,36 +222,36 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     )
     
     refined_intermediate_bounds = None
-    if Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_tightening:
+    if (not self.input_split) and Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_tightening:
         if abstract_method == 'forward':
-            return None
-        if not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
-            return None
-        
-        if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
+            pass
+        elif not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
+            pass
+        elif any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
             # TODO: skip refine for Conv layers
-            return None
+            pass
+        else:
+            self._init_abstractor('backward', objective)
             
-        self._init_abstractor('backward', objective)
-        
-        tmp_objective = copy.deepcopy(objective)
-        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
-        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
-        
-        ret = self.abstractor.initialize(tmp_objective)
-        
-        c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
-        self.abstractor.build_lp_solver(
-            model_type='mip', 
-            input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
-            input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
-            c=c_to_use,
-            refine=True,
-            timeout=None,
-        )
-        refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
-        del self.abstractor
+            tmp_objective = copy.deepcopy(objective)
+            tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
+            tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
+            tmp_objective.rhs = tmp_objective.rhs[0:1].to(self.device)
+            tmp_objective.cs = tmp_objective.cs[0:1].to(self.device)
+            
+            ret = self.abstractor.initialize(tmp_objective)
+            self.abstractor.build_lp_solver(
+                model_type='mip', 
+                input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
+                input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
+                c=tmp_objective.cs,
+                refine=True,
+                timeout=None,
+                timeout_per_neuron=Settings.mip_tightening_timeout_per_neuron,
+            )
+            refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
     
+    # TODO: don't know why we need to re-initialize, otherwise it raises errors.
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
         self._init_abstractor(abstract_method, objective)
@@ -302,7 +306,7 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, n_
         only_replicate_restarts=True,
         use_gama=False,
     )
-    if (attack_images is None) and (self.iteration % (5 * n_interval) == 0):
+    if (attack_images is None) and (self.iteration % (5 * n_interval) == 0) and 0:
         attack_images = general_attack(
             model=self.net, 
             X=adv_example, 

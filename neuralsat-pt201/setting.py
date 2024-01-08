@@ -21,8 +21,8 @@ class GlobalSettings:
         self.max_hidden_branches = 5000
         self.max_hidden_visited_branches = 20000
         
-        self.max_input_branches  = 1e5
-        self.max_input_visited_branches = 5e6
+        self.max_input_branches  = 10000
+        self.max_input_visited_branches = 300000
         
         # stabilize
         self.use_mip_tightening = 1
@@ -68,9 +68,12 @@ class GlobalSettings:
         
         # FIXME: remove after debugging
         # self.max_hidden_visited_branches = 100
-        self.use_attack = 1
-        self.use_restart = 0
-        self.use_mip_tightening = 0
+        # self.use_attack = 0
+        # self.use_restart = 0
+        # self.use_mip_tightening = 0
+        # self.max_input_visited_branches = 1e2
+        # self.max_hidden_visited_branches = 20
+        # self.mip_tightening_timeout_per_neuron = 1.0
             
         
     def __repr__(self):

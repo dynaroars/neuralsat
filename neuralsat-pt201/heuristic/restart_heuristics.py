@@ -2,7 +2,7 @@ from beartype import beartype
 
 INPUT_SPLIT_RESTART_STRATEGIES = [
     # {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
-    # {'abstract_method': 'forward+backward', 'split_method': 'naive'},
+    {'abstract_method': 'forward+backward', 'split_method': 'naive'},
     {'abstract_method': 'backward',        'split_method': 'naive'},
     {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
     # {'abstract_method': 'crown-optimized', 'split_method': 'gradient'},
