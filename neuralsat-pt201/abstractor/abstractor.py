@@ -101,11 +101,14 @@ class NetworkAbstractor:
             return True
         
         try:
-            self.net.set_bound_opts({'optimize_bound_args': {
-                'iteration': 1,
-                'stop_criterion_func': lambda x: False,
-                'enable_beta_crown': False
-            }})
+            self.net.set_bound_opts({
+                # 'crown_batch_size': 512,
+                'optimize_bound_args': {
+                    'iteration': 1,
+                    'stop_criterion_func': lambda x: False,
+                    'enable_beta_crown': False
+                }
+            })
             self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:

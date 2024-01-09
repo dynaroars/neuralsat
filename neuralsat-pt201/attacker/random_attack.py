@@ -105,7 +105,7 @@ class RandomAttacker:
                 input_uppers=input_uppers,
             )
             if stat:
-                return samples
+                return samples[0][0]
 
             pos_samples, neg_samples = self._split_samples(
                 samples=samples, 
@@ -183,7 +183,7 @@ class RandomAttacker:
             vec = cs @ s_out.transpose(0, 1)
             for i in range(self.n_samples):
                 if torch.all(vec[:, i] <= rhs):
-                    return True, s_in[i].view(self.input_shape)
+                    return True, [(s_in[i].view(self.input_shape), s_out[i].flatten())]
                 sample = s_in[i].flatten(), s_out[i].flatten()
                 samples.append(sample)
         return False, samples

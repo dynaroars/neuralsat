@@ -14,8 +14,6 @@ import gzip
 from util.misc.error import *
 
 
-USE_ONNX2PYTORCH = True
-
 custom_quirks = {
     'Reshape': {
         'fix_batch_size': True
@@ -70,12 +68,8 @@ def _parse_onnx(path: str) -> tuple:
     batched_input_shape = add_batch(orig_input_shape)
     batched_output_shape = add_batch(orig_output_shape)
 
-    if USE_ONNX2PYTORCH:
-        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
-        pytorch_model.eval()
-    else:
-        pytorch_model = onnx2torch.convert(path)
-        pytorch_model.eval()
+    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    pytorch_model.eval()
     
     pytorch_model.to(torch.get_default_dtype())
     

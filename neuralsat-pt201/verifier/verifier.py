@@ -129,14 +129,12 @@ class Verifier:
                     logger.info(f'Try batch size {self.batch}')
                     try:
                         # main function
-                        Timers.tic('Verify one') if Settings.use_timer else None
                         status = self._verify_one(
                             objective=objective, 
                             preconditions=learned_clauses, 
                             reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
                             timeout=timeout
                         )
-                        Timers.toc('Verify one') if Settings.use_timer else None
                     except RuntimeError as exception:
                         if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
