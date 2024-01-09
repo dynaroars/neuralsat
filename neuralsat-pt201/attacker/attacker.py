@@ -58,7 +58,7 @@ class PGDAttacker:
 
 
     @beartype
-    def run(self: 'PGDAttacker', iterations: int = 50, restarts: int = 20, timeout: float = 1.0) -> tuple[bool, torch.Tensor | None]:
+    def run(self: 'PGDAttacker', iterations: int = 50, restarts: int = 20, timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         
@@ -89,6 +89,7 @@ class PGDAttacker:
             rhs=rhs_f64,
             attack_iters=iterations, 
             num_restarts=restarts,
+            timeout=timeout,
         )
         
         if is_attacked:

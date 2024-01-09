@@ -21,7 +21,7 @@ class GlobalSettings:
         self.max_hidden_branches = 5000
         self.max_hidden_visited_branches = 20000
         
-        self.max_input_branches  = 10000
+        self.max_input_branches  = 100000
         self.max_input_visited_branches = 300000
         
         # stabilize

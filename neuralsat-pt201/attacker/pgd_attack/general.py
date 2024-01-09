@@ -1,5 +1,6 @@
 from beartype import beartype
 import torch
+import time
 
 from onnx2pytorch.convert.model import ConvertModel
 
@@ -9,7 +10,8 @@ from util.misc.adam_clipping import AdamClipping
 
 @beartype
 def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor, 
-           cs: torch.Tensor, rhs: torch.Tensor, attack_iters: int = 100, num_restarts: int = 30) -> tuple[bool, torch.Tensor | None]:
+           cs: torch.Tensor, rhs: torch.Tensor, timeout: float,
+           attack_iters: int = 100, num_restarts: int = 30) -> tuple[bool, torch.Tensor | None]:
     # set all parameters without gradient, this can speedup things significantly.
     grad_status = {}
     for p in model.parameters():
@@ -40,6 +42,7 @@ def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_ma
         attack_iters=attack_iters, 
         num_restarts=num_restarts, 
         use_gama=False,
+        timeout=timeout,
     )
     
     if attack_images is None:
@@ -52,6 +55,7 @@ def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_ma
             attack_iters=attack_iters, 
             num_restarts=num_restarts, 
             use_gama=True,
+            timeout=timeout,
         )
 
     if attack_images is not None:
@@ -67,8 +71,8 @@ def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_ma
 
 @beartype
 def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor, 
-                   serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], use_gama: bool = False, 
-                   num_restarts: int = 10, attack_iters: int = 100, 
+                   serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], timeout: float,
+                   use_gama: bool = False, num_restarts: int = 10, attack_iters: int = 100, 
                    only_replicate_restarts: bool = False) -> torch.Tensor | None:
     # hyper params
     lr_decay = 0.99
@@ -100,6 +104,7 @@ def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor,
     opt = AdamClipping(params=[delta], lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(opt, lr_decay)
 
+    start = time.time()
     for _ in range(attack_iters):
         inputs = torch.max(torch.min((X + delta), data_max), data_min)
         output = model(inputs.view(-1, *input_shape[1:])).view(input_shape[0], *extra_dim, num_classes)
@@ -107,6 +112,9 @@ def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor,
         # early stop
         if check_adv_multi(inputs, output, serialized_conditions, data_max, data_min):
             return inputs
+        
+        if time.time() - start > timeout:
+            break
         
         origin_out = torch.softmax(model(X.reshape(-1, *input_shape[1:])), 1).view(output.shape) if use_gama else None
 
@@ -118,6 +126,7 @@ def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor,
         opt.zero_grad(set_to_none=True)
         scheduler.step()
         gama_lambda *= 0.9
+        
 
     return None
     

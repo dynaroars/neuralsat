@@ -260,7 +260,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 
 @beartype
-def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, timeout: float = 0.5) -> tuple[bool, torch.Tensor | None]:
+def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
@@ -273,7 +273,8 @@ def _random_idx(total_samples: int, num_samples:int, device='cpu') -> torch.Tens
 
 
 @beartype
-def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, n_sample: int = 50, n_interval: int = 1) -> torch.Tensor | None:
+def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: float,
+            n_sample: int = 50, n_interval: int = 1) -> torch.Tensor | None:
     if not Settings.use_attack:
         return None
     
@@ -305,6 +306,7 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, n_
         num_restarts=5, 
         only_replicate_restarts=True,
         use_gama=False,
+        timeout=timeout,
     )
     if (attack_images is None) and (self.iteration % (5 * n_interval) == 0) and 0:
         attack_images = general_attack(
@@ -317,6 +319,7 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, n_
             num_restarts=10, 
             only_replicate_restarts=True,
             use_gama=True,
+            timeout=timeout,
         )
 
     if attack_images is not None:

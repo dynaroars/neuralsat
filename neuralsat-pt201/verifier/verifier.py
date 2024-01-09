@@ -311,7 +311,7 @@ class Verifier:
         
         # step 4: PGD attack
         Timers.tic('Loop attack') if Settings.use_timer else None
-        self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval)
+        self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
         Timers.toc('Loop attack') if Settings.use_timer else None
         if self.adv is not None:
             return
@@ -356,7 +356,7 @@ class Verifier:
             f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
-        if Settings.use_mip_tightening:
+        if Settings.use_mip_tightening and (not self.input_split):
             msg += f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
             
         if (not self.input_split) and (unstable is not None):
