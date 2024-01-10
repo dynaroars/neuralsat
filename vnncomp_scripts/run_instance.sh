@@ -7,7 +7,7 @@ VERSION_STRING=v1
 # fi
 
 if [[ -z "${NEURALSAT_MAIN}" ]]; then
-	NEURALSAT_MAIN=$(dirname $(dirname $(realpath $0)))/neuralsat/main.py
+	NEURALSAT_MAIN=$(dirname $(dirname $(realpath $0)))/neuralsat-pt201/main.py
 fi
 
 
