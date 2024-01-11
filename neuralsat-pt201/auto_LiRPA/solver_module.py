@@ -131,6 +131,10 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                     
                 self.model.update()
                 
+                # store bounds
+                refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
+                refine_node_upper = refine_node.upper.clone().detach().cpu().flatten(1)
+
                 # tighten bounds
                 if len(candidates):
                     if DEBUG:
@@ -147,8 +151,6 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                     MULTIPROCESS_MODEL = None
                     
                     # update bounds
-                    refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
-                    refine_node_upper = refine_node.upper.clone().detach().cpu().flatten(1)
                     for neuron_idx, vlb, vub, refined in solver_result:
                         if refined:
                             if vlb >= 0:
