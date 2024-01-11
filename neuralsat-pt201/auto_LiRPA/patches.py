@@ -507,7 +507,7 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
             # The spec dimension may be sparse and contains unstable neurons for the spec layer only.
             if alpha_lookup_idx is None:
                 # alpha is spec-dense. Possible because the number of unstable neurons may decrease.
-                if last_A.size(0) == d_unfolded_r.size(0):
+                if last_A.shape[0] == d_unfolded_r.size(0):
                     # Non spec-sparse, partially shared alpha among output channel dimension.
                     # Shape after unfolding is (out_c, batch, out_h, out_w, in_c, patch_h, patch_w).
                     d_unfolded_r = d_unfolded_r[last_A.unstable_idx[0], :, last_A.unstable_idx[1], last_A.unstable_idx[2]]
