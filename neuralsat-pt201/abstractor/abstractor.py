@@ -74,6 +74,7 @@ class NetworkAbstractor:
             global_input=torch.zeros(self.input_shape, device=self.device),
             bound_opts={'conv_mode': mode, 'verbosity': 0},
             device=self.device,
+            verbose=False,
         )
         self.net.eval()
         self.net.get_split_nodes(input_split=False)

@@ -176,7 +176,8 @@ def create_one(masks: dict, clauses: list, var_mapping: dict) -> tuple[SATSolver
 
 
 @beartype
-def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: torch.Tensor, lower_bounds: dict, upper_bounds: dict, histories: list, preconditions: dict) -> torch.Tensor:
+def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: torch.Tensor, remain_idx: torch.Tensor,
+                    lower_bounds: dict, upper_bounds: dict, histories: list, preconditions: dict) -> torch.Tensor:
     assert torch.equal(objective_ids, torch.unique(objective_ids))
     # initial learned conflict clauses
     clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
@@ -192,8 +193,11 @@ def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: t
     # print(masks_per_objective)
     
     self.all_sat_solvers = []
-    remain_idx = []
+    new_remain_idx = []
     for (batch_id, objective_id) in enumerate(objective_ids):
+        if batch_id not in remain_idx:
+            continue
+        
         new_sat_solver, bcp_vars = create_one(
             masks=masks_per_objective[int(objective_id)], 
             clauses=clauses_per_objective[int(objective_id)], 
@@ -212,9 +216,9 @@ def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: t
         if (new_sat_solver is not None) and all(update_stats):
             # save
             self.all_sat_solvers.append(new_sat_solver)    
-            remain_idx.append(batch_id)
+            new_remain_idx.append(batch_id)
                     
-    return torch.tensor(remain_idx)
+    return torch.tensor(new_remain_idx)
     
     
 @beartype

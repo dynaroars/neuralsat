@@ -25,11 +25,13 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size,
     else:
         dense = False
     unstable_size = get_unstable_size(unstable_idx)
-    print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
+    if self.verbose:
+        print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
     num_batches = (unstable_size + crown_batch_size - 1) // crown_batch_size
     ret = []
     ret_A = {} # if return_A, we will store A here
-    for i in tqdm(range(num_batches)):
+    pbar = tqdm(range(num_batches)) if self.verbose else range(num_batches)
+    for i in pbar:
         if isinstance(unstable_idx, tuple):
             unstable_idx_batch = tuple(
                 u[i*crown_batch_size:(i+1)*crown_batch_size]

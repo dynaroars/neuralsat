@@ -61,9 +61,10 @@ class DomainsList:
                 lower_bounds=lower_bounds, 
                 upper_bounds=upper_bounds, 
                 histories=all_histories, 
-                preconditions=preconditions
+                preconditions=preconditions,
+                remain_idx=remain_idx,
             )
-            logger.info(f'Initialize {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
+            logger.info(f'Initialized {len(self.all_sat_solvers)} solvers with {len(preconditions)} learned clauses in {time.time() - tic:.03f} seconds')
         
         # objective indices
         self.all_objective_ids = TensorStorage(objective_ids[remain_idx].cpu())

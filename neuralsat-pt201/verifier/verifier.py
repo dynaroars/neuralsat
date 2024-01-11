@@ -9,7 +9,7 @@ import copy
 
 from onnx2pytorch.convert.model import ConvertModel
 
-from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES
+from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES, INPUT_SPLIT_RESTART_STRATEGIES
 from heuristic.domains_list import DomainsList
 
 from auto_LiRPA.utils import stop_criterion_batch_any
@@ -247,9 +247,6 @@ class Verifier:
         if hasattr(self, 'tightener'):
             self.tightener.reset()
         
-        # restart threshold
-        max_branches = Settings.max_input_branches if self.input_split else Settings.max_hidden_branches
-        max_visited_branches = Settings.max_input_visited_branches if self.input_split else Settings.max_hidden_visited_branches
         
         # main loop
         start_time = time.time()
@@ -271,14 +268,41 @@ class Verifier:
                 return ReturnStatus.TIMEOUT
             
             # check restart
-            if Settings.use_restart and (self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES)):
-                if (len(self.domains_list) > max_branches) or (self.domains_list.visited > max_visited_branches):
-                    return ReturnStatus.RESTART
-            
-        logger.debug(f'Main loop: {time.time() - start_time}')
+            if self._check_restart(start_time=start_time):
+                return ReturnStatus.RESTART
         
         return ReturnStatus.UNSAT
-            
+    
+    
+    @beartype
+    def _check_restart(self: 'Verifier', start_time: float) -> bool:
+        if not Settings.use_restart:
+            return False
+        
+        if self.input_split:
+            if self.num_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
+                return False
+        else:
+            if self.num_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
+                return False
+        
+        # restart runtime threshold
+        if time.time() - start_time > Settings.max_restart_runtime:
+            logger.debug(f'[Restart] Runtime exceeded {Settings.max_restart_runtime} seconds')
+            return True
+        
+        # restart domains threshold
+        max_branches = Settings.max_input_branches if self.input_split else Settings.max_hidden_branches
+        max_visited_branches = Settings.max_input_visited_branches if self.input_split else Settings.max_hidden_visited_branches
+        if len(self.domains_list) > max_branches:
+            logger.debug(f'[Restart] Number of remaining domains exceeded {max_branches} domains')
+            return True
+        
+        if self.domains_list.visited > max_visited_branches:
+            logger.debug(f'[Restart] Number of visited domains exceeded {max_visited_branches} domains')
+            return True
+        
+        return False
             
     @beartype
     def _parallel_dpll(self: 'Verifier') -> None:
