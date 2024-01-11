@@ -1,4 +1,4 @@
-name: neuralsat
+name: neuralsat-pt212
 channels:
   - gurobi
   - pytorch
@@ -119,4 +119,5 @@ dependencies:
     - pyaml==23.9.7
     - scipy==1.11.4
     - sortedcontainers==2.4.0
+    - termcolor==2.4.0
     - tqdm==4.66.1

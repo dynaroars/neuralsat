@@ -1,4 +1,4 @@
-name: neuralsat
+name: neuralsat-pt113
 channels:
   - gurobi
   - pytorch
