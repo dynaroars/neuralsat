@@ -140,6 +140,7 @@ class Verifier:
                         if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
+                                logger.debug('[!] OOM with batch_size=1')
                                 return ReturnStatus.UNKNOWN
                             self.batch = self.batch // 2
                             dnf_objectives.add(objective)

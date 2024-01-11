@@ -206,8 +206,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     if params is None:
         raise NotImplementedError()
     
-    if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
-        params['abstract_method'] = 'forward'
+    # if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
+    #     params['abstract_method'] = 'forward'
         
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
@@ -223,7 +223,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     
     refined_intermediate_bounds = None
     if (not self.input_split) and Settings.use_restart and self.num_restart == len(HIDDEN_SPLIT_RESTART_STRATEGIES) and Settings.use_mip_tightening:
-        if abstract_method == 'forward':
+        if 'forward' in abstract_method:
             pass
         elif not torch.allclose(objective.lower_bounds.mean(dim=0), objective.lower_bounds[0], 1e-5, 1e-5):
             pass

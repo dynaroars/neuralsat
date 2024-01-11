@@ -84,7 +84,9 @@ class GlobalSettings:
         # self.max_input_visited_branches = 100000
         # self.max_hidden_visited_branches = 20
         # self.mip_tightening_timeout_per_neuron = 1.0
-        # self.backward_batch_size = 256 
+        # self.backward_batch_size = 256
+        # self.forward_dynamic = 1
+        # self.forward_max_dim = 100
             
         
     def __repr__(self):
