@@ -3,6 +3,7 @@ import warnings
 warnings.filterwarnings(action='ignore')
 from beartype import beartype
 import numpy as np
+import logging
 import torch
 import time
 import copy
@@ -374,15 +375,17 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Bound: {minimum_lowers:<15.04f} '
-            f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
+            f'Bound: {minimum_lowers:<12.02f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
-        if Settings.use_mip_tightening and (not self.input_split):
-            msg += f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
+        if logger.level <= logging.DEBUG:
+            msg += f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
             
-        if (not self.input_split) and (unstable is not None):
-            msg += f'Unstable neurons: {unstable:<10}'
+            if Settings.use_mip_tightening and (not self.input_split):
+                msg += f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
+                
+            if (not self.input_split) and (unstable is not None):
+                msg += f'Unstable neurons: {unstable:<10}'
             
         logger.info(msg)
     

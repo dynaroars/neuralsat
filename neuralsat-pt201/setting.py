@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 try:
@@ -34,18 +35,24 @@ class GlobalSettings:
         
         # attack
         self.use_attack = 1
-        self.use_mip_attack = 0
+        self.use_mip_attack = 0 # in progress
         
         self.attack_interval = 10
         
         # timing statistic
-        self.use_timer = 1
+        self.use_timer = 0
         
-        # threshold for automatically switching between input and hidden splitting
-        self.safety_property_threshold = 0.5
+        # property
+        self.safety_property_threshold = 0.5 # threshold for input/hidden splitting
         
         # motivation example
         self.test = 0
+        
+        # abstraction
+        self.share_alphas = 0
+        self.backward_batch_size = np.inf
+        self.forward_max_dim = 10000
+        self.forward_dynamic = 0
 
     def __getitem__(self, key):
         return self.__dict__[key]
@@ -70,12 +77,14 @@ class GlobalSettings:
         
         # FIXME: remove after debugging
         # self.max_hidden_visited_branches = 100
+        # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
         # self.use_mip_tightening = 0
         # self.max_input_visited_branches = 100000
         # self.max_hidden_visited_branches = 20
         # self.mip_tightening_timeout_per_neuron = 1.0
+        # self.backward_batch_size = 256 
             
         
     def __repr__(self):

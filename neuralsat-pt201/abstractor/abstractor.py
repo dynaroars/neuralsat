@@ -102,14 +102,7 @@ class NetworkAbstractor:
             return True
         
         try:
-            self.net.set_bound_opts({
-                # 'crown_batch_size': 512,
-                'optimize_bound_args': {
-                    'iteration': 1,
-                    'stop_criterion_func': lambda x: False,
-                    'enable_beta_crown': False
-                }
-            })
+            self.net.set_bound_opts(get_check_abstractor_params())
             self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
             self.net.compute_bounds(x=(x,), method=method)
         except KeyboardInterrupt:
@@ -125,7 +118,7 @@ class NetworkAbstractor:
         
 
     @beartype
-    def initialize(self: 'NetworkAbstractor', objective: typing.Any, share_slopes: bool = False, reference_bounds: dict | None = None, init_betas: typing.Any = None) -> AbstractResults:
+    def initialize(self: 'NetworkAbstractor', objective: typing.Any, reference_bounds: dict | None = None, init_betas: typing.Any = None) -> AbstractResults:
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -168,10 +161,15 @@ class NetworkAbstractor:
             })
             
         # setup optimization parameters
-        self.net.set_bound_opts(get_initialize_opt_params(share_slopes, stop_criterion_func))
+        self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
 
         # initial bounds
-        lb, _, aux_reference_bounds = self.net.init_alpha(x=(x,), share_alphas=share_slopes, c=objective.cs, bound_upper=False)
+        lb, _, aux_reference_bounds = self.net.init_alpha(
+            x=(x,), 
+            share_alphas=Settings.share_alphas, 
+            c=objective.cs, 
+            bound_upper=False,
+        )
         logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
         
         if stop_criterion_func(lb).all().item():
