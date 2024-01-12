@@ -64,9 +64,9 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 ## People
 - Hai Duong (GMU, main developer)
 - Linhan Li (GMU)
-- ThanhVu Nguyen (GMU)
-- Matt Dwyer (UVA)
 - Dong Xu (UVA)
+- [ThanhVu Nguyen](https://dynaroars.github.io/people/nguyenthanhvuh/) (GMU)
+- [Matthew Dwyer](https://matthewbdwyer.github.io/) (UVA)
 
 
 ## :page_with_curl: Publications
