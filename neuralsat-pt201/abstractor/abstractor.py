@@ -3,6 +3,7 @@ warnings.filterwarnings(action='ignore')
 
 from beartype import beartype
 import traceback
+import logging
 import typing
 import torch
 import copy
@@ -111,7 +112,10 @@ class NetworkAbstractor:
             exit()
         except:
             # raise
-            traceback.print_exc()
+            if logger.level <= logging.DEBUG:
+                traceback.print_exc()
+            else:
+                logger.info(f'[!] Error when trying method="{method}"')
             return False
         else:
             return True
