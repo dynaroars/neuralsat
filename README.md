@@ -4,7 +4,6 @@
 *NeuralSAT* is a deep neural network (DNN) verification tool.  It integrates the DPLL(T) approach commonly used in SMT solving with a theory solver specialized for DNN reasoning. NeuralSAT exploits multicores and GPU for efficiency and can scale to networks with millions of parameters.  It also supports a wide range of neural networks and activation functions.
 
 
-====================
 <!-- 
 **NeuralSAT** is a technique and prototype tool for verifying DNNs. 
 It combines ideas from DPLL(T)/CDCL algorithms in SAT/SMT solving with a abstraction-based theory solver to reason about DNN properties. 
@@ -59,7 +58,7 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 
 
 ## INSTALLATION and USAGE
-- see [INSTALL.md][./INSTALL.md]
+- see [INSTALL.md](./INSTALL.md)
 
 
 ## People

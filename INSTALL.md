@@ -38,7 +38,7 @@ pip install "third_party/haioc"
 ```
 
 
-## Usages
+## 🚀 Usages
 
 - Activate `conda` environment
 
