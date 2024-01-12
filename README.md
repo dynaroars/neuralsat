@@ -58,6 +58,9 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 
 
 
+## INSTALLATION and USAGE
+- see [INSTALL.md][./INSTALL.md]
+
 
 ## People
 - Hai Duong (GMU, main developer)
