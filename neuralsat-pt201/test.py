@@ -33,8 +33,8 @@ class TestVerifier(unittest.TestCase):
 
 
     def test_mnist1(self):
-        net_path = 'example/mnistfc-medium-net-554.onnx'
-        vnnlib_path = Path('example/test.vnnlib')
+        net_path = 'example/onnx/mnistfc-medium-net-554.onnx'
+        vnnlib_path = 'example/vnnlib/test.vnnlib'
         device = 'cuda'
         
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -56,8 +56,8 @@ class TestVerifier(unittest.TestCase):
         
 
     def test_mnist2(self):
-        net_path = 'example/mnistfc-medium-net-151.onnx'
-        vnnlib_path = Path('example/prop_2_0.03.vnnlib')
+        net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
+        vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
         device = 'cpu'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -79,8 +79,8 @@ class TestVerifier(unittest.TestCase):
         
     
     def test_mnist3(self):
-        net_path = 'example/mnist-net_256x2.onnx'
-        vnnlib_path = Path('example/prop_1_0.05.vnnlib')
+        net_path = 'example/onnx/mnist-net_256x2.onnx'
+        vnnlib_path = 'example/vnnlib/prop_1_0.05.vnnlib'
         device = 'cpu'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -101,8 +101,8 @@ class TestVerifier(unittest.TestCase):
         
         
     def test_acas1(self):
-        net_path = 'example/ACASXU_run2a_1_1_batch_2000.onnx'
-        vnnlib_path = Path('example/prop_3.vnnlib')
+        net_path = 'example/onnx/ACASXU_run2a_1_1_batch_2000.onnx'
+        vnnlib_path = 'example/vnnlib/prop_3.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -125,8 +125,8 @@ class TestVerifier(unittest.TestCase):
         
     
     def test_acas2(self):
-        net_path = 'example/ACASXU_run2a_1_1_batch_2000.onnx'
-        vnnlib_path = Path('example/prop_6.vnnlib')
+        net_path = 'example/onnx/ACASXU_run2a_1_1_batch_2000.onnx'
+        vnnlib_path = 'example/vnnlib/prop_6.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -148,8 +148,8 @@ class TestVerifier(unittest.TestCase):
         
         
     def test_acas3(self):
-        net_path = 'example/ACASXU_run2a_1_9_batch_2000.onnx'
-        vnnlib_path = Path('example/prop_7.vnnlib')
+        net_path = 'example/onnx/ACASXU_run2a_1_9_batch_2000.onnx'
+        vnnlib_path = 'example/vnnlib/prop_7.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -170,8 +170,8 @@ class TestVerifier(unittest.TestCase):
         
         
     def test_nn4sys(self):
-        net_path = 'example/mscn_128d.onnx'
-        vnnlib_path = Path('example/cardinality_0_100_128.vnnlib')
+        net_path = 'example/onnx/mscn_128d.onnx'
+        vnnlib_path = 'example/vnnlib/cardinality_0_100_128.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -194,8 +194,8 @@ class TestVerifier(unittest.TestCase):
         
     
     def test_cifar1(self):
-        net_path = 'example/cifar10_2_255_simplified.onnx'
-        vnnlib_path = Path('example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib')
+        net_path = 'example/onnx/cifar10_2_255_simplified.onnx'
+        vnnlib_path = 'example/vnnlib/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -219,7 +219,7 @@ class TestVerifier(unittest.TestCase):
     def test_cgan1(self):
         return True
         net_path = 'example/cGAN_imgSz32_nCh_1.onnx'
-        vnnlib_path = Path('example/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib')
+        vnnlib_path = 'example/vnnlib/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -241,8 +241,8 @@ class TestVerifier(unittest.TestCase):
         
         
     def test_dist_shift1(self):
-        net_path = 'example/mnist_concat.onnx'
-        vnnlib_path = Path('example/index188_delta0.13.vnnlib')
+        net_path = 'example/onnx/mnist_concat.onnx'
+        vnnlib_path = 'example/vnnlib/index188_delta0.13.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -264,8 +264,8 @@ class TestVerifier(unittest.TestCase):
         
         
     def test_tllverifybench1(self):
-        net_path = 'example/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx'
-        vnnlib_path = Path('example/property_N=16_1.vnnlib')
+        net_path = 'example/onnx/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx'
+        vnnlib_path = 'example/vnnlib/property_N=16_1.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
@@ -291,7 +291,7 @@ class TestVerifier(unittest.TestCase):
         if not os.path.exists(net_path):
             return True
         
-        vnnlib_path = Path('example/spec0_screw.vnnlib')
+        vnnlib_path = 'example/vnnlib/spec0_screw.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
