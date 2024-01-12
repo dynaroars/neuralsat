@@ -5,7 +5,7 @@
 
 ## Content
 
-- ```neuralsat```: source code
+- ```neuralsat-pt201```: source code
 - ```third_party```: external libraries
 - ```vnncomp_scripts```: scripts for competition
 
