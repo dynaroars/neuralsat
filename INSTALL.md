@@ -9,7 +9,7 @@
 
 
 ## Installation
-====================
+
 
 ### Dependencies
 - [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
@@ -38,7 +38,7 @@ pip install "third_party/haioc"
 ```
 
 
-## 🚀 Usages
+## 🚀 Usage
 
 - Activate `conda` environment
 
@@ -49,13 +49,13 @@ conda activate neuralsat
 - Minimal command
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
+python3 main.py --net PATH_TO_ONNX_MODEL --spec PATH_TO_VNNLIB_FILE
 ```
 
 - More options
 
 ```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH 
+python3 main.py --net PATH_TO_VNNLIB_FILE --spec PATH_TO_VNNLIB_FILE
                [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}]
 ```
 
@@ -73,7 +73,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 ### Examples
 
-- Examples showing **NeuralSAT** verifies properties (i.e., UNSAT results):
+- Examples showing **NeuralSAT** verifies properties (i.e., returning `unsat``):
 
 ```python
 python3 main.py --net "example/mnistfc-medium-net-554.onnx" --spec "example/test.vnnlib"
@@ -91,7 +91,7 @@ python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example
 ```
 
 
-- Examples showing **NeuralSAT** disproves properties (i.e., SAT results):
+- Examples showing **NeuralSAT** disproves properties (i.e., returning `sat` and counterexample):
 
 ```python
 python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"
