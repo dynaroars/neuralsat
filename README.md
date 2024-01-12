@@ -1,4 +1,9 @@
-**NeuralSAT**: A DPLL(T) Framework for Verifying Deep Neural Networks
+# **NeuralSAT**: A DPLL(T) Framework for Verifying Deep Neural Networks
+
+
+*NeuralSAT* is a deep neural network (DNN) verification tool.  It integrates the DPLL(T) approach commonly used in SMT solving with a theory solver specialized for DNN reasoning. NeuralSAT exploits multicores and GPU for efficiency and can scale to networks with millions of parameters.  It also supports a wide range of neural networks and activation functions.
+
+
 ====================
 <!-- 
 **NeuralSAT** is a technique and prototype tool for verifying DNNs. 
@@ -11,112 +16,60 @@ It applies DPLL/CDCL to assign values to boolean variables and checks for confli
 If conflicts arise, **NeuralSAT** determines the assignment decisions causing the conflicts and learns clauses to avoid those decisions in the future. 
 **NeuralSAT** repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can decide, in which it returns *`UNSAT`*. -->
 
-Content
-====================
-- ```neuralsat```: source code
-
-- ```third_party```: external libraries
-
-- ```vnncomp_scripts```: scripts for competition
 
 
-Installation
-====================
+## News
+- NeuralSAT is ranked 4th in the recent VNN-COMP'23 (verify neural networks competition).  This was our first participation and we look forward to next time.
 
-## Dependencies
-- [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-- [Gurobi](https://www.gurobi.com/): Gurobi requires a license (a [free academic license](https://www.gurobi.com/downloads/free-academic-license/) is available).
+## Features
 
-## Installation
-- Make sure you have `Anaconda`/`Miniconda` and `Gurobi` properly installed.
+- **standard** input and output formats
+  - input: `onnx` for neural networks and `vnnlib` for specifications
+  - output: `unsat` for proved property, `sat` for disproved property (accompanied with a counterexample), and `unknown` for property that cannot be proved.
+  
 
-- Remove pre-installed environment 
+- **versatile**: support multiple types of neural types of networks and activation functions
+  - layers (can be mixture of different types): `fully connected` (fc), `convolutional` (cnn), `residual networks` (resnet), `batch normalization` (bn)
+  - activation functions:  `ReLU`, `sigmoid`, `tanh`, `power`
 
-```bash
-conda deactivate 
-conda env remove --name neuralsat
-```
+- **well-tested**
+  - NeuralSAT has been tested on a wide-range of benchmarks (e.g., ACAS XU, MNIST, CFAR).
+ 
+- **fast** and among the most scalable verification tools currently
+  - NeuralSAT exploits and uses multhreads (i.e., multicore processing/CPUS) and GPUs available on your system to improve its performance.
 
-- Install required packages 
+- **active development** and **frequent updates**
+  - If NeuralSAT does not support your problem, feel free to contact us (e.g., by [openning a new Github issue](https://arxiv.org/pdf/2307.10266.pdf)). We will do our best to help.
+  - We will release new, stable versions about 3-4 times a year
+  
+- **fully automatic**, **ease of use** and requires very little configurations or expert knowledge
+  - NeuralSAT requires *no* parameter tuning (a huge engineering effort that researchers often don't pay attention to)!  In fact, you can just apply NeuralSAT *as is* to check your networks and desired properties.  The user *does not* have to do any configuration or tweaking.  It just works!
+    - But of course if you're an expert (or want to break the tool), you are welcome to tweak its internal settings.  
+  - This is what makes NeuralSAT different from other DNN verifiers (e.g., AB-Crown), which require lots of tuning for the tools to work properly.
 
-```bash
-conda env create -f env.yaml
-```
+<details>
 
-- (Optional) Install specific Pytorch C++/CUDA extensions
+<summary><kbd>details</kbd></summary>
 
-```bash
-pip install "third_party/haioc"
-```
-
-
-Getting Started
-====================
-
-## Usages
-
-- Activate `conda` environment
-
-```bash
-conda activate neuralsat
-```
-
-- Minimal command
-
-```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH
-```
-
-- More options
-
-```python
-python3 main.py --net ONNX_PATH --spec VNNLIB_PATH 
-               [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}]
-```
-
-## Options
-Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT**. 
-
-- `--net`: Path to `ONNX` model.
-- `--spec`: Path to `VNNLIB` specification file.
-- `--batch`: Maximum number of parallel checking branches.
-- `--timeout`: Timeout (in second) for verifying one instance.
-- `--device`: Device to use (either `cpu` or `cuda`).
-- `--verbosity`: Logging options (0: NOTSET, 1: INFO, 2: DEBUG).
-- `--result_file`: File to export execution results (including counter-example if found).
+- **sound** and **complete** algorithm: will give both correct `unsat` and `sat` results
+- combine ideas from conflict-clause learning (CDCL), abstractions (e.g., polytopes), LP solving
+- employ multiple adversarial attack techniques for fast counterexamples (i.e., `sat`) discovery
+</details>
 
 
 
-## Examples
 
-- Examples showing **NeuralSAT** verifies properties (i.e., UNSAT results):
-
-```python
-python3 main.py --net "example/mnistfc-medium-net-554.onnx" --spec "example/test.vnnlib"
-# unsat,29.7011
-```
-
-```python
-python3 main.py --net "example/cifar10_2_255_simplified.onnx" --spec "example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib"
-# unsat,20.0496
-```
-
-```python
-python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example/prop_6.vnnlib"
-# unsat,4.3972
-```
+## People
+- Hai Duong (GMU, main developer)
+- Linhan Li (GMU)
+- ThanhVu Nguyen (GMU)
+- Matt Dwyer (UVA)
+- Dong Xu (UVA)
 
 
-- Examples showing **NeuralSAT** disproves properties (i.e., SAT results):
+## :page_with_curl: Publications
+- Hai Duong, Linhan Li, ThanhVu Nguyen, Matthew Dwyer, [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2023
 
-```python
-python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"
-# sat,3.6618
-# adv (first 5): tensor([-0.3284, -0.4299, -0.4991,  0.0000,  0.0156])
-```
+## Acknowledgements
+The *NeuralSAT* research is partially supported by grants from NSF ([2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133)) and an Amazon Research Award.
 
-```python
-python3 main.py --net "example/mnist-net_256x2.onnx" --spec "example/prop_1_0.05.vnnlib"
-# sat,1.4306
-# adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
-```
