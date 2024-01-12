@@ -41,6 +41,7 @@ class Verifier:
         # hyper parameters
         self.input_split = False
         self.batch = max(batch, 1)
+        self.orig_batch = max(batch, 1)
 
         # counter-example
         self.adv = None
@@ -168,6 +169,8 @@ class Verifier:
                     break # objective is verified
                 if status == ReturnStatus.RESTART:
                     logger.debug('Restarting')
+                    # restore original batch size for new restart
+                    self.batch = self.orig_batch
                     for k, v in self._get_learned_conflict_clauses().items():
                         learned_clauses[k].extend(v)
                     nth_restart += 1
