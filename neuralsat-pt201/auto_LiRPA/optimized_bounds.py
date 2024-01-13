@@ -363,9 +363,7 @@ def _get_optimized_bounds(
     else:
         pruner = None
 
-    if opt_choice == 'adam-autolr':
-        opt = AdamElementLR(parameters)
-    elif opt_choice == 'adam':
+    if opt_choice == 'adam':
         opt = optim.Adam(parameters)
     elif opt_choice == 'sgd':
         opt = optim.SGD(parameters, momentum=0.9)
