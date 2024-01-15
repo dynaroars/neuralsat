@@ -278,7 +278,7 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
     if not Settings.use_attack:
         return None
     
-    if self.iteration % n_interval != 0:
+    if (self.iteration > 0) and (self.iteration % n_interval != 0):
         return None
 
     # random samples

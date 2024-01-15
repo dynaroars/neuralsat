@@ -5,6 +5,7 @@ import torch
 from onnx2pytorch.convert.model import ConvertModel
 from verifier.objective import DnfObjectives
 
+from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from util.misc.check import check_solution
 from util.misc.logger import logger
 
@@ -33,7 +34,21 @@ class Attacker:
         for atk in self.attackers:
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
-            is_attacked, adv = atk.run(timeout=timeout)
+            try:
+                # attacker using float64 might get OOM
+                is_attacked, adv = atk.run(timeout=timeout)
+            except RuntimeError as exception:
+                if is_cuda_out_of_memory(exception):
+                    # restore to default data type
+                    atk.net.to(torch.get_default_dtype())
+                    logger.info(f"[Failed] {atk} got OOM")
+                    return False, None
+                else:
+                    raise NotImplementedError
+            except:
+                raise NotImplementedError
+            else:
+                gc_cuda()
             logger.info(f"{'[Success]' if is_attacked else '[Failed]'} {atk}")
             if is_attacked:
                 return is_attacked, adv
