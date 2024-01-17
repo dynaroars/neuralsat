@@ -90,10 +90,12 @@ class DomainsList:
                 else:
                     self.all_slopes[k][kk].append(v[:, :, remain_idx].cpu())
 
+        # lAs
+        self.all_lAs = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lAs.items()} if len(lAs) else None
+        
         if self.input_split:
-            self.all_lower_bounds = self.all_upper_bounds = self.all_lAs = self.all_histories = self.all_betas = None
+            self.all_lower_bounds = self.all_upper_bounds = self.all_histories = self.all_betas = None
         else: # hidden spliting 
-            self.all_lAs = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lAs.items()}
             # hidden bounds
             self.all_lower_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lower_bounds.items() if k != self.final_name}
             self.all_upper_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in upper_bounds.items() if k != self.final_name}
@@ -134,12 +136,15 @@ class DomainsList:
             print(len(self.all_cs), len(self.all_rhs), len(self.all_objective_ids))
         assert all([vv.data.shape[2] == len(self) for v in self.all_slopes.values() for vv in v.values()]), \
             print([vv.data.shape[2] for v in self.all_slopes.values() for vv in v.values()], len(self))
+        
+        if self.all_lAs is not None:
+            assert all([len(_) == len(self) for _ in self.all_lAs.values()])
+        
         if not self.input_split:
             assert len(self.all_betas) == len(self.all_histories) == len(self)
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
             assert all([len(_) == len(self) for _ in self.all_lower_bounds.values()])
             assert all([len(_) == len(self) for _ in self.all_upper_bounds.values()])
-            assert all([len(_) == len(self) for _ in self.all_lAs.values()])
             if self.all_sat_solvers is not None:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
 
@@ -172,14 +177,16 @@ class DomainsList:
         for k, v in self.all_slopes.items():
             new_slopes[k] = {kk: vv.pop(batch).to(device=device, non_blocking=True) for (kk, vv) in v.items()}
             
+        # lAs
+        new_lAs = {k: lA.pop(batch).to(device=device, non_blocking=True) for (k, lA) in self.all_lAs.items()} if self.all_lAs is not None else None
+        
         if self.input_split:
             # input splitting
             new_lower_bounds = new_upper_bounds = None
-            new_masks = new_lAs = new_betas = new_histories = None
+            new_masks = new_betas = new_histories = None
             new_sat_solvers = None
         else: 
             # hidden spliting 
-            new_lAs = {k: lA.pop(batch).to(device=device, non_blocking=True) for (k, lA) in self.all_lAs.items()}
             new_lower_bounds = {k: lb.pop(batch).to(device=device, non_blocking=True) for (k, lb) in self.all_lower_bounds.items()}
             new_upper_bounds = {k: ub.pop(batch).to(device=device, non_blocking=True) for (k, ub) in self.all_upper_bounds.items()}
             
@@ -278,7 +285,6 @@ class DomainsList:
             # hidden bounds
             [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
             [v.append(domain_params.upper_bounds[k][remaining_index]) for k, v in self.all_upper_bounds.items()]
-            [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()]
         
         # objective indices
         self.all_objective_ids.append(domain_params.objective_ids[remaining_index])
@@ -297,6 +303,9 @@ class DomainsList:
         # alpha
         [vv.append(domain_params.slopes[k][kk][:,:,remaining_index]) for (k, v) in self.all_slopes.items() for (kk, vv) in v.items()]
             
+        # lAs
+        [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()] if self.all_lAs is not None else None
+        
         # checking
         self._check_consistent()
         

@@ -1,19 +1,20 @@
 from beartype import beartype
 
 INPUT_SPLIT_RESTART_STRATEGIES = [
-    # {'abstract_method': 'crown-optimized', 'split_method': 'naive'},
-    # {'abstract_method': 'forward',          'split_method': 'naive'},
-    {'abstract_method': 'forward+backward', 'split_method': 'naive'},
-    {'abstract_method': 'backward',         'split_method': 'naive'},
-    {'abstract_method': 'crown-optimized',  'split_method': 'naive'},
-    # {'abstract_method': 'crown-optimized', 'split_method': 'gradient'},
+    {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'smart', 'decision_topk': 1},
+    {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'naive', 'decision_topk': 1},
+    
+    {'input_split': True, 'abstract_method': 'backward',         'decision_method': 'smart', 'decision_topk': 1},
+    {'input_split': True, 'abstract_method': 'backward',         'decision_method': 'naive', 'decision_topk': 1},
+    
+    {'input_split': True, 'abstract_method': 'crown-optimized',  'decision_method': 'smart', 'decision_topk': 1},
+    {'input_split': True, 'abstract_method': 'crown-optimized',  'decision_method': 'naive', 'decision_topk': 1},
 ]
 
 HIDDEN_SPLIT_RESTART_STRATEGIES = [
-    {'abstract_method': 'crown-optimized', 'decision_topk': 10, 'random_selection': False},
-    {'abstract_method': 'crown-optimized', 'decision_topk': 20, 'random_selection': False},
-    {'abstract_method': 'crown-optimized', 'decision_topk': 30, 'random_selection': False},
-    # {'abstract_method': 'crown-optimized', 'decision_topk': 30, 'random_selection': True},
+    {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 10},
+    {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 20},
+    {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 30},
 ]
 
 

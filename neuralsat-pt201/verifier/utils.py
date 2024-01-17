@@ -211,14 +211,13 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
         
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
-    decision_topk = params.get('decision_topk', None)
-    random_selection = params.get('random_selection', False)
-    
+
     # decision heuristic
+    assert params['input_split'] == self.input_split
     self.decision = DecisionHeuristic(
-        decision_topk=decision_topk, 
-        input_split=self.input_split,
-        random_selection=random_selection,
+        input_split=params['input_split'],
+        decision_topk=params['decision_topk'],
+        decision_method=params['decision_method'],
     )
     
     refined_intermediate_bounds = None

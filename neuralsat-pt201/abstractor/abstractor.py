@@ -159,6 +159,7 @@ class NetworkAbstractor:
                 'objective_ids': getattr(objective, 'ids', None),
                 'output_lbs': lb, 
                 'slopes': self.get_slope(), 
+                'lAs': self.get_lAs(), 
                 'cs': objective.cs,
                 'rhs': objective.rhs,
                 'input_lowers': input_lowers,
@@ -211,8 +212,6 @@ class NetworkAbstractor:
             'input_uppers': input_uppers,
         })
             
-        
-    
     
     @beartype
     def _forward_hidden(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: list, simplify: bool) -> AbstractResults:
@@ -358,6 +357,7 @@ class NetworkAbstractor:
         with torch.no_grad():
             # slopes
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
+            double_lAs = self.get_lAs(size=len(new_input_lowers))
 
         return AbstractResults(**{
             'objective_ids': double_objective_ids,
@@ -365,6 +365,7 @@ class NetworkAbstractor:
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers,
             'slopes': double_slopes, 
+            'lAs': double_lAs, 
             'cs': double_cs, 
             'rhs': double_rhs, 
         })
