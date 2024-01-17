@@ -1,0 +1,57 @@
+pytorch1.12.1:∂
+Donnx::MatMul_1
+Constant_0"Constant*
+value*Jª'[@{É[@†
+?
+onnx::MatMul_0
+onnx::MatMul_1onnx::Add_2MatMul_1"MatMul
+;onnx::Add_3
+Constant_2"Constant*
+value*
+J˚©¿†
+7
+onnx::Add_2
+onnx::Add_3onnx::Sigmoid_4Add_3"Add
+5
+onnx::Sigmoid_4onnx::Concat_5	Sigmoid_4"Sigmoid
+Donnx::MatMul_6
+Constant_5"Constant*
+value*J≈èè@ºtè@†
+?
+onnx::MatMul_0
+onnx::MatMul_6onnx::Add_7MatMul_6"MatMul
+;onnx::Add_8
+Constant_7"Constant*
+value*
+Jk+Êø†
+7
+onnx::Add_7
+onnx::Add_8onnx::Sigmoid_9Add_8"Add
+6
+onnx::Sigmoid_9onnx::Concat_10	Sigmoid_9"Sigmoid
+R
+onnx::Concat_5
+onnx::Concat_10onnx::MatMul_11	Concat_10"Concat*
+axis†
+Fonnx::MatMul_12Constant_11"Constant*
+value*J™ÇÂ¿$óŸ@†
+C
+onnx::MatMul_11
+onnx::MatMul_12onnx::Add_13	MatMul_12"MatMul
+=onnx::Add_14Constant_13"Constant*
+value*
+JÈC¿†
+;
+onnx::Add_13
+onnx::Add_14onnx::Sigmoid_15Add_14"Add
++
+onnx::Sigmoid_1516
+Sigmoid_15"Sigmoid	torch_jitZ 
+onnx::MatMul_0
+
+
+b
+16
+
+
+B

@@ -1,0 +1,15 @@
+(declare-const X_0 Real)
+(declare-const X_1 Real)
+
+(declare-const Y_0 Real)
+
+; Input constraints:
+(assert (>= X_0 0.5))
+(assert (<= X_0 0.7))
+
+(assert (>= X_1 0.5))
+(assert (<= X_1 0.7))
+
+; Output constraints:
+(assert (<= Y_0 0.499999999999))
+(assert (>= Y_0 0.0))
