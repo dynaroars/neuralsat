@@ -1,4 +1,4 @@
-# NeuralSAT **Installation and Usage
+# NeuralSAT Installation and Usage
 
 > While NeuralSAT can be installed and run on any platforms satisfying its [dependencies](#dependencies), we mainly develop and test NeuralSAT on Linux.
 
