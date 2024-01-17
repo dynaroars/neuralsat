@@ -29,7 +29,7 @@ class DomainsList:
                  input_uppers: torch.Tensor, 
                  lower_bounds: dict | None, 
                  upper_bounds: dict | None, 
-                 lAs: dict | None, 
+                 lAs: dict, 
                  histories: dict | None, 
                  slopes: dict, 
                  cs: torch.Tensor, 

@@ -63,7 +63,7 @@ def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None)
     
     
 @beartype
-def _preprocess(self: verifier.verifier.Verifier, objectives, forced_input_split: bool | None = None) -> tuple:
+def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, forced_input_split: bool | None = None) -> tuple:
     # determine search algorithm
     self.refined_betas = None
     
@@ -183,7 +183,7 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: float) -> bool:
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -200,7 +200,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective) -
     
     
 @beartype
-def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective) -> None | dict:
+def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
     self.num_restart = nth_restart + 1
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
@@ -250,7 +250,6 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             )
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
     
-    # TODO: don't know why we need to re-initialize, otherwise it raises errors.
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
         self._init_abstractor(abstract_method, objective)
@@ -259,13 +258,14 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 
 @beartype
-def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
+def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
+                timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
     
 @beartype
-def _random_idx(total_samples: int, num_samples:int, device='cpu') -> torch.Tensor:
+def _random_idx(total_samples: int, num_samples: int, device: str = 'cpu') -> torch.Tensor:
     if num_samples >= total_samples:
         return torch.Tensor(range(total_samples)).to(device)
     return torch.Tensor(random.sample(range(total_samples), num_samples)).to(device)
@@ -365,7 +365,7 @@ def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: i
     
 
 @beartype
-def _update_tightening_patience(self: verifier.verifier.Verifier, minimum_lowers, old_domains_length):
+def _update_tightening_patience(self: verifier.verifier.Verifier, minimum_lowers: float, old_domains_length: int) -> None:
     current_domains_length = len(self.domains_list)
     if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= self.batch):
         self.tightening_patience -= 1
@@ -460,7 +460,7 @@ def get_stats(self: verifier.verifier.Verifier) -> tuple[int, int]:
 
 
 @beartype
-def _check_adv_f64(self: verifier.verifier.Verifier, adv: torch.Tensor, objective) -> bool:
+def _check_adv_f64(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: typing.Any) -> bool:
     lower_bounds_f64 = objective.lower_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
     upper_bounds_f64 = objective.upper_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
     cs_f64 = objective.cs_f64.to(self.device)
