@@ -173,7 +173,7 @@ class Verifier:
                     # restore original batch size for new restart
                     self.batch = self.orig_batch
                     nth_restart += 1
-                    if not self.input_split:
+                    if not self.input_split: # TODO: no need to check here
                         for k, v in self._get_learned_conflict_clauses().items():
                             learned_clauses[k].extend(v)
                         objective = self._prune_objective(objective)
@@ -189,6 +189,9 @@ class Verifier:
     def _prune_objective(self: 'Verifier', objective: typing.Any) -> None:
         assert self.domains_list is not None
         all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
+        # TODO: check here
+        # if not len(all_remaining_ids):
+        #     return
         indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
         
         # pruning
