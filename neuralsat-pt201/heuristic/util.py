@@ -16,7 +16,7 @@ if typing.TYPE_CHECKING:
 
     
 @beartype
-def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_blocking: bool = False) -> dict:
+def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_blocking: bool = True) -> dict:
     new_masks = {
         j: torch.logical_and(
                     lower_bounds[j] < 0, 

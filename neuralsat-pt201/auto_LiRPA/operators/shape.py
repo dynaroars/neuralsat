@@ -504,10 +504,13 @@ class BoundTranspose(Bound):
         self.ibp_intermediate = True
 
     def forward(self, x):
-    #     if isinstance(x, list):
-    #         print(len(x), self.perm)
-    #         print(x)
-    #         exit()
+        if isinstance(x, list):
+            # gurobi vars
+            assert all([p >= 0 for p in self.perm])
+            np_x = np.array(x)
+            assert np_x.ndim == len(self.perm) - 1
+            np_x = np_x.transpose(*[p-1 for p in self.perm[1:]])
+            return np_x.tolist()
         return x.permute(*self.perm)
 
     def bound_backward(self, last_lA, last_uA, x, **kwargs):
