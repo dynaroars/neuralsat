@@ -186,7 +186,7 @@ class Verifier:
     
     
     @beartype
-    def _prune_objective(self: 'Verifier', objective: typing.Any) -> None:
+    def _prune_objective(self: 'Verifier', objective: typing.Any) -> typing.Any:
         assert self.domains_list is not None
         all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
         # TODO: check here
