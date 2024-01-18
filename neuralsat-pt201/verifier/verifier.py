@@ -4,6 +4,7 @@ warnings.filterwarnings(action='ignore')
 from beartype import beartype
 import numpy as np
 import logging
+import typing
 import torch
 import time
 import copy
@@ -171,10 +172,11 @@ class Verifier:
                     logger.debug('Restarting')
                     # restore original batch size for new restart
                     self.batch = self.orig_batch
-                    for k, v in self._get_learned_conflict_clauses().items():
-                        learned_clauses[k].extend(v)
                     nth_restart += 1
-                    objective = self._prune_objective(objective)
+                    if not self.input_split:
+                        for k, v in self._get_learned_conflict_clauses().items():
+                            learned_clauses[k].extend(v)
+                        objective = self._prune_objective(objective)
                     continue
                 raise NotImplementedError()
             
@@ -183,7 +185,8 @@ class Verifier:
         return ReturnStatus.UNSAT  
     
     
-    def _prune_objective(self: 'Verifier', objective):
+    @beartype
+    def _prune_objective(self: 'Verifier', objective: typing.Any) -> None:
         assert self.domains_list is not None
         all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
         indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])

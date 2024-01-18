@@ -208,6 +208,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     
     if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         Settings.forward_dynamic = True
+        # Settings.forward_max_dim = 100
+        # Settings.backward_batch_size = 16
         
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']

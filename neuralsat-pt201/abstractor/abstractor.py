@@ -41,22 +41,35 @@ class NetworkAbstractor:
         
     @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
-        assert self.select_params(objective), print('Initialization failed')
-        logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}')
+        if self.select_params(objective):
+            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}')
+            return None
             
+        # try smaller backward batch size
+        backward_batch_size = 512
+        while backward_batch_size >= 1:
+            Settings.backward_batch_size = backward_batch_size
+            if self.select_params(objective):
+                logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={backward_batch_size}')
+                return None 
+            backward_batch_size = backward_batch_size // 2
+
+        logger.info('[!] Initialization failed')
+        raise
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any) -> bool:
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
-            
-            ['patches', 'backward'],
-            ['matrix', 'backward'],
-            
-            ['patches', 'forward'],
-            ['matrix', 'forward'],
         ]
+        if self.method == 'crown-optimized':    
+            params += [        
+                ['patches', 'backward'],
+                ['matrix', 'backward'],
+                # ['patches', 'forward'],
+                # ['matrix', 'forward'],
+            ]
         
         for mode, method in params:
             logger.debug(f'Try conv_mode={mode}, method={method}, input_split={self.input_split}')
