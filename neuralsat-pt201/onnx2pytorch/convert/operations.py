@@ -106,7 +106,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
         elif node.op_type == "Constant":
             constant = extract_attributes(node)['constant']
             next_node = onnx_graph.node[i + 1]
-            if constant.ndim == 2 and (-1 in constant) and next_node.op_type == 'Reshape' \
+            if constant.ndim == 1 and len(constant) == 2 and (-1 in constant) and next_node.op_type == 'Reshape' \
                     and len(node.input) == 0 and len(node.output) == 1:
                 op = Flatten()
                 node.input.extend([n_i for n_i in next_node.input if n_i != node.output[0]])

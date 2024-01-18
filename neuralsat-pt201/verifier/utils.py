@@ -395,7 +395,7 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
         lower_bounds=domain_params.lower_bounds, 
         upper_bounds=domain_params.upper_bounds, 
         device='cpu',
-    
+        non_blocking=False, # TODO: setting True makes it return wrong values
     )
     
     n_unstables = torch.stack([v.sum(dim=1) for k, v in new_masks.items()]).sum(dim=0)

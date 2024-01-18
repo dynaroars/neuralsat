@@ -290,6 +290,8 @@ class Tightener:
         # step 3: rebuild mip model
         unified_bound_shapes = {k: v.size() for k, v in worst_domains.lower_bounds.items()}
         current_model = self.rebuild_mip_model(unified_lower_bounds, unified_upper_bounds, unified_bound_shapes)
+        if current_model is None:
+            return
         current_model.setParam('TimeLimit', timeout)
 
         global MULTIPROCESS_MODEL
@@ -348,15 +350,20 @@ class Tightener:
                 refined_lower_bounds[l_name].to(self.abstractor.device).view(1, *shape[1:]), 
                 refined_upper_bounds[l_name].to(self.abstractor.device).view(1, *shape[1:])
             ]
-
-        self.abstractor.build_lp_solver(
-            model_type='mip', 
-            input_lower=self.input_lowers,
-            input_upper=self.input_uppers,
-            c=self.c_to_use,
-            refine=False,
-            intermediate_layer_bounds=intermediate_layer_bounds,
-        )
+        try:
+            self.abstractor.build_lp_solver(
+                model_type='mip', 
+                input_lower=self.input_lowers,
+                input_upper=self.input_uppers,
+                c=self.c_to_use,
+                refine=False,
+                intermediate_layer_bounds=intermediate_layer_bounds,
+            )
+        except AttributeError:
+            return None
+        except:
+            raise NotImplementedError()
+        
         current_model = self.abstractor.net.model.copy()
         current_model.setParam('Threads', 1)
         current_model.setParam('MIPGap', 0.01)

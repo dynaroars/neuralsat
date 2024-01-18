@@ -16,11 +16,11 @@ if typing.TYPE_CHECKING:
 
     
 @beartype
-def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str) -> dict:
+def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_blocking: bool = False) -> dict:
     new_masks = {
         j: torch.logical_and(
                     lower_bounds[j] < 0, 
-                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=True)
+                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
         for j in lower_bounds
     }
     return new_masks

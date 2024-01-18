@@ -504,6 +504,10 @@ class BoundTranspose(Bound):
         self.ibp_intermediate = True
 
     def forward(self, x):
+    #     if isinstance(x, list):
+    #         print(len(x), self.perm)
+    #         print(x)
+    #         exit()
         return x.permute(*self.perm)
 
     def bound_backward(self, last_lA, last_uA, x, **kwargs):
