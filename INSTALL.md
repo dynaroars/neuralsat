@@ -1,6 +1,6 @@
 # NeuralSAT Installation and Usage
 
-> While NeuralSAT can be installed and run on any platforms satisfying its [dependencies](#dependencies), we mainly develop and test NeuralSAT on Linux.
+> While NeuralSAT can be installed and run on any platforms satisfying its [dependencies](#installation), we mainly develop and test NeuralSAT on Linux.
 
 
 ## Content
@@ -12,25 +12,25 @@
 
 ## Installation
 
-
-### Dependencies
 - [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 - [Gurobi](https://www.gurobi.com/): Gurobi requires a license (a [free academic license](https://www.gurobi.com/downloads/free-academic-license/) is available).
-
-## Installation
-- Make sure you have `Anaconda`/`Miniconda` and `Gurobi` properly installed.
 
 - Remove pre-installed environment 
 
 ```bash
-conda deactivate 
-conda env remove --name neuralsat
+conda deactivate; conda env remove --name neuralsat
 ```
 
 - Install required packages 
 
 ```bash
 conda env create -f env.yaml
+```
+
+- Activate `conda` environment
+
+```bash
+conda activate neuralsat
 ```
 
 - (Optional) Install specific Pytorch C++/CUDA extensions
@@ -50,23 +50,11 @@ pip install --no-deps git+https://github.com/dlshriver/DNNV.git@d4f59a01810cf4da
 
 ## 🚀 Usage
 
-- Activate `conda` environment
-
-```bash
-conda activate neuralsat
-```
-
-- Minimal command
-
 ```python
-python3 main.py --net PATH_TO_ONNX_MODEL --spec PATH_TO_VNNLIB_FILE
-```
-
-- More options
-
-```python
-python3 main.py --net PATH_TO_VNNLIB_FILE --spec PATH_TO_VNNLIB_FILE
-               [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}]
+main.py [-h] --net NET --spec SPEC 
+        [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}] [--verbosity {0,1,2}] 
+        [--result_file RESULT_FILE] [--export_cex] 
+        [--disable_restart] [--disable_stabilize] 
 ```
 
 ### Options
@@ -79,6 +67,9 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - `--device`: Device to use (either `cpu` or `cuda`).
 - `--verbosity`: Logging options (0: NOTSET, 1: INFO, 2: DEBUG).
 - `--result_file`: File to export execution results (including counter-example if found).
+- `--export_cex`: Enable writing counter-example to `result_file`.
+- `--disable_restart`: disable RESTART heuristic.
+- `--disable_stabilize`: disable STABILIZE.
 
 
 ### Examples
@@ -86,33 +77,32 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 - Examples showing **NeuralSAT** verifies properties (i.e., returning `unsat``):
 
 ```python
-python3 main.py --net "example/mnistfc-medium-net-554.onnx" --spec "example/test.vnnlib"
-# unsat,29.7011
+python3 main.py --net "example/onnx/mnistfc-medium-net-554.onnx" --spec "example/vnnlib/test.vnnlib"
+# unsat,24.9284
 ```
 
 ```python
-python3 main.py --net "example/cifar10_2_255_simplified.onnx" --spec "example/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib"
-# unsat,20.0496
+python3 main.py --net "example/onnx/cifar10_2_255_simplified.onnx" --spec "example/vnnlib/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib"
+# unsat,17.9806
 ```
 
 ```python
-python3 main.py --net "example/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example/prop_6.vnnlib"
-# unsat,4.3972
+python3 main.py --net "example/onnx/ACASXU_run2a_1_1_batch_2000.onnx" --spec "example/vnnlib/prop_6.vnnlib" --disable_restart
+# unsat,3.0907
 ```
 
 
 - Examples showing **NeuralSAT** disproves properties (i.e., returning `sat` and counterexample):
 
 ```python
-python3 main.py --net "example/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/prop_7.vnnlib"
-# sat,3.6618
-# adv (first 5): tensor([-0.3284, -0.4299, -0.4991,  0.0000,  0.0156])
+python3 main.py --net "example/onnx/mnist-net_256x2.onnx" --spec "example/vnnlib/prop_1_0.05.vnnlib"
+# sat,0.7526
 ```
 
 ```python
-python3 main.py --net "example/mnist-net_256x2.onnx" --spec "example/prop_1_0.05.vnnlib"
-# sat,1.4306
-# adv (first 5): tensor([0.0000, 0.0500, 0.0500, 0.0000, 0.0500])
+python3 main.py --net "example/onnx/ACASXU_run2a_1_9_batch_2000.onnx" --spec "example/vnnlib/prop_7.vnnlib" --disable_restart
+# sat,6.1320
 ```
+
 
 

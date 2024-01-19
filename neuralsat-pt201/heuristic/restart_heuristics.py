@@ -1,5 +1,7 @@
 from beartype import beartype
 
+from setting import Settings
+
 INPUT_SPLIT_RESTART_STRATEGIES = [
     {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'smart', 'decision_topk': 1},
     {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'naive', 'decision_topk': 1},
@@ -21,6 +23,9 @@ HIDDEN_SPLIT_RESTART_STRATEGIES = [
 @beartype
 def get_restart_strategy(nth_restart: int, input_split: bool = False) -> dict:
     if input_split:
+        if not Settings.use_restart:
+            return INPUT_SPLIT_RESTART_STRATEGIES[3] # default: backward + naive
+        
         if nth_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[-1]
         else:
