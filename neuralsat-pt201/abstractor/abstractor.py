@@ -164,7 +164,7 @@ class NetworkAbstractor:
                     method=self.method, 
                     reference_bounds=reference_bounds,
                 )
-            logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
+            logger.info(f'Initial bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
             
@@ -189,7 +189,7 @@ class NetworkAbstractor:
             c=objective.cs, 
             bound_upper=False,
         )
-        logger.info(f'Initial bounds: {lb.detach().cpu().flatten()}')
+        logger.info(f'Initial bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
         
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
@@ -203,7 +203,7 @@ class NetworkAbstractor:
             aux_reference_bounds=aux_reference_bounds, 
             reference_bounds=reference_bounds,
         )
-        logger.info(f'Initial optimized bounds: {lb.detach().cpu().flatten()}')
+        logger.info(f'Initial optimized bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
         
