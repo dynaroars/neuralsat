@@ -42,17 +42,16 @@ class NetworkAbstractor:
     @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
         if self.select_params(objective):
-            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}')
+            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
             return None
             
         # try smaller backward batch size
-        backward_batch_size = 512
-        while backward_batch_size >= 1:
-            Settings.backward_batch_size = backward_batch_size
+        Settings.backward_batch_size = 512
+        while Settings.backward_batch_size >= 1:
             if self.select_params(objective):
-                logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={backward_batch_size}')
+                logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
                 return None 
-            backward_batch_size = backward_batch_size // 2
+            Settings.backward_batch_size = Settings.backward_batch_size // 2
 
         logger.info('[!] Initialization failed')
         raise
