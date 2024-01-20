@@ -302,7 +302,7 @@ def init_forward(self: 'BoundedModule', roots, dim_in):
             shape = fv.shape
             if roots[i].from_input:
                 w = torch.zeros(shape[0], dim_in, *shape[1:], device=self.device)
-                warnings.warn(f'Creating a LinearBound with zero weights with shape {w.shape}')
+                # warnings.warn(f'Creating a LinearBound with zero weights with shape {w.shape}')
             else:
                 w = None
             roots[i].linear = LinearBound(w, b, w, b, b, b)

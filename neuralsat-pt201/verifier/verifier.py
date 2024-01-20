@@ -85,7 +85,7 @@ class Verifier:
     
     
     @beartype
-    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0) -> str:
+    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: float = 3600.0) -> str:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
