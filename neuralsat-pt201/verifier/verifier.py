@@ -117,6 +117,7 @@ class Verifier:
             # restart variables
             nth_restart = 0 
             learned_clauses = {int(k): [] for k in objective.ids}
+            # TODO: shouldn't add to all objectives
             if len(preconditions): # add to all objective ids
                 [learned_clauses[k].extend(preconditions) for k in learned_clauses]
             
@@ -171,12 +172,12 @@ class Verifier:
                 if status == ReturnStatus.RESTART:
                     logger.debug('Restarting')
                     # restore original batch size for new restart
+                    objective = self._prune_objective(objective)
                     self.batch = self.orig_batch
                     nth_restart += 1
-                    if not self.input_split: # TODO: no need to check here
+                    if not self.input_split:
                         for k, v in self._get_learned_conflict_clauses().items():
                             learned_clauses[k].extend(v)
-                        objective = self._prune_objective(objective)
                     continue
                 raise NotImplementedError()
             
@@ -188,10 +189,12 @@ class Verifier:
     @beartype
     def _prune_objective(self: 'Verifier', objective: typing.Any) -> typing.Any:
         assert self.domains_list is not None
+        
         all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
-        # TODO: check here
-        # if not len(all_remaining_ids):
-        #     return
+        if not len(all_remaining_ids):
+            return objective
+        
+        # remaining
         indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
         
         # pruning
@@ -258,7 +261,6 @@ class Verifier:
         if hasattr(self, 'tightener'):
             self.tightener.reset()
         
-        
         # main loop
         start_time = time.time()
         while len(self.domains_list) > 0:
@@ -314,6 +316,7 @@ class Verifier:
             return True
         
         return False
+            
             
     @beartype
     def _parallel_dpll(self: 'Verifier') -> None:
