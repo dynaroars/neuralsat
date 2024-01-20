@@ -584,7 +584,7 @@ class BoundReciprocal(BoundOptimizableActivation):
         if init:
             self.init_linear_relaxation(x, dim_opt)
 
-        assert x.lower.min() > 0
+        assert x.lower.min() > 0, print('x.lower.min() =', x.lower.min())
 
         ku = -1. / (x.lower * x.upper)
         self.add_linear_relaxation(mask=None, type='upper', k=ku, x0=x.lower)

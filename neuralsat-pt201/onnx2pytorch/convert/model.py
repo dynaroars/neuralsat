@@ -118,7 +118,7 @@ class ConvertModel(nn.Module):
         self.debug = debug
         self.enable_pruning = enable_pruning
         self.is_nhwc = False
-        self.is_last_removed = False
+        self.is_last_removed = {}
 
         self.input_names = get_inputs_names(onnx_model.graph)
         self.output_names = get_outputs_names(onnx_model.graph)
@@ -127,7 +127,7 @@ class ConvertModel(nn.Module):
 
         # Create mapping from node (identified by first output) to submodule
         self.mapping = {}
-        for op_id, op_name, op, is_nhwc, is_last_removed in convert_operations(
+        for op_id, op_name, op, is_nhwc, op_type, is_last_removed in convert_operations(
             onnx_model.graph,
             opset_version,
             batch_dim,
@@ -139,7 +139,8 @@ class ConvertModel(nn.Module):
                 raise NotImplementedError("debug-mode with Loop node not implemented.")
             self.mapping[op_id] = op_name
             self.is_nhwc = self.is_nhwc or is_nhwc
-            self.is_last_removed = self.is_last_removed or is_last_removed
+            if is_last_removed:
+                self.is_last_removed[op_type] = is_last_removed
 
         # Store initializers as buffers
         for tensor in self.onnx_model.graph.initializer:

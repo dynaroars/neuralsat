@@ -25,6 +25,9 @@ custom_quirks = {
     'Softmax' :{
         'skip_last_layer': True
     },
+    'Squeeze' :{
+        'skip_last_layer': True
+    },
     'Conv' :{
         'merge_batch_norm': True
     },
@@ -63,7 +66,7 @@ def _parse_onnx(path: str) -> tuple:
     onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
     
     orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
-    orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims)
+    orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims) if len(onnx_output_dims) else (1,)
     
     batched_input_shape = add_batch(orig_input_shape)
     batched_output_shape = add_batch(orig_output_shape)
@@ -76,7 +79,10 @@ def _parse_onnx(path: str) -> tuple:
     is_nhwc = pytorch_model.is_nhwc
     
     if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
-        custom_quirks['Softmax']['skip_last_layer'] = pytorch_model.is_last_removed
+        custom_quirks['Softmax']['skip_last_layer'] = pytorch_model.is_last_removed.get('Softmax', False)
+    
+    if custom_quirks.get('Squeeze', {}).get('skip_last_layer', False):
+        custom_quirks['Squeeze']['skip_last_layer'] = pytorch_model.is_last_removed.get('Squeeze', False)
     
     # print('nhwc:', is_nhwc, batched_input_shape)
     

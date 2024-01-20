@@ -263,6 +263,7 @@ class Verifier:
         
         # main loop
         start_time = time.time()
+        start_iteration = self.iteration
         while len(self.domains_list) > 0:
             # search
             Timers.tic('Main loop') if Settings.use_timer else None
@@ -281,14 +282,14 @@ class Verifier:
                 return ReturnStatus.TIMEOUT
             
             # check restart
-            if self._check_restart(start_time=start_time):
+            if self._check_restart(start_time=start_time, start_iteration=start_iteration):
                 return ReturnStatus.RESTART
         
         return ReturnStatus.UNSAT
     
     
     @beartype
-    def _check_restart(self: 'Verifier', start_time: float) -> bool:
+    def _check_restart(self: 'Verifier', start_time: float, start_iteration: int) -> bool:
         if not Settings.use_restart:
             return False
         
@@ -300,9 +301,10 @@ class Verifier:
                 return False
         
         # restart runtime threshold
-        if time.time() - start_time > Settings.max_restart_runtime:
-            logger.debug(f'[Restart] Runtime exceeded {Settings.max_restart_runtime} seconds')
-            return True
+        if self.iteration - start_iteration >= 20:
+            if time.time() - start_time > Settings.max_restart_runtime:
+                logger.debug(f'[Restart] Runtime exceeded {Settings.max_restart_runtime} seconds')
+                return True
         
         # restart domains threshold
         max_branches = Settings.max_input_branches if self.input_split else Settings.max_hidden_branches
@@ -388,7 +390,7 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Bound: {minimum_lowers:<12.02f} '
+            f'Bound: {minimum_lowers:<12.04f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
         if logger.level <= logging.DEBUG:

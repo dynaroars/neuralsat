@@ -19,8 +19,6 @@ def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_ma
         p.requires_grad_(False)
 
     output = model(x).detach()
-    if output.ndim == 0:
-        output = output.view(1, 1).to(torch.get_default_dtype())
     
     # specifications
     serialized_conditions = serialize_specs(x, cs, rhs)
