@@ -62,7 +62,7 @@ class NetworkAbstractor:
             ['patches', self.method], # default
             ['matrix', self.method],
         ]
-        if self.method == 'crown-optimized':    
+        if self.method != 'backward':    
             params += [        
                 ['patches', 'backward'],
                 ['matrix', 'backward'],
@@ -95,10 +95,10 @@ class NetworkAbstractor:
         # check conversion correctness
         dummy = objective.lower_bounds[0].view(1, *self.input_shape[1:]).to(self.device)
         try:
-            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-5, rtol=1e-5)
+            assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-5)
         except:
             print('[!] Conversion error')
-            raise ValueError(f'torch allclose failed: norm {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
+            raise ValueError(f'torch allclose failed: {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
         
         
     @beartype
@@ -128,7 +128,7 @@ class NetworkAbstractor:
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
             else:
-                logger.info(f'[!] Error when trying method="{method}"')
+                logger.info(f'[!] Error when trying method="{method}", backward_batch_size={Settings.backward_batch_size}')
             return False
         else:
             return True

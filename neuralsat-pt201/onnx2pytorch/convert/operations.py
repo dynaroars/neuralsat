@@ -332,7 +332,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
         elif node.op_type == "Sqrt":
             op = OperatorWrapper(torch.sqrt)
         elif node.op_type == "Squeeze":
-            if node == onnx_graph.node[-1] and quirks.get(node.op_type, {}).get('skip_last_layer', False):
+            if node == onnx_graph.node[-1] and len(extract_attributes(node)) == 0 and quirks.get(node.op_type, {}).get('skip_last_layer', False):
                 op = nn.Identity()
                 is_last_removed = True
             else:
