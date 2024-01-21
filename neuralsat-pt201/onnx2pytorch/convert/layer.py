@@ -91,7 +91,7 @@ def convert_batch_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = BatchNormWrapper
-    torch_params = [torch.from_numpy(numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.tensor(numpy_helper.to_array(param)) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)
@@ -102,7 +102,7 @@ def convert_instance_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = InstanceNormWrapper
-    torch_params = [torch.from_numpy(numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.tensor(numpy_helper.to_array(param)) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)

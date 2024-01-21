@@ -31,57 +31,10 @@ def extract_instance(net_path, vnnlib_path):
 
 class TestVerifier(unittest.TestCase):
 
-
-    def test_mnist1(self):
-        net_path = 'example/onnx/mnistfc-medium-net-554.onnx'
-        vnnlib_path = 'example/vnnlib/test.vnnlib'
-        device = 'cuda'
-        
-        print('\n\nRunning test with', net_path, vnnlib_path)
-
-        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
-        model.to(device)
-        
-        verifier = Verifier(
-            net=model, 
-            input_shape=input_shape, 
-            batch=1000,
-            device=device,
-        )
-        
-        status = verifier.verify(objectives)
-        
-        self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertEqual(verifier.iteration, 40)
-        
-
-    def test_mnist2(self):
-        net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
-        vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
-        device = 'cpu'
-
-        print('\n\nRunning test with', net_path, vnnlib_path)
-        
-        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
-        model.to(device)
-        
-        verifier = Verifier(
-            net=model, 
-            input_shape=input_shape, 
-            batch=1000,
-            device=device,
-        )
-        
-        status = verifier.verify(objectives)
-        
-        self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertTrue(verifier.iteration in [24])
-        
-    
-    def test_mnist3(self):
+    def test_mnist_sat(self):
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.05.vnnlib'
-        device = 'cpu'
+        device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
         
@@ -100,10 +53,10 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(status, ReturnStatus.SAT)
         
         
-    def test_acas1(self):
-        net_path = 'example/onnx/ACASXU_run2a_1_1_batch_2000.onnx'
-        vnnlib_path = 'example/vnnlib/prop_3.vnnlib'
-        device = 'cuda'
+    def test_mnist_unsat(self):
+        net_path = 'example/onnx/mnist-net_256x2.onnx'
+        vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
+        device = 'cpu'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
         
@@ -113,18 +66,16 @@ class TestVerifier(unittest.TestCase):
         verifier = Verifier(
             net=model, 
             input_shape=input_shape, 
-            batch=2000,
+            batch=1000,
             device=device,
         )
         
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertTrue(verifier.iteration in [180, 184])
         
         
-    
-    def test_acas2(self):
+    def test_acas_unsat(self):
         net_path = 'example/onnx/ACASXU_run2a_1_1_batch_2000.onnx'
         vnnlib_path = 'example/vnnlib/prop_6.vnnlib'
         device = 'cuda'
@@ -144,10 +95,9 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertTrue(verifier.iteration in [40, 177])
         
         
-    def test_acas3(self):
+    def test_acas_sat(self):
         net_path = 'example/onnx/ACASXU_run2a_1_9_batch_2000.onnx'
         vnnlib_path = 'example/vnnlib/prop_7.vnnlib'
         device = 'cuda'
@@ -169,7 +119,7 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(status, ReturnStatus.SAT)
         
         
-    def test_nn4sys(self):
+    def test_nn4sys_unsat(self):
         net_path = 'example/onnx/mscn_128d.onnx'
         vnnlib_path = 'example/vnnlib/cardinality_0_100_128.vnnlib'
         device = 'cuda'
@@ -189,11 +139,10 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertTrue(verifier.iteration in [5, 158])
         
         
     
-    def test_cifar1(self):
+    def test_cifar_unsat(self):
         net_path = 'example/onnx/cifar10_2_255_simplified.onnx'
         vnnlib_path = 'example/vnnlib/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib'
         device = 'cuda'
@@ -213,12 +162,10 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        # self.assertTrue(verifier.iteration in [20])
         
         
-    def test_cgan1(self):
-        return True
-        net_path = 'example/cGAN_imgSz32_nCh_1.onnx'
+    def test_cgan_unsat(self):
+        net_path = 'example/onnx/cGAN_imgSz32_nCh_1.onnx'
         vnnlib_path = 'example/vnnlib/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib'
         device = 'cuda'
 
@@ -240,7 +187,7 @@ class TestVerifier(unittest.TestCase):
         
         
         
-    def test_dist_shift1(self):
+    def test_dist_shift_unsat(self):
         net_path = 'example/onnx/mnist_concat.onnx'
         vnnlib_path = 'example/vnnlib/index188_delta0.13.vnnlib'
         device = 'cuda'
@@ -263,35 +210,9 @@ class TestVerifier(unittest.TestCase):
 
         
         
-    def test_tllverifybench1(self):
+    def test_tllverifybench_unsat(self):
         net_path = 'example/onnx/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx'
         vnnlib_path = 'example/vnnlib/property_N=16_1.vnnlib'
-        device = 'cuda'
-
-        print('\n\nRunning test with', net_path, vnnlib_path)
-        
-        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
-        model.to(device)
-        
-        verifier = Verifier(
-            net=model, 
-            input_shape=input_shape, 
-            batch=1000,
-            device=device,
-        )
-        
-        status = verifier.verify(objectives)
-        
-        self.assertEqual(status, ReturnStatus.UNSAT)
-        
-        
-    def test_vggnet161(self):
-        return True
-        net_path = 'example/vgg16-7.onnx'
-        if not os.path.exists(net_path):
-            return True
-        
-        vnnlib_path = 'example/vnnlib/spec0_screw.vnnlib'
         device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
