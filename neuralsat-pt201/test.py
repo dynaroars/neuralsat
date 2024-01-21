@@ -1,9 +1,8 @@
-from pathlib import Path
-import unittest
-import os
 
 import warnings
 warnings.filterwarnings(action='ignore')
+import unittest
+import logging
 
 from verifier.objective import Objective, DnfObjectives
 from util.spec.read_vnnlib import read_vnnlib
@@ -235,7 +234,6 @@ class TestVerifier(unittest.TestCase):
 if __name__ == '__main__':
     Settings.setup(args=None)
     print(Settings)
-    
-    logger.setLevel(1)
+    logger.setLevel(logging.INFO)
     unittest.main()
     
