@@ -75,7 +75,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 def _history_to_clause(h: dict, name_mapping: dict) -> list:
     clause = []
     for lname, ldata in h.items():
-        assert sum(ldata[2]) == 0 # TODO: fixme
+        assert sum(ldata[2]) == 0 # TODO: fixme, non-ReLU might have non-zero value
         # extract data
         var_names, signs = ldata[0], ldata[1]
         # convert data
@@ -229,7 +229,7 @@ def boolean_propagation(self: 'heuristic.domains_list.DomainsList', domain_param
     # new solver
     new_sat_solver = copy.deepcopy(domain_params.sat_solvers[batch_idx])
     
-    # TODO: Fixme: generalize this
+    # TODO: Fixme: generalize this (do not use list)
     lid, nid = decisions[batch_idx % len(decisions)]
     lname = self.net.split_nodes[lid].name
     

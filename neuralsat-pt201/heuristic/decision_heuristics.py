@@ -295,8 +295,8 @@ class DecisionHeuristic:
             
         masked_scores = {k: torch.where(domain_params.masks[k].bool(), scores[k], 0.0) for k in scores}
         
-        # TODO: fixme
         assert len(abstractor.net.split_nodes) == len(masked_scores)
+        # TODO: do not use list here
         best_scores = [masked_scores[k.name].topk(1, 1) for k in abstractor.net.split_nodes]
         best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
         best_scores_all_layers_indices = torch.cat([s.indices for s in best_scores], dim=1).detach().cpu().numpy()

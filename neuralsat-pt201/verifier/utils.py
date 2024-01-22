@@ -391,6 +391,8 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
     if domain_params.lower_bounds is None:
         return None, None
     
+    # TODO: check all activation layers are ReLU here
+    
     new_masks = compute_masks(
         lower_bounds=domain_params.lower_bounds, 
         upper_bounds=domain_params.upper_bounds, 

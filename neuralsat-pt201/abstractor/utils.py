@@ -18,15 +18,6 @@ if typing.TYPE_CHECKING:
 
 def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, batch):
     pass
-    # if betas is not None:
-    #     if not len(betas['sparse_beta']):
-    #         return
-    #     self.net.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
-    #     assert len(self.net.relus) == len(betas['sparse_beta'])
-    #     for relu_idx, relu_layer in enumerate(self.net.relus):
-    #         relu_layer.sparse_beta = betas['sparse_beta'][relu_idx].detach().clone().repeat(batch, 1).requires_grad_() # need detach()
-    #         relu_layer.sparse_beta_loc = betas['sparse_beta_loc'][relu_idx].clone().repeat(batch, 1)
-    #         relu_layer.sparse_beta_sign = betas['sparse_beta_sign'][relu_idx].clone().repeat(batch, 1)
     
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
@@ -348,7 +339,7 @@ def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input
     tmp_model = self.net.model.copy()
     tmp_model.update()
     
-    # TODO: check all activation layers are ReLU
+    # TODO: assert all activation layers are ReLU
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     

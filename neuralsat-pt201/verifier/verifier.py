@@ -219,7 +219,7 @@ class Verifier:
     @beartype
     def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
         # initialization params
-        # TODO: fix init_betas
+        # TODO: fix init_betas found by MIP
         ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, init_betas=self.refined_betas)
 
         # check verified

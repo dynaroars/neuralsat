@@ -29,7 +29,7 @@ def process(items):
     return valid_items
 
 
-def main(init_size=100, batch_size=30):
+def main(init_size=200, batch_size=2):
     items = [None] * init_size
 
     pbar = tqdmm()
@@ -41,7 +41,7 @@ def main(init_size=100, batch_size=30):
         visited += 2 * len(to_be_processed_items)
 
         time.sleep(0.1)
-        pbar.set_percentage(1 - (len(new_items) / visited))
+        pbar.set_percentage(1 - min(1, (len(items) / visited)))
         pbar.set_description(f'n_items={len(items)}')
         if len(items) == 0:
             break

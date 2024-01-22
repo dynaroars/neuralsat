@@ -92,8 +92,6 @@ class PGDAttacker:
         cs_f64 = self.objective.cs_f64.to(self.device)
         rhs_f64 = self.objective.rhs_f64.to(self.device)
         
-        
-        # TODO: add timeout
         self.net.to(cs_f64.dtype)
         is_attacked, attack_images = attack(
             model=self.net,

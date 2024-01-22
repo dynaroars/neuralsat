@@ -193,7 +193,7 @@ class NetworkAbstractor:
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
 
-        self.update_refined_beta(init_betas, batch=len(objective.cs))
+        # self.update_refined_beta(init_betas, batch=len(objective.cs))
         
         lb, _ = self.net.compute_bounds(
             x=(x,), 
