@@ -52,10 +52,33 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(status, ReturnStatus.SAT)
         
         
+    def test_mnist_gdvb_unsat(self):
+        net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
+        vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
+        device = 'cuda'
+
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=1000,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+        
+        
+        
     def test_mnist_unsat(self):
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
-        device = 'cpu'
+        device = 'cuda'
 
         print('\n\nRunning test with', net_path, vnnlib_path)
         
