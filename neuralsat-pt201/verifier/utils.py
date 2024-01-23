@@ -123,7 +123,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, forced
         tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
         
         use_refined = not Settings.use_restart
-        if any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
+        if any([isinstance(_, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d, 
+                               torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) 
+                            for _ in self.net.modules()][1:]):
             # skip refine for Conv layers for now
             use_refined = False
 
@@ -153,7 +155,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, forced
             objectives.cs = objectives.cs[remaining_index]
             objectives.rhs = objectives.rhs[remaining_index]
             
-            # TODO: fixme
+            # TODO: fixme (update found betas from MIP)
             # self.refined_betas = self.abstractor.net.get_betas()
         
         # torch.save(refined_intermediate_bounds, 'refined.pt')
