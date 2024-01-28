@@ -15,7 +15,7 @@ INPUT_SPLIT_RESTART_STRATEGIES = [
 
 HIDDEN_SPLIT_RESTART_STRATEGIES = [
     {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 10},
-    {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 20},
+    # {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 20},
     {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 30},
 ]
 
