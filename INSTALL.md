@@ -91,6 +91,10 @@ python3 main.py --net "example/onnx/ACASXU_run2a_1_1_batch_2000.onnx" --spec "ex
 # unsat,3.0907
 ```
 
+```python
+python3 main.py --net "example/onnx/mnist-net_256x4.onnx" --spec "example/vnnlib/prop_1_0.03.vnnlib"
+# unsat,139.4125
+```
 
 - Examples showing **NeuralSAT** disproves properties (i.e., returning `sat` and counterexample):
 
