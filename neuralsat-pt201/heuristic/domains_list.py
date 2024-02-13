@@ -22,7 +22,7 @@ class DomainsList:
 
     @beartype
     def __init__(self: 'DomainsList', 
-                 net: 'auto_LiRPA.BoundedModule',
+                 net: auto_LiRPA.BoundedModule | torch._dynamo.OptimizedModule,
                  objective_ids: torch.Tensor,
                  output_lbs: torch.Tensor,
                  input_lowers: torch.Tensor, 

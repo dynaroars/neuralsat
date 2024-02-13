@@ -959,6 +959,7 @@ class BoundedModule(nn.Module):
                 }
         return merged_A
 
+    # @torch.compile
     def compute_bounds(
             self, x=None, aux=None, C=None, method='backward', IBP=False,
             forward=False, bound_lower=True, bound_upper=False, reuse_ibp=False,

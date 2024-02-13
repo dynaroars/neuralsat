@@ -63,7 +63,7 @@ def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None)
     
     
 @beartype
-def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, forced_input_split: bool | None = None) -> tuple:
+def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_split: str | None = None) -> tuple:
     # determine search algorithm
     self.refined_betas = None
     
@@ -74,8 +74,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, forced
     
     if Settings.test:
         self.input_split = False
-    elif forced_input_split is not None:
-        self.input_split = forced_input_split
+    elif force_split is not None:
+        assert force_split in ['input', 'hidden']
+        self.input_split = force_split == 'input'
     elif eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= 200: # small inputs

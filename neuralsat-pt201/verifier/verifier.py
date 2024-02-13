@@ -74,18 +74,19 @@ class Verifier:
     
     
     @beartype
-    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0) -> str:
+    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0, force_split: str | None = None) -> str:
         self.start_time = time.time()
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
             preconditions=preconditions,
             timeout=timeout,
+            force_split=force_split,
         )
         return self.status
     
     
     @beartype
-    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: float = 3600.0) -> str:
+    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: float = 3600.0, force_split: str | None = None) -> str:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -98,7 +99,7 @@ class Verifier:
 
         # refine
         Timers.tic('Preprocess') if Settings.use_timer else None
-        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, forced_input_split=None)
+        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
         Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT

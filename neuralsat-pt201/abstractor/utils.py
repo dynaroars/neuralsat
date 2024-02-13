@@ -92,7 +92,7 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
 @beartype
 def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = None, device: str = 'cpu') -> dict:
     lAs = {}
-    list_nodes = [self.net[self.net.input_name[0]]] if self.input_split else self.net.get_splittable_activations()
+    list_nodes = [n for n in self.net.nodes() if n.name == self.net.input_name[0]] if self.input_split else self.net.get_splittable_activations()
     for node in list_nodes:
         lA = getattr(node, 'lA', None)
         if lA is None:

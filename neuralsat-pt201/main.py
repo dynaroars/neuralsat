@@ -48,6 +48,8 @@ if __name__ == '__main__':
                         help="disable RESTART heuristic.")
     parser.add_argument('--disable_stabilize', action='store_false',
                         help="disable STABILIZE heuristic.")
+    parser.add_argument('--force_split', type=str, choices=['input', 'hidden'],
+                        help="select SPLITTING strategy.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
     args = parser.parse_args()   
@@ -114,7 +116,7 @@ if __name__ == '__main__':
     # verify
     Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
-    status = verifier.verify(objectives, timeout=timeout)
+    status = verifier.verify(objectives, timeout=timeout, force_split=args.force_split)
     runtime = time.time() - START_TIME
     Timers.toc('Verify') if Settings.use_timer else None
     
