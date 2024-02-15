@@ -132,7 +132,7 @@ if __name__ == '__main__':
         with open(args.result_file, 'w') as fp:
             print(f'{status},{runtime:.06f}', file=fp)
             if (verifier.adv is not None) and args.export_cex:
-                print(get_adv_string(inputs=verifier.adv, outputs=verifier.net(verifier.adv), is_nhwc=is_nhwc), file=fp)
+                print(get_adv_string(inputs=verifier.adv, net_path=args.net, is_nhwc=is_nhwc), file=fp)
 
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')

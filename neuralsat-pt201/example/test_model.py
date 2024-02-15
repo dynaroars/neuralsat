@@ -32,11 +32,11 @@ class NetSigmoid(nn.Module):
         
         self.layer = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(784, 50),
+            nn.Linear(2, 3),
             nn.Sigmoid(),
-            nn.Linear(50, 25),
+            nn.Linear(3, 4),
             nn.Sigmoid(),
-            nn.Linear(25, 10),
+            nn.Linear(4, 2),
         )
 
     def forward(self, x):
@@ -45,13 +45,13 @@ class NetSigmoid(nn.Module):
     
 def test_sigmoid():
     net = NetSigmoid()
-    x = torch.randn(1, 1, 28, 28)
+    x = torch.randn(1, 2)
     print(net(x).shape)
     
     torch.onnx.export(
         net,
         x,
-        "fnn_signmoid.onnx",
+        "example/onnx/fnn_signmoid.onnx",
         verbose=False,
     )
     
@@ -72,7 +72,7 @@ def test_relu():
     torch.onnx.export(
         net, 
         x, 
-        "example/fnn.onnx", 
+        "example/onnx/fnn.onnx", 
         verbose=False,
     )
     
@@ -121,7 +121,7 @@ def test_relu2():
         torch.onnx.export(
             net, 
             x_L, 
-            "example/relu2.onnx", 
+            "example/onnx/relu2.onnx", 
             verbose=False,
         )
     
@@ -161,32 +161,6 @@ def test_relu2():
             print('[backward] upper', ub)
     
     
-def test_load_model():
-    from onnx2torch import convert
-    import onnxruntime as ort
-    path = '../benchmark/vnncomp23-instances/vnncomp23/ml4acopf/./onnx/14_ieee_ml4acopf.onnx'
-    input_shape = (1, 22)
-    x = torch.randn(input_shape)
-    
-    # pytorch
-    torch_model = convert(path)
-    print(torch_model)
-    exit()
-    out_torch = torch_model(x)
-    # onnx
-    ort_sess = ort.InferenceSession(path)
-    names = [i.name for i in ort_sess.get_inputs()]
-    outputs_ort = ort_sess.run(None, dict(zip(names, [x.numpy()])))
-    
-    print(torch.max(torch.abs(torch.tensor(outputs_ort) - out_torch)))
-    print(np.allclose(outputs_ort, out_torch.detach().numpy(), atol=1.e-5))
-
-    # print(.shape)
-    
-    trace, out = torch.jit._get_trace_graph(torch_model, x)
-    
-    
-    
 class FNNReLU(nn.Module):
     
     def __init__(self):
@@ -215,7 +189,7 @@ def test_relu3():
     torch.onnx.export(
         net,
         x,
-        "example/mnist_relu.onnx",
+        "example/onnx/mnist_relu.onnx",
         verbose=False,
     )
     
@@ -347,7 +321,7 @@ def test():
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/test_mnistfc_unsat.onnx"
+    output_name = "example/onnx/test_mnistfc_unsat.onnx"
     torch.onnx.export(
         net,
         x,
@@ -448,7 +422,7 @@ def test_cnn():
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/cifar_relu.onnx"
+    output_name = "example/onnx/cifar_relu.onnx"
     torch.onnx.export(
         net,
         x,
@@ -459,4 +433,4 @@ def test_cnn():
     
     
 if __name__ == '__main__':
-    test_cnn()
+    test_sigmoid()

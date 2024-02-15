@@ -120,6 +120,7 @@ def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
     elif type(input_node) == BoundBatchNormalization:
         bias = input_node.inputs[-3].param.detach().view(-1, *([1] * (ratio.ndim - 3)))
     else: 
+        print(type(input_node))
         raise NotImplementedError()
     
     return bias * ratio
