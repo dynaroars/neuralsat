@@ -292,7 +292,7 @@ class BoundOptimizableActivation(BoundActivation):
                 b_pos = self.non_deter_index_select(b_pos, index=unstable_idx, dim=0)
                 b_neg = self.non_deter_index_select(b_neg, index=unstable_idx, dim=0)
             A_prod, _bias = multiply_by_A_signs(
-                last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias)
+                last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias=reduce_bias)
             return A_prod, _bias
 
         lA, lbias = _bound_oneside(last_lA, sign=-1)

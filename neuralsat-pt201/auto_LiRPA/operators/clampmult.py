@@ -111,12 +111,10 @@ class ClampedMultiplication(torch.autograd.Function):
             A, d_pos, d_neg, b_pos, b_neg,
             grad_output_A, grad_output_bias)
 
-# @torch.compile
-# @torch.jit.script
-def multiply_by_A_signs(A, d_pos, d_neg, b_pos, b_neg, contiguous='auto',
-                        reduce_bias=True):
+
+def multiply_by_A_signs(A, d_pos, d_neg, b_pos, b_neg, contiguous=True, reduce_bias=True):
     if isinstance(A, Tensor):
-        if contiguous is True or contiguous == 'auto':
+        if contiguous:
             # For dense mode, convert d_pos and d_neg to contiguous tensor by default.
             d_pos = d_pos.contiguous()
             d_neg = d_neg.contiguous()

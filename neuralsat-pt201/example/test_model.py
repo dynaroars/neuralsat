@@ -32,11 +32,13 @@ class NetSigmoid(nn.Module):
         
         self.layer = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(2, 3),
+            nn.Linear(2, 5),
             nn.Sigmoid(),
-            nn.Linear(3, 4),
+            nn.Linear(5, 7),
             nn.Sigmoid(),
-            nn.Linear(4, 2),
+            nn.Linear(7, 9),
+            nn.Sigmoid(),
+            nn.Linear(9, 2),
         )
 
     def forward(self, x):
@@ -274,9 +276,8 @@ def extract_instance(net_path, vnnlib_path):
     from util.spec.read_vnnlib import read_vnnlib
     from util.network.read_onnx import parse_onnx
     from verifier.objective import Objective, DnfObjectives
-    from pathlib import Path
     
-    vnnlibs = read_vnnlib(Path(vnnlib_path))
+    vnnlibs = read_vnnlib(vnnlib_path)
     model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     
     # objective
@@ -291,37 +292,12 @@ def extract_instance(net_path, vnnlib_path):
 
  
 def test():
-    # torch.manual_seed(0)
-    net = nn.Sequential(
-        nn.Flatten(), 
-        nn.Linear(784, 10), 
-        nn.ReLU(),
-        nn.Linear(10, 16), 
-        nn.ReLU(),
-        nn.Linear(16, 9), 
-        nn.ReLU(),
-        # nn.Linear(25, 15), 
-        # nn.ReLU(),
-        # nn.Linear(15, 25), 
-        # nn.ReLU(),
-        nn.Linear(9, 10), 
-    )
-    
-    # net = nn.Sequential(
-    #     nn.Flatten(), 
-    #     nn.Linear(784, 4), 
-    #     nn.ReLU(),
-    #     nn.Linear(4, 5), 
-    #     nn.ReLU(),
-    #     nn.Linear(5, 10), 
-    # )
-    
-    
-    x = torch.randn(1, 784)
+    net = NetSigmoid()
+    x = torch.randn(1, 2)
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/onnx/test_mnistfc_unsat.onnx"
+    output_name = "example/onnx/fnn_signmoid.onnx"
     torch.onnx.export(
         net,
         x,
@@ -332,10 +308,8 @@ def test():
     
     print('Export onnx to:', output_name)
     
-    from pathlib import Path
-
     net_path = output_name
-    vnnlib_path = Path('example/test.vnnlib')
+    vnnlib_path = 'example/vnnlib/fnn.vnnlib'
     device = 'cpu'
     
     print('Running test with', net_path, vnnlib_path)
@@ -352,12 +326,19 @@ def test():
     )
     
     status = verifier.verify(objectives)
-    print(f'{status},{time.time() - START_TIME:.04f}')
+    print(f'{status},{verifier.iteration}')
+    return status, verifier.iteration
     
 def trail1():
+    from util.misc.logger import logger
+    import logging
+    logger.setLevel(logging.INFO)
+    
     trial = 0
     while True:
-        test()
+        status, iteration = test()
+        if status == 'unsat' and iteration > 0:
+            break
         print(f'Trail {trial} failed\n\n')
         trial += 1
         time.sleep(1.0)
@@ -433,4 +414,4 @@ def test_cnn():
     
     
 if __name__ == '__main__':
-    test_sigmoid()
+    trail1()
