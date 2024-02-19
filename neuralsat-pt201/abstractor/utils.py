@@ -171,13 +171,12 @@ def update_histories(self: 'abstractor.abstractor.NetworkAbstractor', histories:
     # add new decisions to histories
     for i, h in enumerate(double_histories):
         bi = i % batch
-        l_id, n_id = decisions[bi]
-        l_name = self.net.split_nodes[l_id].name
+        n_name, n_id, n_point = decisions[bi]
         # FIXME: check repeated decisions
-        loc = _append_tensor(h[l_name][0], n_id, dtype=torch.long)
-        sign = _append_tensor(h[l_name][1], +1 if i < batch else -1)
-        beta = _append_tensor(h[l_name][2], 0.0) # FIXME: 0.0 is for ReLU only
-        h[l_name] = (loc, sign, beta)
+        loc = _append_tensor(h[n_name][0], n_id, dtype=torch.long)
+        sign = _append_tensor(h[n_name][1], +1 if i < batch else -1)
+        beta = _append_tensor(h[n_name][2], n_point)
+        h[n_name] = (loc, sign, beta)
         
     return double_histories
     
@@ -221,13 +220,12 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_indices_batch = {k: [] for k in lower_bounds}
     splitting_indices_neuron = {k: [] for k in lower_bounds}
     splitting_points = {k: [] for k in lower_bounds}
-
+    
     for i in range(batch):
-        l_id, n_id = decisions[i][0], decisions[i][1]
-        node = self.net.split_nodes[l_id]
-        splitting_indices_batch[node.name].append(i)
-        splitting_indices_neuron[node.name].append(n_id)
-        splitting_points[node.name].append(0.0) # FIXME: split at 0 for ReLU
+        n_name, n_id, n_point = decisions[i]
+        splitting_indices_batch[n_name].append(i)
+        splitting_indices_neuron[n_name].append(n_id)
+        splitting_points[n_name].append(n_point)
     
     # convert to tensor
     splitting_indices_batch = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_indices_batch.items()}
@@ -309,7 +307,7 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
     # forward to recompute hidden bounds
     self.net.set_bound_opts(get_branching_opt_params()) 
     self.net.init_alpha(x=(new_x,), c=c)
-    # TODO: use crown-optimized here?
+    
     lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
     if rhs is not None:
         if (lb > rhs).all():

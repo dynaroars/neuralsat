@@ -151,6 +151,9 @@ class BoundActivation(Bound):
         0: Stable (linear) neuron; 1: unstable (nonlinear) neuron.
         """
         return torch.ones_like(lower)
+    
+    def get_split_point(self):
+        raise NotImplementedError
 
 
 class BoundOptimizableActivation(BoundActivation):

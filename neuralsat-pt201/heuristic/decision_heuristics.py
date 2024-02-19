@@ -105,16 +105,26 @@ class DecisionHeuristic:
             for idx in topk_scores_indices[:, k]:
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
+                layer_name = abstractor.net.split_nodes[layer_idx].name
+                layer_split_point = abstractor.net.split_activations[layer_name][0][0].get_split_point()
                 neuron_idx = idx - score_length[layer_idx]
-                decision_max.append([layer_idx, neuron_idx])
+                if layer_split_point is not None: # relu
+                    decision_max.append([layer_name, neuron_idx, layer_split_point])
+                else: # general activation
+                    raise NotImplementedError
 
             # top-k candidates from backup scores.
             decision_min = [] # lower is better
             for idx in topk_backup_scores_indices[:, k]:
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
+                layer_name = abstractor.net.split_nodes[layer_idx].name
+                layer_split_point = abstractor.net.split_activations[layer_name][0][0].get_split_point()
                 neuron_idx = idx - score_length[layer_idx]
-                decision_min.append([layer_idx, neuron_idx])
+                if layer_split_point is not None: # relu
+                    decision_min.append([layer_name, neuron_idx, layer_split_point])
+                else: # general activation
+                    raise NotImplementedError
             
             # top-k candidates
             topk_decisions.append(decision_max + decision_min)
@@ -152,7 +162,9 @@ class DecisionHeuristic:
                                  domain_params: AbstractResults) -> list[list]:
         batch = len(domain_params.input_lowers)
         topk = min(self.decision_topk, int(sum([i.sum() for (_, i) in domain_params.masks.items()]).item()))
-
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        
         # babsr scores
         scores, backup_scores = _compute_babsr_scores(
             abstractor=abstractor, 
@@ -194,29 +206,37 @@ class DecisionHeuristic:
         # align decisions
         all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
         final_decision = [[] for b in range(batch)]
-            
+
         for b in range(batch):
-            mask_item = [domain_params.masks[k.name][b].clone() for k in abstractor.net.split_nodes]
+            mask_item = {k: domain_params.masks[k][b].clone() for k in split_node_names}
             # valid scores
             if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
-                decision = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
-                if mask_item[decision[0]][decision[1]] != 0:
-                    final_decision[b].append(decision)
-                    mask_item[decision[0]][decision[1]] = 0
+                n_name, n_id, n_point = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
+                if n_point is not None: # relu
+                    if mask_item[n_name][n_id] != 0: # unstable relu
+                        final_decision[b].append([n_name, n_id, n_point])
+                        mask_item[n_name][n_id] = 0
+                else:
+                    assert n_point is None
+                    # TODO: general activation
+                    raise NotImplementedError
             # invalid scores
             if len(final_decision[b]) == 0: 
                 # use random decisions 
                 selected = False
-                for layer in np.random.choice(len(abstractor.net.split_nodes), len(abstractor.net.split_nodes), replace=False):
-                    if len(mask_item[layer].nonzero(as_tuple=False)) != 0:
-                        final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item()])
-                        mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
+                    if (len(mask_item[layer].nonzero(as_tuple=False)) != 0) or (split_node_points[layer] is None):
+                        if split_node_points[layer] is not None: # relu
+                            final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item(), split_node_points[layer]])
+                            mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                        else:
+                            # TODO: general activation
+                            raise NotImplementedError
                         selected = True
                         break
                 assert selected
         
         final_decision = sum(final_decision, [])
-            
         return final_decision
 
 
@@ -274,7 +294,9 @@ class DecisionHeuristic:
     @beartype
     def naive_hidden_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults, mode: str) -> list[list]:
         batch = len(domain_params.input_lowers)
-
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        
         if mode == 'distance':
             scores = {
                 k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) 
@@ -296,7 +318,6 @@ class DecisionHeuristic:
         masked_scores = {k: torch.where(domain_params.masks[k].bool(), scores[k], 0.0) for k in scores}
         
         assert len(abstractor.net.split_nodes) == len(masked_scores)
-        # TODO: do not use list here
         best_scores = [masked_scores[k.name].topk(1, 1) for k in abstractor.net.split_nodes]
         best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
         best_scores_all_layers_indices = torch.cat([s.indices for s in best_scores], dim=1).detach().cpu().numpy()
@@ -305,8 +326,12 @@ class DecisionHeuristic:
         
         layer_ids = best_scores_all.indices[:, 0].detach().cpu().numpy()
         assert len(layer_ids) == batch
+        decisions = [[
+            split_node_names[layer_ids[b]], 
+            best_scores_all_layers_indices[b, layer_ids[b]], 
+            split_node_points[split_node_names[layer_ids[b]]]
+        ] for b in range(batch)]
         
-        decisions = [[layer_ids[b], best_scores_all_layers_indices[b, layer_ids[b]]] for b in range(batch)]
         return decisions
 
         

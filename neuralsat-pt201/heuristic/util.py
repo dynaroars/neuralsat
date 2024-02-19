@@ -17,6 +17,7 @@ if typing.TYPE_CHECKING:
     
 @beartype
 def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_blocking: bool = True) -> dict:
+    # TODO: shifted relu should not use 0.0, e.g., max(x, 1.0)
     new_masks = {
         j: torch.logical_and(
                     lower_bounds[j] < 0, 
@@ -75,7 +76,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 def _history_to_clause(h: dict, name_mapping: dict) -> list:
     clause = []
     for lname, ldata in h.items():
-        assert sum(ldata[2]) == 0 # TODO: fixme, non-ReLU might have non-zero value
+        assert sum(ldata[2]) == 0 # ReLU only
         # extract data
         var_names, signs = ldata[0], ldata[1]
         # convert data
@@ -137,14 +138,15 @@ def update_hidden_bounds_histories(self: 'heuristic.domains_list.DomainsList', l
     history = histories[batch_idx]
     loc = _append_tensor(history[lid][0], nid, dtype=torch.long)
     sign = _append_tensor(history[lid][1], +1 if literal > 0 else -1)
-    beta = _append_tensor(history[lid][2], 0.0) # FIXME: 0.0 is for ReLU only
+    beta = _append_tensor(history[lid][2], 0.0) # ReLU only
     history[lid] = (loc, sign, beta)
+
     
     # update bounds
     if literal > 0: # active neuron
-        lower_bounds[lid][batch_idx].flatten()[nid] = 0.0
+        lower_bounds[lid][batch_idx].flatten()[nid] = 0.0 # ReLU only
     else: # inactive neuron
-        upper_bounds[lid][batch_idx].flatten()[nid] = 0.0
+        upper_bounds[lid][batch_idx].flatten()[nid] = 0.0 # ReLU only
     
     if upper_bounds[lid][batch_idx].flatten()[nid] < lower_bounds[lid][batch_idx].flatten()[nid]:
         return False
@@ -224,18 +226,15 @@ def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: t
     
 @beartype
 def boolean_propagation(self: 'heuristic.domains_list.DomainsList', domain_params: AbstractResults, decisions: list, batch_idx: int | torch.Tensor) -> SATSolver | None:
-    assert len(decisions) * 2 == len(domain_params.input_lowers) 
-    assert len(decisions) * 2 == len(domain_params.sat_solvers) 
+    assert len(decisions) * 2 == len(domain_params.input_lowers) == len(domain_params.sat_solvers) 
     
     # new solver
     new_sat_solver = copy.deepcopy(domain_params.sat_solvers[batch_idx])
     
-    # TODO: Fixme: generalize this (do not use list)
-    lid, nid = decisions[batch_idx % len(decisions)]
-    lname = self.net.split_nodes[lid].name
-    
     # new decision
-    variable = self.var_mapping[lname, nid]
+    n_name, n_id, n_point = decisions[batch_idx % len(decisions)]
+    assert n_point == 0.0 # relu only
+    variable = self.var_mapping[n_name, n_id]
     literal = variable if batch_idx < len(decisions) else -variable
 
     # assign

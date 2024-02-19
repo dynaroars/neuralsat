@@ -356,6 +356,9 @@ class BoundRelu(BoundTwoPieceLinear):
         self.leaky_alpha = attr.get('alpha', 0)
         self.alpha_size = 2
         # Alpha dimension is (2, output_shape, batch, *shape) for ReLU.
+        
+    def get_split_point(self):
+        return 0.
 
     def get_unstable_idx(self):
         self.alpha_indices = torch.logical_and(

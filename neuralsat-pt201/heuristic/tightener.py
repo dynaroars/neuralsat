@@ -320,7 +320,7 @@ class Tightener:
                     unstable_to_stable_neurons.append((l_id, n_id, -1.0))
                 # print(f'neuron[{l_id}][{n_id}]: [{unified_lower_bounds[l_id][n_id]:.06f}, {unified_upper_bounds[l_id][n_id]:.06f}] => [{unified_lower_bounds_refined[l_id][n_id]:.06f}, {unified_upper_bounds_refined[l_id][n_id]:.06f}]')
                 
-            # TODO: add neurons to blacklist
+            # add neurons to blacklist
             # self.black_list.append(var_name)
                     
         logger.debug(f'[Stabilize] layer="{selected_layer}", #candidates={len(candidates)}, #total={len(unified_indices)}, #tightened={num_neuron_refined}, #stabilized={len(unstable_to_stable_neurons)}, #blacklisted={len(self.black_list)}')
