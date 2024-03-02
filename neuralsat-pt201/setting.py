@@ -80,9 +80,9 @@ class GlobalSettings:
         # FIXME: remove after debugging
         # self.max_hidden_visited_branches = 100
         # self.use_timer = 1
-        # self.use_attack = 0
-        # self.use_restart = 0
-        # self.use_mip_tightening = 0
+        self.use_attack = 0
+        self.use_restart = 0
+        self.use_mip_tightening = 0
         # self.max_input_visited_branches = 100000
         # self.max_hidden_visited_branches = 20
         # self.mip_tightening_timeout_per_neuron = 1.0

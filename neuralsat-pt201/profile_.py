@@ -29,7 +29,7 @@ def extract_instance(net_path, vnnlib_path):
     return model, input_shape, objectives
 
 
-@proton.profile(name='cac', context='python')
+@proton.profile(name='output', context='python')
 def run(verifier, objectives):
     START_TIME = time.time()
     with proton.scope("verify"):

@@ -353,7 +353,7 @@ class Verifier:
             )
             Timers.toc('Tightening') if Settings.use_timer else None
             
-        with proton.scope("pickout"):
+        with proton.scope("pop"):
             # step 3: selection
             Timers.tic('Get domains') if Settings.use_timer else None
             pick_ret = self.domains_list.pick_out(self.batch, self.device)
@@ -372,18 +372,18 @@ class Verifier:
         if (self.adv is not None): 
             return
         
-        # pruning
+        # pruning/ filter
         pruned_ret = _prune_domains(pick_ret, remain_idx) if remain_idx is not None else pick_ret
         if not len(pruned_ret.input_lowers): 
             return
             
-        with proton.scope("branching"):
+        with proton.scope("splitting"):
             # step 6: branching
             Timers.tic('Decision') if Settings.use_timer else None
             decisions = self.decision(self.abstractor, pruned_ret)
             Timers.toc('Decision') if Settings.use_timer else None
         
-        with proton.scope("abstraction"):
+        with proton.scope("over-approximate"):
             # step 7: abstraction 
             Timers.tic('Abstraction') if Settings.use_timer else None
             abstraction_ret = self.abstractor.forward(decisions, pruned_ret)

@@ -1,0 +1,72 @@
+; Latent-space robustness property for
+;   10 dimensional latent space
+;   hypercube of radius 0.05
+;   centered at coordinate <1.3,...,1.3>
+;   which has a radius of 14.14 
+;   which is mean of a 10-degree chi distribution
+
+(declare-const X_0 Real)
+(declare-const X_1 Real)
+(declare-const X_2 Real)
+(declare-const X_3 Real)
+(declare-const X_4 Real)
+(declare-const X_5 Real)
+(declare-const X_6 Real)
+(declare-const X_7 Real)
+(declare-const X_8 Real)
+(declare-const X_9 Real)
+
+(declare-const Y_0 Real)
+(declare-const Y_1 Real)
+(declare-const Y_2 Real)
+(declare-const Y_3 Real)
+(declare-const Y_4 Real)
+(declare-const Y_5 Real)
+(declare-const Y_6 Real)
+(declare-const Y_7 Real)
+(declare-const Y_8 Real)
+(declare-const Y_9 Real)
+
+; Input constraints:
+(assert (>= X_0 1.25))
+(assert (<= X_0 1.35))
+
+(assert (>= X_1 1.25))
+(assert (<= X_1 1.35))
+
+(assert (>= X_2 1.25))
+(assert (<= X_2 1.35))
+
+(assert (>= X_3 1.25))
+(assert (<= X_3 1.35))
+
+(assert (>= X_4 1.25))
+(assert (<= X_4 1.35))
+
+(assert (>= X_5 1.25))
+(assert (<= X_5 1.35))
+
+(assert (>= X_6 1.25))
+(assert (<= X_6 1.35))
+
+(assert (>= X_7 1.25))
+(assert (<= X_7 1.35))
+
+(assert (>= X_8 1.25))
+(assert (<= X_8 1.35))
+
+(assert (>= X_9 1.25))
+(assert (<= X_9 1.35))
+
+; Output constraints: expected output class is Y_4
+(assert (or
+    (and (>= Y_0 Y_4))
+    (and (>= Y_1 Y_4))
+    (and (>= Y_2 Y_4))
+    (and (>= Y_3 Y_4))
+    (and (>= Y_5 Y_4))
+    (and (>= Y_6 Y_4))
+    (and (>= Y_7 Y_4))
+    (and (>= Y_8 Y_4))
+    (and (>= Y_9 Y_4))
+))
