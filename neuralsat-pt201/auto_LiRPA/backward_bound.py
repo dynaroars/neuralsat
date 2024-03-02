@@ -8,6 +8,7 @@ from .utils import *
 from .bound_ops import *
 import warnings
 
+import proton # type: ignore
 from typing import TYPE_CHECKING, List
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
@@ -241,10 +242,10 @@ def backward_general(
             lA, uA = l.lA, l.uA
             if (l.name != start_backpropagation_at_node.name and use_beta_crown
                     and getattr(l, 'sparse_betas', None)):
-                lA, uA, lbias, ubias = self.beta_crown_backward_bound(
-                    l, lA, uA, start_node=start_backpropagation_at_node)
-                lb = lb + lbias
-                ub = ub + ubias
+                with proton.scope("beta_crown_backward_bound"):
+                    lA, uA, lbias, ubias = self.beta_crown_backward_bound(l, lA, uA, start_node=start_backpropagation_at_node)
+                    lb = lb + lbias
+                    ub = ub + ubias
 
             if isinstance(l, BoundOptimizableActivation):
                 # For other optimizable activation functions (TODO: unify with ReLU).
@@ -255,10 +256,12 @@ def backward_general(
                 l.preserve_mask = update_mask
             else:
                 start_shape = None
-            A, lower_b, upper_b = l.bound_backward(
-                lA, uA, *l.inputs,
-                start_node=bound_node, unstable_idx=unstable_idx,
-                start_shape=start_shape)
+            
+            with proton.scope("bound_backward"):
+                A, lower_b, upper_b = l.bound_backward(
+                    lA, uA, *l.inputs,
+                    start_node=bound_node, unstable_idx=unstable_idx,
+                    start_shape=start_shape)
 
             # After propagation through this node, we delete its lA, uA variables.
             if bound_node.name != self.final_name:
@@ -270,8 +273,11 @@ def backward_general(
                     print(l, time_elapsed)
             if lb.ndim > 0 and type(lower_b) == Tensor and self.conv_mode == 'patches':
                 lb, ub, lower_b, upper_b = check_patch_biases(lb, ub, lower_b, upper_b)
-            lb = lb + lower_b
-            ub = ub + upper_b
+            
+            with proton.scope("add_bounds"):
+                lb = lb + lower_b
+                ub = ub + upper_b
+                
             if self.return_A and self.needed_A_dict and bound_node.name in self.needed_A_dict:
                 # FIXME remove [0][0] and [0][1]?
                 if len(self.needed_A_dict[bound_node.name]) == 0 or l.name in self.needed_A_dict[bound_node.name]:
@@ -301,8 +307,9 @@ def backward_general(
                     # return A matrix as a dict: {node_start.name: [A_lower, A_upper]}
                     return None, None, self.A_dict
 
-            for i, l_pre in enumerate(l.inputs):
-                add_bound(l, l_pre, lA=A[i][0], uA=A[i][1])
+            with proton.scope("add_bounds_all"):
+                for i, l_pre in enumerate(l.inputs):
+                    add_bound(l, l_pre, lA=A[i][0], uA=A[i][1])
 
     if lb.ndim >= 2:
         lb = lb.transpose(0, 1)
@@ -323,9 +330,10 @@ def backward_general(
             bound_node, roots[0].lA, roots[0].uA, roots[0].lower.size()[1:], unstable_idx,
             batch_mask=update_mask)
 
-    lb, ub = concretize(self, batch_size, output_dim, lb, ub,
-                        bound_lower, bound_upper,
-                        average_A=average_A, node_start=bound_node)
+    with proton.scope("concretize"):
+        lb, ub = concretize(self, batch_size, output_dim, lb, ub,
+                            bound_lower, bound_upper,
+                            average_A=average_A, node_start=bound_node)
 
     # TODO merge into `concretize`
     if (self.cut_used and getattr(self, "cut_module", None) is not None
@@ -336,8 +344,9 @@ def backward_general(
             # make sure there is no bug for cut constraints propagation
             print(f"Warning: lb is larger than ub with diff: {(lb-ub)[(lb-ub)>0].max().item()}")
 
-    lb = lb.view(batch_size, *output_shape) if bound_lower else None
-    ub = ub.view(batch_size, *output_shape) if bound_upper else None
+    with proton.scope("reshape bounds"):
+        lb = lb.view(batch_size, *output_shape) if bound_lower else None
+        ub = ub.view(batch_size, *output_shape) if bound_upper else None
 
     if verbose:
         logger.debug('')
@@ -653,7 +662,8 @@ def _preprocess_C(self: 'BoundedModule', C, node):
 
     return C, batch_size, output_dim, output_shape
 
-
+# worked sometimes
+# @torch.compile(mode='reduce-overhead')
 def concretize(self, batch_size, output_dim, lb, ub=None,
                bound_lower=True, bound_upper=True,
                average_A=False, node_start=None):

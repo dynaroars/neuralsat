@@ -163,7 +163,7 @@ class SATSolver:
     def multiple_assign_cpp(self: 'SATSolver', literals: list[int]) -> bool:
         if not len(literals):
             return True
-        import haioc
+        import haioc # type: ignore
         logger.debug(f'[!] Parallel assign using C++: {len(literals)}')
         
         xs = torch.tensor(literals).int()#.cuda()

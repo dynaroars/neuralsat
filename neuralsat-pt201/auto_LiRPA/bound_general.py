@@ -4,6 +4,7 @@ import numpy as np
 import warnings
 from collections import OrderedDict, deque
 
+import proton # type: ignore
 import torch
 from torch.nn import Parameter
 
@@ -805,8 +806,9 @@ class BoundedModule(nn.Module):
         for i in range(len(node.inputs)):
             if (i in node.requires_input_bounds or not node.inputs[i].perturbed
                     or node.inputs[i].name in self.layers_with_constraint):
-                self.compute_intermediate_bounds(
-                    node.inputs[i], prior_checked=True)
+                with proton.scope("compute_intermediate_bounds"):
+                    self.compute_intermediate_bounds(
+                        node.inputs[i], prior_checked=True)
         node.prior_checked = True
 
     def compute_intermediate_bounds(self, node, prior_checked=False):
@@ -1192,10 +1194,13 @@ class BoundedModule(nn.Module):
                 needed_A_dict=needed_A_dict,
                 final_node_name=final_node_name,
                 cutter=cutter, decision_thresh=decision_thresh)
-            if bound_upper:
-                ret2 = self._get_optimized_bounds(bound_side='upper', **kwargs)
-            if bound_lower:
-                ret1 = self._get_optimized_bounds(bound_side='lower', **kwargs)
+            
+            with proton.scope("_get_optimized_bounds"):
+                if bound_upper:
+                    ret2 = self._get_optimized_bounds(bound_side='upper', **kwargs)
+                if bound_lower:
+                    ret1 = self._get_optimized_bounds(bound_side='lower', **kwargs)
+                    
             if bound_lower and bound_upper:
                 if return_A:
                     # Needs to merge the A dictionary.
@@ -1209,16 +1214,16 @@ class BoundedModule(nn.Module):
 
 
         return self._compute_bounds_main(C=C,
-                                         method=method,
-                                         IBP=IBP,
-                                         bound_lower=bound_lower,
-                                         bound_upper=bound_upper,
-                                         reuse_ibp=reuse_ibp,
-                                         reuse_alpha=reuse_alpha,
-                                         average_A=average_A,
-                                         alpha_idx=alpha_idx,
-                                         need_A_only=need_A_only,
-                                         update_mask=update_mask)
+                                        method=method,
+                                        IBP=IBP,
+                                        bound_lower=bound_lower,
+                                        bound_upper=bound_upper,
+                                        reuse_ibp=reuse_ibp,
+                                        reuse_alpha=reuse_alpha,
+                                        average_A=average_A,
+                                        alpha_idx=alpha_idx,
+                                        need_A_only=need_A_only,
+                                        update_mask=update_mask)
 
     def save_intermediate(self, save_path=None):
         r"""A function for saving intermediate bounds.
@@ -1273,7 +1278,8 @@ class BoundedModule(nn.Module):
             return self.ibp_lower, self.ibp_upper
 
         if IBP:
-            self.ibp_lower, self.ibp_upper = self.IBP_general(node=final, C=C)
+            with proton.scope("IBP_general"):
+                self.ibp_lower, self.ibp_upper = self.IBP_general(node=final, C=C)
 
         if method is None:
             return self.ibp_lower, self.ibp_upper
@@ -1305,7 +1311,8 @@ class BoundedModule(nn.Module):
             # All nodes may need to be recomputed
             node.prior_checked = False
 
-        self.check_prior_bounds(final)
+        with proton.scope("check_prior_bounds"):
+            self.check_prior_bounds(final)
 
         if method == 'backward':
             apply_output_constraints_to = (
@@ -1313,19 +1320,21 @@ class BoundedModule(nn.Module):
             )
             # This is for the final output bound.
             # No need to pass in intermediate layer beta constraints.
-            ret = self.backward_general(
-                final, C,
-                bound_lower=bound_lower, bound_upper=bound_upper,
-                average_A=average_A, need_A_only=need_A_only,
-                unstable_idx=alpha_idx, update_mask=update_mask,
-                apply_output_constraints_to=apply_output_constraints_to)
+            with proton.scope("backward_general"):
+                ret = self.backward_general(
+                    final, C,
+                    bound_lower=bound_lower, bound_upper=bound_upper,
+                    average_A=average_A, need_A_only=need_A_only,
+                    unstable_idx=alpha_idx, update_mask=update_mask,
+                    apply_output_constraints_to=apply_output_constraints_to)
             # FIXME when C is specified, lower and upper should not be saved to
             # final.lower and final.upper, because they are not the bounds for
             # the node.
             final.lower, final.upper = ret[0], ret[1]
             return ret
         elif method == 'forward':
-            return self.forward_general(C=C, node=final, concretize=True)
+            with proton.scope("forward_general"):
+                return self.forward_general(C=C, node=final, concretize=True)
         else:
             raise NotImplementedError
 

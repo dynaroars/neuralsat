@@ -8,6 +8,7 @@ neuralsat/example/vgg*.onnx
 neuralsat/example/spec0_screw.vnnlib
 *.lp
 *.nsys-rep
+*.hatchet
 
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*

@@ -70,8 +70,10 @@ class GlobalSettings:
     
     def setup(self, args):
         if args is not None:
-            self.use_restart = args.disable_restart
-            self.use_mip_tightening = args.disable_stabilize and USE_GUROBI
+            if hasattr(args, 'disable_restart'):
+                self.use_restart = args.disable_restart
+            if hasattr(args, 'disable_stabilize'):
+                self.use_mip_tightening = args.disable_stabilize and USE_GUROBI
         else:
             self.use_mip_tightening = USE_GUROBI
         

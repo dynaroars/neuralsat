@@ -5,6 +5,7 @@ from beartype import beartype
 import numpy as np
 import logging
 import typing
+import proton # type: ignore
 import torch
 import time
 import copy
@@ -90,19 +91,21 @@ class Verifier:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
-        # attack
-        Timers.tic('Pre-attack') if Settings.use_timer else None
-        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
-        Timers.toc('Pre-attack') if Settings.use_timer else None
-        if is_attacked:
-            return ReturnStatus.SAT  
+        with proton.scope("pre-attack"):
+            # attack
+            Timers.tic('Pre-attack') if Settings.use_timer else None
+            is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
+            Timers.toc('Pre-attack') if Settings.use_timer else None
+            if is_attacked:
+                return ReturnStatus.SAT  
 
-        # refine
-        Timers.tic('Preprocess') if Settings.use_timer else None
-        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
-        Timers.toc('Preprocess') if Settings.use_timer else None
-        if not len(dnf_objectives):
-            return ReturnStatus.UNSAT
+        with proton.scope("pre-process"):
+            # refine
+            Timers.tic('Preprocess') if Settings.use_timer else None
+            dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
+            Timers.toc('Preprocess') if Settings.use_timer else None
+            if not len(dnf_objectives):
+                return ReturnStatus.UNSAT
         
         # mip attack
         is_attacked, self.adv = self._mip_attack(reference_bounds)
@@ -252,11 +255,12 @@ class Verifier:
         
     @beartype
     def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: float) -> str:
-        # initialization
-        Timers.tic('Initialization') if Settings.use_timer else None
-        self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
-        Timers.toc('Initialization') if Settings.use_timer else None
-            
+        with proton.scope("initialization"):
+            # initialization
+            Timers.tic('Initialization') if Settings.use_timer else None
+            self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
+            Timers.toc('Initialization') if Settings.use_timer else None
+                
         # cleaning
         torch.cuda.empty_cache()
         if hasattr(self, 'tightener'):
@@ -265,26 +269,32 @@ class Verifier:
         # main loop
         start_time = time.time()
         start_iteration = self.iteration
-        while len(self.domains_list) > 0:
-            # search
-            Timers.tic('Main loop') if Settings.use_timer else None
-            self._parallel_dpll()
-            Timers.toc('Main loop') if Settings.use_timer else None
+
+        with proton.scope("loop"):
+            while len(self.domains_list) > 0:
+                # search
+                Timers.tic('Main loop') if Settings.use_timer else None
+                self._parallel_dpll()
+                Timers.toc('Main loop') if Settings.use_timer else None
+                    
+                # check adv founded
+                if self.adv is not None:
+                    if self._check_adv_f64(self.adv, objective):
+                        return ReturnStatus.SAT
+                    logger.debug("[!] Invalid counter-example")
+                    self.adv = None
                 
-            # check adv founded
-            if self.adv is not None:
-                if self._check_adv_f64(self.adv, objective):
-                    return ReturnStatus.SAT
-                logger.debug("[!] Invalid counter-example")
-                self.adv = None
-            
-            # check timeout
-            if self._check_timeout(timeout):
-                return ReturnStatus.TIMEOUT
-            
-            # check restart
-            if self._check_restart(start_time=start_time, start_iteration=start_iteration):
-                return ReturnStatus.RESTART
+                # check timeout
+                if self._check_timeout(timeout):
+                    return ReturnStatus.TIMEOUT
+                
+                # check restart
+                if self._check_restart(start_time=start_time, start_iteration=start_iteration):
+                    return ReturnStatus.RESTART
+                
+                # TODO: remove
+                if len(self.domains_list) > 50000:
+                    return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
     
@@ -343,17 +353,19 @@ class Verifier:
             )
             Timers.toc('Tightening') if Settings.use_timer else None
             
-        # step 3: selection
-        Timers.tic('Get domains') if Settings.use_timer else None
-        pick_ret = self.domains_list.pick_out(self.batch, self.device)
-        Timers.toc('Get domains') if Settings.use_timer else None
+        with proton.scope("pickout"):
+            # step 3: selection
+            Timers.tic('Get domains') if Settings.use_timer else None
+            pick_ret = self.domains_list.pick_out(self.batch, self.device)
+            Timers.toc('Get domains') if Settings.use_timer else None
         
-        # step 4: PGD attack
-        Timers.tic('Loop attack') if Settings.use_timer else None
-        self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
-        Timers.toc('Loop attack') if Settings.use_timer else None
-        if self.adv is not None:
-            return
+        with proton.scope("attack"):
+            # step 4: PGD attack
+            Timers.tic('Loop attack') if Settings.use_timer else None
+            self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
+            Timers.toc('Loop attack') if Settings.use_timer else None
+            if self.adv is not None:
+                return
 
         # step 5: complete assignments
         self.adv, remain_idx = self._check_full_assignment(pick_ret)
@@ -365,20 +377,23 @@ class Verifier:
         if not len(pruned_ret.input_lowers): 
             return
             
-        # step 6: branching
-        Timers.tic('Decision') if Settings.use_timer else None
-        decisions = self.decision(self.abstractor, pruned_ret)
-        Timers.toc('Decision') if Settings.use_timer else None
+        with proton.scope("branching"):
+            # step 6: branching
+            Timers.tic('Decision') if Settings.use_timer else None
+            decisions = self.decision(self.abstractor, pruned_ret)
+            Timers.toc('Decision') if Settings.use_timer else None
         
-        # step 7: abstraction 
-        Timers.tic('Abstraction') if Settings.use_timer else None
-        abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
-        Timers.toc('Abstraction') if Settings.use_timer else None
+        with proton.scope("abstraction"):
+            # step 7: abstraction 
+            Timers.tic('Abstraction') if Settings.use_timer else None
+            abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
+            Timers.toc('Abstraction') if Settings.use_timer else None
 
-        # step 8: pruning unverified branches
-        Timers.tic('Add domains') if Settings.use_timer else None
-        self.domains_list.add(abstraction_ret, decisions)
-        Timers.toc('Add domains') if Settings.use_timer else None
+        with proton.scope("add"):
+            # step 8: pruning unverified branches
+            Timers.tic('Add domains') if Settings.use_timer else None
+            self.domains_list.add(abstraction_ret, decisions)
+            Timers.toc('Add domains') if Settings.use_timer else None
 
         # statistics
         self.iteration += 1

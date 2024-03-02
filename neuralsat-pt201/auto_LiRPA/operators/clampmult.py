@@ -1,4 +1,5 @@
 """Element multiplication with the A matrix based on its sign."""
+import proton # type: ignore
 import torch
 from typing import Optional, Tuple
 from torch import Tensor
@@ -100,16 +101,18 @@ class ClampedMultiplication(torch.autograd.Function):
         ctx.save_for_backward(A, d_pos, d_neg, b_pos, b_neg)
         ctx.patches_mode = patches_mode
         ctx.reduce_bias = reduce_bias
-        return ClampedMultiplication.clamp_mutiply_forward(
-            A, d_pos, d_neg, b_pos, b_neg, patches_mode, reduce_bias)
+        with proton.scope("ClampedMultiplication_forward"):
+            return ClampedMultiplication.clamp_mutiply_forward(
+                A, d_pos, d_neg, b_pos, b_neg, patches_mode, reduce_bias)
 
     @staticmethod
     def backward(ctx, grad_output_A, grad_output_bias):
         A, d_pos, d_neg, b_pos, b_neg = ctx.saved_tensors
         assert ctx.reduce_bias
-        return ClampedMultiplication.clamp_mutiply_backward(
-            A, d_pos, d_neg, b_pos, b_neg,
-            grad_output_A, grad_output_bias)
+        with proton.scope("ClampedMultiplication_backward"):
+            return ClampedMultiplication.clamp_mutiply_backward(
+                A, d_pos, d_neg, b_pos, b_neg,
+                grad_output_A, grad_output_bias)
 
 
 def multiply_by_A_signs(A, d_pos, d_neg, b_pos, b_neg, contiguous=True, reduce_bias=True):

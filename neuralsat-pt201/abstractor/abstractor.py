@@ -5,6 +5,7 @@ from beartype import beartype
 import traceback
 import logging
 import typing
+import proton # type: ignore
 import torch
 import copy
 import math
@@ -256,19 +257,20 @@ class NetworkAbstractor:
             
         # simplify for decision heuristics
         if simplify:
-            # setup optimization parameters
-            self.net.set_bound_opts(get_branching_opt_params())
-            
-            # compute outputs
-            with torch.no_grad():
-                double_output_lbs, _, = self.net.compute_bounds(
-                    x=(new_x,), 
-                    C=double_cs, 
-                    method='backward', 
-                    reuse_alpha=True,
-                    interm_bounds=new_intermediate_layer_bounds
-                )
-            return AbstractResults(**{'output_lbs': double_output_lbs})
+            with proton.scope("simplify"):
+                # setup optimization parameters
+                self.net.set_bound_opts(get_branching_opt_params())
+                
+                # compute outputs
+                with torch.no_grad():
+                    double_output_lbs, _, = self.net.compute_bounds(
+                        x=(new_x,), 
+                        C=double_cs, 
+                        method='backward', 
+                        reuse_alpha=True,
+                        interm_bounds=new_intermediate_layer_bounds
+                    )
+                return AbstractResults(**{'output_lbs': double_output_lbs})
 
         # 2 * batch
         assert len(decisions) == len(domain_params.objective_ids)
@@ -284,14 +286,15 @@ class NetworkAbstractor:
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(stop_criterion_batch_any(double_rhs)))
         
-        # compute outputs
-        double_output_lbs, _ = self.net.compute_bounds(
-            x=(new_x,), 
-            C=double_cs, 
-            method=self.method,
-            decision_thresh=double_rhs,
-            interm_bounds=new_intermediate_layer_bounds,
-        )
+        with proton.scope("full"):
+            # compute outputs
+            double_output_lbs, _ = self.net.compute_bounds(
+                x=(new_x,), 
+                C=double_cs, 
+                method=self.method,
+                decision_thresh=double_rhs,
+                interm_bounds=new_intermediate_layer_bounds,
+            )
 
         # reorganize output
         with torch.no_grad():

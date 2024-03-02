@@ -374,12 +374,7 @@ class BoundConv(Bound):
             k = int(eps)
             weight_sum = torch.sum(weight.abs(), 1)
             deviation = torch.sum(torch.topk(weight_sum.view(weight_sum.shape[0], -1), k)[0], dim=1) * ratio
-
-            if self.has_bias:
-                center = self.F_conv(mid, weight, v[2][0], self.stride, self.padding, self.dilation, self.groups)
-            else:
-                center = self.F_conv(mid, weight, None, self.stride, self.padding, self.dilation, self.groups)
-
+            center = self.F_conv(mid, weight, bias, self.stride, self.padding, self.dilation, self.groups)
             ss = center.shape
             deviation = deviation.repeat(ss[2] * ss[3]).view(-1, ss[1]).t().view(ss[1], ss[2], ss[3])
 
