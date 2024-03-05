@@ -245,6 +245,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
             # set 2nd half (set upper)
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
+            assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
     return new_intermediate_layer_bounds

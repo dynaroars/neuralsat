@@ -356,7 +356,4 @@ class DecisionHeuristic:
                 point = decision_points[l_name][b][n_id].item()
             decisions.append([l_name, n_id, point])
             
-        # for bi, (nn, ni, np) in enumerate(decisions):
-        #     print(bi, nn, ni, np)
-        #     assert domain_params.lower_bounds[nn][bi][ni] <= np <= domain_params.upper_bounds[nn][bi][ni]
         return decisions
