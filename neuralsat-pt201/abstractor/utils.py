@@ -198,7 +198,7 @@ def set_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas: list, histo
         betas=betas,
         max_splits_per_layer=max_splits_per_layer, 
         batch=batch, 
-        bias=False,
+        bias=None in self.split_points,
     )
 
     # set new betas

@@ -49,6 +49,15 @@ class DecisionHeuristic:
                 abstractor=abstractor, 
             )
         
+        if None in abstractor.split_points:
+            # FIXME: generalize it with relu
+            # handle general activation 
+            return self.naive_hidden_branching(
+                domain_params=domain_params, 
+                abstractor=abstractor, 
+                mode='width',
+            )
+        
         # hidden split
         if self.decision_method != 'smart':
             if random.uniform(0, 1) > 0.7:
@@ -312,11 +321,22 @@ class DecisionHeuristic:
                 k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) 
                     for k in domain_params.upper_bounds
             }
+        elif mode == 'width':
+            scores = {
+                k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) 
+                    for k in domain_params.upper_bounds
+            }
         else:
             raise NotImplementedError()
             
-        masked_scores = {k: torch.where(domain_params.masks[k].bool(), scores[k], 0.0) for k in scores}
+        masks = {k: v if split_node_points[k] else torch.ones_like(v) for k, v in domain_params.masks.items()}
+        masked_scores = {k: torch.where(masks[k].bool(), scores[k], 0.0) for k in scores}
         
+        # TODO: not always required to compute
+        decision_points = {
+            k: (domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) / 2.0
+                for k in domain_params.upper_bounds
+        }
         assert len(abstractor.net.split_nodes) == len(masked_scores)
         best_scores = [masked_scores[k.name].topk(1, 1) for k in abstractor.net.split_nodes]
         best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
@@ -326,12 +346,14 @@ class DecisionHeuristic:
         
         layer_ids = best_scores_all.indices[:, 0].detach().cpu().numpy()
         assert len(layer_ids) == batch
-        decisions = [[
-            split_node_names[layer_ids[b]], 
-            best_scores_all_layers_indices[b, layer_ids[b]], 
-            split_node_points[split_node_names[layer_ids[b]]]
-        ] for b in range(batch)]
-        
+        decisions = []
+        for b in range(batch):
+            l_name = split_node_names[layer_ids[b]]
+            n_id = best_scores_all_layers_indices[b, layer_ids[b]]
+            if split_node_points[l_name]:
+                point = split_node_points[l_name]
+            else:
+                point = decision_points[l_name][b][n_id].item()
+            decisions.append([l_name, n_id, point])
+            
         return decisions
-
-        

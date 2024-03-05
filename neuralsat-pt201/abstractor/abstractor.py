@@ -40,6 +40,13 @@ class NetworkAbstractor:
         self.iteration = 0
         
     @beartype
+    @property
+    def split_points(self):
+        if not hasattr(self, '_split_points'):
+            self._split_points = [self.net.split_activations[k.name][0][0].get_split_point() for k in self.net.split_nodes]
+        return self._split_points
+        
+    @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
         if self.select_params(objective):
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')

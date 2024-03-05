@@ -115,6 +115,12 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     objectives.cs = objectives.cs[remaining_index]
     objectives.rhs = objectives.rhs[remaining_index]
     
+    if None in self.abstractor.split_points:
+        # FIXME: disable restart + stabilize for now
+        Settings.use_restart = False
+        Settings.use_mip_tightening = False
+        return objectives, None
+    
     # refine
     refined_intermediate_bounds = None
     if len(objectives) and (Settings.use_mip_tightening) and self.abstractor.method == 'backward':
@@ -200,6 +206,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
     )
     
     self.abstractor.setup(objective)
+    self.abstractor.net.get_split_nodes(input_split=False)
     
     
 @beartype
@@ -233,6 +240,9 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             pass
         elif any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
             # FIXME: skip refine for Conv layers
+            pass
+        elif None in self.abstractor.split_points:
+            # skip refine for general activation layers
             pass
         else:
             self._init_abstractor('backward', objective)
@@ -394,7 +404,10 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
     if domain_params.lower_bounds is None:
         return None, None
     
-    # TODO: check all activation layers are ReLU here
+    # check all activation layers are ReLU 
+    if None in self.abstractor.split_points: 
+        # general activation
+        return None, None
     
     new_masks = compute_masks(
         lower_bounds=domain_params.lower_bounds, 

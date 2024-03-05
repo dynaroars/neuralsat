@@ -391,7 +391,7 @@ class Verifier:
             f'Iteration: {self.iteration:<10} '
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
-            f'Bound: {minimum_lowers:<12.04f} '
+            f'Bound: {minimum_lowers:<15.06f} '
             f'Time elapsed: {time.time() - self.start_time:<10.02f} '
         )
         if logger.level <= logging.DEBUG:

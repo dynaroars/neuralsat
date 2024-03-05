@@ -32,13 +32,11 @@ class NetSigmoid(nn.Module):
         
         self.layer = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(2, 5),
+            nn.Linear(784, 5),
             nn.Sigmoid(),
             nn.Linear(5, 7),
             nn.Sigmoid(),
-            nn.Linear(7, 9),
-            nn.Sigmoid(),
-            nn.Linear(9, 2),
+            nn.Linear(7, 10),
         )
 
     def forward(self, x):
@@ -293,7 +291,7 @@ def extract_instance(net_path, vnnlib_path):
  
 def test():
     net = NetSigmoid()
-    x = torch.randn(1, 2)
+    x = torch.randn(1, 1, 28, 28)
     print(net(x).shape)
    
     net.eval()
@@ -309,7 +307,7 @@ def test():
     print('Export onnx to:', output_name)
     
     net_path = output_name
-    vnnlib_path = 'example/vnnlib/fnn.vnnlib'
+    vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
     device = 'cpu'
     
     print('Running test with', net_path, vnnlib_path)
@@ -414,4 +412,4 @@ def test_cnn():
     
     
 if __name__ == '__main__':
-    trail1()
+    test()
