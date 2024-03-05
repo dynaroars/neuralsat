@@ -51,7 +51,7 @@ def test_sigmoid():
     torch.onnx.export(
         net,
         x,
-        "example/onnx/fnn_signmoid.onnx",
+        "example/onnx/fnn_sigmoid.onnx",
         verbose=False,
     )
     
@@ -295,7 +295,7 @@ def test():
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/onnx/fnn_signmoid.onnx"
+    output_name = "example/onnx/fnn_sigmoid.onnx"
     torch.onnx.export(
         net,
         x,
