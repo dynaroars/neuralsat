@@ -84,6 +84,10 @@ class DnfObjectives:
         class TMP:
             pass
         
+        assert len(self.lower_bounds) == len(self.upper_bounds) == len(self.cs) == len(self.rhs)
+        assert len(self.lower_bounds_f64) == len(self.upper_bounds_f64) == len(self.cs_f64) == len(self.rhs_f64)
+        assert len(self.cs) == len(self.cs_f64)
+
         # f32
         lower_bounds = self.lower_bounds[self.num_used : self.num_used + batch]
         upper_bounds = self.upper_bounds[self.num_used : self.num_used + batch]

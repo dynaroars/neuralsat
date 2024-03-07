@@ -58,9 +58,9 @@ class Verifier:
         
         
     @beartype
-    def get_objective(self: 'Verifier', dnf_objectives: 'DnfObjectives'):
+    def get_objective(self: 'Verifier', dnf_objectives: 'DnfObjectives', max_domain: int):
         # objective = dnf_objectives.pop(1)
-        objective = dnf_objectives.pop(max(1, self.batch))
+        objective = dnf_objectives.pop(max(1, max_domain))
         return objective
     
     
@@ -109,10 +109,32 @@ class Verifier:
         if is_attacked:
             return ReturnStatus.SAT 
         
+        status = self._verify_with_restart(
+            dnf_objectives=copy.deepcopy(dnf_objectives),
+            preconditions=preconditions,
+            timeout=timeout,
+            reference_bounds=reference_bounds,
+            max_domain=self.batch
+        )
+        
+        if not status:
+            status = self._verify_with_restart(
+                dnf_objectives=copy.deepcopy(dnf_objectives),
+                preconditions=preconditions,
+                timeout=timeout,
+                reference_bounds=reference_bounds,
+                max_domain=1
+            )
+            
+        return status
+        
+    @beartype    
+    def _verify_with_restart(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
+                             timeout: float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
         # verify
         while len(dnf_objectives):
             Timers.tic('Get objective') if Settings.use_timer else None
-            objective = self.get_objective(dnf_objectives)
+            objective = self.get_objective(dnf_objectives, max_domain=max_domain)
             Timers.toc('Get objective') if Settings.use_timer else None
             
             # restart variables
@@ -151,7 +173,9 @@ class Verifier:
                             objective = self.get_objective(dnf_objectives)
                             continue
                         else:
-                            raise NotImplementedError
+                            # raise NotImplementedError
+                            logger.debug('[!] RuntimeError exception')
+                            return None
                     except SystemExit:
                         exit()
                     except:
@@ -176,6 +200,7 @@ class Verifier:
                     objective = self._prune_objective(objective)
                     self.batch = self.orig_batch
                     nth_restart += 1
+                    # TODO: check general activation
                     if not self.input_split:
                         for k, v in self._get_learned_conflict_clauses().items():
                             learned_clauses[k].extend(v)

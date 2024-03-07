@@ -78,13 +78,16 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     output_ubs = output_lbs + torch.inf
     
     # get hidden bounds
-    for layer in self.net.layers_requiring_bounds:
+    for layer in list(set(self.net.layers_requiring_bounds + self.net.split_nodes)):
         lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
         upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
     
     # add output bounds
     lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)
     upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
+
+    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, print([_.shape[0] for _ in lower_bounds.values()])
+    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, print([_.shape[0] for _ in upper_bounds.values()])
     
     return lower_bounds, upper_bounds
 
@@ -248,6 +251,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
+    assert all([_[0].shape[0] == _[1].shape[0] == 2 * batch for _ in new_intermediate_layer_bounds.values()])
     return new_intermediate_layer_bounds
 
 

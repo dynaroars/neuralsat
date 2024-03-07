@@ -571,6 +571,9 @@ class BoundReciprocal(BoundOptimizableActivation):
         super().__init__(attr, inputs, output_index, options)
         self.splittable = True
 
+    def get_split_point(self):
+        return None
+    
     def forward(self, x):
         return torch.reciprocal(x)
 

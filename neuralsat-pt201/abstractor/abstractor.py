@@ -52,7 +52,13 @@ class NetworkAbstractor:
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
             return None
             
-        # try smaller backward batch size
+        # FIXME: try special settings for ViT
+        extra_opts = {'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True},}
+        if self.select_params(objective, extra_opts=extra_opts):
+            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
+            return None
+            
+        # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
             if self.select_params(objective):
@@ -64,12 +70,12 @@ class NetworkAbstractor:
         raise
             
     @beartype
-    def select_params(self: 'NetworkAbstractor', objective: typing.Any) -> bool:
+    def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
         ]
-        if self.method != 'backward':    
+        if self.input_split and (self.method != 'backward'):
             params += [        
                 ['patches', 'backward'],
                 ['matrix', 'backward'],
@@ -79,7 +85,7 @@ class NetworkAbstractor:
         
         for mode, method in params:
             logger.debug(f'Try conv_mode={mode}, method={method}, input_split={self.input_split}')
-            self._init_module(mode=mode, objective=objective)
+            self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
                 self.mode = mode
                 self.method = method
@@ -88,11 +94,13 @@ class NetworkAbstractor:
         return False
             
     @beartype
-    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any) -> None:
+    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+        bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
+        logger.debug(f'bound_opts={bound_opts}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
-            bound_opts={'conv_mode': mode, 'verbosity': 0},
+            bound_opts=bound_opts,
             device=self.device,
             verbose=False,
         )

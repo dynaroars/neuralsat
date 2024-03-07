@@ -790,6 +790,9 @@ class BoundMatMul(BoundLinear):
         self.transA = 0
         self.transB = 0
         self.splittable = True
+        
+    def get_split_point(self):
+        return None
 
     def forward(self, x, y):
         self.x_shape = x.shape
