@@ -263,15 +263,15 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             tmp_objective = copy.deepcopy(objective)
             tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
             tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
-            tmp_objective.rhs = tmp_objective.rhs[0:1].to(self.device)
-            tmp_objective.cs = tmp_objective.cs[0:1].to(self.device)
+            # tmp_objective.rhs = tmp_objective.rhs.to(self.device) # TODO: check
+            c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
             
             ret = self.abstractor.initialize(tmp_objective)
             self.abstractor.build_lp_solver(
                 model_type='mip', 
                 input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
                 input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
-                c=tmp_objective.cs, # do not use
+                c=c_to_use,
                 refine=True,
                 timeout=None,
                 timeout_per_neuron=Settings.mip_tightening_timeout_per_neuron,

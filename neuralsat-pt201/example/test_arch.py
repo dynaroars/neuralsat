@@ -40,8 +40,8 @@ def extract_instance(net_path, vnnlib_path):
 
 
 if __name__ == "__main__":
-    net_path = '/home/droars/Downloads/vnncomp2023_benchmarks/benchmarks/vit/onnx/pgd_2_3_16.onnx'
-    vnnlib_path = '/home/droars/Downloads/vnncomp2023_benchmarks/benchmarks/vit/vnnlib/pgd_2_3_16_4021.vnnlib'
+    net_path = 'example/onnx/pgd_2_3_16.onnx'
+    vnnlib_path = 'example/vnnlib/pgd_2_3_16_4021.vnnlib'
     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
     print(model)
     print(custom_quirks)
