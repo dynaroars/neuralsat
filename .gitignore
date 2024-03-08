@@ -2,10 +2,6 @@ benchmark/
 benchmark
 ref/
 old/
-neuralsat/example/*/*.csv
-neuralsat/example/*.csv
-neuralsat/example/vgg*.onnx
-neuralsat/example/spec0_screw.vnnlib
 *.lp
 *.nsys-rep
 
