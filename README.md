@@ -58,7 +58,7 @@ If conflicts arise, *NeuralSAT* determines the assignment decisions causing the 
 *NeuralSAT* repeats these decisions and checking steps until it finds a full assignment for all boolean variables, in which it returns *`SAT`*, or until it no longer can decide, in which it returns *`UNSAT`*. 
 
 <p align="center">
-  <img src="./doc/figure/overview.png" />
+  <img src="./doc/figure/overview.png" width='50%'/>
 </p>
 
 ## ALGORITHM
@@ -78,7 +78,7 @@ This step creates Boolean variables to represent the activation status of hidden
 *NeuralSAT* also forms a set of initial clauses ensuring that each status variable is either `T` (active) or `F` (inactive).
 
 
-### DPLL search. 
+### DPLL search
 *NeuralSAT* iteratively searches for an assignment satisfying the clauses.
 Throughout it maintains several state variables including: clauses, a set of clauses consisting of
 the initial activation clauses and learned conflict clauses; $\alpha$, a truth assignment mapping status
@@ -149,7 +149,7 @@ We use this [MNIST_GDVB](#mnist_gdvb-benchmark) benchmark to study the variation
 ### MNIST_GDVB benchmark
 
 <p align="center">
-  <img src="./doc/figure/mnist-gdvb.png" />
+  <img src="./doc/figure/mnist-gdvb.png" width="50%"/>
 </p>
 
 Here we focus primarily on the benefits and interactions among the optimizations in NeuralSAT compared to the baseline `N` which is NeuralSAT without any optimization.
