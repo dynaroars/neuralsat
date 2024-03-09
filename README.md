@@ -168,7 +168,7 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 ### VNN-COMP's benchmarks
 
 <p align="center">
-  <img src="./doc/figure/vnncomp23.png" width="80%"/>
+  <img src="./doc/figure/vnncomp23.png" width="70%"/>
 </p>
 
 
@@ -183,7 +183,7 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 
 
 ## :page_with_curl: PUBLICATIONS
-- Hai Duong, ThanhVu Nguyen, Matthew Dwyer, [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2024.
+- Hai Duong, ThanhVu Nguyen, Matthew Dwyer. [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2024.
 
 ```
 @misc{duong2024dpllt,
