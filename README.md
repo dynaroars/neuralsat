@@ -144,7 +144,7 @@ We leverage the fact that local robustness properties are a pseudo-canonical for
 Next we run two state-of-the-art verifiers: $\alpha\beta$-CROWN and MN-BaB, for each of the `38 * 16 = 608` combinations of DNN and property with a small timeout of `200` seconds. 
 Any problem that could be solved within that timeout was removed from the benchmark as "too easy". 
 This resulted in `90` verification problems that not only are more computationally challenging than benchmarks used in other studies, but also exhibit significant architectural diversity. 
-We use this [MNIST_GDVB](#mnist_gdvb-benchmark) benchmark to study the variation in performance on challenging problems.
+We use this [MNIST_GDVB](https://github.com/dynaroars/neuralbench/tree/main/instances/mnist_gdvb) benchmark to study the variation in performance on challenging problems.
 
 ### MNIST_GDVB benchmark
 
