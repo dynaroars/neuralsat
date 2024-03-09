@@ -10,7 +10,7 @@ GDVB takes a seed neural network as input and systematically varies a number of 
 In this experiment, we begin with a single MNIST network with `3` layers, each with `1024` neurons and generate `38` different DNNs that cover combinations of parameter variations. 
 We leverage the fact that local robustness properties are a pseudo-canonical form for pre-post condition specifications and use GDVB to generate 16 properties with varying radii and center points. 
 Next we run two state-of-the-art verifiers: $\alpha\beta$-CROWN and MN-BaB, for each of the `38 * 16 = 608` combinations of DNN and property with a small timeout of `200` seconds. 
-Any problem that could be solved within that timeout was removed from the benchmark as “too easy”. 
+Any problem that could be solved within that timeout was removed from the benchmark as "too easy". 
 This resulted in `90` verification problems that not only are more computationally challenging than benchmarks used in other studies, but also exhibit significant architectural diversity. 
 We use this [MNIST_GDVB](#1-mnist_gdvb-benchmark) benchmark to study the variation in performance on challenging problems.
 
