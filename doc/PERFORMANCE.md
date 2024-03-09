@@ -1,5 +1,5 @@
 # NeuralSAT Performances
-To gain insights into the performance improvements of VeriStable we require benchmarks that force the algorithm to search a non-trivial portion of the space of activation patterns. 
+To gain insights into the performance improvements of NeuralSAT we require benchmarks that force the algorithm to search a non-trivial portion of the space of activation patterns. 
 It is well-known that SAT problems can be very easy to solve regardless of their size or whether they are satisfiable or unsatisfiable. 
 The same is true for DNN verification problems.
 The organizers of the first three DNN verifier competitions remark on the need for benchmarks that are "not so easy that every tool can solve all of them" in order to assess verifier performance.
