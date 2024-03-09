@@ -17,10 +17,10 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 
 
 
-## News
+## NEWS
 - NeuralSAT is ranked 4th in the recent VNN-COMP'23 (verify neural networks competition).  This was our first participation and we look forward to next time.
 
-## Features
+## FEATURES
 
 - **standard** input and output formats
   - input: `onnx` for neural networks and `vnnlib` for specifications
@@ -55,13 +55,17 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 - employ multiple adversarial attack techniques for fast counterexamples (i.e., `sat`) discovery
 </details>
 
+## PERFORMANCES
+- see [PERFORMANCE.md](./doc/PERFORMANCE.md)
 
 
-## INSTALLATION and USAGE
-- see [INSTALL.md](./INSTALL.md)
+
+## INSTALLATION & USAGE
+- see [INSTALL.md](./doc/INSTALL.md)
 
 
-## People
+## PEOPLE
+
 - Hai Duong (GMU, main developer)
 - Linhan Li (GMU)
 - Dong Xu (UVA)
@@ -69,9 +73,32 @@ If conflicts arise, **NeuralSAT** determines the assignment decisions causing th
 - [Matthew Dwyer](https://matthewbdwyer.github.io/) (UVA)
 
 
-## :page_with_curl: Publications
-- Hai Duong, Linhan Li, ThanhVu Nguyen, Matthew Dwyer, [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2023
+## :page_with_curl: PUBLICATIONS
+- Hai Duong, ThanhVu Nguyen, Matthew Dwyer, [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2024.
 
-## Acknowledgements
+```
+@misc{duong2024dpllt,
+      title={A DPLL(T) Framework for Verifying Deep Neural Networks}, 
+      author={Hai Duong and ThanhVu Nguyen and Matthew Dwyer},
+      year={2024},
+      eprint={2307.10266},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
+
+- Hai Duong, Dong Xu, ThanhVu Nguyen, Matthew Dwyer. [**Harnessing Neuron Stability to Improve DNN Verification**](https://arxiv.org/pdf/2401.14412.pdf), Foundations of Software Engineering (FSE), 18 pages (to appear), 2024.
+```
+@misc{duong2024harnessing,
+      title={Harnessing Neuron Stability to Improve DNN Verification}, 
+      author={Hai Duong and Dong Xu and ThanhVu Nguyen and Matthew B. Dwyer},
+      year={2024},
+      eprint={2401.14412},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
+
+## ACKNOWLEDGEMENTS
 The *NeuralSAT* research is partially supported by grants from NSF ([2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133)) and an Amazon Research Award.
 
