@@ -72,7 +72,7 @@ If satisfiability is confirmed, it continues with new assignments; otherwise, it
   <img src="./doc/figure/algorithm.png" />
 </p>
 
-### Boolean Representation. 
+### Boolean Representation
 `Boolean Abstraction` encodes the DNN verification problem into a Boolean constraint to be solved. 
 This step creates Boolean variables to represent the activation status of hidden neurons in the DNN. 
 *NeuralSAT* also forms a set of initial clauses ensuring that each status variable is either `T` (active) or `F` (inactive).
@@ -168,7 +168,7 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 ### VNN-COMP's benchmarks
 
 <p align="center">
-  <img src="./doc/figure/vnncomp23.png" />
+  <img src="./doc/figure/vnncomp23.png" width="80%"/>
 </p>
 
 
