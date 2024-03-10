@@ -14,7 +14,7 @@
 
 - **standard** input and output formats
   - input: `onnx` for neural networks and `vnnlib` for specifications
-  - output: `unsat` for proved property, `sat` for disproved property (accompanied with a counterexample), and `unknown` for property that cannot be proved.
+  - output: `unsat` for proved property, `sat` for disproved property (accompanied with a counterexample), and `unknown` or `timeout` for property that cannot be proved.
   
 
 - **versatile**: support multiple types of neural types of networks and activation functions
@@ -22,7 +22,7 @@
   - activation functions:  `ReLU`, `sigmoid`, `tanh`, `power`
 
 - **well-tested**
-  - NeuralSAT has been tested on a wide-range of benchmarks (e.g., ACAS XU, MNIST, CFAR).
+  - NeuralSAT has been tested on a wide-range of benchmarks (e.g., ACAS XU, MNIST, CIFAR).
  
 - **fast** and among the most scalable verification tools currently
   - NeuralSAT exploits and uses multhreads (i.e., multicore processing/CPUS) and GPUs available on your system to improve its performance.
@@ -168,7 +168,7 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 ### VNN-COMP's benchmarks
 
 <p align="center">
-  <img src="./doc/figure/vnncomp23.png" width="70%"/>
+  <img src="./doc/figure/vnncomp23.png" width="60%"/>
 </p>
 
 
