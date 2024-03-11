@@ -149,7 +149,7 @@ We use this [MNIST_GDVB](https://github.com/dynaroars/neuralbench/tree/main/inst
 ### MNIST_GDVB benchmark
 
 <p align="center">
-  <img src="./doc/figure/mnist-gdvb.png" width="50%"/>
+  <img src="./doc/figure/mnist-gdvb.png" width="60%"/>
 </p>
 
 Here we focus primarily on the benefits and interactions among the optimizations in NeuralSAT compared to the baseline `N` which is NeuralSAT without any optimization.
