@@ -9,7 +9,6 @@ from torch import optim
 from .beta_crown import print_optimized_beta
 from .cuda_utils import double2float
 from .utils import logger, reduction_sum, multi_spec_keep_func_all
-from .opt_pruner import OptPruner
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -18,9 +17,6 @@ if TYPE_CHECKING:
 default_optimize_bound_args = {
     'enable_alpha_crown': True,  # Enable optimization of alpha.
     'enable_beta_crown': False,  # Enable beta split constraint.
-
-    'apply_output_constraints_to': None,  # Enable optimization w.r.t. output constraints.
-
     'iteration': 20,  # Number of alpha/beta optimization iterations.
     # Share some alpha variables to save memory at the cost of slightly
     # looser bounds.
@@ -35,7 +31,6 @@ default_optimize_bound_args = {
     'lr_alpha': 0.5,
     # Learning rate for the optimizable parameter beta in beta-CROWN.
     'lr_beta': 0.05,
-    'lr_cut_beta': 5e-3,  # Learning rate for optimizing cut betas.
     # Initial alpha variables by calling CROWN once.
     'init_alpha': True,
     'lr_coeffs': 0.01,  # Learning rate for coeffs for refinement
@@ -57,13 +52,6 @@ default_optimize_bound_args = {
     'start_save_best': 0.5,
     # Use double fp (float64) at the last iteration in alpha/beta CROWN.
     'use_float64_in_last_iteration': False,
-    # Prune verified domain within iteration.
-    'pruning_in_iteration': False,
-    # Percentage of the minimum domains that can apply pruning.
-    'pruning_in_iteration_threshold': 0.2,
-    # For specification that will output multiple bounds for one
-    # property, we use this function to prune them.
-    'multi_spec_keep_func': multi_spec_keep_func_all,
     # Use the newly fixed loss function. By default, it is set to False
     # for compatibility with existing use cases.
     # Try to ensure that the parameters always match with the optimized bounds.
@@ -260,19 +248,9 @@ def update_best_beta(self: 'BoundedModule', enable_opt_interm_bounds, betas,
                 for key in node_input.sparse_betas.keys():
                     best_betas[node_input.name][key] = (
                         node_input.sparse_betas[key].val.detach().clone())
-        if self.cut_used:
-            for gbidx, general_betas in enumerate(self.cut_beta_params):
-                # FIXME need to check if 'cut' is a node name
-                best_betas['cut'][gbidx] = general_betas.detach().clone()
     else:
         for node in self.nodes_with_beta:
             best_betas[node.name][idx] = node.sparse_betas[0].val[idx]
-        if self.cut_used:
-            regular_beta_length = len(betas) - len(self.cut_beta_params)
-            for cut_beta_idx in range(len(self.cut_beta_params)):
-                # general cut beta crown general_betas
-                best_betas['cut'][cut_beta_idx][:, :, idx,
-                    :] = betas[regular_beta_length + cut_beta_idx][:, :, idx, :]
 
 
 def _get_optimized_bounds(
@@ -280,8 +258,8 @@ def _get_optimized_bounds(
         forward=False, method='backward', bound_side='lower',
         reuse_ibp=False, return_A=False, average_A=False, final_node_name=None,
         interm_bounds=None, reference_bounds=None,
-        aux_reference_bounds=None, needed_A_dict=None, cutter=None,
-        decision_thresh=None, epsilon_over_decision_thresh=1e-4):
+        aux_reference_bounds=None, needed_A_dict=None,
+        decision_thresh=None):
     """
     Optimize CROWN lower/upper bounds by alpha and/or beta.
     """
@@ -290,7 +268,6 @@ def _get_optimized_bounds(
     iteration = opts['iteration']
     beta = opts['enable_beta_crown']
     alpha = opts['enable_alpha_crown']
-    apply_output_constraints_to = opts['apply_output_constraints_to']
     opt_choice = opts['optimizer']
     keep_best = opts['keep_best']
     fix_interm_bounds = opts['fix_interm_bounds']
@@ -299,7 +276,6 @@ def _get_optimized_bounds(
     use_float64_in_last_iteration = opts['use_float64_in_last_iteration']
     early_stop_patience = opts['early_stop_patience']
     start_save_best = opts['start_save_best']
-    multi_spec_keep_func = opts['multi_spec_keep_func']
     deterministic = opts['deterministic']
     enable_opt_interm_bounds = self.bound_opts.get(
         'enable_opt_interm_bounds', False)
@@ -332,11 +308,9 @@ def _get_optimized_bounds(
             optimizable_activations, parameters, alphas, opts['lr_alpha'])
     if beta:
         ret_set_beta = self.set_beta(
-            enable_opt_interm_bounds, parameters,
-            opts['lr_beta'], opts['lr_cut_beta'], cutter, dense_coeffs_mask)
+            enable_opt_interm_bounds=enable_opt_interm_bounds, parameters=parameters,
+            lr_beta=opts['lr_beta'], dense_coeffs_mask=dense_coeffs_mask)
         betas, best_betas, coeffs, dense_coeffs_mask = ret_set_beta[:4]
-    if apply_output_constraints_to is not None and len(apply_output_constraints_to) > 0:
-        _set_gammas(self.nodes(), parameters)
 
     start = time.time()
 
@@ -344,24 +318,6 @@ def _get_optimized_bounds(
         if decision_thresh.dim() == 1:
             # add the spec dim to be aligned with compute_bounds return
             decision_thresh = decision_thresh.unsqueeze(-1)
-
-    if opts['pruning_in_iteration']:
-        if return_A:
-            raise NotImplementedError(
-                'Pruning in iteration optimization does not support '
-                'return A yet. '
-                'Please fix or discard this optimization by setting '
-                '--disable_pruning_in_iteration '
-                'or bab: pruning_in_iteration: false')
-        pruner = OptPruner(
-            x, threshold=opts['pruning_in_iteration_threshold'],
-            multi_spec_keep_func=multi_spec_keep_func,
-            loss_reduction_func=loss_reduction_func,
-            decision_thresh=decision_thresh,
-            epsilon_over_decision_thresh=epsilon_over_decision_thresh,
-            fix_interm_bounds=fix_interm_bounds)
-    else:
-        pruner = None
 
     if opt_choice == 'adam':
         opt = optim.Adam(parameters)
@@ -388,9 +344,6 @@ def _get_optimized_bounds(
     need_grad = True
     patience = 0
     for i in range(iteration):
-        if cutter:
-            # cuts may be optimized by cutter
-            self.cut_module = cutter.cut_module
 
         intermediate_constr = None
 
@@ -412,12 +365,6 @@ def _get_optimized_bounds(
                 C, x, interm_bounds = self._to_float64(
                     C, x, aux_reference_bounds, interm_bounds)
 
-        if pruner:
-            # we will use last update preserve mask in caller functions to recover
-            # lA, l, u, etc to full batch size
-            self.last_update_preserve_mask = pruner.preserve_mask
-            pruner.cache_full_sized_alpha(optimizable_activations)
-
         with torch.no_grad() if not need_grad else ExitStack():
             # ret is lb, ub or lb, ub, A_dict (if return_A is set to true)
             ret = self.compute_bounds(
@@ -437,23 +384,8 @@ def _get_optimized_bounds(
                 # corresponding A matrices and biases.
                 intermediate_constr=intermediate_constr,
                 needed_A_dict=needed_A_dict,
-                update_mask=pruner.preserve_mask if pruner else None)
+                update_mask=None)
         ret_l, ret_u = ret[0], ret[1]
-
-        if pruner:
-            pruner.recover_full_sized_alpha(optimizable_activations)
-
-        if (self.cut_used and i % cutter.log_interval == 0
-                and len(self.cut_beta_params) > 0):
-            # betas[-1]: (2(0 lower, 1 upper), spec, batch, num_constrs)
-            if ret_l is not None:
-                print(i, 'lb beta sum:',
-                      f'{self.cut_beta_params[-1][0].sum() / ret_l.size(0)},',
-                      f'worst {ret_l.min()}')
-            if ret_u is not None:
-                print(i, 'lb beta sum:',
-                      f'{self.cut_beta_params[-1][1].sum() / ret_u.size(0)},',
-                      f'worst {ret_u.min()}')
 
         if i == 0:
             # save results at the first iteration
@@ -486,15 +418,7 @@ def _get_optimized_bounds(
         full_l = l
         full_ret = ret
 
-        if pruner:
-            (x, C, full_l, full_ret_l, full_ret_u,
-             full_ret, stop_criterion) = pruner.prune(
-                x, C, ret_l, ret_u, ret, full_l, full_ret_l, full_ret_u,
-                full_ret, interm_bounds, aux_reference_bounds,
-                stop_criterion_func, bound_lower)
-        else:
-            stop_criterion = (stop_criterion_func(full_ret_l) if bound_lower
-                              else stop_criterion_func(-full_ret_u))
+        stop_criterion = (stop_criterion_func(full_ret_l) if bound_lower else stop_criterion_func(-full_ret_u))
 
         loss_ = l if bound_lower else -u
         total_loss = -1 * loss_
@@ -579,10 +503,7 @@ def _get_optimized_bounds(
                 if idx is not None:
                     # for update propose, we condition the idx to update only
                     # on domains preserved
-                    if pruner:
-                        reference_idx, idx = pruner.prune_idx(idx_mask, idx, x)
-                    else:
-                        reference_idx = idx
+                    reference_idx = idx
 
                     _update_optimizable_activations(
                         optimizable_activations, interm_bounds,
@@ -597,8 +518,7 @@ def _get_optimized_bounds(
         if os.environ.get('AUTOLIRPA_DEBUG_OPT', False):
             print(f'****** iter [{i}]',
                   f'loss: {loss_sum.item()}, lr: {opt.param_groups[0]["lr"]}',
-                  (' pruning_in_iteration open status: '
-                     f'{pruner.pruning_in_iteration}') if pruner else '')
+            )
 
         if stop_criterion_final:
             # print(f'\nall verified at {i}th iter')
@@ -654,16 +574,6 @@ def _get_optimized_bounds(
         if alpha:
             for m in optimizable_activations:
                 m.clip_alpha()
-                
-        if apply_output_constraints_to is not None and len(apply_output_constraints_to) > 0:
-            for m in self.nodes():
-                m.clip_gammas()
-
-        if pruner:
-            pruner.next_iter()
-
-    if pruner:
-        best_ret = pruner.update_best(full_ret_l, full_ret_u, best_ret)
 
     if verbosity > 3:
         breakpoint()
@@ -690,9 +600,6 @@ def _get_optimized_bounds(
                                 best_betas[node.name][key])
                     else:
                         node.sparse_betas[0].val.copy_(best_betas[node.name])
-            if self.cut_used:
-                for ii in range(len(self.cut_beta_params)):
-                    self.cut_beta_params[ii].data = best_betas['cut'][ii].data
 
     if interm_bounds is not None and not fix_interm_bounds:
         for l in self._modules.values():
@@ -716,10 +623,6 @@ def _get_optimized_bounds(
 
     for node in optimizable_activations:
         node.opt_end()
-
-    if pruner:
-        pruner.update_ratio(full_l, full_ret_l)
-        pruner.clean_full_sized_alpha_cache()
 
     if os.environ.get('AUTOLIRPA_DEBUG_OPT', False):
         print()
@@ -746,9 +649,6 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         # initialize the parameters
         node.opt_init()
 
-    apply_output_constraints_to = (
-        self.bound_opts['optimize_bound_args']['apply_output_constraints_to']
-    )
     if (not skip_bound_compute or interm_bounds is None or
             activation_opt_params is None or not all(
                 [act.name in activation_opt_params
@@ -759,14 +659,10 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         # lower/upper
         with torch.no_grad():
             # We temporarilly deactivate output constraints
-            self.bound_opts['optimize_bound_args']['apply_output_constraints_to'] = []
             l, u = self.compute_bounds(
                 x=x, C=c, method=method, bound_lower=bound_lower,
                 bound_upper=bound_upper, final_node_name=final_node_name,
                 interm_bounds=interm_bounds)
-            self.bound_opts['optimize_bound_args']['apply_output_constraints_to'] = (
-                apply_output_constraints_to
-            )
     else:
         # we skip, but we still would like to figure out the "used",
         # "perturbed", "backward_from" of each note in the graph
@@ -783,20 +679,7 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         if method in ['forward', 'forward+backward']:
             start_nodes.append(('_forward', 1, None, False))
         if method in ['backward', 'forward+backward']:
-            if (
-                apply_output_constraints_to is not None
-                and len(apply_output_constraints_to) > 0
-            ):
-                input_node = None
-                for potential_input_node_name in self.input_name:
-                    if type(self[potential_input_node_name]) is BoundInput:
-                        assert input_node is None, 'Only a single input node is supported'
-                        input_node = self[potential_input_node_name]
-                assert input_node is not None
-
-                backward_from_node = input_node
-            else:
-                backward_from_node = node
+            backward_from_node = node
             start_nodes += self.get_alpha_crown_start_nodes(
                 node,
                 c=c,
@@ -816,13 +699,6 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
                 init_intermediate_bounds[node.inputs[i].name] = (
                     [node.inputs[i].lower.detach(),
                     node.inputs[i].upper.detach()])
-    if (
-        apply_output_constraints_to is not None
-        and len(apply_output_constraints_to) > 0
-        and hasattr(self, 'constraints')
-    ):
-        for node in self.nodes():
-            node.init_gammas(self.constraints.size(0))
 
     if self.bound_opts['verbosity'] >= 1:
         print('Optimizable variables initialized.')

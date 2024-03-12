@@ -63,7 +63,7 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size,
         self.return_A = return_A
 
         batch_ret = self.backward_general(
-            node, C_batch,
+            bound_node=node, C=C_batch,
             bound_lower=bound_lower, bound_upper=bound_upper,
             average_A=False, need_A_only=False, unstable_idx=unstable_idx_batch,
             verbose=False)
@@ -111,31 +111,11 @@ def backward_general(
     unstable_idx=None,
     update_mask=None,
     verbose=True,
-    apply_output_constraints_to: Optional[List[str]] = None,
     initial_As: Optional[dict] = None,
     initial_lb: Optional[torch.tensor] = None,
     initial_ub: Optional[torch.tensor] = None,
 ):
     use_beta_crown = self.bound_opts['optimize_bound_args']['enable_beta_crown']
-
-    if bound_node.are_output_constraints_activated_for_layer(apply_output_constraints_to):
-        assert not use_beta_crown
-        assert not self.cut_used
-        assert initial_As is None
-        assert initial_lb is None
-        assert initial_ub is None
-        return self.backward_general_with_output_constraint(
-            bound_node=bound_node,
-            C=C,
-            start_backporpagation_at_node=start_backpropagation_at_node,
-            bound_lower=bound_lower,
-            bound_upper=bound_upper,
-            average_A=average_A,
-            need_A_only=need_A_only,
-            unstable_idx=unstable_idx,
-            update_mask=update_mask,
-            verbose=verbose,
-        )
 
     roots = self.roots()
 
@@ -315,26 +295,9 @@ def backward_general(
             self.needed_A_dict[bound_node.name],
             lb=lb, ub=ub, unstable_idx=unstable_idx)
 
-    # TODO merge into `concretize`
-    if (self.cut_used and getattr(self, 'cut_module', None) is not None
-            and self.cut_module.x_coeffs is not None):
-        # propagate input neuron in cut constraints
-        roots[0].lA, roots[0].uA = self.cut_module.input_cut(
-            bound_node, roots[0].lA, roots[0].uA, roots[0].lower.size()[1:], unstable_idx,
-            batch_mask=update_mask)
-
     lb, ub = concretize(self, batch_size, output_dim, lb, ub,
                         bound_lower, bound_upper,
                         average_A=average_A, node_start=bound_node)
-
-    # TODO merge into `concretize`
-    if (self.cut_used and getattr(self, "cut_module", None) is not None
-            and self.cut_module.cut_bias is not None):
-        # propagate cut bias in cut constraints
-        lb, ub = self.cut_module.bias_cut(bound_node, lb, ub, unstable_idx, batch_mask=update_mask)
-        if lb is not None and ub is not None and ((lb-ub)>0).sum().item() > 0:
-            # make sure there is no bug for cut constraints propagation
-            print(f"Warning: lb is larger than ub with diff: {(lb-ub)[(lb-ub)>0].max().item()}")
 
     lb = lb.view(batch_size, *output_shape) if bound_lower else None
     ub = ub.view(batch_size, *output_shape) if bound_upper else None
@@ -867,8 +830,7 @@ def get_alpha_crown_start_nodes(
     # Only if output constraints are used, will they differ: the node that should be
     # bounded (node) needs alphas for *all* layers, not just those behind it.
     # In this case, backward_from_node will be the input node
-    if backward_from_node != node:
-        assert len(self.bound_opts['optimize_bound_args']['apply_output_constraints_to']) > 0
+    assert backward_from_node == node
 
     for nj in self.backward_from[backward_from_node.name]:  # Pre-activation layers.
         unstable_idx = None

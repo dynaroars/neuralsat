@@ -100,15 +100,7 @@ def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = 
         lA = getattr(node, 'lA', None)
         if lA is None:
             continue
-        preserve_mask = self.net.last_update_preserve_mask
-        if preserve_mask is not None:
-            assert size is not None
-            new_lA = torch.zeros([size, lA.shape[0]] + list(lA.shape[2:]), dtype=lA.dtype, device=lA.device)
-            new_lA[preserve_mask] = lA.transpose(0, 1)
-            lA = new_lA
-        else:
-            lA = lA.transpose(0, 1)
-        lAs[node.name] = _to_device(lA, device=device)
+        lAs[node.name] = _to_device(lA.transpose(0, 1), device=device)
     return lAs
 
 

@@ -125,13 +125,6 @@ class BoundedModule(nn.Module):
         self.best_intermediate_betas = None
         # Initialization value for intermediate betas.
         self.init_intermediate_betas = None
-        # whether using cut
-        self.cut_used = False
-        # a placeholder for cut timestamp, which would be a non-positive int
-        self.cut_timestamp = -1
-        # a placeholder to save the latest samplewise mask for
-        # pruning-in-iteration optimization
-        self.last_update_preserve_mask = None
 
     def nodes(self) -> List[Bound]:
         return self._modules.values()
@@ -478,34 +471,11 @@ class BoundedModule(nn.Module):
                 if hasattr(l, 'forward_value'):
                     delattr(l, 'forward_value')
             else:
-                for attr in ['lower', 'upper', 'interval', 'forward_value', 'd',
-                             'lA', 'lower_d']:
+                for attr in ['lower', 'upper', 'interval', 'forward_value', 'd', 'lA', 'lower_d']:
                     if hasattr(l, attr):
-                        # If we use output constraints to tighten bounds, the bound
-                        # computation of every layer will begin at the output layer.
-                        # Thus, it will require to backpropagate through ReLUs *behind*
-                        # the currently bounded one. For those ReLUs, the relaxation
-                        # must depend on the lower and upper bounds of the previous
-                        # iteration. Usually, those would be deleted here, so we must
-                        # save them.
-                        # Keeping them as the .lower and .upper parameters is not
-                        # possible, as the rest of the framework assumes that layers
-                        # that were not bounded in this iteration do not have those
-                        # parameters.
-                        apply_output_constraints_to = (
-                            self.bound_opts['optimize_bound_args']['apply_output_constraints_to']
-                        )
-                        if (
-                            apply_output_constraints_to is not None and
-                            len(apply_output_constraints_to) > 0 and
-                            attr in ['lower', 'upper'] and
-                            isinstance(getattr(l, attr), torch.Tensor)
-                        ):
-                            setattr(l, f'previous_iteration_{attr}', getattr(l, attr).detach())
                         delattr(l, attr)
 
-            for attr in ['zero_backward_coeffs_l', 'zero_backward_coeffs_u',
-                         'zero_lA_mtx', 'zero_uA_mtx']:
+            for attr in ['zero_backward_coeffs_l', 'zero_backward_coeffs_u', 'zero_lA_mtx', 'zero_uA_mtx']:
                 setattr(l, attr, False)
             # Given an interval here to make IBP/CROWN start from this node
             if interm_bounds is not None and l.name in interm_bounds.keys():
@@ -887,9 +857,6 @@ class BoundedModule(nn.Module):
                 newC, reduced_dim, unstable_idx, unstable_size = sparse_C
 
                 if unstable_idx is None or unstable_size > 0:
-                    apply_output_constraints_to = (
-                        self.bound_opts['optimize_bound_args']['apply_output_constraints_to']
-                    )
                     # Special case for BoundRelu when sparse intermediate bounds are disabled
                     # Currently sparse intermediate bounds are restricted to ReLU models only
                     skip = False
@@ -905,15 +872,11 @@ class BoundedModule(nn.Module):
                                 skip = True
                     if not skip:
                         if self.return_A:
-                            node.lower, node.upper, _ = self.backward_general(
-                                node, newC, unstable_idx=unstable_idx,
-                                apply_output_constraints_to=apply_output_constraints_to)
+                            node.lower, node.upper, _ = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
                         else:
                             # Compute backward bounds only when there are unstable
                             # neurons, or when we don't know which neurons are unstable.
-                            node.lower, node.upper = self.backward_general(
-                                node, newC, unstable_idx=unstable_idx,
-                                apply_output_constraints_to=apply_output_constraints_to)
+                            node.lower, node.upper = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
 
                 if reduced_dim:
                     self.restore_sparse_bounds(
@@ -968,7 +931,7 @@ class BoundedModule(nn.Module):
             interm_bounds=None, reference_bounds=None,
             intermediate_constr=None, alpha_idx=None,
             aux_reference_bounds=None, need_A_only=False,
-            cutter=None, decision_thresh=None,
+            decision_thresh=None,
             update_mask=None):
         r"""Main function for computing bounds.
 
@@ -1191,7 +1154,7 @@ class BoundedModule(nn.Module):
                 aux_reference_bounds=aux_reference_bounds,
                 needed_A_dict=needed_A_dict,
                 final_node_name=final_node_name,
-                cutter=cutter, decision_thresh=decision_thresh)
+                decision_thresh=decision_thresh)
             if bound_upper:
                 ret2 = self._get_optimized_bounds(bound_side='upper', **kwargs)
             if bound_lower:
@@ -1308,17 +1271,14 @@ class BoundedModule(nn.Module):
         self.check_prior_bounds(final)
 
         if method == 'backward':
-            apply_output_constraints_to = (
-                self.bound_opts['optimize_bound_args']['apply_output_constraints_to']
-            )
             # This is for the final output bound.
             # No need to pass in intermediate layer beta constraints.
             ret = self.backward_general(
-                final, C,
+                bound_node=final, C=C,
                 bound_lower=bound_lower, bound_upper=bound_upper,
                 average_A=average_A, need_A_only=need_A_only,
                 unstable_idx=alpha_idx, update_mask=update_mask,
-                apply_output_constraints_to=apply_output_constraints_to)
+            )
             # FIXME when C is specified, lower and upper should not be saved to
             # final.lower and final.upper, because they are not the bounds for
             # the node.
@@ -1358,12 +1318,10 @@ class BoundedModule(nn.Module):
         check_optimized_variable_sparsity, restore_sparse_bounds,
         get_alpha_crown_start_nodes, get_unstable_locations, batched_backward,
         _preprocess_C)
-    from .output_constraints import backward_general_with_output_constraint
     from .optimized_bounds import (
         _get_optimized_bounds, init_alpha, update_best_beta,
         opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype, get_refined_interm_bounds)
-    from .beta_crown import (beta_crown_backward_bound, reset_beta, set_beta,
-                             set_beta_cuts, get_split_nodes)
+    from .beta_crown import (beta_crown_backward_bound, reset_beta, set_beta, get_split_nodes)
     from .jacobian import (augment_gradient_graph, compute_jacobian_bounds,
                            _expand_jacobian)
     from .optimize_graph import _optimize_graph

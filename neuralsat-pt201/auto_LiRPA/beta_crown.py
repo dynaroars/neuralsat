@@ -66,7 +66,7 @@ def get_split_nodes(self: 'BoundedModule', input_split=False):
 
 
 def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters,
-             lr_beta, lr_cut_beta, cutter, dense_coeffs_mask):
+             lr_beta, dense_coeffs_mask):
     """
     Set betas, best_betas, coeffs, dense_coeffs_mask, best_coeffs, biases
     and best_biases.
@@ -96,21 +96,7 @@ def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters,
     # Beta has shape (batch, max_splits_per_layer)
     parameters.append({'params': betas.copy(), 'lr': lr_beta, 'batch_dim': 0})
 
-    if self.cut_used:
-        self.set_beta_cuts(parameters, lr_cut_beta, betas, best_betas, cutter)
-
     return betas, best_betas, coeffs, dense_coeffs_mask
-
-
-def set_beta_cuts(self: 'BoundedModule', parameters, lr_cut_beta, betas,
-                  best_betas, cutter):
-    # also need to optimize cut betas
-    parameters.append({'params': self.cut_beta_params,
-                        'lr': lr_cut_beta, 'batch_dim': 0})
-    betas += self.cut_beta_params
-    best_betas['cut'] = [beta.detach().clone() for beta in self.cut_beta_params]
-    if getattr(cutter, 'opt', False):
-        parameters.append(cutter.get_parameters())
 
 
 def reset_beta(self: 'BoundedModule', node, shape, betas, bias=False,

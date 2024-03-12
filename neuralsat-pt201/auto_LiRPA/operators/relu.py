@@ -25,8 +25,6 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         self.history_beta_used = False
         self.flattened_nodes = None
         self.patch_size = {}
-        self.cut_used = False
-        self.cut_module = None
 
     def init_opt_parameters(self, start_nodes):
         ref = self.inputs[0].lower # a reference variable for getting the shape
@@ -232,17 +230,11 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         """
         # Usage of output constraints requires access to bounds of the previous iteration
         # (see _clear_and_set_new)
-        apply_output_constraints_to = self.options["optimize_bound_args"]["apply_output_constraints_to"]
-        if hasattr(x, "lower"):
-            lower = x.lower
-        else:
-            assert start_node.are_output_constraints_activated_for_layer(apply_output_constraints_to)
-            lower = x.previous_iteration_lower
-        if hasattr(x, "upper"):
-            upper = x.upper
-        else:
-            assert start_node.are_output_constraints_activated_for_layer(apply_output_constraints_to)
-            upper = x.previous_iteration_upper
+        assert hasattr(x, "lower")
+        assert hasattr(x, "upper")
+        lower = x.lower
+        upper = x.upper
+        
         # Get element-wise CROWN linear relaxations.
         (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d,
             lb_upper_d, ub_upper_d, alpha_lookup_idx) = \
@@ -281,17 +273,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         # we should force these beta to be 0 to disable the effect of these constraints
         A = last_lA if last_lA is not None else last_uA
         current_layer_shape = lower.size()[1:]
-        if self.cut_used and type(A) is Patches:
-            self.cut_module.patch_trick(start_node, self.name, A, current_layer_shape)
         ######## A problem with patches mode for cut constraint end ##########
-
-        if self.cut_used:
-            if self.leaky_alpha > 0:
-                raise NotImplementedError
-            # propagate postrelu node in cut constraints
-            last_lA, last_uA = self.cut_module.relu_cut(
-                start_node, self.name, last_lA, last_uA, current_layer_shape,
-                unstable_idx, batch_mask=self.inputs[0].alpha_beta_update_mask)
 
         # In patches mode we might need an unfold.
         # lower_d, upper_d, lower_b, upper_b: 1, batch, current_c, current_w, current_h or None
@@ -307,28 +289,13 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         lb_lower_d = maybe_unfold_patches(lb_lower_d, last_lA, alpha_lookup_idx=alpha_lookup_idx)
         lb_upper_d = maybe_unfold_patches(lb_upper_d, last_lA, alpha_lookup_idx=alpha_lookup_idx)
 
-        if self.cut_used:
-            assert reduce_bias
-            I = (lower < 0) * (upper > 0)
-            # propagate integer var of relu neuron (arelu) in cut constraints through relu layer
-            lA, uA, lbias, ubias = self.cut_module.arelu_cut(
-                start_node, self.name, last_lA, last_uA, lower_d, upper_d,
-                lower_b, upper_b, lb_lower_d, ub_lower_d, I, x, self.patch_size,
-                current_layer_shape, unstable_idx,
-                batch_mask=self.inputs[0].alpha_beta_update_mask)
-        else:
-            uA, ubias = _bound_oneside(
-                last_uA, ub_upper_d if upper_d is None else upper_d,
-                ub_lower_d if lower_d is None else lower_d, upper_b, lower_b)
-            lA, lbias = _bound_oneside(
-                last_lA, lb_lower_d if lower_d is None else lower_d,
-                lb_upper_d if upper_d is None else upper_d, lower_b, upper_b)
+        uA, ubias = _bound_oneside(
+            last_uA, ub_upper_d if upper_d is None else upper_d,
+            ub_lower_d if lower_d is None else lower_d, upper_b, lower_b)
+        lA, lbias = _bound_oneside(
+            last_lA, lb_lower_d if lower_d is None else lower_d,
+            lb_upper_d if upper_d is None else upper_d, lower_b, upper_b)
 
-        if self.cut_used:
-            # propagate prerelu node in cut constraints
-            lA, uA = self.cut_module.pre_cut(
-                start_node, self.name, lA, uA, current_layer_shape, unstable_idx,
-                batch_mask=self.inputs[0].alpha_beta_update_mask)
         self.masked_beta_lower = self.masked_beta_upper = None
 
         return [(lA, uA)], lbias, ubias
@@ -530,17 +497,10 @@ class BoundRelu(BoundTwoPieceLinear):
         # Usage of output constraints requires access to bounds of the previous iteration
         # (see _clear_and_set_new)
         if x is not None:
-            apply_output_constraints_to = self.options['optimize_bound_args']['apply_output_constraints_to']
-            if hasattr(x, "lower"):
-                lower = x.lower
-            else:
-                assert start_node.are_output_constraints_activated_for_layer(apply_output_constraints_to)
-                lower = x.previous_iteration_lower
-            if hasattr(x, "upper"):
-                upper = x.upper
-            else:
-                assert start_node.are_output_constraints_activated_for_layer(apply_output_constraints_to)
-                upper = x.previous_iteration_upper
+            assert hasattr(x, "lower")
+            assert hasattr(x, "upper")
+            lower = x.lower
+            upper = x.upper
         else:
             lower = self.lower
             upper = self.upper

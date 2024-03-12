@@ -155,43 +155,6 @@ class Bound(nn.Module):
         ret += ')'
         return ret
 
-    def are_output_constraints_activated_for_layer(
-        self: 'Bound',
-        apply_output_constraints_to: Optional[List[str]],
-    ):
-        if apply_output_constraints_to is None:
-            return False
-        for layer_type_or_name in apply_output_constraints_to:
-            if layer_type_or_name.startswith('/'):
-                if self.name == layer_type_or_name:
-                    return True
-            else:
-                assert layer_type_or_name.startswith('Bound'), (
-                    'To apply output constraints to tighten layer bounds, pass either the layer name '
-                    '(starting with "/", e.g. "/input.7") or the layer type (starting with "Bound", '
-                    'e.g. "BoundLinear")'
-                )
-                if type(self).__name__ == layer_type_or_name:
-                    return True
-        return False
-
-    def init_gammas(self, num_constraints):
-        if not self.are_output_constraints_activated_for_layer(
-            self.options.get('optimize_bound_args', {}).get('apply_output_constraints_to', [])
-        ):
-            return
-        assert len(self.output_shape) > 0, self
-        neurons_in_this_layer = 1
-        for d in self.output_shape[1:]:
-            neurons_in_this_layer *= d
-        init_gamma_value = 0.0
-        self.gammas = torch.full((2, num_constraints), init_gamma_value, requires_grad=True, device=self.device)
-
-    def clip_gammas(self):
-        if not hasattr(self, "gammas"):
-            return
-        self.gammas.data = torch.clamp(self.gammas.data, min=0.0)
-
     def is_input_perturbed(self, i=0):
         r"""Check if the i-th input is with perturbation or not."""
         return i < len(self.inputs) and self.inputs[i].perturbed

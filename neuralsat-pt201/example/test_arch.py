@@ -66,7 +66,6 @@ if __name__ == "__main__":
         'matmul': {'share_alphas': False}, # yes
         'tanh': {'loose_threshold': None}, 
         'buffers': {'no_batchdim': False}, # yes (optimized backward)
-        'optimize_bound_args': {'apply_output_constraints_to': []}, 
         'optimize_graph': {'optimizer': None}
     }
 
@@ -102,7 +101,6 @@ if __name__ == "__main__":
             'fix_interm_bounds': True, 
             'use_shared_alpha': False, 
             'early_stop_patience': 10, 
-            'pruning_in_iteration': False
         }
     })
 
