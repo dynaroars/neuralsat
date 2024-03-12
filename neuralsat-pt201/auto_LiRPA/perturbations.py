@@ -151,8 +151,6 @@ class PerturbationLpNorm(Perturbation):
             x_U = x + self.eps if self.x_U is None else self.x_U
         return x_L, x_U
 
-    # did not improve
-    # @torch.compile(mode='reduce-overhead')
     def concretize_matrix(self, x, A, sign):
         # If A is an identity matrix, we will handle specially.
         if not isinstance(A, eyeC):

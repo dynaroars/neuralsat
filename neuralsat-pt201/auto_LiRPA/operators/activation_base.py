@@ -153,7 +153,7 @@ class BoundActivation(Bound):
         return torch.ones_like(lower)
     
     def get_split_point(self):
-        raise NotImplementedError
+        raise NotImplementedError(f'get_split_point is not implemented for {self}.')
 
 
 class BoundOptimizableActivation(BoundActivation):

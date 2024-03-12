@@ -82,6 +82,9 @@ class BoundMul(BoundOptimizableActivation):
         self.splittable = True
         self.mul_helper = MulHelper()
 
+    def get_split_point(self):
+        return None
+    
     def forward(self, x, y):
         self.x_shape = x.shape
         self.y_shape = y.shape

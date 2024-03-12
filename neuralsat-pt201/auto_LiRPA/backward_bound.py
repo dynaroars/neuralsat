@@ -8,7 +8,6 @@ from .utils import *
 from .bound_ops import *
 import warnings
 
-import proton # type: ignore
 from typing import TYPE_CHECKING, List
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
@@ -64,7 +63,7 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size,
         self.return_A = return_A
 
         batch_ret = self.backward_general(
-            node, C_batch,
+            bound_node=node, C=C_batch,
             bound_lower=bound_lower, bound_upper=bound_upper,
             average_A=False, need_A_only=False, unstable_idx=unstable_idx_batch,
             verbose=False)
@@ -112,31 +111,11 @@ def backward_general(
     unstable_idx=None,
     update_mask=None,
     verbose=True,
-    apply_output_constraints_to: Optional[List[str]] = None,
     initial_As: Optional[dict] = None,
     initial_lb: Optional[torch.tensor] = None,
     initial_ub: Optional[torch.tensor] = None,
 ):
     use_beta_crown = self.bound_opts['optimize_bound_args']['enable_beta_crown']
-
-    if bound_node.are_output_constraints_activated_for_layer(apply_output_constraints_to):
-        assert not use_beta_crown
-        assert not self.cut_used
-        assert initial_As is None
-        assert initial_lb is None
-        assert initial_ub is None
-        return self.backward_general_with_output_constraint(
-            bound_node=bound_node,
-            C=C,
-            start_backporpagation_at_node=start_backpropagation_at_node,
-            bound_lower=bound_lower,
-            bound_upper=bound_upper,
-            average_A=average_A,
-            need_A_only=need_A_only,
-            unstable_idx=unstable_idx,
-            update_mask=update_mask,
-            verbose=verbose,
-        )
 
     roots = self.roots()
 
@@ -242,10 +221,10 @@ def backward_general(
             lA, uA = l.lA, l.uA
             if (l.name != start_backpropagation_at_node.name and use_beta_crown
                     and getattr(l, 'sparse_betas', None)):
-                with proton.scope("beta_crown_backward_bound"):
-                    lA, uA, lbias, ubias = self.beta_crown_backward_bound(l, lA, uA, start_node=start_backpropagation_at_node)
-                    lb = lb + lbias
-                    ub = ub + ubias
+                lA, uA, lbias, ubias = self.beta_crown_backward_bound(
+                    l, lA, uA, start_node=start_backpropagation_at_node)
+                lb = lb + lbias
+                ub = ub + ubias
 
             if isinstance(l, BoundOptimizableActivation):
                 # For other optimizable activation functions (TODO: unify with ReLU).
@@ -256,12 +235,10 @@ def backward_general(
                 l.preserve_mask = update_mask
             else:
                 start_shape = None
-            
-            with proton.scope("bound_backward"):
-                A, lower_b, upper_b = l.bound_backward(
-                    lA, uA, *l.inputs,
-                    start_node=bound_node, unstable_idx=unstable_idx,
-                    start_shape=start_shape)
+            A, lower_b, upper_b = l.bound_backward(
+                lA, uA, *l.inputs,
+                start_node=bound_node, unstable_idx=unstable_idx,
+                start_shape=start_shape)
 
             # After propagation through this node, we delete its lA, uA variables.
             if bound_node.name != self.final_name:
@@ -273,11 +250,8 @@ def backward_general(
                     print(l, time_elapsed)
             if lb.ndim > 0 and type(lower_b) == Tensor and self.conv_mode == 'patches':
                 lb, ub, lower_b, upper_b = check_patch_biases(lb, ub, lower_b, upper_b)
-            
-            with proton.scope("add_bounds"):
-                lb = lb + lower_b
-                ub = ub + upper_b
-                
+            lb = lb + lower_b
+            ub = ub + upper_b
             if self.return_A and self.needed_A_dict and bound_node.name in self.needed_A_dict:
                 # FIXME remove [0][0] and [0][1]?
                 if len(self.needed_A_dict[bound_node.name]) == 0 or l.name in self.needed_A_dict[bound_node.name]:
@@ -307,9 +281,8 @@ def backward_general(
                     # return A matrix as a dict: {node_start.name: [A_lower, A_upper]}
                     return None, None, self.A_dict
 
-            with proton.scope("add_bounds_all"):
-                for i, l_pre in enumerate(l.inputs):
-                    add_bound(l, l_pre, lA=A[i][0], uA=A[i][1])
+            for i, l_pre in enumerate(l.inputs):
+                add_bound(l, l_pre, lA=A[i][0], uA=A[i][1])
 
     if lb.ndim >= 2:
         lb = lb.transpose(0, 1)
@@ -322,31 +295,12 @@ def backward_general(
             self.needed_A_dict[bound_node.name],
             lb=lb, ub=ub, unstable_idx=unstable_idx)
 
-    # TODO merge into `concretize`
-    if (self.cut_used and getattr(self, 'cut_module', None) is not None
-            and self.cut_module.x_coeffs is not None):
-        # propagate input neuron in cut constraints
-        roots[0].lA, roots[0].uA = self.cut_module.input_cut(
-            bound_node, roots[0].lA, roots[0].uA, roots[0].lower.size()[1:], unstable_idx,
-            batch_mask=update_mask)
+    lb, ub = concretize(self, batch_size, output_dim, lb, ub,
+                        bound_lower, bound_upper,
+                        average_A=average_A, node_start=bound_node)
 
-    with proton.scope("concretize"):
-        lb, ub = concretize(self, batch_size, output_dim, lb, ub,
-                            bound_lower, bound_upper,
-                            average_A=average_A, node_start=bound_node)
-
-    # TODO merge into `concretize`
-    if (self.cut_used and getattr(self, "cut_module", None) is not None
-            and self.cut_module.cut_bias is not None):
-        # propagate cut bias in cut constraints
-        lb, ub = self.cut_module.bias_cut(bound_node, lb, ub, unstable_idx, batch_mask=update_mask)
-        if lb is not None and ub is not None and ((lb-ub)>0).sum().item() > 0:
-            # make sure there is no bug for cut constraints propagation
-            print(f"Warning: lb is larger than ub with diff: {(lb-ub)[(lb-ub)>0].max().item()}")
-
-    with proton.scope("reshape bounds"):
-        lb = lb.view(batch_size, *output_shape) if bound_lower else None
-        ub = ub.view(batch_size, *output_shape) if bound_upper else None
+    lb = lb.view(batch_size, *output_shape) if bound_lower else None
+    ub = ub.view(batch_size, *output_shape) if bound_upper else None
 
     if verbose:
         logger.debug('')
@@ -662,8 +616,7 @@ def _preprocess_C(self: 'BoundedModule', C, node):
 
     return C, batch_size, output_dim, output_shape
 
-# worked sometimes
-# @torch.compile(mode='reduce-overhead')
+
 def concretize(self, batch_size, output_dim, lb, ub=None,
                bound_lower=True, bound_upper=True,
                average_A=False, node_start=None):
@@ -877,8 +830,7 @@ def get_alpha_crown_start_nodes(
     # Only if output constraints are used, will they differ: the node that should be
     # bounded (node) needs alphas for *all* layers, not just those behind it.
     # In this case, backward_from_node will be the input node
-    if backward_from_node != node:
-        assert len(self.bound_opts['optimize_bound_args']['apply_output_constraints_to']) > 0
+    assert backward_from_node == node
 
     for nj in self.backward_from[backward_from_node.name]:  # Pre-activation layers.
         unstable_idx = None
