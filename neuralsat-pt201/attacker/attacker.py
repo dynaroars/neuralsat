@@ -1,6 +1,7 @@
 from beartype import beartype
 import random
 import torch
+import os
 
 from onnx2pytorch.convert.model import ConvertModel
 from verifier.objective import DnfObjectives
@@ -83,8 +84,9 @@ class PGDAttacker:
         # assert torch.all(data_min <= data_max)
         # x = (data_min[:, 0] + data_max[:, 0]) / 2
         x = (data_max[:, 0] - data_min[:, 0]) * torch.rand(data_min[:, 0].shape, device=self.device) + data_min[:, 0]
-        assert torch.all(x <= data_max[:, 0])
-        assert torch.all(x >= data_min[:, 0])
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(x <= data_max[:, 0])
+            assert torch.all(x >= data_min[:, 0])
         
         cs = self.objective.cs.to(self.device)
         rhs = self.objective.rhs.to(self.device)

@@ -5,6 +5,7 @@ import typing
 import torch
 import math
 import copy
+import os
 
 from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor
@@ -21,7 +22,8 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
     
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
-    assert torch.all(x_L <= x_U)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(x_L <= x_U)
     return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
 
 
@@ -240,7 +242,8 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
             # set 2nd half (set upper)
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
-            assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
+            if os.environ.get('NEURALSAT_ASSERT'):
+                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
     assert all([_[0].shape[0] == _[1].shape[0] == 2 * batch for _ in new_intermediate_layer_bounds.values()])

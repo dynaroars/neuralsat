@@ -8,7 +8,7 @@ import typing
 import torch
 import copy
 import math
-
+import os
 
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
@@ -253,7 +253,8 @@ class NetworkAbstractor:
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
-        assert torch.all(double_input_lowers <= double_input_uppers)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(double_input_lowers <= double_input_uppers)
         
         # update hidden bounds with new decisions (perform splitting)
         new_intermediate_layer_bounds = self.hidden_split_idx(

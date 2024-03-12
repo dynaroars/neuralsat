@@ -5,6 +5,7 @@ import numpy as np
 import typing
 import random
 import torch
+import os
 
 if typing.TYPE_CHECKING:
     import abstractor
@@ -103,7 +104,8 @@ class DecisionHeuristic:
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers])
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers])
         
-        assert torch.all(double_input_lowers <= double_input_uppers)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(double_input_lowers <= double_input_uppers)
         
         topk_scores_indices = topk_scores.indices.cpu()
         topk_backup_scores_indices = topk_backup_scores.indices.cpu()

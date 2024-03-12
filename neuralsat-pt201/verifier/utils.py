@@ -7,6 +7,7 @@ import typing
 import torch
 import time
 import copy
+import os
 
 if typing.TYPE_CHECKING:
     import verifier
@@ -315,8 +316,9 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
     input_uppers = domain_params.input_uppers[indices][None]
     # adv_example = (input_lowers + input_uppers) / 2
     adv_example = (input_uppers - input_lowers) * torch.rand(input_lowers.shape, device=self.device) + input_lowers
-    assert torch.all(adv_example <= input_uppers)
-    assert torch.all(adv_example >= input_lowers)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(adv_example <= input_uppers)
+        assert torch.all(adv_example >= input_lowers)
     
     cs = domain_params.cs[indices].view(1, -1, domain_params.cs[indices].shape[-1])
     rhs = domain_params.rhs[indices].view(1, -1)
