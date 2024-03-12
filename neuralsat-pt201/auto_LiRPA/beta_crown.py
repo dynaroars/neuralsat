@@ -65,8 +65,7 @@ def get_split_nodes(self: 'BoundedModule', input_split=False):
     return self.split_nodes, self.split_activations
 
 
-def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters,
-             lr_beta, dense_coeffs_mask):
+def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters, lr_beta, dense_coeffs_mask):
     """
     Set betas, best_betas, coeffs, dense_coeffs_mask, best_coeffs, biases
     and best_biases.
@@ -87,7 +86,7 @@ def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters,
                     betas.append(sparse_beta.val)
             best_betas[node.name] = {
                 beta_m: sparse_beta.val.detach().clone()
-                for beta_m, sparse_beta in node.sparse_betas.items()
+                    for beta_m, sparse_beta in node.sparse_betas.items()
             }
         else:
             betas.append(node.sparse_betas[0].val)
@@ -99,22 +98,20 @@ def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters,
     return betas, best_betas, coeffs, dense_coeffs_mask
 
 
-def reset_beta(self: 'BoundedModule', node, shape, betas, bias=False,
-               start_nodes=None):
+def reset_beta(self: 'BoundedModule', node, shape, betas, bias=False, start_nodes=None):
     # Create only the non-zero beta. For each layer, it is padded to maximal length.
     # We create tensors on CPU first, and they will be transferred to GPU after initialized.
     if self.bound_opts.get('enable_opt_interm_bounds', False):
         node.sparse_betas = {
             key: SparseBeta(
-                shape,
-                betas=[(betas[j][i] if betas[j] is not None else None)
-                        for j in range(len(betas))],
-                device=self.device, bias=bias,
+                shape=shape,
+                betas=[(betas[j][i] if betas[j] is not None else None) for j in range(len(betas))],
+                device=self.device, 
+                bias=bias,
             ) for i, key in enumerate(start_nodes)
         }
     else:
-        node.sparse_betas = [SparseBeta(
-            shape, betas=betas, device=self.device, bias=bias)]
+        node.sparse_betas = [SparseBeta(shape=shape, betas=betas, device=self.device, bias=bias)]
 
 
 def beta_crown_backward_bound(self: 'BoundedModule', node, lA, uA, start_node=None):
@@ -169,13 +166,11 @@ def beta_crown_backward_bound(self: 'BoundedModule', node, lA, uA, start_node=No
                 _bias_unsupported()
             # For matrix mode, beta is sparse.
             beta_values = (
-                node.sparse_betas[start_node.name].val
-                * node.sparse_betas[start_node.name].sign
+                node.sparse_betas[start_node.name].val * node.sparse_betas[start_node.name].sign
             ).expand(A.size(0), -1, -1)
             # node.single_beta_loc has shape [batch, max_single_split].
             # Need to expand at the specs dimension.
-            beta_indices = (node.sparse_betas[start_node.name].loc
-                            .unsqueeze(0).expand(A.size(0), -1, -1))
+            beta_indices = (node.sparse_betas[start_node.name].loc.unsqueeze(0).expand(A.size(0), -1, -1))
             beta_bias = node.sparse_betas[start_node.name].bias
         else:
             # For matrix mode, beta is sparse.
