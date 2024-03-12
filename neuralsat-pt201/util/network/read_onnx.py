@@ -16,7 +16,7 @@ from util.misc.error import *
 
 custom_quirks = {
     'Reshape': {
-        'fix_batch_size': True
+        'fix_batch_size': False
     },
     'Transpose': {
         'merge_batch_size_with_channel': True,
@@ -133,8 +133,8 @@ def parse_onnx(path: str) -> tuple:
             # print(f'[{i}] Model was converted incorrectly. Try again.')
             continue
         except OnnxConversionError:
-            if custom_quirks['Reshape']['fix_batch_size']:
-                custom_quirks['Reshape']['fix_batch_size'] = False
+            if not custom_quirks['Reshape']['fix_batch_size']:
+                custom_quirks['Reshape']['fix_batch_size'] = True
                 continue
             else:
                 warnings.warn(f'Unable to convert onnx to pytorch model')

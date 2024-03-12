@@ -5,6 +5,7 @@ import typing
 import torch
 import math
 import copy
+import os
 
 from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor
@@ -21,7 +22,8 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
     
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
-    assert torch.all(x_L <= x_U)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(x_L <= x_U)
     return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
 
 
@@ -78,13 +80,16 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     output_ubs = output_lbs + torch.inf
     
     # get hidden bounds
-    for layer in self.net.layers_requiring_bounds:
+    for layer in list(set(self.net.layers_requiring_bounds + self.net.split_nodes)):
         lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
         upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
     
     # add output bounds
     lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)
     upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
+
+    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, print([_.shape[0] for _ in lower_bounds.values()])
+    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, print([_.shape[0] for _ in upper_bounds.values()])
     
     return lower_bounds, upper_bounds
 
@@ -98,15 +103,7 @@ def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = 
         lA = getattr(node, 'lA', None)
         if lA is None:
             continue
-        preserve_mask = self.net.last_update_preserve_mask
-        if preserve_mask is not None:
-            assert size is not None
-            new_lA = torch.zeros([size, lA.shape[0]] + list(lA.shape[2:]), dtype=lA.dtype, device=lA.device)
-            new_lA[preserve_mask] = lA.transpose(0, 1)
-            lA = new_lA
-        else:
-            lA = lA.transpose(0, 1)
-        lAs[node.name] = _to_device(lA, device=device)
+        lAs[node.name] = _to_device(lA.transpose(0, 1), device=device)
     return lAs
 
 
@@ -199,7 +196,7 @@ def set_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas: list, histo
         betas=betas,
         max_splits_per_layer=max_splits_per_layer, 
         batch=batch, 
-        bias=False,
+        bias=None in self.split_points,
     )
 
     # set new betas
@@ -246,8 +243,11 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
             # set 2nd half (set upper)
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
+            if os.environ.get('NEURALSAT_ASSERT'):
+                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
+    assert all([_[0].shape[0] == _[1].shape[0] == 2 * batch for _ in new_intermediate_layer_bounds.values()])
     return new_intermediate_layer_bounds
 
 

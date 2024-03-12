@@ -5,6 +5,7 @@ import numpy as np
 import typing
 import random
 import torch
+import os
 
 if typing.TYPE_CHECKING:
     import abstractor
@@ -47,6 +48,15 @@ class DecisionHeuristic:
             return self.naive_input_branching(
                 domain_params=domain_params,
                 abstractor=abstractor, 
+            )
+        
+        if None in abstractor.split_points:
+            # FIXME: generalize it with relu
+            # handle general activation 
+            return self.naive_hidden_branching(
+                domain_params=domain_params, 
+                abstractor=abstractor, 
+                mode=random.choice(['width', 'distance'][1:]),
             )
         
         # hidden split
@@ -94,7 +104,8 @@ class DecisionHeuristic:
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers])
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers])
         
-        assert torch.all(double_input_lowers <= double_input_uppers)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(double_input_lowers <= double_input_uppers)
         
         topk_scores_indices = topk_scores.indices.cpu()
         topk_backup_scores_indices = topk_backup_scores.indices.cpu()
@@ -300,25 +311,43 @@ class DecisionHeuristic:
         if mode == 'distance':
             scores = {
                 k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) 
-                    for k in domain_params.upper_bounds
+                    for k in split_node_points
             }
         elif mode == 'polarity':
             scores = {
                 k: (domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k]) 
-                    for k in domain_params.upper_bounds
+                    for k in split_node_points
             }
         elif mode == 'scale':
             scores = {
                 k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) 
-                    for k in domain_params.upper_bounds
+                    for k in split_node_points
+            }
+        elif mode == 'width':
+            scores = {
+                k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) 
+                    for k in split_node_points
             }
         else:
             raise NotImplementedError()
             
-        masked_scores = {k: torch.where(domain_params.masks[k].bool(), scores[k], 0.0) for k in scores}
+        masks = {
+            k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k]) 
+                for k in split_node_points
+        }
         
+        masked_scores = {
+            k: torch.where(masks[k].bool(), scores[k].flatten(1), 0.0) 
+                for k in split_node_points
+        }
+        
+        # TODO: not always required to compute
+        decision_points = {
+            k: (domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) / 2.0
+                for k in split_node_points
+        }
         assert len(abstractor.net.split_nodes) == len(masked_scores)
-        best_scores = [masked_scores[k.name].topk(1, 1) for k in abstractor.net.split_nodes]
+        best_scores = [masked_scores[k].topk(1, 1) for k in split_node_points]
         best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
         best_scores_all_layers_indices = torch.cat([s.indices for s in best_scores], dim=1).detach().cpu().numpy()
         best_scores_all = best_scores_all_layers.topk(1, 1)
@@ -326,12 +355,14 @@ class DecisionHeuristic:
         
         layer_ids = best_scores_all.indices[:, 0].detach().cpu().numpy()
         assert len(layer_ids) == batch
-        decisions = [[
-            split_node_names[layer_ids[b]], 
-            best_scores_all_layers_indices[b, layer_ids[b]], 
-            split_node_points[split_node_names[layer_ids[b]]]
-        ] for b in range(batch)]
+        decisions = []
+        for b in range(batch):
+            l_name = split_node_names[layer_ids[b]]
+            n_id = best_scores_all_layers_indices[b, layer_ids[b]]
+            if split_node_points[l_name] is not None:
+                point = split_node_points[l_name]
+            else:
+                point = decision_points[l_name][b].flatten()[n_id].item()
+            decisions.append([l_name, n_id, point])
         
         return decisions
-
-        

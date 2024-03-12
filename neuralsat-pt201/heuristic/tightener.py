@@ -224,9 +224,10 @@ class Tightener:
         # worst bounds
         unified_lower_bounds = {k: v.min(dim=0).values.flatten() for k, v in worst_domains.lower_bounds.items()}
         unified_upper_bounds = {k: v.max(dim=0).values.flatten() for k, v in worst_domains.upper_bounds.items()}
-        assert all([(unified_lower_bounds[k] <= worst_domains.lower_bounds[k].flatten(1)).all() for k in worst_domains.lower_bounds])
-        assert all([(unified_upper_bounds[k] >= worst_domains.upper_bounds[k].flatten(1)).all() for k in worst_domains.upper_bounds])
-        assert len(self.pre_relu_names) == len(unified_lower_bounds)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert all([(unified_lower_bounds[k] <= worst_domains.lower_bounds[k].flatten(1)).all() for k in worst_domains.lower_bounds])
+            assert all([(unified_upper_bounds[k] >= worst_domains.upper_bounds[k].flatten(1)).all() for k in worst_domains.upper_bounds])
+            assert len(self.pre_relu_names) == len(unified_lower_bounds)
         
         # print('lower_bounds:', [(k, v.shape, v.sum()) for k, v in unified_lower_bounds.items()])
         # print('upper_bounds:', [(k, v.shape, v.sum()) for k, v in unified_upper_bounds.items()])

@@ -7,6 +7,7 @@ import typing
 import torch
 import time
 import copy
+import os
 
 if typing.TYPE_CHECKING:
     import verifier
@@ -97,7 +98,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
-        print('Failed to preprocessing objectives')
+        print('Failed to initialize abstractor')
         return objectives, None
     
     # prune objectives
@@ -106,7 +107,11 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1] # raise errors if using beta, use full objectives instead
     
     # forward
-    ret = self.abstractor.initialize(tmp_objective)
+    try:
+        ret = self.abstractor.initialize(tmp_objective)
+    except:
+        print('Failed to initialize objectives')
+        return objectives, None
 
     # pruning
     remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
@@ -114,15 +119,21 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     objectives.upper_bounds = objectives.upper_bounds[remaining_index]
     objectives.cs = objectives.cs[remaining_index]
     objectives.rhs = objectives.rhs[remaining_index]
+    objectives.lower_bounds_f64 = objectives.lower_bounds_f64[remaining_index]
+    objectives.upper_bounds_f64 = objectives.upper_bounds_f64[remaining_index]
+    objectives.cs_f64 = objectives.cs_f64[remaining_index]
+    objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
+    
+    if None in self.abstractor.split_points:
+        # FIXME: disable restart + stabilize for now
+        Settings.use_restart = False
+        Settings.use_mip_tightening = False
+        logger.info(f'Remain {len(objectives)} objectives')
+        return objectives, None
     
     # refine
     refined_intermediate_bounds = None
     if len(objectives) and (Settings.use_mip_tightening) and self.abstractor.method == 'backward':
-        logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
-        tmp_objective = copy.deepcopy(objectives)
-        tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
-        tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
-        
         use_refined = not Settings.use_restart
         if any([isinstance(_, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d, 
                                torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) 
@@ -131,6 +142,11 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             use_refined = False
 
         if use_refined:
+            logger.info(f'Refining hidden bounds for {len(objectives)} remaining objectives')
+            tmp_objective = copy.deepcopy(objectives)
+            tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
+            tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
+            
             # build solver
             tic = time.time()
             c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
@@ -155,6 +171,10 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             objectives.upper_bounds = objectives.upper_bounds[remaining_index]
             objectives.cs = objectives.cs[remaining_index]
             objectives.rhs = objectives.rhs[remaining_index]
+            objectives.lower_bounds_f64 = objectives.lower_bounds_f64[remaining_index]
+            objectives.upper_bounds_f64 = objectives.upper_bounds_f64[remaining_index]
+            objectives.cs_f64 = objectives.cs_f64[remaining_index]
+            objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
             
             # TODO: fixme (update found betas from MIP)
             # self.refined_betas = self.abstractor.net.get_betas()
@@ -200,6 +220,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
     )
     
     self.abstractor.setup(objective)
+    self.abstractor.net.get_split_nodes(input_split=False)
     
     
 @beartype
@@ -234,21 +255,24 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
         elif any([isinstance(_, (torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d)) for _ in self.net.modules()][1:]):
             # FIXME: skip refine for Conv layers
             pass
+        elif None in self.abstractor.split_points:
+            # skip refine for general activation layers
+            pass
         else:
             self._init_abstractor('backward', objective)
             
             tmp_objective = copy.deepcopy(objective)
             tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
             tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1].to(self.device)
-            tmp_objective.rhs = tmp_objective.rhs[0:1].to(self.device)
-            tmp_objective.cs = tmp_objective.cs[0:1].to(self.device)
+            # tmp_objective.rhs = tmp_objective.rhs.to(self.device) # TODO: check
+            c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
             
             ret = self.abstractor.initialize(tmp_objective)
             self.abstractor.build_lp_solver(
                 model_type='mip', 
                 input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
                 input_upper=tmp_objective.upper_bounds.view(self.input_shape), 
-                c=tmp_objective.cs,
+                c=c_to_use,
                 refine=True,
                 timeout=None,
                 timeout_per_neuron=Settings.mip_tightening_timeout_per_neuron,
@@ -292,8 +316,9 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
     input_uppers = domain_params.input_uppers[indices][None]
     # adv_example = (input_lowers + input_uppers) / 2
     adv_example = (input_uppers - input_lowers) * torch.rand(input_lowers.shape, device=self.device) + input_lowers
-    assert torch.all(adv_example <= input_uppers)
-    assert torch.all(adv_example >= input_lowers)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(adv_example <= input_uppers)
+        assert torch.all(adv_example >= input_lowers)
     
     cs = domain_params.cs[indices].view(1, -1, domain_params.cs[indices].shape[-1])
     rhs = domain_params.rhs[indices].view(1, -1)
@@ -394,7 +419,10 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
     if domain_params.lower_bounds is None:
         return None, None
     
-    # TODO: check all activation layers are ReLU here
+    # check all activation layers are ReLU 
+    if None in self.abstractor.split_points: 
+        # general activation
+        return None, None
     
     new_masks = compute_masks(
         lower_bounds=domain_params.lower_bounds, 

@@ -1,6 +1,7 @@
 from beartype import beartype
 import random
 import torch
+import os
 
 from onnx2pytorch.convert.model import ConvertModel
 from verifier.objective import DnfObjectives
@@ -83,8 +84,9 @@ class PGDAttacker:
         # assert torch.all(data_min <= data_max)
         # x = (data_min[:, 0] + data_max[:, 0]) / 2
         x = (data_max[:, 0] - data_min[:, 0]) * torch.rand(data_min[:, 0].shape, device=self.device) + data_min[:, 0]
-        assert torch.all(x <= data_max[:, 0])
-        assert torch.all(x >= data_min[:, 0])
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(x <= data_max[:, 0])
+            assert torch.all(x >= data_min[:, 0])
         
         cs = self.objective.cs.to(self.device)
         rhs = self.objective.rhs.to(self.device)
@@ -92,18 +94,38 @@ class PGDAttacker:
         cs_f64 = self.objective.cs_f64.to(self.device)
         rhs_f64 = self.objective.rhs_f64.to(self.device)
         
-        self.net.to(cs_f64.dtype)
-        is_attacked, attack_images = attack(
-            model=self.net,
-            x=x.to(cs_f64.dtype), 
-            data_min=data_min_f64,
-            data_max=data_max_f64,
-            cs=cs_f64,
-            rhs=rhs_f64,
-            attack_iters=iterations, 
-            num_restarts=restarts,
-            timeout=timeout,
-        )
+        try:
+            self.net.to(cs_f64.dtype)
+            is_attacked, attack_images = attack(
+                model=self.net,
+                x=x.to(cs_f64.dtype), 
+                data_min=data_min_f64,
+                data_max=data_max_f64,
+                cs=cs_f64,
+                rhs=rhs_f64,
+                attack_iters=iterations, 
+                num_restarts=restarts,
+                timeout=timeout,
+            )
+        except RuntimeError as exception:
+            if is_cuda_out_of_memory(exception):
+                self.net.to(cs.dtype)
+                is_attacked, attack_images = attack(
+                    model=self.net,
+                    x=x.to(cs.dtype), 
+                    data_min=data_min,
+                    data_max=data_max,
+                    cs=cs,
+                    rhs=rhs,
+                    attack_iters=iterations, 
+                    num_restarts=restarts,
+                    timeout=timeout,
+                )
+            else:
+                raise NotImplementedError()
+        except:
+            raise NotImplementedError()
+                
         
         if is_attacked:
             with torch.no_grad():

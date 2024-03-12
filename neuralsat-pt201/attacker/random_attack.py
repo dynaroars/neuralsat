@@ -3,6 +3,7 @@ import numpy as np
 import random
 import torch
 import time
+import os
 
 from onnx2pytorch.convert.model import ConvertModel
 from verifier.objective import DnfObjectives
@@ -176,7 +177,8 @@ class RandomAttacker:
     @beartype
     def _make_samples(self: 'RandomAttacker', input_lowers: torch.Tensor, input_uppers: torch.Tensor) -> tuple[bool, list[tuple[torch.Tensor, torch.Tensor]]]:
         s_in = (input_uppers - input_lowers) * torch.rand(self.n_samples, *self.input_shape[1:], device=self.device) + input_lowers
-        assert torch.all(input_lowers <= s_in) and torch.all(s_in <= input_uppers)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(input_lowers <= s_in) and torch.all(s_in <= input_uppers)
         s_out = self.net(s_in)
         samples = []
         for cs, rhs in zip(self.objective.cs.to(self.device), self.objective.rhs.to(self.device)):

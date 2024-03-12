@@ -9,7 +9,7 @@ import proton # type: ignore
 import torch
 import copy
 import math
-
+import os
 
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
@@ -41,12 +41,25 @@ class NetworkAbstractor:
         self.iteration = 0
         
     @beartype
+    @property
+    def split_points(self):
+        if not hasattr(self, '_split_points'):
+            self._split_points = [self.net.split_activations[k.name][0][0].get_split_point() for k in self.net.split_nodes]
+        return self._split_points
+        
+    @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
         if self.select_params(objective):
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
             return None
             
-        # try smaller backward batch size
+        # FIXME: try special settings for ViT
+        extra_opts = {'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True},}
+        if self.select_params(objective, extra_opts=extra_opts):
+            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
+            return None
+            
+        # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
             if self.select_params(objective):
@@ -58,12 +71,12 @@ class NetworkAbstractor:
         raise
             
     @beartype
-    def select_params(self: 'NetworkAbstractor', objective: typing.Any) -> bool:
+    def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
         ]
-        if self.method != 'backward':    
+        if self.input_split and (self.method != 'backward'):
             params += [        
                 ['patches', 'backward'],
                 ['matrix', 'backward'],
@@ -73,7 +86,7 @@ class NetworkAbstractor:
         
         for mode, method in params:
             logger.debug(f'Try conv_mode={mode}, method={method}, input_split={self.input_split}')
-            self._init_module(mode=mode, objective=objective)
+            self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
                 self.mode = mode
                 self.method = method
@@ -82,11 +95,13 @@ class NetworkAbstractor:
         return False
             
     @beartype
-    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any) -> None:
+    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+        bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
+        logger.debug(f'bound_opts={bound_opts}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
-            bound_opts={'conv_mode': mode, 'verbosity': 0},
+            bound_opts=bound_opts,
             device=self.device,
             verbose=False,
         )
@@ -239,7 +254,8 @@ class NetworkAbstractor:
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
-        assert torch.all(double_input_lowers <= double_input_uppers)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(double_input_lowers <= double_input_uppers)
         
         # update hidden bounds with new decisions (perform splitting)
         new_intermediate_layer_bounds = self.hidden_split_idx(
