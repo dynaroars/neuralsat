@@ -86,7 +86,8 @@ class ConvertModel(nn.Module):
         experimental=False,
         debug=False,
         enable_pruning=False,
-        quirks = None,
+        quirks=None,
+        enable_recording=False,
     ):
         """
         Convert onnx model to pytorch.
@@ -119,6 +120,7 @@ class ConvertModel(nn.Module):
         self.enable_pruning = enable_pruning
         self.is_nhwc = False
         self.is_last_removed = {}
+        self.enable_recording = enable_recording
 
         self.input_names = get_inputs_names(onnx_model.graph)
         self.output_names = get_outputs_names(onnx_model.graph)
@@ -171,6 +173,9 @@ class ConvertModel(nn.Module):
             inputs = input_list
         if len(input_dict) > 0:
             inputs = [input_dict[key] for key in self.input_names]
+            
+        if self.enable_recording:
+            intermediate_outputs = []
 
         if not self.experimental and inputs[0].shape[self.batch_dim] > 1:
             raise NotImplementedError(
@@ -195,9 +200,6 @@ class ConvertModel(nn.Module):
                 continue
             # print(out_op_id, out_op_name, op)
 
-            # if first layer choose input as in_activations
-            # if not in_op_names and len(node.input) == 1:
-            #    in_activations = input
             if isinstance(op, STANDARD_LAYERS) or (
                 isinstance(op, COMPOSITE_LAYERS)
                 and any(isinstance(x, STANDARD_LAYERS) for x in op.modules())
@@ -217,23 +219,14 @@ class ConvertModel(nn.Module):
                 ]
 
             in_activations = [in_act for in_act in in_activations if in_act is not None]
-
+                    
             # store activations for next layer
             if isinstance(op, Loop):
                 outputs = op((self,), activations, *in_activations)
                 for out_op_id, output in zip(node.output, outputs):
                     activations[out_op_id] = output
             elif isinstance(op, partial) and op.func == torch.cat:
-                if PRINT_DEBUG:
-                    print('[+] Computing', node.op_type)
-                    # print(out_op_id in activations, )
-                    print('\t- inputs', [_.shape for _ in in_activations])
-                    # print('\t- inputs', [_ for _ in in_activations])
-                    # activations[out_op_id] = op([ia.squeeze() for ia in in_activations])
-                    
                 activations[out_op_id] = op(in_activations)
-                # print(op(in_activations))
-                # print()
             elif isinstance(op, Identity):
                 # After batch norm fusion the batch norm parameters
                 # were all passed to identity instead of first one only
@@ -246,7 +239,11 @@ class ConvertModel(nn.Module):
                     activations[out_op_id] = output
             else:
                 activations[out_op_id] = op(*in_activations)
-
+                # record hidden outputs
+                if self.enable_recording:
+                    if isinstance(op, nn.ReLU):
+                        intermediate_outputs.extend([_.clone() for _ in in_activations])
+                    
             # Remove activations that are no longer needed
             for in_op_id in node.input:
                 if in_op_id in still_needed_by:
@@ -263,9 +260,13 @@ class ConvertModel(nn.Module):
                     [activations[out_op_id] for out_op_id in node.output],
                     node,
                 )
-
+                
         # collect all outputs
         outputs = [activations[x] for x in self.output_names]
         if len(outputs) == 1:
             outputs = outputs[0]
+            
+        if self.enable_recording:
+            return outputs, intermediate_outputs
+        
         return outputs
