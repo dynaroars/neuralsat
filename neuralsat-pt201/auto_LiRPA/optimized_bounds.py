@@ -1,14 +1,13 @@
-import time
-import os
 from collections import OrderedDict
 from contextlib import ExitStack
-from auto_LiRPA.operators.leaf import BoundInput
-
-import torch
 from torch import optim
+import torch
+import time
+import os
+
 from .beta_crown import print_optimized_beta
 from .cuda_utils import double2float
-from .utils import logger, reduction_sum, multi_spec_keep_func_all
+from .utils import logger, reduction_sum
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

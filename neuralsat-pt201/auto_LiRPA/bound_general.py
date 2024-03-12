@@ -804,8 +804,7 @@ class BoundedModule(nn.Module):
         reference_bounds = self.reference_bounds
 
         if self.use_forward:
-            node.lower, node.upper = self.forward_general(
-                node=node, concretize=True)
+            node.lower, node.upper = self.forward_general(node=node, concretize=True)
             return
 
         #FIXME need clean up
@@ -821,14 +820,12 @@ class BoundedModule(nn.Module):
             # For the first linear layer, IBP can give the same tightness
             # as CROWN.
             if not self.check_IBP_first_linear(node):
-                sparse_intermediate_bounds_with_ibp = self.bound_opts.get(
-                    'sparse_intermediate_bounds_with_ibp', True)
+                sparse_intermediate_bounds_with_ibp = self.bound_opts.get('sparse_intermediate_bounds_with_ibp', True)
                 # Sparse intermediate bounds can be enabled
                 # if aux_reference_bounds are given.
                 # (this is enabled for ReLU only, and not for other
                 # activations.)
-                sparse_intermediate_bounds = (self.bound_opts.get(
-                    'sparse_intermediate_bounds', False)
+                sparse_intermediate_bounds = (self.bound_opts.get('sparse_intermediate_bounds', False)
                     and isinstance(self[node.output_name[0]], BoundRelu))
 
                 ref_intermediate_lb, ref_intermediate_ub = None, None
@@ -841,8 +838,7 @@ class BoundedModule(nn.Module):
                                 # Get IBP bounds for this layer;
                                 # we set delete_bounds_after_use=True which does
                                 # not save extra intermediate bound tensors.
-                                ret_ibp = self.IBP_general(
-                                    node=node, delete_bounds_after_use=True)
+                                ret_ibp = self.IBP_general(node=node, delete_bounds_after_use=True)
                                 ref_intermediate_lb = ret_ibp[0]
                                 ref_intermediate_ub = ret_ibp[1]
                         else:
@@ -862,8 +858,7 @@ class BoundedModule(nn.Module):
                     skip = False
                     if unstable_idx is None:
                         if (len(node.output_name) == 1
-                                and isinstance(self[node.output_name[0]],
-                                               (BoundRelu, BoundSignMerge))
+                                and isinstance(self[node.output_name[0]], (BoundRelu, BoundSignMerge))
                                 and node.name in self.reference_bounds):
                             lower, upper = self.reference_bounds[node.name]
                             fully_stable = torch.logical_or(lower>=0, upper<=0).all()
