@@ -140,7 +140,7 @@ class NetworkAbstractor:
         except SystemExit:
             exit()
         except:
-            # raise
+            raise
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
             else:

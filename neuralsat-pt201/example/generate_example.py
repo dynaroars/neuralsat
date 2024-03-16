@@ -22,6 +22,10 @@ class PaperNet(nn.Module):
             nn.Linear(2, 2),
             nn.ReLU(),
             nn.Linear(2, 2),
+            nn.ReLU(),
+            nn.Linear(2, 2),
+            nn.ReLU(),
+            nn.Linear(2, 2),
         ])
         self._init_weights()
         
@@ -40,6 +44,12 @@ class PaperNet(nn.Module):
         
         self.layers[4].weight.data = self.random(size=(2, 2))
         self.layers[4].bias.data = self.random(size=(2,))
+        
+        self.layers[6].weight.data = self.random(size=(2, 2))
+        self.layers[6].bias.data = self.random(size=(2,))
+        
+        self.layers[8].weight.data = self.random(size=(2, 2))
+        self.layers[8].bias.data = self.random(size=(2,))
 
     @torch.no_grad()
     def forward(self, x):
@@ -64,7 +74,7 @@ def generate_network(seed):
     # print(net(x))
     
     net.eval()
-    root_dir = '/home/droars/Desktop/neuralsat-priv/neuralsat/example'
+    root_dir = 'example/onnx'
     output_name = f'{root_dir}/motivation_example.onnx' #'example/cacmodel.onnx'
     os.system(f'rm -rf {output_name}')
     
@@ -75,12 +85,13 @@ def generate_network(seed):
         verbose=False,
         opset_version=12,
     )
+    print(f'Exported to {output_name}')
     
     assert os.path.exists(output_name)
     
 
 def extract_instance(net_path, vnnlib_path):
-    vnnlibs = read_vnnlib(Path(vnnlib_path))
+    vnnlibs = read_vnnlib(vnnlib_path)
     model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
     
     # objective
@@ -95,8 +106,8 @@ def extract_instance(net_path, vnnlib_path):
 
 
 def verify():
-    net_path = '/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example.onnx'
-    vnnlib_path = '/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example.vnnlib'
+    net_path = 'example/onnx/motivation_example.onnx'
+    vnnlib_path = 'example/vnnlib/motivation_example.vnnlib'
     device = 'cpu'
     
     print('Running test with', net_path, vnnlib_path)
@@ -115,11 +126,11 @@ def verify():
     return status, verifier.iteration
 
 def save_network(seed):
-    net_path = '/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example.onnx'
-    new_net_path = f'/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example_{seed}.onnx'
+    net_path = 'example/onnx/motivation_example.onnx'
+    new_net_path = f'example/onnx/motivation_example_{seed}.onnx'
     
-    vnnlib_path = '/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example.vnnlib'
-    new_vnnlib_path = f'/home/droars/Desktop/neuralsat-priv/neuralsat/example/motivation_example_{seed}.vnnlib'
+    vnnlib_path = 'example/vnnlib/motivation_example.vnnlib'
+    new_vnnlib_path = f'example/vnnlib/motivation_example_{seed}.vnnlib'
     
     os.system(f'cp {net_path} {new_net_path}')
     os.system(f'cp {vnnlib_path} {new_vnnlib_path}')
@@ -130,23 +141,22 @@ if __name__ == "__main__":
     Settings.setup_test()
     logger.setLevel(2)
     
-    for trial in range(300):
+    for trial in range(500000):
         print('\n\n[+] Trail:', trial)
         status, iteration = None, 0
             
-        # seed = random.randint(0, 100000)
+        seed = random.randint(0, 100000)
         # seed = 98556
-        # print('seed:', seed)
+        print('seed:', seed)
         try:
             generate_network(seed)
             status, iteration = verify()
         except:
-            # raise
             print('[!] Error occurred')
             pass
         
         if status == 'unsat' and iteration > 2:
             save_network(trial)
-            # break
+            break
         
-        time.sleep(1)
+        time.sleep(0.1)

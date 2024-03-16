@@ -337,8 +337,11 @@ def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input
     logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
-    
-    # TODO: assert all activation layers are ReLU
+
+    # assert all activation layers are ReLU
+    if None in self.split_points:
+        return False, None
+
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     

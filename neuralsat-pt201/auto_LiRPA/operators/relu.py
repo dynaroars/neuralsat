@@ -455,6 +455,7 @@ class BoundRelu(BoundTwoPieceLinear):
 
     @staticmethod
     @torch.jit.script
+    # @torch.compile(mode='reduce-overhead')
     def _relu_upper_bound(lb, ub, leaky_alpha: float):
         """Upper bound slope and intercept according to CROWN relaxation."""
         lb_r = lb.clamp(max=0)

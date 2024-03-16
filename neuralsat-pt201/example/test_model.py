@@ -7,23 +7,6 @@ import time
 import onnx
 import os
 
-class CifarConv(nn.Module):
-    
-    def __init__(self):
-        super().__init__()
-        
-        self.layers = nn.Sequential(
-            nn.Conv2d(3, 2, 2, stride=2, padding=0),
-            nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(512, 32),
-            nn.ReLU(),
-            nn.Linear(32, 10)
-        )
-        
-    def forward(self, x):
-        return self.layers(x)
-    
     
 class NetSigmoid(nn.Module):
     
@@ -42,40 +25,7 @@ class NetSigmoid(nn.Module):
     def forward(self, x):
         return self.layer(x)
     
-    
-def test_sigmoid():
-    net = NetSigmoid()
-    x = torch.randn(1, 2)
-    print(net(x).shape)
-    
-    torch.onnx.export(
-        net,
-        x,
-        "example/onnx/fnn_sigmoid.onnx",
-        verbose=False,
-    )
-    
-    
-def test_relu():
-    net = nn.Sequential(
-        nn.Flatten(), 
-        nn.Linear(2, 3), 
-        nn.ReLU(), 
-        nn.Linear(3, 4), 
-        nn.ReLU(), 
-        nn.Linear(4, 2)
-    )
-    print(net)
-    x = torch.tensor([[1.0, 2.0]])
-    y = net(x)
-    print(y)
-    torch.onnx.export(
-        net, 
-        x, 
-        "example/onnx/fnn.onnx", 
-        verbose=False,
-    )
-    
+
     
 class ReLUNet(nn.Module):
     
@@ -161,52 +111,27 @@ def test_relu2():
             print('[backward] upper', ub)
     
     
-class FNNReLU(nn.Module):
+    
+class NetReLU(nn.Module):
     
     def __init__(self):
-        super(FNNReLU, self).__init__()
+        super(NetReLU, self).__init__()
         
         self.layer = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(784, 9),
+            nn.Linear(2, 2),
             nn.ReLU(),
-            nn.Linear(9, 7),
+            nn.Linear(2, 2),
             nn.ReLU(),
-            nn.Linear(7, 5),
+            nn.Linear(2, 2),
             nn.ReLU(),
-            nn.Linear(5, 10),
+            nn.Linear(2, 2),
+            nn.ReLU(),
+            nn.Linear(2, 2),
         )
 
     def forward(self, x):
         return self.layer(x)
-    
-    
-def test_relu3():
-    net = FNNReLU()
-    x = torch.randn(1, 1, 28, 28)
-    print(net(x).shape)
-    
-    torch.onnx.export(
-        net,
-        x,
-        "example/onnx/mnist_relu.onnx",
-        verbose=False,
-    )
-    
-    
-def load(path):
-    import onnx2pytorch
-    import onnx
-    # cifar10_8_255_simplified.onnx
-    # path = '/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx'
-    
-    onnx_model = onnx.load(path)
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
-    pytorch_model.eval()
-    
-    print(pytorch_model)
-    
-    
 
     
 class NetConv(nn.Module):
@@ -244,31 +169,6 @@ class NetConv(nn.Module):
         return x
     
     
-    
-class NetConv2(nn.Module):
-    
-    def __init__(self):
-        super().__init__()
-        
-        self.c1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, bias=False)
-        self.c2 = nn.Conv2d(16, 32, kernel_size=2, stride=1, bias=False)
-        self.l1 = nn.Linear(23328, 43, bias=False)
-
-    def forward(self, x):
-        x = self.c1(x)
-        x = x.sign()
-        x = torch.add(x, 0.1)
-        x = x.sign()
-        # x = torch.where(x > 0.0, 1.0, -1.0).float()
-        # x[x >= 0] = 1.0
-        # x[x < 0] = -1.0
-        x = self.c2(x)
-        x = x.permute(0, 2, 3, 1)
-        x = x.reshape(-1, 23328)
-        # x = torch.where(x > 0.0, 1.0, -1.0).float()
-        x = self.l1(x)
-        return x
-   
 
 def extract_instance(net_path, vnnlib_path):
     from util.spec.read_vnnlib import read_vnnlib
@@ -327,6 +227,45 @@ def test():
     print(f'{status},{verifier.iteration}')
     return status, verifier.iteration
     
+def test1():
+    net = NetReLU()
+    x = torch.randn(1, 2)
+    print(net(x).shape)
+   
+    net.eval()
+    output_name = "example/onnx/fnn_relu_4x2.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+    )
+    
+    print('Export onnx to:', output_name)
+    
+    net_path = output_name
+    vnnlib_path = 'example/vnnlib/motivation_example.vnnlib'
+    device = 'cpu'
+    
+    print('Running test with', net_path, vnnlib_path)
+    START_TIME = time.time()
+    model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+    model.to(device)
+
+    from verifier.verifier import Verifier 
+    verifier = Verifier(
+        net=model, 
+        input_shape=input_shape, 
+        batch=1000,
+        device=device,
+    )
+    
+    status = verifier.verify(objectives)
+    print(f'{status},{verifier.iteration}')
+    return status, verifier.iteration
+
+
 def trail1():
     from util.misc.logger import logger
     import logging
@@ -334,7 +273,7 @@ def trail1():
     
     trial = 0
     while True:
-        status, iteration = test()
+        status, iteration = test1()
         if status == 'unsat' and iteration > 0:
             break
         print(f'Trail {trial} failed\n\n')
@@ -386,30 +325,5 @@ def simplify_network():
             print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
             
  
-def test_cnn():
-    # torch.manual_seed(0)
-    net = nn.Sequential(
-        nn.Conv2d(3, 2, 10, 9), 
-        nn.ReLU(),
-        # nn.Conv2d(5, 7, 5, 3), 
-        # nn.ReLU(),
-        nn.Flatten(), 
-        nn.Linear(18, 10), 
-    )
-    
-    x = torch.randn(1, 3, 32, 32)
-    print(net(x).shape)
-   
-    net.eval()
-    output_name = "example/onnx/cifar_relu.onnx"
-    torch.onnx.export(
-        net,
-        x,
-        output_name,
-        verbose=False,
-        opset_version=12,
-    )
-    
-    
 if __name__ == '__main__':
-    test()
+    trail1()
