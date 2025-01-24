@@ -10,6 +10,7 @@ import copy
 import math
 import os
 
+from util.misc.torch_cuda_memory import is_cuda_out_of_memory
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
 
@@ -24,7 +25,7 @@ class NetworkAbstractor:
     "Over-approximation method alpha-beta-CROWN"
 
     @beartype
-    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
+    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel | torch.nn.Module, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
 
         self.pytorch_model = copy.deepcopy(pytorch_model)
         self.device = device
@@ -52,12 +53,14 @@ class NetworkAbstractor:
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
             return None
             
-        # FIXME: try special settings for ViT
-        extra_opts = {'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True},}
+        # FIXME: try special settings for large CNNs
+        extra_opts = {'use_full_conv_alpha': False}
+        Settings.use_restart = False
+        Settings.use_attack = False
         if self.select_params(objective, extra_opts=extra_opts):
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
             return None
-            
+        
         # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
@@ -66,6 +69,12 @@ class NetworkAbstractor:
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 2
 
+        # FIXME: try special settings for ViT
+        extra_opts = {'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True},}
+        if self.select_params(objective, extra_opts=extra_opts):
+            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
+            return None
+            
         logger.info('[!] Initialization failed')
         raise
             
@@ -133,7 +142,10 @@ class NetworkAbstractor:
             self.net.set_bound_opts(get_check_abstractor_params())
             self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
             lb, _ = self.net.compute_bounds(x=(x,), method=method) # FIXME: it uses a lot of RAM
+            print('[+] _check_module:', method, lb)
             assert not torch.isnan(lb).any()
+        except RuntimeError:
+            return False # FIXME: might affect other benchmarks
         except KeyboardInterrupt:
             exit()
         except SystemExit:

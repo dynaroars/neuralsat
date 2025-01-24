@@ -98,7 +98,7 @@ def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tupl
     
 @beartype
 def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
-    if type(input_node) == BoundConv:
+    if type(input_node) in [BoundConv, BoundConvTranspose]:
         if len(input_node.inputs) > 2:
             bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
         else:

@@ -148,3 +148,19 @@ def parse_onnx(path: str) -> tuple:
             exit()
             
             
+            
+
+def parse_pth(pth_path: str) -> tuple:
+    pytorch_model = torch.load(pth_path)
+    
+    input_shape = (1, 3, 32, 32)
+    output_shape = tuple(pytorch_model(torch.zeros(input_shape)).shape)
+    is_nhwc = False
+    
+    custom_quirks['Softmax']['skip_last_layer'] = False
+    custom_quirks['Squeeze']['skip_last_layer'] = False
+    # check conversion
+    # correct_conversion = True
+    # assert correct_conversion
+
+    return pytorch_model, input_shape, output_shape, is_nhwc

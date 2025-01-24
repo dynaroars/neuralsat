@@ -1,3 +1,0 @@
-[submodule "neuralbench"]
-	path = neuralbench
-	url = https://github.com/dynaroars/neuralbench

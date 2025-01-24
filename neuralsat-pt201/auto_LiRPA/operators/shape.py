@@ -369,6 +369,8 @@ class BoundGather(Bound):
         def _expand_A_with_zeros(A, axis, idx, max_axis_size):
             # Need to recreate A with three parts: before the gathered element, gathered element, and after gathered element.
             tensors = []
+            if idx < 0:
+                idx = max_axis_size + idx
             if idx > 0:
                 shape_pre = list(A.shape)
                 shape_pre[axis] *= idx

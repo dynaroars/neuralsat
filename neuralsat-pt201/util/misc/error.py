@@ -10,3 +10,8 @@ class OnnxOutputAllCloseError(Exception):
 
 class OnnxMergeBatchNormError(Exception):
     pass
+
+
+class VerifierInitializeError(RuntimeError):
+    pass
+

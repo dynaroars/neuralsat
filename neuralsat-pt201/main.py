@@ -5,7 +5,7 @@ import os
 
 from util.misc.logger import logger, LOGGER_LEVEL
 from util.spec.read_vnnlib import read_vnnlib
-from util.network.read_onnx import parse_onnx
+from util.network.read_onnx import parse_onnx, parse_pth
 from util.misc.export import get_adv_string
 from util.misc.timer import Timers
 
@@ -22,7 +22,8 @@ def print_w_b(model):
             print('\t[+] w:', layer.weight.data.detach().flatten())
             print('\t[+] b:', layer.bias.data.detach().flatten())
             print()
-            
+
+ 
 if __name__ == '__main__':
     START_TIME = time.time()
 
@@ -74,7 +75,13 @@ if __name__ == '__main__':
     
     # network
     Timers.tic('Load network') if Settings.use_timer else None
-    model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
+    if args.net.endswith('.onnx'):
+        model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
+    elif args.net.endswith('.pth'):
+        model, input_shape, output_shape, is_nhwc = parse_pth(args.net)
+    else:
+        raise NotImplementedError('Unsupported network type')
+    
     model.to(args.device)
     Timers.toc('Load network') if Settings.use_timer else None
     

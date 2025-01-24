@@ -5,7 +5,7 @@ from onnx2pytorch.convert.model import ConvertModel
 
 @beartype
 @torch.no_grad()
-def check_solution(net: ConvertModel, adv: torch.Tensor, 
+def check_solution(net: ConvertModel | torch.nn.Module, adv: torch.Tensor, 
                    cs: torch.Tensor, rhs: torch.Tensor, 
                    data_min: torch.Tensor, data_max: torch.Tensor) -> torch.Tensor:
     old_dtype = adv.dtype

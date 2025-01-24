@@ -3,6 +3,8 @@ import warnings
 warnings.filterwarnings(action='ignore')
 from beartype import beartype
 import numpy as np
+import torch.nn as nn
+import traceback
 import logging
 import typing
 import torch
@@ -17,16 +19,25 @@ from heuristic.domains_list import DomainsList
 from auto_LiRPA.utils import stop_criterion_batch_any
 
 from verifier.objective import DnfObjectives
+from verifier.mip_solver import MIPSolver
 from verifier.utils import _prune_domains
 
 from abstractor.utils import new_slopes
 
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from util.misc.error import VerifierInitializeError
 from util.misc.result import ReturnStatus
 from util.misc.logger import logger
 from util.misc.timer import Timers
 
 from setting import Settings
+
+def get_used_gpu_memory():
+    device = torch.device('cuda:0')
+    free, total = torch.cuda.mem_get_info(device)
+    mem_used_MB = (total - free) / 1024 ** 2
+    torch.cuda.empty_cache()
+    return mem_used_MB, (total - free) / total * 100
 
 
 class Verifier:
@@ -34,7 +45,7 @@ class Verifier:
     "Branch-and-Bound verifier"
     
     @beartype
-    def __init__(self: 'Verifier', net: 'ConvertModel', input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
+    def __init__(self: 'Verifier', net: ConvertModel | nn.Module, input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device
@@ -99,7 +110,10 @@ class Verifier:
 
         # refine
         Timers.tic('Preprocess') if Settings.use_timer else None
+        print('[+] Before preprocessing:', len(dnf_objectives))
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
+        print('[+] After preprocessing:', len(dnf_objectives))
+        print(f'[+] verify _preprocess:', get_used_gpu_memory()[0], 'MB')
         Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
@@ -108,6 +122,18 @@ class Verifier:
         is_attacked, self.adv = self._mip_attack(reference_bounds)
         if is_attacked:
             return ReturnStatus.SAT 
+        
+        # FIXME: mip verify
+        if 0:
+            try:
+                mip_verifier = MIPSolver(self.net, dnf_objectives, self.input_shape)
+                status, self.adv = mip_verifier.verify(timeout=0.2 * timeout)
+                if status in [ReturnStatus.SAT, ReturnStatus.UNSAT]:
+                    return status
+            except AttributeError:
+                pass
+            except:
+                raise NotImplementedError
         
         status = self._verify_with_restart(
             dnf_objectives=copy.deepcopy(dnf_objectives),
@@ -153,7 +179,7 @@ class Verifier:
                 
                 # adaptive batch size
                 while True: 
-                    logger.info(f'Try batch size {self.batch}')
+                    logger.info(f'Try {self.batch=} {max_domain=}')
                     try:
                         # main function
                         status = self._verify_one(
@@ -166,6 +192,7 @@ class Verifier:
                         if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
+                                print(traceback.format_exc())
                                 logger.debug('[!] OOM with batch_size=1')
                                 return ReturnStatus.UNKNOWN
                             self.batch = self.batch // 2
@@ -173,8 +200,8 @@ class Verifier:
                             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
-                            # raise NotImplementedError
-                            logger.debug('[!] RuntimeError exception')
+                            logger.debug(f'[!] RuntimeError exception')
+                            traceback.print_exc()
                             return None
                     except SystemExit:
                         exit()
@@ -279,8 +306,17 @@ class Verifier:
     def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: float) -> str:
         # initialization
         Timers.tic('Initialization') if Settings.use_timer else None
-        self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
+        try:
+            self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
+        except RuntimeError as exception:
+            if is_cuda_out_of_memory(exception):
+                raise VerifierInitializeError
+            else:
+                raise NotImplementedError
+        except:
+            raise NotImplementedError
         Timers.toc('Initialization') if Settings.use_timer else None
+        print(f'[+] verify _initialize:', get_used_gpu_memory()[0], 'MB')
             
         # cleaning
         torch.cuda.empty_cache()
@@ -429,6 +465,12 @@ class Verifier:
                 msg += f'Unstable neurons: {unstable:<10}'
             
         logger.info(msg)
+        
+        mem_used_mb, mem_used_percentage = get_used_gpu_memory()
+        if mem_used_percentage > 60.0:
+            self.batch = len(pick_ret.input_lowers)
+            logger.debug(f'Fixed {self.batch=}')
+        print(f'[+] verify _parallel_dpll:', mem_used_mb, 'MB')
     
     
     from .utils import (

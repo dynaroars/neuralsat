@@ -72,7 +72,7 @@ class BoundConv(Bound):
                         self.padding[0] - 1 - (int(weight.size()[2] - 1) * self.dilation[0]))
                     output_padding1 = (
                         int(self.input_shape[3]) - (int(self.output_shape[3]) - 1) * self.stride[1] + 2 *
-                        self.padding[1] - 1 - (int(weight.size()[3] - 1) * self.dilation[0]))
+                        self.padding[1] - 1 - (int(weight.size()[3] - 1) * self.dilation[1]))
                     next_A = F.conv_transpose2d(
                         last_A.reshape(shape[0] * shape[1], *shape[2:]), weight, None,
                         stride=self.stride, padding=self.padding, dilation=self.dilation,

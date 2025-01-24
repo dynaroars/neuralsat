@@ -19,6 +19,7 @@ from heuristic.tightener import Tightener
 
 from attacker.pgd_attack.general import general_attack
 from attacker.mip_attack import MIPAttacker
+from verifier.mip_solver import MIPSolver
 from attacker.attacker import Attacker
 
 from abstractor.abstractor import NetworkAbstractor
@@ -288,7 +289,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 @beartype
 def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
-                timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
+                timeout: float = 20.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
@@ -332,7 +333,7 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
         data_max=input_uppers, 
         serialized_conditions=serialized_conditions, 
         attack_iters=20, 
-        num_restarts=5, 
+        num_restarts=10, 
         only_replicate_restarts=True,
         use_gama=False,
         timeout=timeout,

@@ -1,6 +1,5 @@
 from beartype import beartype
 import typing
-import torch
 
 from setting import Settings
 
@@ -11,7 +10,7 @@ def get_check_abstractor_params() -> dict:
         'forward_max_dim': Settings.forward_max_dim,
         'dynamic_forward': Settings.forward_dynamic,
         'optimize_bound_args': {
-            'iteration': 1,
+            'iteration': 2,
             'stop_criterion_func': lambda x: False,
             'enable_beta_crown': False
         }
@@ -40,7 +39,7 @@ def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
             'fix_interm_bounds': True,
             'stop_criterion_func': stop_criterion_func,
             'iteration': 50, 
-            'lr_alpha': 0.1, 
+            'lr_alpha': 0.2, 
             'lr_beta': 0.1,
             'lr_decay': 0.98, 
         }
@@ -57,7 +56,7 @@ def get_beta_opt_params(stop_criterion_func: typing.Callable) -> dict:
             'use_shared_alpha': Settings.share_alphas, 
             'fix_interm_bounds': True, 
             'iteration': 20,
-            'lr_alpha': 0.1, 
+            'lr_alpha': 0.2, 
             'lr_beta': 0.1,
             'lr_decay': 0.98, 
             'stop_criterion_func': stop_criterion_func,
@@ -74,8 +73,8 @@ def get_input_opt_params(stop_criterion_func: typing.Callable) -> dict:
         'optimize_bound_args': {
             'enable_beta_crown': False, 
             'fix_interm_bounds': True, 
-            'iteration': 20,
-            'lr_alpha': 0.1, 
+            'iteration': 10,
+            'lr_alpha': 0.2, 
             'lr_decay': 0.98, 
             'stop_criterion_func': stop_criterion_func,
         }
