@@ -99,7 +99,7 @@ class DnfObjectives:
         objective = TMP()
         
         # indices for distinguishing restart
-        objective.ids = torch.arange(0, batch) + self.num_used + 3
+        objective.ids = self.ids[self.num_used : self.num_used + batch]
         
         # input bounds
         objective.lower_bounds = lower_bounds
@@ -161,6 +161,10 @@ class DnfObjectives:
         self.lower_bounds_f64 = torch.stack(self.lower_bounds_f64)
         self.upper_bounds_f64 = torch.stack(self.upper_bounds_f64)
 
+        # ids
+        magic_number = 3
+        self.ids = torch.arange(0, len(self.cs)) + magic_number
+        
         if self.is_nhwc:
             n_, c_, h_, w_ = self.input_shape
             orig_input_shape = (-1, h_, w_, c_)

@@ -25,7 +25,7 @@ class GlobalSettings:
         self.max_input_branches  = 100000
         self.max_input_visited_branches = 300000
         
-        self.max_restart_runtime = 150.0
+        self.max_restart_runtime = 100.0
         
         # stabilize
         self.use_mip_tightening = 1
@@ -37,7 +37,10 @@ class GlobalSettings:
         # attack
         self.use_attack = 1
         self.use_mip_attack = 0 # in progress
-        self.use_mip_verify = 1 # in progress
+        
+        # MIP verify
+        self.use_mip_verify = 1
+        self.mip_verify_threshold = 2
         
         self.attack_interval = 10
         
@@ -82,8 +85,8 @@ class GlobalSettings:
         # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
-        self.max_restart_runtime = 50.0
-        self.use_mip_tightening = 0
+        # self.max_restart_runtime = 50.0
+        # self.use_mip_tightening = 0
         # self.max_input_visited_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 2.0
         # self.backward_batch_size = 256

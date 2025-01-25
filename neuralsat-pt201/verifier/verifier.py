@@ -123,8 +123,7 @@ class Verifier:
         if is_attacked:
             return ReturnStatus.SAT 
         
-        # FIXME: mip verify
-        if 0:
+        if self._check_invoke_mip_presolving():
             try:
                 mip_verifier = MIPSolver(self.net, dnf_objectives, self.input_shape)
                 status, self.adv = mip_verifier.verify(timeout=0.2 * timeout)
@@ -238,37 +237,7 @@ class Verifier:
             
         return ReturnStatus.UNSAT  
     
-    
-    @beartype
-    def _prune_objective(self: 'Verifier', objective: typing.Any) -> typing.Any:
-        assert self.domains_list is not None
-        
-        all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
-        if not len(all_remaining_ids):
-            return objective
-        
-        # remaining
-        indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
-        
-        # pruning
-        objective.ids = objective.ids[indices]
-        
-        objective.lower_bounds = objective.lower_bounds[indices]
-        objective.upper_bounds = objective.upper_bounds[indices]
-        
-        objective.lower_bounds_f64 = objective.lower_bounds_f64[indices]
-        objective.upper_bounds_f64 = objective.upper_bounds_f64[indices]
-        
-        objective.cs = objective.cs[indices]
-        objective.rhs = objective.rhs[indices]
-        
-        objective.cs_f64 = objective.cs_f64[indices]
-        objective.rhs_f64 = objective.rhs_f64[indices]
-        
-        # assert torch.equal(objective.ids, all_remaining_ids)
-        return objective
-                
-        
+
     @beartype
     def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
         # initialization params
@@ -481,6 +450,7 @@ class Verifier:
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_tightening, _update_tightening_patience,
         compute_stability, _save_stats, get_stats,
+        _check_invoke_mip_presolving, _prune_objective,
         get_unsat_core,
     )
     
