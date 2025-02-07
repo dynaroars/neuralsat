@@ -241,42 +241,12 @@ def _build_solver_input(self: 'BoundedModule', node):
     x_U = node.value + node.perturbation.eps if node.perturbation.x_U is None else node.perturbation.x_U
     x_L = x_L.squeeze(0)
     x_U = x_U.squeeze(0)
-    # x_L, x_U = node.lower.squeeze(0), node.upper.squeeze(0)
-
-    if x_L.ndim not in [1, 3]:
-        x_L = x_L.squeeze()
-        x_U = x_U.squeeze()
-    
-    # handle case (batch, 1, h, w) -- mnist
-    if (x_L.ndim == 3) and (x_L.size(0) == 1):
-        x_L = x_L.flatten()
-        x_U = x_U.flatten()
-        
-    if x_L.ndim == 1:
-        # This is a linear input.
-        for dim, (lb, ub) in enumerate(zip(x_L, x_U)):
-            v = self.model.addVar(lb=lb, ub=ub, obj=0,
-                                    vtype=grb.GRB.CONTINUOUS,
-                                    name=f'inp_{dim}')
-            inp_gurobi_vars.append(v)
-    else:
-        assert x_L.ndim == 3, f"x_L ndim  {x_L.ndim}"
-        dim = 0
-        for chan in range(x_L.shape[0]):
-            chan_vars = []
-            for row in range(x_L.shape[1]):
-                row_vars = []
-                for col in range(x_L.shape[2]):
-                    lb = x_L[chan, row, col]
-                    ub = x_U[chan, row, col]
-                    v = self.model.addVar(lb=lb, ub=ub, obj=0,
-                                            vtype=grb.GRB.CONTINUOUS,
-                                            name=f'inp_{dim}')
-                                            # name=f'inp_[{chan},{row},{col}]')
-                    row_vars.append(v)
-                    dim += 1
-                chan_vars.append(row_vars)
-            inp_gurobi_vars.append(chan_vars)
+ 
+    this_layer_shape = x_L.shape
+    for dim, (lb, ub) in enumerate(zip(x_L.flatten(), x_U.flatten())):
+        v = self.model.addVar(lb=lb, ub=ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'inp_{dim}')
+        inp_gurobi_vars.append(v)
+    inp_gurobi_vars = np.array(inp_gurobi_vars).reshape(this_layer_shape).tolist()
 
     node.solver_vars = inp_gurobi_vars
     # save the gurobi input variables so that we can later extract primal values in input space easily

@@ -123,8 +123,8 @@ class BoundSub(Bound):
             else:
                 return y_w + torch.zeros_like(x_b)
 
-        lw = add_w(x.lw, -y.uw, x.lb, y.lb)
-        uw = add_w(x.uw, -y.lw, x.ub, y.ub)
+        lw = add_w(x.lw, -y.uw if y.uw is not None else None, x.lb, y.lb)
+        uw = add_w(x.uw, -y.lw if y.lw is not None else None, x.ub, y.ub)
 
         return LinearBound(lw, lb, uw, ub)
 

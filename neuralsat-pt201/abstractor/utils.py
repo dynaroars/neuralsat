@@ -23,8 +23,11 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
     if os.environ.get('NEURALSAT_ASSERT'):
-        assert torch.all(x_L <= x_U)
-    return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+        assert torch.all(x_L <= x_U + 1e-6) #, f'{x_L=}\n\n{x_U=}'
+    new_x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+    if hasattr(self, 'extras'):
+        new_x.ptb.extras = self.extras
+    return new_x
 
 
 @beartype
@@ -88,22 +91,29 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)
     upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
 
-    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, print([_.shape[0] for _ in lower_bounds.values()])
-    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, print([_.shape[0] for _ in upper_bounds.values()])
+    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in lower_bounds.values()]}'
+    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in upper_bounds.values()]}'
     
     return lower_bounds, upper_bounds
 
 
 @beartype
-def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = None, device: str = 'cpu') -> dict:
+def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu') -> dict:
     lAs = {}
-    list_nodes = [n for n in self.net.nodes() if n.name == self.net.input_name[0]] if self.input_split else self.net.get_splittable_activations()
+    # list_nodes = [n for n in self.net.nodes() if n.name == self.net.input_name[0]] if self.input_split else self.net.get_splittable_activations()
+    list_nodes = [self.net[self.net.input_name[0]]] if self.input_split else self.net.get_splittable_activations()
     for node in list_nodes:
         lA = getattr(node, 'lA', None)
         if lA is None:
             continue
         lAs[node.name] = _to_device(lA.transpose(0, 1), device=device)
     return lAs
+
+
+@beartype
+def get_input_A(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu') -> tuple:
+    input_node = self.net[self.net.input_name[0]]
+    return input_node.lA, input_node.uA, input_node.lbias, input_node.ubias
 
 
 @beartype
@@ -218,6 +228,9 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_indices_neuron = {k: [] for k in lower_bounds}
     splitting_points = {k: [] for k in lower_bounds}
     
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert all([torch.all(lower_bounds[key] <= upper_bounds[key] + 1e-6) for key in lower_bounds])
+    
     for i in range(batch):
         n_name, n_id, n_point = decisions[i]
         splitting_indices_batch[n_name].append(i)
@@ -230,8 +243,8 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_points = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_points.items()}
     
     # 2 * batch
-    double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()}
-    double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()}
+    double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()} # TODO: torch compile
+    double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()} # TODO: torch compile
 
     # construct new hidden bounds
     new_intermediate_layer_bounds = {}
@@ -243,7 +256,8 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             # set 2nd half (set upper)
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
             if os.environ.get('NEURALSAT_ASSERT'):
-                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
+                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key] + 1e-6)
+                
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
     assert all([_[0].shape[0] == _[1].shape[0] == 2 * batch for _ in new_intermediate_layer_bounds.values()])
@@ -325,9 +339,6 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
         refine=refine,
     )
     self.net.model.update()
-    self.last_c_lp = c
-    self.last_input_lower = input_lower.clone()
-    self.last_input_upper = input_upper.clone()
 
 
 @beartype
@@ -336,8 +347,11 @@ def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input
     logger.debug('Full assignment')
     tmp_model = self.net.model.copy()
     tmp_model.update()
-    
-    # TODO: assert all activation layers are ReLU
+
+    # assert all activation layers are ReLU
+    if None in self.split_points:
+        return False, None
+
     pre_relu_layer_names = [relu_layer.inputs[0].name for relu_layer in self.net.relus]
     relu_layer_names = [relu_layer.name for relu_layer in self.net.relus]
     

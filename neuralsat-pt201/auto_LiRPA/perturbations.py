@@ -151,18 +151,63 @@ class PerturbationLpNorm(Perturbation):
             x_U = x + self.eps if self.x_U is None else self.x_U
         return x_L, x_U
 
+    def extra_concretize_matrix(self, extra_x, extra_A, curr_A, sign):
+        
+        assert sign in [-1, 1], f'Invalid {sign=}'
+        extra_center = ((extra_x[1] + extra_x[0]) / 2.0).flatten(1).unsqueeze(-1)
+        extra_diff   = ((extra_x[1] - extra_x[0]) / 2.0).flatten(1).unsqueeze(-1)
+        
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(extra_x[0] < extra_x[1])
+            assert torch.any(extra_x[0] != extra_x[1])
+            assert torch.any(extra_diff != 0.), f'{extra_diff.sum()=}'
+        
+        extra_lA    = extra_A.lA.flatten(2).transpose(0, 1)
+        extra_uA    = extra_A.uA.flatten(2).transpose(0, 1)
+        extra_lbias = extra_A.lbias.unsqueeze(-1)
+        extra_ubias = extra_A.ubias.unsqueeze(-1)
+        
+        curr_A_pos  = curr_A.clamp(min=0.)
+        curr_A_neg  = curr_A.clamp(max=0.)
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(curr_A_pos >= 0.0)
+            assert torch.all(curr_A_neg <= 0.0)
+        
+        if sign == 1: # upper bound
+            new_A    = curr_A_pos.matmul(extra_uA)    + curr_A_neg.matmul(extra_lA)
+            new_bias = curr_A_pos.matmul(extra_ubias) + curr_A_neg.matmul(extra_lbias)
+        else: # lower bound
+            new_A    = curr_A_pos.matmul(extra_lA)    + curr_A_neg.matmul(extra_uA)
+            new_bias = curr_A_pos.matmul(extra_lbias) + curr_A_neg.matmul(extra_ubias)
+        
+        assert new_bias.size(-1) == 1, f'{new_A.size()=} {new_bias.size()=}'
+        new_bound = new_bias + new_A.matmul(extra_center) + sign * new_A.abs().matmul(extra_diff)
+        # print(f'[+] Extra bounds: {sign=} {curr_A.shape=} {extra_A.lA.shape=} {new_bound.shape=}')
+        return new_bound.squeeze(-1)
+    
+    # TODO: torch compile
     def concretize_matrix(self, x, A, sign):
         # If A is an identity matrix, we will handle specially.
         if not isinstance(A, eyeC):
             # A has (Batch, spec, *input_size). For intermediate neurons, spec is *neuron_size.
             A = A.reshape(A.shape[0], A.shape[1], -1)
 
+        extra_bound = None
         if self.norm == np.inf:
+            if getattr(self, 'extras', None) is not None:
+                extra_bound = self.extra_concretize_matrix(
+                    extra_x=self.extras['input'],
+                    extra_A=self.extras['coeff'],
+                    curr_A=A,
+                    sign=sign,
+                )
+                # return extra_bound
+                
             # For Linfinity distortion, when an upper and lower bound is given, we use them instead of eps.
             x_L, x_U = self.get_input_bounds(x, A)
             x_ub = x_U.reshape(x_U.shape[0], -1, 1)
             x_lb = x_L.reshape(x_L.shape[0], -1, 1)
-            # Find the uppwer and lower bound similarly to IBP.
+            # Find the upper and lower bound similarly to IBP.
             center = (x_ub + x_lb) / 2.0
             diff = (x_ub - x_lb) / 2.0
             if not isinstance(A, eyeC):
@@ -180,6 +225,16 @@ class PerturbationLpNorm(Perturbation):
                 # A is an identity matrix. Its norm is all 1.
                 bound = x + sign * self.eps
         bound = bound.squeeze(-1)
+        if extra_bound is not None:
+            if sign == 1: # upper bound
+                extra_bound = torch.where(extra_bound <= bound, extra_bound, bound)
+                if os.environ.get('NEURALSAT_ASSERT'):
+                    assert torch.all(extra_bound <= bound + 1e-4) #, f'{extra_bound=} {bound=}'
+            else:
+                extra_bound = torch.where(extra_bound >= bound, extra_bound, bound)
+                if os.environ.get('NEURALSAT_ASSERT'):
+                    assert torch.all(extra_bound >= bound - 1e-4) #, f'{extra_bound=} {bound=}'
+            return extra_bound
         return bound
 
     def concretize_patches(self, x, A, sign):
@@ -222,8 +277,7 @@ class PerturbationLpNorm(Perturbation):
                 bound = torch.einsum('bschw,bchw->bs', matrix, x) + sign * deviation
                 if A.unstable_idx is None:
                     # Reshape to (batch, out_c, out_h, out_w).
-                    bound = bound.view(matrix.size(0), A.patches.size(0),
-                                       A.patches.size(2), A.patches.size(3))
+                    bound = bound.view(matrix.size(0), A.patches.size(0), A.patches.size(2), A.patches.size(3))
             else:
                 # A is an identity matrix. Its norm is all 1.
                 bound = x + sign * self.eps
@@ -290,8 +344,7 @@ class PerturbationLpNorm(Perturbation):
         lb = ub = torch.zeros_like(x)
         eye = torch.eye(dim).to(x).expand(batch_size, dim, dim)
         lw = uw = eye.reshape(batch_size, dim, *x.shape[1:])
-        return LinearBound(
-            lw, lb, uw, ub, x_L, x_U), x, None
+        return LinearBound(lw, lb, uw, ub, x_L, x_U), x, None
 
     def __repr__(self):
         if self.norm == np.inf:

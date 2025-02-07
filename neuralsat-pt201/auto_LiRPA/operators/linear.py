@@ -170,9 +170,8 @@ class BoundLinear(BoundOptimizableActivation):
             if isinstance(last_A, torch.Tensor):
                 # Matrix mode.
                 # Just multiply this layer's weight into bound matrices, and produce biases.
-                next_A = last_A.to(weight).matmul(weight)
-                sum_bias = (last_A.to(bias).matmul(bias)
-                    if has_bias else 0.0)
+                next_A = last_A.to(weight).matmul(weight) # TODO: torch compile
+                sum_bias = (last_A.to(bias).matmul(bias) if has_bias else 0.0) # TODO: torch compile
             elif isinstance(last_A, Patches):
                 # Patches mode. After propagating through this layer, it will become a matrix.
                 # Reshape the weight matrix as a conv image.
@@ -731,6 +730,7 @@ class BoundLinear(BoundOptimizableActivation):
 
         new_layer_gurobi_vars = []
 
+        assert this_layer_shape[0] == len(this_layer_weight), print(this_layer_shape, this_layer_weight.shape)
         for neuron_idx in range(this_layer_shape[0]):
             out_lb = out_lbs[neuron_idx] if out_lbs is not None else -float('inf')
             out_ub = out_ubs[neuron_idx] if out_ubs is not None else float('inf')

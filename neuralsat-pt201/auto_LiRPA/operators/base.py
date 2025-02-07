@@ -112,8 +112,10 @@ class Bound(nn.Module):
         self.name: Optional[str] = None
         self.output_name = []
         self.device = attr.get('device')
-        self.attr, self.inputs, self.output_index, self.options = \
-            attr, inputs, output_index, options
+        self.attr = attr
+        self.inputs: List['Bound'] = inputs
+        self.output_index = output_index
+        self.options = options
         self.forward_value = None
         self.output_shape = None
         self.from_input = False
@@ -144,6 +146,7 @@ class Bound(nn.Module):
         self.zero_uA_mtx = False
         self.patches_start = False
         self.alpha_beta_update_mask = None
+        self.batch_dim = -1
 
     def __repr__(self, attrs=None):
         inputs = ', '.join([node.name for node in self.inputs])
@@ -295,7 +298,7 @@ class Bound(nn.Module):
                     dims.append(i + 1)
             if dims:
                 A = torch.sum(A, dim=dims, keepdim=True)
-            assert A.shape[2:] == shape[1:]  # skip the spec and batch dimension.
+            assert A.shape[2:] == shape[1:], f'{self=} {A.shape=} {shape=}'  # skip the spec and batch dimension.
         else:
             pass
         return A

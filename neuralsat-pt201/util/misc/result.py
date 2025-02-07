@@ -17,10 +17,16 @@ AbstractResults = namedtuple(
 )
 
 
+CoefficientMatrix = namedtuple(
+    'CoefficientMatrix', ('lA', 'uA', 'lbias', 'ubias'), 
+    defaults=(None,) * 4
+)
+
 class ReturnStatus:
 
-    UNSAT   = 'unsat'
-    SAT     = 'sat'
-    UNKNOWN = 'unknown'
-    TIMEOUT = 'timeout'
-    RESTART = 'restart'
+    UNSAT       = 'unsat'
+    SAT         = 'sat'
+    UNKNOWN     = 'unknown'
+    TIMEOUT     = 'timeout'
+    RESTART     = 'restart'
+    INVALID_CEX = 'invalid_counterexample'

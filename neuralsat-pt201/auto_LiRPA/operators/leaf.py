@@ -7,8 +7,8 @@ from .base import *
 
 
 class BoundInput(Bound):
-    def __init__(self, ori_name, value, perturbation=None, input_index=None):
-        super().__init__()
+    def __init__(self, ori_name, value, perturbation=None, input_index=None, options=None, attr=None):
+        super().__init__(options=options, attr=attr)
         self.ori_name = ori_name
         self.value = value
         self.perturbation = perturbation
@@ -140,8 +140,8 @@ class BoundInput(Bound):
             self.name))
 
 class BoundParams(BoundInput):
-    def __init__(self, ori_name, value, perturbation=None, options=None):
-        super().__init__(ori_name, None, perturbation)
+    def __init__(self, ori_name, value, perturbation=None, options=None, attr=None):
+        super().__init__(ori_name, None, perturbation, attr=attr)
         self.register_parameter('param', value)
         self.from_input = False
         self.initializing = False
@@ -164,10 +164,10 @@ class BoundParams(BoundInput):
             return self.param.requires_grad_(self.training)
 
 class BoundBuffers(BoundInput):
-    def __init__(self, ori_name, value, perturbation=None, options=None):
-        super().__init__(ori_name, None, perturbation)
+    def __init__(self, ori_name, value, perturbation=None, options=None, attr=None):
+        super().__init__(ori_name, None, perturbation, attr=attr)
         self.register_buffer('buffer', value.clone().detach())
-        self.from_input = not options.get('buffers', {}).get('no_batchdim', False)
+        self.from_input = options.get('buffers', {}).get('from_input', False)
 
     def forward(self):
         return self.buffer

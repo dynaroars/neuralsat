@@ -180,15 +180,17 @@ def backward_general(
     # Save intermediate layer A matrices when required.
     A_record = {}
 
+    # print(f'- Bound backward from {start_backpropagation_at_node}')
+
     queue = deque([start_backpropagation_at_node])
     while len(queue) > 0:
-        l = queue.popleft()  # backward from l
+        l = queue.popleft() # backward from l
         self.backward_from[l.name].append(bound_node)
 
-        if l.name in self.root_names: continue
+        if l.name in self.root_names: 
+            continue
 
-        # if all the succeeds are done, then we can turn to this node in the
-        # next iteration.
+        # if all the succeeds are done, then we can turn to this node in the next iteration.
         for l_pre in l.inputs:
             degree_out[l_pre.name] -= 1
             if degree_out[l_pre.name] == 0:
@@ -199,11 +201,9 @@ def backward_general(
             if verbose:
                 logger.debug(f'  Bound backward to {l} (out shape {l.output_shape})')
                 if l.lA is not None:
-                    logger.debug('    lA type %s shape %s',
-                                 type(l.lA), list(l.lA.shape))
+                    logger.debug('    lA type %s shape %s', type(l.lA), list(l.lA.shape))
                 if l.uA is not None:
-                    logger.debug('    uA type %s shape %s',
-                                 type(l.uA), list(l.uA.shape))
+                    logger.debug('    uA type %s shape %s', type(l.uA), list(l.uA.shape))
 
             if _print_time:
                 start_time = time.time()
@@ -219,10 +219,8 @@ def backward_general(
                 continue
 
             lA, uA = l.lA, l.uA
-            if (l.name != start_backpropagation_at_node.name and use_beta_crown
-                    and getattr(l, 'sparse_betas', None)):
-                lA, uA, lbias, ubias = self.beta_crown_backward_bound(
-                    l, lA, uA, start_node=start_backpropagation_at_node)
+            if (l.name != start_backpropagation_at_node.name and use_beta_crown and getattr(l, 'sparse_betas', None)):
+                lA, uA, lbias, ubias = self.beta_crown_backward_bound(l, lA, uA, start_node=start_backpropagation_at_node)
                 lb = lb + lbias
                 ub = ub + ubias
 
@@ -232,7 +230,7 @@ def backward_general(
                     start_shape = bound_node.output_shape[1:]
                 else:
                     start_shape = C.shape[0]
-                l.preserve_mask = update_mask
+                # l.preserve_mask = update_mask
             else:
                 start_shape = None
             A, lower_b, upper_b = l.bound_backward(
@@ -341,6 +339,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
     sparse_conv_intermediate_bounds = self.bound_opts.get('sparse_conv_intermediate_bounds', False)
     minimum_sparsity = self.bound_opts.get('minimum_sparsity', 0.9)
     crown_batch_size = self.bound_opts.get('crown_batch_size', 1e9)
+    # print(f'{node=} {node.output_shape=}')
     dim = int(prod(node.output_shape[1:]))
     batch_size = self.batch_size
 
@@ -412,8 +411,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 # elements in specifications for all batches.
                 # The shape of patches is [unstable_size, batch, C, H, W].
                 newC = Patches(
-                    shape=[unstable_size, batch_size, *node.output_shape[1:-2],
-                           1, 1],
+                    shape=[unstable_size, batch_size, *node.output_shape[1:-2], 1, 1],
                     identity=1, unstable_idx=unstable_idx,
                     output_shape=[batch_size, *node.output_shape[1:]])
                 reduced_dim = True
@@ -622,34 +620,32 @@ def concretize(self, batch_size, output_dim, lb, ub=None,
                average_A=False, node_start=None):
     roots = self.roots()
     for i in range(len(roots)):
-        if roots[i].lA is None and roots[i].uA is None: continue
+        if roots[i].lA is None and roots[i].uA is None: 
+            continue
+        
         if average_A and isinstance(roots[i], BoundParams):
-            lA = roots[i].lA.mean(
-                node_start.batch_dim + 1, keepdim=True
-            ).expand(roots[i].lA.shape) if bound_lower else None
-            uA = roots[i].uA.mean(
-                node_start.batch_dim + 1, keepdim=True
-            ).expand(roots[i].uA.shape) if bound_upper else None
+            lA = roots[i].lA.mean(node_start.batch_dim + 1, keepdim=True).expand(roots[i].lA.shape) if bound_lower else None
+            uA = roots[i].uA.mean(node_start.batch_dim + 1, keepdim=True).expand(roots[i].uA.shape) if bound_upper else None
         else:
             lA, uA = roots[i].lA, roots[i].uA
+        
         if not isinstance(roots[i].lA, eyeC) and not isinstance(roots[i].lA, Patches):
             lA = roots[i].lA.reshape(output_dim, batch_size, -1).transpose(0, 1) if bound_lower else None
         if not isinstance(roots[i].uA, eyeC) and not isinstance(roots[i].uA, Patches):
             uA = roots[i].uA.reshape(output_dim, batch_size, -1).transpose(0, 1) if bound_upper else None
+        
+        # save bias for input
+        roots[i].lbias = lb
+        roots[i].ubias = ub
+
         if hasattr(roots[i], 'perturbation') and roots[i].perturbation is not None:
             if isinstance(roots[i], BoundParams):
                 # add batch_size dim for weights node
-                lb = lb + roots[i].perturbation.concretize(
-                    roots[i].center.unsqueeze(0), lA,
-                    sign=-1, aux=roots[i].aux) if bound_lower else None
-                ub = ub + roots[i].perturbation.concretize(
-                    roots[i].center.unsqueeze(0), uA,
-                    sign=+1, aux=roots[i].aux) if bound_upper else None
+                lb = lb + roots[i].perturbation.concretize(roots[i].center.unsqueeze(0), lA, sign=-1, aux=roots[i].aux) if bound_lower else None
+                ub = ub + roots[i].perturbation.concretize(roots[i].center.unsqueeze(0), uA, sign=+1, aux=roots[i].aux) if bound_upper else None
             else:
-                lb = lb + roots[i].perturbation.concretize(
-                    roots[i].center, lA, sign=-1, aux=roots[i].aux) if bound_lower else None
-                ub = ub + roots[i].perturbation.concretize(
-                    roots[i].center, uA, sign=+1, aux=roots[i].aux) if bound_upper else None
+                lb = lb + roots[i].perturbation.concretize(roots[i].center, lA, sign=-1, aux=roots[i].aux) if bound_lower else None
+                ub = ub + roots[i].perturbation.concretize(roots[i].center, uA, sign=+1, aux=roots[i].aux) if bound_upper else None
         else:
             fv = roots[i].forward_value
             if type(roots[i]) == BoundInput:
@@ -672,7 +668,6 @@ def concretize(self, batch_size, output_dim, lb, ub=None,
 
             lb = _add_constant(lA, lb) if bound_lower else None
             ub = _add_constant(uA, ub) if bound_upper else None
-
     return lb, ub
 
 

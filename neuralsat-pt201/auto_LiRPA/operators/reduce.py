@@ -12,7 +12,7 @@ class BoundReduce(Bound):
     def _parse_input_and_axis(self, *x):
         if len(x) > 1:
             assert not self.is_input_perturbed(1)
-            self.axis = tuple(x[1])
+            self.axis = tuple(item.item() for item in tuple(x[1]))
         self.axis = self.make_axis_non_negative(self.axis)
         return x[0]
 

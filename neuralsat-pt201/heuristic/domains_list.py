@@ -4,6 +4,7 @@ from beartype import beartype
 import typing
 import torch
 import time
+import os
 
 if typing.TYPE_CHECKING:
     import auto_LiRPA
@@ -328,38 +329,61 @@ class DomainsList:
     def pick_out_worst_domains(self: 'DomainsList', batch: int, device: str = 'cpu') -> AbstractResults:
         indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()[:batch]
 
+        # objective ids
+        new_objective_ids = self.all_objective_ids[indices].to(device=device, non_blocking=True)
+
+        # input bounds
+        new_input_lowers = self.all_input_lowers[indices].to(device=device, non_blocking=True)
+        new_input_uppers = self.all_input_uppers[indices].to(device=device, non_blocking=True)
+
+        # hidden bounds
         new_lower_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_lower_bounds.items()}
         new_upper_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_upper_bounds.items()}
 
+        # output
+        new_output_lowers = self.all_output_lowers[indices].to(device=device, non_blocking=True)
+        
+        # properties
+        # new_cs = self.all_cs[indices].to(device=device, non_blocking=True)
+        new_rhs = self.all_rhs[indices].to(device=device, non_blocking=True)
+        
         self._check_consistent()
         
         return AbstractResults(**{
+            'objective_ids': new_objective_ids,
+            'input_lowers': new_input_lowers, 
+            'input_uppers': new_input_uppers, 
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
+            'output_lbs': new_output_lowers,
+            # 'cs': new_cs,
+            'rhs': new_rhs,
         })
         
         
     @beartype
+    @torch.no_grad()
     def update_refined_bounds(self: 'DomainsList', domain_params: typing.Any) -> None:
         # updating
         for key in domain_params.lower_bounds:
             orig_shape = self.all_lower_bounds[key].size()[1:] # skip batch dim
 
-            self.all_lower_bounds[key].copy_(
-                torch.where(
-                    domain_params.lower_bounds[key].view(orig_shape) > self.all_lower_bounds[key].data, 
-                    domain_params.lower_bounds[key].view(orig_shape), 
-                    self.all_lower_bounds[key].data
-                )
+            new_lower = torch.where(
+                domain_params.lower_bounds[key].view(orig_shape) > self.all_lower_bounds[key].detach(), 
+                domain_params.lower_bounds[key].view(orig_shape), 
+                self.all_lower_bounds[key].detach()
             )
+            self.all_lower_bounds[key].copy_(new_lower.detach())
             
-            self.all_upper_bounds[key].copy_(
-                torch.where(
-                    domain_params.upper_bounds[key].view(orig_shape) < self.all_upper_bounds[key].data, 
-                    domain_params.upper_bounds[key].view(orig_shape), 
-                    self.all_upper_bounds[key].data
-                )
+            new_upper = torch.where(
+                domain_params.upper_bounds[key].view(orig_shape) < self.all_upper_bounds[key].detach(),
+                domain_params.upper_bounds[key].view(orig_shape), 
+                self.all_upper_bounds[key].detach()
             )
+            self.all_upper_bounds[key].copy_(new_upper.detach())
+            
+            if os.environ.get('NEURALSAT_ASSERT'):
+                assert torch.all(self.all_lower_bounds[key].detach() <= self.all_upper_bounds[key].detach())
 
         # checking
         self._check_consistent()

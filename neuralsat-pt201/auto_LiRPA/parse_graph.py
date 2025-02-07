@@ -2,7 +2,6 @@ import warnings
 import os
 import torch
 from torch.onnx.utils import _optimize_graph
-# from torch.onnx.symbolic_helper import _set_opset_version
 from torch.onnx._globals import GLOBALS
 from collections import OrderedDict
 from collections import namedtuple
@@ -157,7 +156,7 @@ def parse_module(module, inputs, param_exclude=".*AuxLogits.*", param_include=No
         trace, out = torch.jit._get_trace_graph(module, inputs)
     
     # _set_opset_version(12) # FIXME: attrs might differ 
-    GLOBALS._export_onnx_opset_version = 12
+    GLOBALS.export_onnx_opset_version = 12
     
     # Assuming that the first node in the graph is the primary input node.
     # It must have a batch dimension.

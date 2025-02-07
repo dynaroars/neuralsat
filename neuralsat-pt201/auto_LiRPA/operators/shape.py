@@ -574,7 +574,7 @@ class BoundSlice(Bound):
         start = self.start if start is None else start
         end = self.end if end is None else end
         axes = self.axes if axes is None else axes
-        assert (steps == 1 or steps == -1) and axes == int(axes) and start == int(start) and end == int(end)
+        assert (steps == 1 or steps == -1) and axes == int(axes) and start == int(start) and end == int(end), f'{steps=} {axes=} {start=} {end=}'
         shape = x.shape if isinstance(x, Tensor) else [len(x)]
         start, end = self._fixup_params(shape, start, end, axes, steps)
         final = torch.narrow(x, dim=int(axes), start=int(start), length=int(end - start))

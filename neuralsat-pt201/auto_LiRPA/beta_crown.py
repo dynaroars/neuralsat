@@ -42,7 +42,7 @@ class SparseBeta:
             self.bias = self.bias.to(device=self.device, non_blocking=True)
 
 
-def get_split_nodes(self: 'BoundedModule', input_split=False):
+def get_split_nodes(self: 'BoundedModule'):
     self.split_nodes = []
     self.split_activations = {}
     splittable_activations = self.get_splittable_activations()
@@ -57,11 +57,6 @@ def get_split_nodes(self: 'BoundedModule', input_split=False):
         if split_activations_:
             self.split_nodes.append(layer)
             self.split_activations[layer.name] = split_activations_
-    if input_split:
-        root = self[self.root_names[0]]
-        if root not in self.split_nodes:
-            self.split_nodes.append(root)
-            self.split_activations[root.name] = []
     return self.split_nodes, self.split_activations
 
 
@@ -93,7 +88,11 @@ def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters, lr_bet
             best_betas[node.name] = node.sparse_betas[0].val.detach().clone()
 
     # Beta has shape (batch, max_splits_per_layer)
-    parameters.append({'params': betas.copy(), 'lr': lr_beta, 'batch_dim': 0})
+    # parameters.append({'params': betas.copy(), 'lr': lr_beta, 'batch_dim': 0})
+    parameters.append({
+        'params': [item for item in betas if item.numel() > 0],
+        'lr': lr_beta, 'batch_dim': 0
+    })
 
     return betas, best_betas, coeffs, dense_coeffs_mask
 

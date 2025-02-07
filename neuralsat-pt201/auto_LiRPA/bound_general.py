@@ -362,6 +362,21 @@ class BoundedModule(nn.Module):
     def final_node(self):
         return self[self.final_name]
 
+    @staticmethod
+    def _is_shape_compatible(shape1, shape2):
+        """
+        Check whether two tensor shapes shape1 and shape2 are compatible:
+        1. they need to have the same number of dimensions.
+        2. for each dimension, the number of elements need to be the same,
+           or one of the shape has only 1 element.
+        """
+        if len(shape1) != len(shape2):
+            return False
+        for (s1, s2) in zip(shape1, shape2):
+            if not (s1 == s2 or s1 == 1 or s2 == 1):
+                return False
+        return True
+    
     def get_forward_value(self, node):
         """ Recursively get `forward_value` for `node` and its parent nodes"""
         if getattr(node, 'forward_value', None) is not None:
@@ -378,7 +393,25 @@ class BoundedModule(nn.Module):
         # In most cases, the batch dimension is just the first dimension
         # if the node depends on input. Otherwise if the node doesn't
         # depend on input, there is no batch dimension.
-        node.batch_dim = 0 if node.from_input else -1
+        node.batch_dim = 0 if node.from_input else node.batch_dim
+        
+        for inp in node.inputs:
+            if (node.batch_dim != -1 and inp.batch_dim == -1 and
+                    len(node.output_shape) != 1 and self._is_shape_compatible(
+                        node.output_shape, inp.output_shape)):
+                # For now, enable this for constants and buffers only, because
+                # these are the problems we found so far. Need further testing
+                # on general cases.
+                infer_batch_dim = isinstance(
+                    inp, (BoundConstant, BoundBuffers))
+                message = (f'Node {inp} with shape {inp.output_shape}'
+                           f' {"used" if infer_batch_dim else "ignored"}'
+                           f' a inferred batch dimension {inp.batch_dim}.'
+                           f' The node {node} following it has a compatible'
+                           f' shape {node.output_shape}')
+                if infer_batch_dim:
+                    inp.batch_dim = node.batch_dim
+                logger.debug(message)
         # Unperturbed node but it is not a root node.
         # Save forward_value to value. (Can be used in forward bounds.)
         if not node.from_input and len(node.inputs) > 0:
@@ -773,10 +806,10 @@ class BoundedModule(nn.Module):
         for n in node.inputs:
             self.check_prior_bounds(n)
         for i in range(len(node.inputs)):
-            if (i in node.requires_input_bounds or not node.inputs[i].perturbed
-                    or node.inputs[i].name in self.layers_with_constraint):
-                self.compute_intermediate_bounds(
-                    node.inputs[i], prior_checked=True)
+            if (i in node.requires_input_bounds or not node.inputs[i].perturbed or node.inputs[i].name in self.layers_with_constraint):
+                self.compute_intermediate_bounds(node.inputs[i], prior_checked=True)
+                # print(f'\t\t+ Bound {node.inputs[i]} lower: {node.inputs[i].lower}')
+                # print(f'\t\t+ Bound {node.inputs[i]} upper: {node.inputs[i].upper}')
         node.prior_checked = True
 
     def compute_intermediate_bounds(self, node, prior_checked=False):
@@ -786,6 +819,7 @@ class BoundedModule(nn.Module):
             return
 
         logger.debug(f'Getting the bounds of {node}')
+        # print(f'Getting the bounds of {node}')
 
         if not prior_checked:
             self.check_prior_bounds(node)
@@ -847,9 +881,7 @@ class BoundedModule(nn.Module):
                         aux_bounds = self.aux_reference_bounds[node.name]
                         ref_intermediate_lb, ref_intermediate_ub = aux_bounds
 
-                sparse_C = self.get_sparse_C(
-                    node, sparse_intermediate_bounds,
-                    ref_intermediate_lb, ref_intermediate_ub)
+                sparse_C = self.get_sparse_C(node, sparse_intermediate_bounds, ref_intermediate_lb, ref_intermediate_ub)
                 newC, reduced_dim, unstable_idx, unstable_size = sparse_C
 
                 if unstable_idx is None or unstable_size > 0:
@@ -872,11 +904,10 @@ class BoundedModule(nn.Module):
                             # Compute backward bounds only when there are unstable
                             # neurons, or when we don't know which neurons are unstable.
                             node.lower, node.upper = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
+                            # print(f'\t {node=}, {node.lower=}')
 
                 if reduced_dim:
-                    self.restore_sparse_bounds(
-                        node, unstable_idx, unstable_size,
-                        ref_intermediate_lb, ref_intermediate_ub)
+                    self.restore_sparse_bounds(node, unstable_idx, unstable_size, ref_intermediate_lb, ref_intermediate_ub)
 
         # node.lower and node.upper (intermediate bounds) are computed in
         # the above function. If we have bound references, we set them here
@@ -888,10 +919,8 @@ class BoundedModule(nn.Module):
             # prevent gradients flow. So we need a small guard here.
             # Set the intermediate layer bounds using reference bounds,
             # always choosing the tighter one.
-            node.lower = (torch.max(ref_bounds[0], node.lower).detach()
-                          - node.lower.detach() + node.lower)
-            node.upper = (node.upper - (node.upper.detach()
-                          - torch.min(ref_bounds[1], node.upper).detach()))
+            node.lower = torch.max(ref_bounds[0], node.lower).detach() - node.lower.detach() + node.lower
+            node.upper = node.upper - (node.upper.detach() - torch.min(ref_bounds[1], node.upper).detach())
             # Otherwise, we only use reference bounds to check which neurons
             # are unstable.
 
@@ -1325,3 +1354,5 @@ class BoundedModule(nn.Module):
 
     from .solver_module import (
         build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars, _build_solver_refined)
+
+    from .stabilization import stabilize

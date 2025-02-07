@@ -20,8 +20,9 @@ def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_block
     # TODO: shifted relu should not use 0.0, e.g., max(x, 1.0)
     new_masks = {
         j: torch.logical_and(
-                    lower_bounds[j] < 0, 
-                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
+            lower_bounds[j] < 0, 
+            upper_bounds[j] > 0
+        ).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
         for j in lower_bounds
     }
     return new_masks
@@ -40,7 +41,6 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
     for layer in reversed(abstractor.net.split_nodes):
         assert len(abstractor.net.split_activations[layer.name]) == 1
         # layer data
-        this_layer_mask = masks[layer.name].unsqueeze(1)
         pre_act_layer = abstractor.net.split_activations[layer.name][0][0]
         assert len(pre_act_layer.inputs) == 1
         ratio = lAs[pre_act_layer.name]
@@ -53,6 +53,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
         intercept_candidate = intercept_temp * ratio_temp_1.unsqueeze(1)
         
         # (batch, neuron)
+        this_layer_mask = masks[layer.name].unsqueeze(1)
         reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1)) 
 
@@ -73,7 +74,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 
 
 @beartype
-def _history_to_clause(h: dict, name_mapping: dict) -> list:
+def _history_to_conflict_clause(h: dict, name_mapping: dict) -> list:
     clause = []
     for lname, ldata in h.items():
         assert sum(ldata[2]) == 0 # ReLU only
@@ -98,7 +99,10 @@ def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tupl
     
 @beartype
 def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
-    if type(input_node) in [BoundConv, BoundConvTranspose]:
+    if type(input_node) in [BoundRelu]:
+        # FIXME: relu should not be here
+        bias = 0
+    elif type(input_node) in [BoundConv, BoundConvTranspose]:
         if len(input_node.inputs) > 2:
             bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
         else:
@@ -120,8 +124,11 @@ def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
                         bias += ll.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
     elif type(input_node) == BoundBatchNormalization:
         bias = input_node.inputs[-3].param.detach().view(-1, *([1] * (ratio.ndim - 3)))
+    elif type(input_node) == BoundInput:
+        bias = 0
     else: 
         print(type(input_node))
+        print(input_node.inputs[-1].param.shape)
         raise NotImplementedError()
     
     return bias * ratio
@@ -140,7 +147,6 @@ def update_hidden_bounds_histories(self: 'heuristic.domains_list.DomainsList', l
     sign = _append_tensor(history[lid][1], +1 if literal > 0 else -1)
     beta = _append_tensor(history[lid][2], 0.0) # ReLU only
     history[lid] = (loc, sign, beta)
-
     
     # update bounds
     if literal > 0: # active neuron
@@ -183,7 +189,7 @@ def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: t
                     lower_bounds: dict, upper_bounds: dict, histories: list, preconditions: dict) -> torch.Tensor:
     assert torch.equal(objective_ids, torch.unique(objective_ids))
     # initial learned conflict clauses
-    clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
+    clauses_per_objective = {k: [_history_to_conflict_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
     # pprint(clauses_per_objective)
     
     # masks: 1 for active, -1 for inactive, 0 for unstable
@@ -270,4 +276,5 @@ def save_conflict_clauses(self: 'heuristic.domains_list.DomainsList', domain_par
     for i in range(len(domain_params.histories)):
         if i in remaining_index:
             continue
+        # print('Verified:', domain_params.histories[i])
         self.all_conflict_clauses[int(domain_params.objective_ids[i])].append(domain_params.histories[i])

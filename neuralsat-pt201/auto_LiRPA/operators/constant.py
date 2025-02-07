@@ -124,3 +124,25 @@ class BoundATenDiagonal(Bound):
     def interval_propagate(self, *v):
         params = (v[1][0], v[2][0], v[3][0])
         return Interval.make_interval(torch.diagonal(v[0][0], *params), torch.diagonal(v[0][1], *params), v[0])
+
+    def bound_backward(self, last_lA, last_uA, *args, **kwargs):
+        for i in range(1, 4):
+            assert isinstance(self.inputs[i], BoundConstant)
+
+        def _bound_oneside(last_A):
+            if last_A is None:
+                return None
+            A = torch.zeros(*last_A.shape[:2], *self.inputs[0].output_shape[1:]).to(last_A)
+            dim1, dim2 = self.inputs[2].value, self.inputs[3].value
+            assert dim1 != 0 and dim2 != 0
+            if dim1 > 0:
+                dim1 += 1
+            if dim2 > 0:
+                dim2 += 1
+            A = torch.diagonal_scatter(
+                A, last_A,
+                offset=self.inputs[1].value, dim1=dim1, dim2=dim2)
+            return A
+
+        return ([(_bound_oneside(last_lA), _bound_oneside(last_uA))]
+                + [(None, None)] * 3), 0, 0

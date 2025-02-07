@@ -12,7 +12,7 @@ torch._C._jit_set_profiling_mode(False)
 class ClampedMultiplication(torch.autograd.Function):
     @staticmethod
     @torch.no_grad()
-    # @torch.compile
+    # @torch.compile # TODO: torch compile
     @torch.jit.script
     def clamp_mutiply_forward(A: Tensor, d_pos: Tensor, d_neg: Tensor,
             b_pos: Optional[Tensor], b_neg: Optional[Tensor], patches_mode: bool,
@@ -22,8 +22,7 @@ class ClampedMultiplication(torch.autograd.Function):
         A_pos = A.clamp(min=0)
         A_neg = A.clamp(max=0)
         A_new = d_pos * A_pos + d_neg * A_neg
-        bias_pos = bias_neg = torch.zeros(
-                (), dtype=A_new.dtype, device=A_new.device)
+        bias_pos = bias_neg = torch.zeros((), dtype=A_new.dtype, device=A_new.device)
         if b_pos is not None:
             if not reduce_bias:
                 bias_pos = A_pos * b_pos
@@ -44,7 +43,7 @@ class ClampedMultiplication(torch.autograd.Function):
 
     @staticmethod
     @torch.no_grad()
-    # @torch.compile
+    # @torch.compile # TODO: torch compile
     @torch.jit.script
     def clamp_mutiply_backward(A: Tensor, d_pos: Tensor, d_neg: Tensor,
             b_pos: Optional[Tensor], b_neg: Optional[Tensor],
@@ -69,7 +68,7 @@ class ClampedMultiplication(torch.autograd.Function):
             gb_neg = A * A_neg_grad_output_bias
             gb_pos = A * A_pos_grad_output_bias
             # gA has 4 terms.
-            gA = (d_pos * A_pos_grad_output_A
+            gA = (  d_pos * A_pos_grad_output_A
                   + d_neg * A_neg_grad_output_A
                   + b_pos * A_pos_grad_output_bias
                   + b_neg * A_neg_grad_output_bias)
@@ -78,7 +77,7 @@ class ClampedMultiplication(torch.autograd.Function):
             gb_neg = A * A_neg_grad_output_bias
             gb_pos = None
             # gA has 3 terms.
-            gA = (d_pos * A_pos_grad_output_A
+            gA = (  d_pos * A_pos_grad_output_A
                   + d_neg * A_neg_grad_output_A
                   + b_neg * A_neg_grad_output_bias)
         elif b_pos is not None and grad_output_bias is not None:
@@ -86,7 +85,8 @@ class ClampedMultiplication(torch.autograd.Function):
             gb_pos = A * A_pos_grad_output_bias
             gb_neg = None
             # gA has 3 terms.
-            gA = (d_pos * A_pos_grad_output_A + d_neg * A_neg_grad_output_A
+            gA = (  d_pos * A_pos_grad_output_A 
+                  + d_neg * A_neg_grad_output_A
                   + b_pos * A_pos_grad_output_bias)
         else:
             # gA has 2 terms.

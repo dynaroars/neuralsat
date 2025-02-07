@@ -587,7 +587,7 @@ class BoundReciprocal(BoundOptimizableActivation):
         if init:
             self.init_linear_relaxation(x, dim_opt)
 
-        assert x.lower.min() > 0, print('x.lower.min() =', x.lower.min(), x.lower.shape)
+        assert x.lower.min() > 0, f'{x.lower.min()=} {x=} {x.lower=}'
 
         ku = -1. / (x.lower * x.upper)
         self.add_linear_relaxation(mask=None, type='upper', k=ku, x0=x.lower)
@@ -599,8 +599,7 @@ class BoundReciprocal(BoundOptimizableActivation):
         else:
             mid = (x.lower + x.upper) / 2
 
-        self.add_linear_relaxation(
-            mask=None, type='lower', k=-1./(mid**2), x0=mid)
+        self.add_linear_relaxation(mask=None, type='lower', k=-1./(mid**2), x0=mid)
 
     def _init_opt_parameters_impl(self, size_spec, **kwargs):
         """Implementation of init_opt_parameters for each start_node."""

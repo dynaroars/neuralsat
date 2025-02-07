@@ -90,22 +90,10 @@ def _set_alpha(optimizable_activations, parameters, alphas, lr):
     return best_alphas
 
 
-def _set_gammas(nodes, parameters):
-    """
-    Adds gammas to parameters list
-    """
-    gammas = []
-    for node in nodes:
-        if hasattr(node, 'gammas'):
-            gammas.append(node.gammas)
-    gamma_lr = 0.1
-    parameters.append({'params': gammas, 'lr': gamma_lr})
-
 def _save_ret_first_time(bounds, fill_value, x, best_ret):
     """Save results at the first iteration to best_ret."""
     if bounds is not None:
-        best_bounds = torch.full_like(
-            bounds, fill_value=fill_value, device=x[0].device, dtype=x[0].dtype)
+        best_bounds = torch.full_like(bounds, fill_value=fill_value, device=x[0].device, dtype=x[0].dtype)
     else:
         best_bounds = None
 
@@ -335,8 +323,8 @@ def _get_optimized_bounds(
             and reference_bounds is not None):
         aux_reference_bounds = {}
         for name, (lb, ub) in reference_bounds.items():
-            aux_reference_bounds[name] = [
-                lb.detach().clone(), ub.detach().clone()]
+            aux_reference_bounds[name] = [lb.detach().clone(), ub.detach().clone()]
+
     if aux_reference_bounds is None:
         aux_reference_bounds = {}
 
@@ -384,24 +372,30 @@ def _get_optimized_bounds(
                 intermediate_constr=intermediate_constr,
                 needed_A_dict=needed_A_dict,
                 update_mask=None)
+
+            # if (reference_bounds is not None) and (self.final_name in reference_bounds):
+            #     ret_list = list(ret)
+            #     ret_list[0] = torch.where(
+            #         ret_list[0] >= reference_bounds[self.final_name][0],
+            #         ret_list[0],
+            #         reference_bounds[self.final_name][0]
+            #     )    
+            #     ret = tuple(ret_list)
+                    
         ret_l, ret_u = ret[0], ret[1]
 
-        if i == 0:
+        if i == 0 or 1: # FIXME: backward twice error
             # save results at the first iteration
             best_ret = []
-            best_ret_l = _save_ret_first_time(
-                ret[0], float('-inf'), x, best_ret)
-            best_ret_u = _save_ret_first_time(
-                ret[1], float('inf'), x, best_ret)
+            best_ret_l = _save_ret_first_time(ret[0], float('-inf'), x, best_ret)
+            best_ret_u = _save_ret_first_time(ret[1], float('inf'), x, best_ret)
             ret_0 = ret[0].detach().clone() if bound_lower else ret[1].detach().clone()
 
             for node in optimizable_activations:
-                new_intermediate = [node.inputs[0].lower.detach().clone(),
-                                    node.inputs[0].upper.detach().clone()]
+                new_intermediate = [node.inputs[0].lower.detach().clone(), node.inputs[0].upper.detach().clone()]
                 best_intermediate_bounds[node.name] = new_intermediate
                 if sparse_intermediate_bounds:
-                    # Always using the best bounds so far as the reference
-                    # bounds.
+                    # Always using the best bounds so far as the reference bounds.
                     aux_reference_bounds[node.inputs[0].name] = new_intermediate
 
         l = ret_l
@@ -414,7 +408,7 @@ def _get_optimized_bounds(
 
         # full_l, full_ret_l and full_u, full_ret_u is used for update the best
         full_ret_l, full_ret_u = ret_l, ret_u
-        full_l = l
+        # full_l = l
         full_ret = ret
 
         stop_criterion = (stop_criterion_func(full_ret_l) if bound_lower else stop_criterion_func(-full_ret_u))
@@ -448,8 +442,7 @@ def _get_optimized_bounds(
                 x, total_loss, full_ret, ret, best_intermediate_bounds, return_A)
 
         with torch.no_grad():
-            # for lb and ub, we update them in every iteration since updating
-            # them is cheap
+            # for lb and ub, we update them in every iteration since updating them is cheap
             need_update = False
             if keep_best:
                 if best_ret_u is not None:
@@ -488,15 +481,13 @@ def _get_optimized_bounds(
                     if deterministic:
                         idx = improved_idx
                     else:
-                        idx_mask, idx = _get_idx_mask(
-                            0, full_ret_l, ret_0, loss_reduction_func)
+                        idx_mask, idx = _get_idx_mask(0, full_ret_l, ret_0, loss_reduction_func)
                     ret_0[idx] = full_ret_l[idx]
                 else:
                     if deterministic:
                         idx = improved_idx
                     else:
-                        idx_mask, idx = _get_idx_mask(
-                            1, full_ret_u, ret_0, loss_reduction_func)
+                        idx_mask, idx = _get_idx_mask(1, full_ret_u, ret_0, loss_reduction_func)
                     ret_0[idx] = full_ret_u[idx]
 
                 if idx is not None:
@@ -567,8 +558,7 @@ def _get_optimized_bounds(
                 b.data = (b >= 0) * b.data
             for dmi in range(len(dense_coeffs_mask)):
                 # apply dense mask to the dense split coeffs matrix
-                coeffs[dmi].data = (
-                    dense_coeffs_mask[dmi].float() * coeffs[dmi].data)
+                coeffs[dmi].data = dense_coeffs_mask[dmi].float() * coeffs[dmi].data
 
         if alpha:
             for m in optimizable_activations:

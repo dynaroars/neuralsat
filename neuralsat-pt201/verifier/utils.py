@@ -13,24 +13,43 @@ if typing.TYPE_CHECKING:
     import verifier
     
 from heuristic.restart_heuristics import get_restart_strategy, HIDDEN_SPLIT_RESTART_STRATEGIES
-from heuristic.util import compute_masks, _history_to_clause
+from heuristic.util import compute_masks, _history_to_conflict_clause
 from heuristic.decision_heuristics import DecisionHeuristic
-from heuristic.tightener import Tightener
+from heuristic.domains_list import DomainsList
+
+from tightener.cpu_tightener import MILPTightener
+from tightener.gpu_tightener import GPUTightener
 
 from attacker.pgd_attack.general import general_attack
 from attacker.mip_attack import MIPAttacker
-from verifier.mip_solver import MIPSolver
 from attacker.attacker import Attacker
 
 from abstractor.abstractor import NetworkAbstractor
 
 from util.misc.result import AbstractResults, ReturnStatus
+from util.proof.create_aptp import create_aptp
 from util.misc.check import check_solution
 from util.misc.logger import logger
 
 
 from setting import Settings
 
+
+def _check_invoke_mip_presolving(self):
+    print('[+] _check_invoke_mip_presolving')
+    if not Settings.use_mip_verify:
+        return False
+    count_relu = 0
+    for layer in self.net.children():
+        if not isinstance(layer, (torch.nn.Linear, torch.nn.ReLU, torch.nn.Flatten)):
+            print('[!] Found unsupported layer:', layer)
+            return False
+        if isinstance(layer, torch.nn.ReLU):
+            count_relu += 1
+    print(f'[+] {count_relu=}')
+    if count_relu > Settings.mip_verify_threshold:
+        return False
+    return True
 
 @beartype
 def _prune_objective(self: verifier.verifier.Verifier, objective: typing.Any) -> typing.Any:
@@ -60,21 +79,6 @@ def _prune_objective(self: verifier.verifier.Verifier, objective: typing.Any) ->
     
     # assert torch.equal(objective.ids, all_remaining_ids)
     return objective
-
-
-def _check_invoke_mip_presolving(self):
-    print('[+] _check_invoke_mip_presolving')
-    count_relu = 0
-    for layer in self.net.children():
-        if not isinstance(layer, (torch.nn.Linear, torch.nn.ReLU, torch.nn.Flatten)):
-            print('[!] Found unsupported layer:', layer)
-            return False
-        if isinstance(layer, torch.nn.ReLU):
-            count_relu += 1
-    print(f'[+] {count_relu=}')
-    if count_relu > Settings.mip_verify_threshold:
-        return False
-    return True
 
 @beartype
 def _prune_domains(domain_params: AbstractResults, remaining_indices: torch.Tensor) -> AbstractResults:
@@ -116,6 +120,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     eps = diff.max().item()
     perturbed = (diff > 0).int().sum()
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
+
+    if Settings.skip_preprocess:
+        return objectives, None
     
     if Settings.test:
         self.input_split = False
@@ -152,22 +159,26 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     # forward
     try:
-        ret = self.abstractor.initialize(tmp_objective)
+        ret = self.abstractor.initialize(tmp_objective, short_cut=True)
     except:
-        print('Failed to initialize objectives')
+        print('[!] Failed to preprocess objectives')
+        if os.environ.get("NEURALSAT_DEBUG"):
+            import traceback
+            traceback.print_exc()
+            raise NotImplementedError
         return objectives, None
 
     # pruning
     remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
     objectives.lower_bounds = objectives.lower_bounds[remaining_index]
     objectives.upper_bounds = objectives.upper_bounds[remaining_index]
-    objectives.ids = objectives.ids[remaining_index]
     objectives.cs = objectives.cs[remaining_index]
     objectives.rhs = objectives.rhs[remaining_index]
     objectives.lower_bounds_f64 = objectives.lower_bounds_f64[remaining_index]
     objectives.upper_bounds_f64 = objectives.upper_bounds_f64[remaining_index]
     objectives.cs_f64 = objectives.cs_f64[remaining_index]
     objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
+    objectives.ids = objectives.ids[remaining_index]
     
     if None in self.abstractor.split_points:
         # FIXME: disable restart + stabilize for now
@@ -237,22 +248,27 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             )
             
         if Settings.use_mip_tightening:
-            self.tightener = Tightener(
+            self.milp_tightener = MILPTightener(
                 abstractor=self.abstractor,
                 objectives=objectives,
             )
             
+        elif Settings.use_gpu_tightening:
+            self.gpu_tightener = GPUTightener(
+                verifier=self.other,
+                abstractor=self.abstractor,
+            )
+        
     logger.info(f'Remain {len(objectives)} objectives')
-    # refined_intermediate_bounds = torch.load('refined.pt')
     return objectives, refined_intermediate_bounds
 
 @beartype
-def _check_timeout(self: verifier.verifier.Verifier, timeout: float) -> bool:
+def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bool:
     return time.time() - self.start_time > timeout 
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -264,11 +280,49 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         input_split=self.input_split,
         device=self.device,
     )
+
+    self.abstractor.setup(objective, extra_opts=extra_opts)
+    self.abstractor.net.get_split_nodes()
     
-    self.abstractor.setup(objective)
-    self.abstractor.net.get_split_nodes(input_split=False)
+
+@beartype
+def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+    self.num_restart = nth_restart + 1
+    # TODO: select splitting method (input/hidden)
+    if objective is not None:
+        diff = (objective.upper_bounds - objective.lower_bounds).clone()
+        eps = diff.max().item()
+        perturbed = (diff > 0).int().sum()
+        logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
+        logger.info(f'[!] max_sum={objective.upper_bounds.sum():.06f}, min_sum={objective.lower_bounds.sum():.06f}')
+        # if eps > 0.5:
+        #     self.input_split = True
     
-    
+    if self.input_split:
+        params = {'input_split': True, 'abstract_method': 'backward', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        # params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
+    else:
+        if Settings.subverifier_decision_method == 'smart':
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method':  'smart', 'decision_topk':  5, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        elif Settings.subverifier_decision_method == 'greedy':
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        else:
+            raise NotImplementedError
+
+    logger.info(f'Params of {nth_restart+1}-th run: {params}')
+
+    # decision heuristic
+    assert params['input_split'] == self.input_split
+    self.decision = DecisionHeuristic(
+        input_split=params['input_split'],
+        decision_topk=params['decision_topk'],
+        decision_method=params['decision_method'],
+    )
+        
+    self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
+        
+
+
 @beartype
 def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
     self.num_restart = nth_restart + 1
@@ -334,7 +388,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 @beartype
 def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
-                timeout: float = 20.0) -> tuple[bool, torch.Tensor | None]:
+                timeout: int | float = 20.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
@@ -347,7 +401,7 @@ def _random_idx(total_samples: int, num_samples: int, device: str = 'cpu') -> to
 
 
 @beartype
-def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: float,
+def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: int | float,
             n_sample: int = 50, n_interval: int = 1) -> torch.Tensor | None:
     if not Settings.use_attack:
         return None
@@ -416,12 +470,9 @@ def _get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> dict:
 
 
 @beartype
-def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
-    if not Settings.use_mip_tightening:
+def _check_invoke_cpu_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
+    if not hasattr(self, 'milp_tightener'):
         return False
-    
-    if Settings.test:
-        return True
     
     if self.input_split:
         return False
@@ -436,6 +487,29 @@ def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: i
         return False
     
     # reset counter
+    self.tightening_patience = 0
+    return True
+    
+@beartype
+def _check_invoke_gpu_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
+    if not hasattr(self, 'gpu_tightener'):
+        return False
+
+    # DEBUG: stabilization during search is still buggy
+    return self.iteration == 0 
+
+    if self.input_split:
+        return False
+    
+    if self.tightening_patience < patience_limit:
+        return False
+    
+    if len(self.domains_list) <= self.batch:
+        return False
+    
+    if Settings.use_restart and self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES):
+        return False
+    
     self.tightening_patience = 0
     return True
     
@@ -558,8 +632,40 @@ def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
         return None
     
     unsat_cores = {k: [] for k in self.all_conflict_clauses}
-    for k, v in self.all_conflict_clauses.items():
-        [unsat_cores[k].append(_history_to_clause(c, self.domains_list.var_mapping)) for c in v]
-        
+    if hasattr(self, 'domains_list') and isinstance(self.domains_list, DomainsList):
+        for k, v in self.all_conflict_clauses.items():
+            [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
     return unsat_cores
         
+        
+        
+@beartype
+def get_proof_tree(self: verifier.verifier.Verifier) -> None | dict:
+    unsat_core = self.get_unsat_core()
+    if not unsat_core:
+        return None
+    
+    proof_tree = {}
+    for obj_idx, conflict_clauses in unsat_core.items():
+        proof_tree[obj_idx] = [[-1 * lit for lit in clause] for clause in conflict_clauses]
+    
+    return proof_tree
+        
+    
+@beartype
+def export_proof(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, output_dir: str) -> None:
+    os.system(f'rm -rf {output_dir}')
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info(f'Exporting APTP proofs at {output_dir=}')
+    proof_dict = self.get_proof_tree()
+    for i in range(len(dnf_objectives)):
+        # print(objectives.ids[i], objectives.cs[i], objectives.rhs[i], proof[int(objectives.ids[i])])
+        aptp_str = create_aptp(
+            proof=proof_dict.get(int(dnf_objectives.ids[i]), []), 
+            lower=dnf_objectives.lower_bounds[i],
+            upper=dnf_objectives.upper_bounds[i],
+            cnf_cs=dnf_objectives.cs[i], 
+            cnf_rhs=dnf_objectives.rhs[i],
+        )
+        with open(os.path.join(output_dir, f'proof_{i}.aptp'), 'w') as fp:
+            print(aptp_str, file=fp)

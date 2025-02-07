@@ -1,0 +1,26 @@
+dataset_params:
+  im_channels : 3
+  im_size : 32
+
+autoencoder_params:
+  z_channels: 1
+  down_channels : [128, 64, 16]
+  mid_channels : [16]
+  resample : True
+  num_down_layers : 1
+  num_mid_layers : 1
+  num_up_layers : 1
+
+train_params:
+  seed : 1112
+  task_name: 'weights/vae/cifar10_3_2'
+  autoencoder_batch_size: 128
+  disc_start: 10000
+  disc_weight: 0.5
+  perceptual_weight: 1
+  autoencoder_epochs : 50000
+  autoencoder_lr: 0.0001
+  autoencoder_acc_steps : 1
+  autoencoder_img_save_steps : 1000
+  vae_autoencoder_ckpt_name: 'vae'
+  vae_discriminator_ckpt_name: 'vae_disc'
