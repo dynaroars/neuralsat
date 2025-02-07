@@ -6,7 +6,8 @@ old/
 *.nsys-rep
 kernel/
 *.hatchet
-
+*.pth
+*.tar
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*
 
