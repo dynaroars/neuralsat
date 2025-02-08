@@ -17,9 +17,9 @@ from heuristic.domains_list import DomainsList
 
 from auto_LiRPA.utils import stop_criterion_batch_any
 
+from verifier.utils import _prune_domains, get_used_gpu_memory
 from verifier.objective import DnfObjectives
 from verifier.mip_solver import MIPSolver
-from verifier.utils import _prune_domains
 
 from abstractor.utils import new_slopes
 
@@ -31,13 +31,6 @@ from util.misc.timer import Timers
 
 from setting import Settings
 
-
-def get_used_gpu_memory():
-    device = torch.device('cuda:0')
-    free, total = torch.cuda.mem_get_info(device)
-    mem_used_MB = (total - free) / 1024 ** 2
-    torch.cuda.empty_cache()
-    return mem_used_MB
 
 class Verifier:
     
@@ -306,7 +299,6 @@ class Verifier:
             Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
             Timers.toc('Main loop') if Settings.use_timer else None
-            print(f'[+] verify _parallel_dpll:', get_used_gpu_memory(), 'MB')
                 
             # check adv founded
             if self.adv is not None:
@@ -467,6 +459,12 @@ class Verifier:
         minimum_lowers = self.domains_list.minimum_lowers
         self._update_tightening_patience(minimum_lowers, old_domains_length)
         
+        # adapt batch size
+        _, mem_used_percentage = get_used_gpu_memory(return_percentage=True)
+        if mem_used_percentage > 60.0:
+            self.batch = len(pick_ret.input_lowers)
+            logger.debug(f'Fixed {self.batch=}')
+            
         # logging
         msg = (
             f'[{"Input" if self.input_split else "Hidden"} splitting]     '
@@ -474,10 +472,10 @@ class Verifier:
             f'Remaining: {len(self.domains_list):<10} '
             f'Visited: {self.domains_list.visited:<10} '
             f'Bound: {minimum_lowers:<15.06f} '
-            f'Time elapsed: {time.time() - self.start_time:<10.02f} '
+            f'Time elapsed (s): {time.time() - self.start_time:<10.02f} '
         )
         if logger.level <= logging.DEBUG:
-            msg += f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
+            msg += f'Iteration elapsed (s): {time.time() - iter_start:<10.02f} '
             
             if Settings.use_mip_tightening and (not self.input_split):
                 msg += f'CPU Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
@@ -488,12 +486,10 @@ class Verifier:
             if (not self.input_split) and (unstable is not None):
                 msg += f'Unstable neurons: {unstable:<10}'
             
+            msg += f'Memory (%): {mem_used_percentage:<10.02f}'
+            
         logger.info(msg)
         
-        mem_used_mb, mem_used_percentage = get_used_gpu_memory()
-        if mem_used_percentage > 60.0:
-            self.batch = len(pick_ret.input_lowers)
-            logger.debug(f'Fixed {self.batch=}')
             
         if os.environ.get("NEURALSAT_TIMING"):
             # DEBUG: sometimes add_time could be very high

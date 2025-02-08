@@ -19,6 +19,7 @@ from util.misc.result import ReturnStatus, CoefficientMatrix
 from util.misc.logger import logger
 
 from tightener.utils import optimize_dnn, verify_dnf_pairs
+from verifier.utils import get_used_gpu_memory
 from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 
@@ -33,13 +34,6 @@ from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedTensor, BoundedModule
 
 InOutBounds = namedtuple('InputOutputBounds', ['under_input', 'under_output', 'over_input', 'over_output'], defaults=(None,) * 4)
-
-def get_used_gpu_memory():
-    device = torch.device('cuda:0')
-    free, total = torch.cuda.mem_get_info(device)
-    mem_used_MB = (total - free) / 1024 ** 2
-    torch.cuda.empty_cache()
-    return mem_used_MB
 
 def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backward'):
     assert method in ['backward', 'crown-optimized']

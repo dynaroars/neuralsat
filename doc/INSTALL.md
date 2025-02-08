@@ -5,7 +5,7 @@
 
 ## Content
 
-- ```neuralsat-pt201```: source code
+- ```src```: source code
 - ```third_party```: external libraries
 - ```vnncomp_scripts```: scripts for competition
 
@@ -43,7 +43,7 @@ pip install "third_party/haioc"
 
 ```bash
 conda deactivate; conda env remove --name dnnv
-conda env create -f neuralsat-pt201/installation/env_dnnv.yaml
+conda env create -f src/installation/env_dnnv.yaml
 conda activate dnnv
 pip install --no-deps git+https://github.com/dlshriver/DNNV.git@d4f59a01810cf4dac99f8f5e5b9d7a350cbfa8d7#egg=dnnv
 ```

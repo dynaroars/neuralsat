@@ -6,7 +6,6 @@ import os
 
 from attacker.pgd_attack.general import attack as pgd_attack
 from verifier.objective import Objective, DnfObjectives
-from decomposer.abcrown_adapter import AbcrownAdapter
 from util.misc.adam_clipping import AdamClipping
 from util.misc.check import check_solution
 from util.misc.logger import logger
@@ -179,11 +178,6 @@ def extract_solved_objective(verifier, objective):
     if hasattr(verifier, 'domains_list') and len(verifier.domains_list):
         remaining_domains = verifier.domains_list.pick_out_worst_domains(len(verifier.domains_list), device='cpu')  
         unsolved_objective_ids = remaining_domains.objective_ids.unique().int()
-    elif isinstance(verifier, AbcrownAdapter):
-        print(objective.ids)
-        unsolved_objective_ids = []
-        if verifier.worst_bound is not None:
-            unsolved_objective_ids = objective.ids.numpy().tolist()
     else:
         unsolved_objective_ids = []
     # print(f'{unsolved_objective_ids=}')
@@ -193,11 +187,7 @@ def extract_solved_objective(verifier, objective):
             continue
         elif value in unsolved_objective_ids:
             # TODO: use worst bound as tightened bound
-            if isinstance(verifier, AbcrownAdapter):
-                worst_bound = verifier.worst_bound
-                assert len(unsolved_objective_ids) == len(objective.ids) == 1
-            else:
-                worst_bound = extract_worst_bound(remaining_domains, value)
+            worst_bound = extract_worst_bound(remaining_domains, value)
             assert worst_bound <= 1e-6, f'Invalid {worst_bound=}'
             unsolved_ids_w_bounds.append((idx, worst_bound))
             # print(idx, value, worst_bound)

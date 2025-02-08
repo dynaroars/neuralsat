@@ -1,4 +1,4 @@
-name: neuralsat-pt201
+name: src
 channels:
   - gurobi
   - pytorch

@@ -19,7 +19,7 @@ RESULTS_FILE=$5
 TIMEOUT=$6
 
 TOOL_DIR=$(dirname $(dirname $(realpath $0)))
-NEURALSAT_MAIN=$TOOL_DIR/neuralsat-pt201/main.py
+NEURALSAT_MAIN=$TOOL_DIR/src/main.py
 
 # remove old result
 if [ -f $RESULTS_FILE ]; then

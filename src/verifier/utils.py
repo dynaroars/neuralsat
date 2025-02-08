@@ -35,6 +35,17 @@ from util.misc.logger import logger
 from setting import Settings
 
 
+def get_used_gpu_memory(return_percentage: bool = False):
+    device = torch.device('cuda:0')
+    free, total = torch.cuda.mem_get_info(device)
+    mem_used_MB = (total - free) / 1024 ** 2
+    torch.cuda.empty_cache()
+    if return_percentage:
+        return mem_used_MB, (total - free) / total * 100
+    return mem_used_MB
+    
+
+
 def _check_invoke_mip_presolving(self):
     print('[+] _check_invoke_mip_presolving')
     if not Settings.use_mip_verify:

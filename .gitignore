@@ -37,7 +37,6 @@ __pycache__/
 *$py.class
 
 *.html
-*.txt
 *.keras
 # C extensions
 *.so

@@ -1,0 +1,95 @@
+python3 main.py --net example/model_fnn_signmoid.onnx --spec example/prop_2_0.03.vnnlib
+
+python3 main.py --net example/onnx/mnistfc-medium-net-554.onnx --spec example/vnnlib/test.vnnlib
+python3 main.py --net example/onnx/mnistfc-medium-net-151.onnx --spec example/vnnlib/prop_2_0.03.vnnlib
+python3 main.py --net example/onnx/mnist-net_256x2.onnx --spec example/vnnlib/prop_1_0.03.vnnlib
+python3 main.py --net example/onnx/mnist-net_256x4.onnx --spec example/vnnlib/prop_10_0.05.vnnlib
+
+python3 main.py --net example/onnx/cifar10_2_255_simplified.onnx --spec example/vnnlib/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib
+python3 main.py --net example/onnx/convBigRELU__PGD.onnx --spec example/vnnlib/cifar10_spec_idx_95_eps_0.00784.vnnlib
+
+python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec example/vnnlib/prop_1.vnnlib
+python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec example/vnnlib/prop_3.vnnlib
+python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec example/vnnlib/prop_6.vnnlib
+
+python3 main.py --net example/onnx/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx --spec example/vnnlib/property_N=16_1.vnnlib
+python3 main.py --net example/onnx/mnist_concat.onnx --spec example/vnnlib/index188_delta0.13.vnnlib 
+python3 main.py --net example/onnx/mscn_128d.onnx --spec example/vnnlib/cardinality_0_100_128.vnnlib
+
+python3 main.py --net /home/droars/Desktop/cav24/benchmark/nn4sys/onnx/mscn_2048d.onnx --spec /home/droars/Desktop/cav24/benchmark/nn4sys/vnnlib/cardinality_0_500_2048.vnnlib 
+python3 main.py --net /home/droars/Desktop/cav24/benchmark/vggnet16/onnx/vgg16-7-simplified.onnx --spec /home/droars/Desktop/cav24/benchmark/vggnet16/vnnlib/spec5_minivan.vnnlib --batch 1
+
+python3 main.py --net example/onnx/mnist-net_256x2.onnx --spec example/vnnlib/prop_1_0.05.vnnlib
+python3 main.py --net example/onnx/ACASXU_run2a_1_9_batch_2000.onnx --spec example/vnnlib/prop_7.vnnlib
+
+python3 main.py --net example/onnx/fnn.onnx --spec example/vnnlib/fnn.vnnlib 
+
+# hard
+python3 main.py --net example/onnx/mnist-net_256x4.onnx --spec example/vnnlib/prop_1_0.03.vnnlib
+python3 main.py --net example/onnx/cifar10_2_255_simplified.onnx --spec example/vnnlib/cifar10_spec_idx_8_eps_0.00784_n1.vnnlib
+
+python3 main.py --net example/onnx/CIFAR10_small.onnx --spec example/vnnlib/spec_CIFAR10_small_idx_39_eps_0.02260.vnnlib
+
+
+conda activate neuralsat
+
+export CUDA_VISIBLE_DEVICES=
+
+python3 main.py --net /home/droars/Desktop/tool/neuralsat/benchmark/mnistfc_hard/onnx/mnistfc-hard-net-587.onnx --spec /home/droars/Desktop/tool/neuralsat/benchmark/mnistfc_hard/spec/prop_4_0.05.vnnlib --timeout 3600 --batch 200
+
+python3 abcrown.py --config exp_configs/vnncomp22/mnistfc.yaml --onnx_path ~/Desktop/neuralsat-priv/neuralsat/example/mnistfc-medium-net-151.onnx --vnnlib_path ~/Desktop/neuralsat-priv/neuralsat/example/prop_2_0.03.vnnlib --timeout 200 --results_file cac.txt
+
+python3 main.py --net example/gurobi.onnx --spec example/prop_3.vnnlib --device cpu
+
+python3 main.py --net /home/droars/Desktop/archive/paper/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx --spec /home/droars/Desktop/archive/paper/benchmark/cifar2020/spec/cifar10_spec_idx_8_eps_0.00784_n1.vnnlib
+
+python3 main.py --net /home/droars/Desktop/archive/paper/benchmark/sri_resnet_b/onnx/resnet_3b2_bn_mixup_ssadv_4.0_bs128_lr-1_v2.onnx --spec /home/droars/Desktop/archive/paper/benchmark/sri_resnet_b/vnnlib/cifar10_spec_idx_1876_eps_0.00350.vnnlib
+
+python3 main.py --net /home/droars/Desktop/archive/paper/benchmark/mnistfc/nnet/mnist-net_256x2.onnx --spec /home/droars/Desktop/archive/paper/benchmark/mnistfc/spec/prop_2_0.03.vnnlib
+
+python3 main.py --net example/onnx/cGAN_imgSz32_nCh_1.onnx --spec example/vnnlib/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib 
+
+/usr/local/cuda-11.8/bin/nsys profile python3 main.py --net example/onnx/mnistfc-medium-net-151.onnx --spec example/vnnlib/prop_2_0.03.vnnlib
+
+
+
+
+python3 main.py --net /home/droars/Desktop/cav24/benchmark/cgan/onnx/cGAN_imgSz64_nCh_3.onnx --spec /home/droars/Desktop/cav24/benchmark/cgan/vnnlib/cGAN_imgSz64_nCh_3_prop_1_input_eps_0.010_output_eps_0.015.vnnlib
+
+
+./vnncomp_scripts/run_instance.sh v1 vit ~/Desktop/neuralsat-priv/benchmark/vnncomp23/vit/onnx/pgd_2_3_16.onnx ~/Desktop/neuralsat-priv/benchmark/vnncomp23/vit/vnnlib/pgd_2_3_16_3009.vnnlib cac.txt 100
+
+
+python3 main.py --net /home/droars/Desktop/cav24/benchmark/nn4sys/onnx/pensieve_big_parallel.onnx --spec /home/droars/Desktop/cav24/benchmark/nn4sys/vnnlib/pensieve_parallel_55.vnnlib
+
+
+python3 main.py --net /home/droars/Desktop/cav24/benchmark/cgan/onnx/cGAN_imgSz32_nCh_3_small_transformer.onnx --spec /home/droars/Desktop/cav24/benchmark/cgan/vnnlib/cGAN_imgSz32_nCh_3_small_transformer_prop_1_input_eps_0.010_output_eps_0.015.vnnlib
+
+
+python3 example/test_model.py && python3 main.py --net example/onnx/fnn_signmoid.onnx --spec example/vnnlib/fnn.vnnlib
+
+
+TORCH_LOGS="+dynamo" TORCHDYNAMO_VERBOSE=1
+sudo sysctl -w kernel.perf_event_paranoid=2
+nsys profile -w true -t cuda,nvtx,osrt,cudnn,cublas -s cpu --cudabacktrace=true -x true --python-backtrace='cuda' python3 main.py --net example/onnx/mnistfc-medium-net-151.onnx --spec example/vnnlib/prop_2_0.03.vnnlib
+nsys profile -w true -t cuda,nvtx,osrt,cudnn,cublas -s cpu --cudabacktrace=true -x true --python-backtrace='cuda' python3 main.py --net example/onnx/mnist-net_256x2.onnx --spec example/vnnlib/prop_1_0.03.vnnlib
+
+python3 main.py --net example/onnx/fnn_signmoid.onnx --spec example/vnnlib/prop_2_0.03.vnnlib
+
+python3 main.py --net example/onnx/pgd_2_3_16.onnx --spec example/vnnlib/pgd_2_3_16_4021.vnnlib
+
+proton-viewer -m time/s output.hatchet
+
+python3 main.py --net example/backup/motivation_example_159.onnx --spec example/backup/motivation_example_159.vnnlib --force_split hidden --device cpu
+
+python3 main.py --net example/onnx/net_conv_small.onnx --spec example/vnnlib/net_conv_small.vnnlib --device cpu
+
+export NEURALSAT_PY=/home/droars/Desktop/neuralsat-priv/venv/bin/python
+
+export AUTOLIRPA_DEBUG_OPT=1
+
+
+
+# ERROR
+python3 main.py --net example/onnx/mnist-256x4-error.onnx --spec example/vnnlib/mnist-256x4-error.vnnlib 
+
