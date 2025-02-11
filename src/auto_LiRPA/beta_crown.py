@@ -1,46 +1,48 @@
 from collections import OrderedDict
-import torch
+from typing import TYPE_CHECKING
 from torch import Tensor
+import numpy as np
+import torch
+
 from .patches import Patches, inplace_unfold
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
 
 
 class SparseBeta:
+    
     def __init__(self, shape, bias=False, betas=None, device='cpu'):
         self.device = device
         self.val = torch.zeros(shape)
         self.loc = torch.zeros(shape, dtype=torch.long, device=device)
         self.sign = torch.zeros(shape, device=device)
-        self.bias = torch.zeros(shape) if bias else None
+        self.bias = torch.zeros(shape, device=device) if bias else None
         if betas:
             for bi in range(len(betas)):
                 if betas[bi] is not None:
                     self.val[bi, :len(betas[bi])] = betas[bi]
-        self.val = self.val.detach().to(
-            device, non_blocking=True).requires_grad_()
+        self.val = self.val.detach().to(device, non_blocking=True).requires_grad_()
 
     def apply_splits(self, history, key):
+        loc_numpy = np.zeros(self.loc.shape, dtype=np.int32)
+        sign_numpy = np.zeros(self.sign.shape)
+        if self.bias is not None:
+            bias_numpy = np.zeros(self.bias.shape)
         for bi in range(len(history)):
             # Add history splits. (layer, neuron) is the current decision.
             split_locs, split_coeffs = history[bi][key][:2]
             split_len = len(split_locs)
             if split_len > 0:
-                self.sign[bi, :split_len] = torch.as_tensor(
-                    split_coeffs, device=self.device)
-                self.loc[bi, :split_len] = torch.as_tensor(
-                    split_locs, device=self.device)
+                sign_numpy[bi, :split_len] = split_coeffs
+                loc_numpy[bi, :split_len] = split_locs
                 if self.bias is not None:
                     split_bias = history[bi][key][2]
-                    self.bias[bi, :split_len] = torch.as_tensor(
-                        split_bias, device=self.device)
-        self.loc = self.loc.to(device=self.device, non_blocking=True)
-        self.sign = self.sign.to(device=self.device, non_blocking=True)
+                    bias_numpy[bi, :split_len] = split_bias
+        self.loc.copy_(torch.from_numpy(loc_numpy), non_blocking=True)
+        self.sign.copy_(torch.from_numpy(sign_numpy), non_blocking=True)
         if self.bias is not None:
-            self.bias = self.bias.to(device=self.device, non_blocking=True)
-
+            self.bias.copy_(torch.from_numpy(bias_numpy), non_blocking=True)
 
 def get_split_nodes(self: 'BoundedModule'):
     self.split_nodes = []
@@ -52,15 +54,16 @@ def get_split_nodes(self: 'BoundedModule'):
         for activation_name in layer.output_name:
             activation = self[activation_name]
             if activation in splittable_activations:
-                split_activations_.append(
-                    (activation, activation.inputs.index(layer)))
+                split_activations_.append((activation, activation.inputs.index(layer)))
         if split_activations_:
+            if layer.lower is None and layer.upper is None:
+                continue
             self.split_nodes.append(layer)
             self.split_activations[layer.name] = split_activations_
     return self.split_nodes, self.split_activations
 
 
-def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters, lr_beta, dense_coeffs_mask):
+def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters, lr_beta, lr_cut_beta, cutter, dense_coeffs_mask):
     """
     Set betas, best_betas, coeffs, dense_coeffs_mask, best_coeffs, biases
     and best_biases.
@@ -79,19 +82,16 @@ def set_beta(self: 'BoundedModule', enable_opt_interm_bounds, parameters, lr_bet
             for sparse_beta in node.sparse_betas.values():
                 if sparse_beta is not None:
                     betas.append(sparse_beta.val)
-            best_betas[node.name] = {
-                beta_m: sparse_beta.val.detach().clone()
-                    for beta_m, sparse_beta in node.sparse_betas.items()
-            }
+            best_betas[node.name] = {beta_m: sparse_beta.val.detach().clone() for beta_m, sparse_beta in node.sparse_betas.items()}
         else:
             betas.append(node.sparse_betas[0].val)
             best_betas[node.name] = node.sparse_betas[0].val.detach().clone()
 
     # Beta has shape (batch, max_splits_per_layer)
-    # parameters.append({'params': betas.copy(), 'lr': lr_beta, 'batch_dim': 0})
     parameters.append({
         'params': [item for item in betas if item.numel() > 0],
-        'lr': lr_beta, 'batch_dim': 0
+        'lr': lr_beta, 
+        'batch_dim': 0,
     })
 
     return betas, best_betas, coeffs, dense_coeffs_mask
@@ -132,20 +132,21 @@ def beta_crown_backward_bound(self: 'BoundedModule', node, lA, uA, start_node=No
         if node.sparse_betas[start_node.name].bias is not None:
             _bias_unsupported()
         # expand sparse_beta to full beta
-        beta_values = (node.sparse_betas[start_node.name].val
-                       * node.sparse_betas[start_node.name].sign)
+        beta_values = node.sparse_betas[start_node.name].val * node.sparse_betas[start_node.name].sign
         beta_indices = node.sparse_betas[start_node.name].loc
         node.masked_beta = torch.zeros(2, *node.shape).reshape(2, -1).to(A.patches.dtype)
-        node.non_deter_scatter_add(
-            node.masked_beta, dim=1, index=beta_indices,
-            src=beta_values.to(node.masked_beta.dtype))
+        node.non_deter_scatter_add(node.masked_beta, dim=1, index=beta_indices, src=beta_values.to(node.masked_beta.dtype))
         node.masked_beta = node.masked_beta.reshape(2, *node.shape)
         # unfold the beta as patches, size (batch, out_h, out_w, in_c, H, W)
         A_patches = A.patches
         masked_beta_unfolded = inplace_unfold(
-            node.masked_beta, kernel_size=A_patches.shape[-2:],
-            padding=A.padding, stride=A.stride,
-            inserted_zeros=A.inserted_zeros, output_padding=A.output_padding)
+            image=node.masked_beta, 
+            kernel_size=A_patches.shape[-2:],
+            padding=A.padding, 
+            stride=A.stride,
+            inserted_zeros=A.inserted_zeros,
+            output_padding=A.output_padding,
+        )
         if A.unstable_idx is not None:
             masked_beta_unfolded = masked_beta_unfolded.permute(1, 2, 0, 3, 4, 5)
             # After selection, the shape is (unstable_size, batch, in_c, H, W).
@@ -164,18 +165,14 @@ def beta_crown_backward_bound(self: 'BoundedModule', node, lA, uA, start_node=No
             if node.sparse_betas[start_node.name].bias is not None:
                 _bias_unsupported()
             # For matrix mode, beta is sparse.
-            beta_values = (
-                node.sparse_betas[start_node.name].val * node.sparse_betas[start_node.name].sign
-            ).expand(A.size(0), -1, -1)
+            beta_values = (node.sparse_betas[start_node.name].val * node.sparse_betas[start_node.name].sign).expand(A.size(0), -1, -1)
             # node.single_beta_loc has shape [batch, max_single_split].
             # Need to expand at the specs dimension.
-            beta_indices = (node.sparse_betas[start_node.name].loc.unsqueeze(0).expand(A.size(0), -1, -1))
+            beta_indices = node.sparse_betas[start_node.name].loc.unsqueeze(0).expand(A.size(0), -1, -1)
             beta_bias = node.sparse_betas[start_node.name].bias
         else:
             # For matrix mode, beta is sparse.
-            beta_values = (
-                node.sparse_betas[0].val * node.sparse_betas[0].sign
-            ).expand(A.size(0), -1, -1)
+            beta_values = (node.sparse_betas[0].val * node.sparse_betas[0].sign).expand(A.size(0), -1, -1)
             # self.single_beta_loc has shape [batch, max_single_split].
             # Need to expand at the specs dimension.
             beta_indices = node.sparse_betas[0].loc.unsqueeze(0).expand(A.size(0), -1, -1)
@@ -190,13 +187,9 @@ def beta_crown_backward_bound(self: 'BoundedModule', node, lA, uA, start_node=No
             if beta_bias is not None:
                 beta_bias = beta_bias[:, node.alpha_beta_update_mask]
         if uA is not None:
-            uA = node.non_deter_scatter_add(
-                uA.reshape(uA.size(0), uA.size(1), -1), dim=2,
-                index=beta_indices, src=beta_values).view(uA.size())
+            uA = node.non_deter_scatter_add(uA.reshape(uA.size(0), uA.size(1), -1), dim=2, index=beta_indices, src=beta_values).view(uA.size())
         if lA is not None:
-            lA = node.non_deter_scatter_add(
-                lA.reshape(lA.size(0), lA.size(1), -1), dim=2,
-                index=beta_indices, src=beta_values.neg()).view(lA.size())
+            lA = node.non_deter_scatter_add(lA.reshape(lA.size(0), lA.size(1), -1), dim=2, index=beta_indices, src=beta_values.neg()).view(lA.size())
         if beta_bias is not None:
             bias = (beta_values * beta_bias).sum(dim=-1)
             lbias = bias

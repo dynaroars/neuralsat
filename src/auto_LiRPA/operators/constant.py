@@ -1,8 +1,8 @@
-""" Constant operators, including operators that are usually fixed nodes and not perturbed """
 from .base import *
 
 
 class BoundConstant(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.value = attr['value'].to(self.device)
@@ -47,10 +47,13 @@ class BoundConstant(Bound):
 
 
 class BoundPrimConstant(Bound):
+    
     def forward(self):
         return torch.tensor([], device=self.device)
 
+
 class BoundConstantOfShape(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.value = attr['value'].to(self.device)
@@ -91,7 +94,9 @@ class BoundConstantOfShape(Bound):
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
         self.solver_vars = self.forward(v)
 
+
 class BoundRange(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
@@ -102,7 +107,9 @@ class BoundRange(Bound):
         else:
             return torch.arange(start, end, step, device=self.device)
 
+
 class BoundATenDiag(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
@@ -113,7 +120,9 @@ class BoundATenDiag(Bound):
     def interval_propagate(self, *v):
         return Interval.make_interval(torch.diag(v[0][0], v[1][0]), torch.diag(v[0][1], v[1][0]), v[0])
 
+
 class BoundATenDiagonal(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.device = attr['device']
@@ -139,10 +148,7 @@ class BoundATenDiagonal(Bound):
                 dim1 += 1
             if dim2 > 0:
                 dim2 += 1
-            A = torch.diagonal_scatter(
-                A, last_A,
-                offset=self.inputs[1].value, dim1=dim1, dim2=dim2)
+            A = torch.diagonal_scatter(A, last_A, offset=self.inputs[1].value, dim1=dim1, dim2=dim2)
             return A
 
-        return ([(_bound_oneside(last_lA), _bound_oneside(last_uA))]
-                + [(None, None)] * 3), 0, 0
+        return ([(_bound_oneside(last_lA), _bound_oneside(last_uA))] + [(None, None)] * 3), 0, 0

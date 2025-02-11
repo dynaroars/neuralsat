@@ -1,7 +1,7 @@
-""" Softmax """
 from .base import *
 
 class BoundSoftmaxImpl(nn.Module):
+
     def __init__(self, axis):
         super().__init__()
         self.axis = axis
@@ -13,8 +13,8 @@ class BoundSoftmaxImpl(nn.Module):
         s = torch.sum(x, dim=self.axis, keepdim=True)
         return x / s
 
-# The `option != 'complex'` case is not used in the auto_LiRPA main paper.
 class BoundSoftmax(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.axis = attr['axis']

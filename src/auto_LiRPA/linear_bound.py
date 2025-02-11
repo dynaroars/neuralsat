@@ -1,4 +1,5 @@
 class LinearBound:
+    
     def __init__(
             self, lw=None, lb=None, uw=None, ub=None, lower=None, upper=None,
             from_input=None, x_L=None, x_U=None, offset=0, tot_dim=None):

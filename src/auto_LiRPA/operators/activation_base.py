@@ -1,20 +1,24 @@
-""" Activation operators or other unary nonlinear operators"""
-import torch
-from torch import Tensor
 from collections import OrderedDict
-from .base import *
+from torch import Tensor
+import torch
+
 from .clampmult import multiply_by_A_signs
+from .base import *
 
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
 
 
 class BoundActivation(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.requires_input_bounds = [0]
         self.use_default_ibp = True
         self.splittable = False
+        # "core" region of input where precomputation can be done
+        self.range_l = -10
+        self.range_u = 10
 
     def _init_masks(self, x):
         self.mask_pos = x.lower >= 0
@@ -43,11 +47,9 @@ class BoundActivation(Bound):
             else:
                 w_out.fill_(k)
         else:
-            w_out[..., mask] = (k[..., mask].to(w_out) if isinstance(k, Tensor)
-                                else k)
+            w_out[..., mask] = k[..., mask].to(w_out) if isinstance(k, Tensor) else k
 
-        if (not isinstance(x0, Tensor) and x0 == 0
-                and not isinstance(y0, Tensor) and y0 == 0):
+        if (not isinstance(x0, Tensor) and x0 == 0 and not isinstance(y0, Tensor) and y0 == 0):
             pass
         else:
             b = -x0 * k + y0
@@ -69,28 +71,21 @@ class BoundActivation(Bound):
             if last_A is None:
                 return None, 0
             if sign == -1:
-                w_pos, b_pos, w_neg, b_neg = (
-                    self.lw.unsqueeze(0), self.lb.unsqueeze(0),
-                    self.uw.unsqueeze(0), self.ub.unsqueeze(0))
+                w_pos, b_pos, w_neg, b_neg = self.lw.unsqueeze(0), self.lb.unsqueeze(0), self.uw.unsqueeze(0), self.ub.unsqueeze(0)
             else:
-                w_pos, b_pos, w_neg, b_neg = (
-                    self.uw.unsqueeze(0), self.ub.unsqueeze(0),
-                    self.lw.unsqueeze(0), self.lb.unsqueeze(0))
+                w_pos, b_pos, w_neg, b_neg = self.uw.unsqueeze(0), self.ub.unsqueeze(0), self.lw.unsqueeze(0), self.lb.unsqueeze(0)
             w_pos = maybe_unfold_patches(w_pos, last_A)
             w_neg = maybe_unfold_patches(w_neg, last_A)
             b_pos = maybe_unfold_patches(b_pos, last_A)
             b_neg = maybe_unfold_patches(b_neg, last_A)
             if self.batch_dim == 0:
-                _A, _bias = multiply_by_A_signs(
-                    last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias=reduce_bias)
+                _A, _bias = multiply_by_A_signs(last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias=reduce_bias)
             elif self.batch_dim == -1:
                 # FIXME: why this is different from above?
                 assert reduce_bias
                 mask = torch.gt(last_A, 0.).to(torch.float)
-                _A = last_A * (mask * w_pos.unsqueeze(1) +
-                               (1 - mask) * w_neg.unsqueeze(1))
-                _bias = last_A * (mask * b_pos.unsqueeze(1) +
-                                  (1 - mask) * b_neg.unsqueeze(1))
+                _A    = last_A * (mask * w_pos.unsqueeze(1) + (1 - mask) * w_neg.unsqueeze(1))
+                _bias = last_A * (mask * b_pos.unsqueeze(1) + (1 - mask) * b_neg.unsqueeze(1))
                 if _bias.ndim > 2:
                     _bias = torch.sum(_bias, dim=list(range(2, _bias.ndim)))
             else:
@@ -104,22 +99,15 @@ class BoundActivation(Bound):
         return [(lA, uA)], lbias, ubias
 
     @staticmethod
-    # @torch.compile
     @torch.jit.script
-    def bound_forward_w(
-            relax_lw: Tensor, relax_uw: Tensor, x_lw: Tensor, x_uw: Tensor, dim: int):
-        lw = (relax_lw.unsqueeze(dim).clamp(min=0) * x_lw +
-              relax_lw.unsqueeze(dim).clamp(max=0) * x_uw)
-        uw = (relax_uw.unsqueeze(dim).clamp(max=0) * x_lw +
-              relax_uw.unsqueeze(dim).clamp(min=0) * x_uw)
+    def bound_forward_w(relax_lw: Tensor, relax_uw: Tensor, x_lw: Tensor, x_uw: Tensor, dim: int):
+        lw = relax_lw.unsqueeze(dim).clamp(min=0) * x_lw + relax_lw.unsqueeze(dim).clamp(max=0) * x_uw
+        uw = relax_uw.unsqueeze(dim).clamp(max=0) * x_lw + relax_uw.unsqueeze(dim).clamp(min=0) * x_uw
         return lw, uw
 
     @staticmethod
-    # @torch.compile
     @torch.jit.script
-    def bound_forward_b(
-            relax_lw: Tensor, relax_uw: Tensor, relax_lb: Tensor,
-            relax_ub: Tensor, x_lb: Tensor, x_ub: Tensor):
+    def bound_forward_b(relax_lw: Tensor, relax_uw: Tensor, relax_lb: Tensor, relax_ub: Tensor, x_lb: Tensor, x_ub: Tensor):
         lb = relax_lw.clamp(min=0) * x_lb + relax_lw.clamp(max=0) * x_ub + relax_lb
         ub = relax_uw.clamp(max=0) * x_lb + relax_uw.clamp(min=0) * x_ub + relax_ub
         return lb, ub
@@ -132,12 +120,10 @@ class BoundActivation(Bound):
         dim = 1 if self.lw.ndim > 0 else 0
 
         if x.lw is not None:
-            lw, uw = BoundActivation.bound_forward_w(
-                self.lw, self.uw, x.lw, x.uw, dim)
+            lw, uw = BoundActivation.bound_forward_w(self.lw, self.uw, x.lw, x.uw, dim)
         else:
             lw = uw = None
-        lb, ub = BoundActivation.bound_forward_b(
-            self.lw, self.uw, self.lb, self.ub, x.lb, x.ub)
+        lb, ub = BoundActivation.bound_forward_b(self.lw, self.uw, self.lb, self.ub, x.lb, x.ub)
 
         return LinearBound(lw, lb, uw, ub)
 
@@ -150,15 +136,18 @@ class BoundActivation(Bound):
 
         0: Stable (linear) neuron; 1: unstable (nonlinear) neuron.
         """
-        return torch.ones_like(lower)
-    
+        return torch.ones_like(lower, dtype=torch.bool)
+
     def get_split_point(self):
         raise NotImplementedError(f'get_split_point is not implemented for {self}.')
 
 
 class BoundOptimizableActivation(BoundActivation):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
+        if 'optimize_bound_args' not in self.options:
+            self.options['optimize_bound_args'] = {}
         self.optimizable = True
         # Stages:
         #   * `init`: initializing parameters
@@ -204,10 +193,14 @@ class BoundOptimizableActivation(BoundActivation):
         CROWN backward bound propagation"""
         self.alpha = OrderedDict()
         for start_node in start_nodes:
-            ns, size_s = start_node[:2]
-            # TODO do not give torch.Size
-            if isinstance(size_s, (torch.Size, list, tuple)):
-                size_s = prod(size_s)
+            if self.options.get('optimize_bound_args', {}).get('use_shared_alpha', False):
+                size_s = 1
+                ns = start_node[0]
+            else:
+                ns, size_s = start_node[:2]
+                # TODO do not give torch.Size
+                if isinstance(size_s, (torch.Size, list, tuple)):
+                    size_s = prod(size_s)
             self.alpha[ns] = self._init_opt_parameters_impl(size_s, name_start=ns)
 
     def _init_opt_parameters_impl(self, size_spec, name_start=None):
@@ -244,14 +237,12 @@ class BoundOptimizableActivation(BoundActivation):
     def bound_relax(self, x, init=False, dim_opt=None):
         return not_implemented_op(self, 'bound_relax')
 
-    def bound_backward(self, last_lA, last_uA, x, start_node=None,
-                       start_shape=None, reduce_bias=True, **kwargs):
+    def bound_backward(self, last_lA, last_uA, x, start_node=None, start_shape=None, reduce_bias=True, **kwargs):
         self._start = start_node.name
         if self.opt_stage not in ['opt', 'reuse']:
             last_A = last_lA if last_lA is not None else last_uA
             # Returned [(lA, uA)], lbias, ubias
-            As, lbias, ubias = super().bound_backward(
-                last_lA, last_uA, x, reduce_bias=reduce_bias)
+            As, lbias, ubias = super().bound_backward(last_lA, last_uA, x, reduce_bias=reduce_bias)
             if isinstance(last_A, Patches):
                 A_prod = As[0][1].patches if As[0][0] is None else As[0][1].patches
                 # FIXME: Unify this function with BoundReLU
@@ -262,9 +253,14 @@ class BoundOptimizableActivation(BoundActivation):
                         # Sparse patches, we need to construct the full patch size:
                         # (out_c, batch, out_h, out_w, c, h, w).
                         self.patch_size[start_node.name] = [
-                            last_A.output_shape[1], A_prod.size(1),
-                            last_A.output_shape[2], last_A.output_shape[3],
-                            A_prod.size(-3), A_prod.size(-2), A_prod.size(-1)]
+                            last_A.output_shape[1], 
+                            A_prod.size(1),
+                            last_A.output_shape[2], 
+                            last_A.output_shape[3],
+                            A_prod.size(-3), 
+                            A_prod.size(-2), 
+                            A_prod.size(-1)
+                        ]
                     else:
                         # Regular patches.
                         self.patch_size[start_node.name] = A_prod.size()
@@ -294,8 +290,7 @@ class BoundOptimizableActivation(BoundActivation):
                 w_neg = self.non_deter_index_select(w_neg, index=unstable_idx, dim=0)
                 b_pos = self.non_deter_index_select(b_pos, index=unstable_idx, dim=0)
                 b_neg = self.non_deter_index_select(b_neg, index=unstable_idx, dim=0)
-            A_prod, _bias = multiply_by_A_signs(
-                last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias=reduce_bias)
+            A_prod, _bias = multiply_by_A_signs(last_A, w_pos, w_neg, b_pos, b_neg, reduce_bias)
             return A_prod, _bias
 
         lA, lbias = _bound_oneside(last_lA, sign=-1)

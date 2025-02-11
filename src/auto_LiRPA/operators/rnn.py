@@ -1,8 +1,8 @@
-"""RNN."""
 from .base import *
 
 
 class BoundRNN(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.complex = True
@@ -20,17 +20,14 @@ class BoundRNN(Bound):
         self.hidden_size = weight_input.shape[-2]
 
         class BoundRNNImpl(nn.Module):
-            def __init__(self, input_size, hidden_size,
-                         weight_input, weight_recurrent, bias, output_index):
+            
+            def __init__(self, input_size, hidden_size, weight_input, weight_recurrent, bias, output_index):
                 super().__init__()
 
                 self.input_size = input_size
                 self.hidden_size = hidden_size
 
-                self.cell = torch.nn.RNNCell(
-                    input_size=input_size,
-                    hidden_size=hidden_size
-                )
+                self.cell = torch.nn.RNNCell(input_size=input_size, hidden_size=hidden_size)
 
                 self.cell.weight_ih.data.copy_(weight_input.squeeze(0).data)
                 self.cell.weight_hh.data.copy_(weight_recurrent.squeeze(0).data)
@@ -53,9 +50,13 @@ class BoundRNN(Bound):
                     return hidden
 
         self.model = BoundRNNImpl(
-            self.input_size, self.hidden_size,
-            weight_input, weight_recurrent, bias,
-            self.output_index)
+            input_size=self.input_size, 
+            hidden_size=self.hidden_size,
+            weight_input=weight_input, 
+            weight_recurrent=weight_recurrent, 
+            bias=bias,
+            output_index=self.output_index,
+        )
         self.input = (x, initial_h)
 
         return self.model(*self.input)

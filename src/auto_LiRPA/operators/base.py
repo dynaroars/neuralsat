@@ -1,15 +1,13 @@
-""" Base class and functions for implementing bound operators"""
 from typing import Optional, List
+from torch import Tensor
+import torch.nn as nn
+import numpy as np
 import warnings
 import torch
-import torch.nn as nn
-from torch import Tensor
-import numpy as np
 
 from ..perturbations import *
-from ..utils import *
 from ..patches import *
-from ..linear_bound import LinearBound
+from ..utils import *
 
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
@@ -18,11 +16,7 @@ epsilon = 1e-12
 
 
 def not_implemented_op(node, func):
-    message = (
-        f'Function `{func}` of `{node}` is not supported yet.'
-        ' Please help to open an issue at https://github.com/Verified-Intelligence/auto_LiRPA'
-        ' or implement this function in auto_LiRPA/bound_ops.py'
-        ' or auto_LiRPA/operators by yourself.')
+    message = f'Function `{func}` of `{node}` is not supported yet.'
     raise NotImplementedError(message)
 
 
@@ -122,12 +116,13 @@ class Bound(nn.Module):
         self.bounded = False
         self.IBP_rets = None
         self.requires_input_bounds = []
+        self.from_complex_node = None
+
         # If True, when we are computing intermediate bounds for these ops,
-        # we simply use IBP to propagate bounds from its input nodes
-        # instead of CROWN. Currently only operators with a single input can be
-        # supported.
+        # we simply use IBP to propagate bounds from its input nodes instead of CROWN. 
+        # Currently only operators with a single input can be supported.
         self.ibp_intermediate = False
-        self.splittable = False
+        self.splittable = self.force_not_splittable = False
         # Determine if this node has a perturbed output or not. The function BoundedModule._mark_perturbed_nodes() will set this property.
         self.perturbed = False
         self.never_perturbed = False
@@ -146,17 +141,77 @@ class Bound(nn.Module):
         self.zero_uA_mtx = False
         self.patches_start = False
         self.alpha_beta_update_mask = None
+        self.is_final_node = False
+        # By default, we assue this node has no batch dimension.
+        # It will be updated in BoundedModule.get_forward_value().
         self.batch_dim = -1
+
+        # The .lower and .upper properties are written to as part of the bound propagation.
+        # Usually, in iterative refinement, each bound only depends on bounds previously
+        # computed in the same iteration. However, this changes if INVPROP is used to incorporate
+        # output constraints. Then, we also need bounds of layers *after* the currently bounded
+        # layer. Therefore, we have to cache the older bounds.
+        self._is_lower_bound_current = False
+        self._lower = None
+        self._is_upper_bound_current = False
+        self._upper = None
 
     def __repr__(self, attrs=None):
         inputs = ', '.join([node.name for node in self.inputs])
-        ret = (f'{self.__class__.__name__}(name={self.name}, '
-                f'inputs=[{inputs}], perturbed={self.perturbed}')
+        ret = f'{self.__class__.__name__}(name={self.name}, inputs=[{inputs}], perturbed={self.perturbed}'
         if attrs is not None:
             for k, v in attrs.items():
                 ret += f', {k}={v}'
         ret += ')'
         return ret
+
+    @property
+    def lower(self):
+        return self._lower
+
+    @lower.setter
+    def lower(self, value):
+        if not (value is None or isinstance(value, torch.Tensor)):
+            raise TypeError(f'lower must be a tensor or None, got {type(value)}')
+        if value is None:
+            self._is_lower_bound_current = False
+        else:
+            self._is_lower_bound_current = True
+        self._lower = value
+
+    @property
+    def upper(self):
+        return self._upper
+
+    @upper.setter
+    def upper(self, value):
+        if not (value is None or isinstance(value, torch.Tensor)):
+            raise TypeError(f'upper must be a tensor or None, got {type(value)}')
+        if value is None:
+            self._is_upper_bound_current = False
+        else:
+            self._is_upper_bound_current = True
+        self._upper = value
+
+    def move_lower_and_upper_bounds_to_cache(self):
+        if self._lower is not None:
+            self._lower = self._lower.detach().requires_grad_(False)
+            self._is_lower_bound_current = False
+        if self._upper is not None:
+            self._upper = self._upper.detach().requires_grad_(False)
+            self._is_upper_bound_current = False
+
+    def delete_lower_and_upper_bounds(self):
+        self._lower = None
+        self._upper = None
+        self._is_lower_bound_current = False
+        self._is_upper_bound_current = False
+
+    def is_lower_bound_current(self):
+        return self._is_lower_bound_current
+
+    def is_upper_bound_current(self):
+        return self._is_upper_bound_current
 
     def is_input_perturbed(self, i=0):
         r"""Check if the i-th input is with perturbation or not."""
@@ -271,11 +326,20 @@ class Bound(nn.Module):
         return not_implemented_op(self, 'bound_backward')
 
     def broadcast_backward(self, A, x):
+        """
+        Adjust shape of A, adding or removing broadcast dimensions, based on the other operand x.
+
+        Typically, A has [spec, batch, ...].
+        The other operand x may have shape [batch, ...], or no batch dimension.
+        Here the "..." dimensions may be different.
+        We need to make sure the two match, by adding or removing dimensions in A.
+        """
         shape = x.output_shape
 
         if isinstance(A, Tensor):
             if x.batch_dim == -1:
-                # final shape of input
+                # The other operand has no batch dimension. (e.g., constants).
+                # Add batch dimension to it.
                 shape = torch.Size([A.shape[1]] + list(shape))
                 dims = []
                 cnt_sum = A.ndim - len(shape) - 1
@@ -298,7 +362,8 @@ class Bound(nn.Module):
                     dims.append(i + 1)
             if dims:
                 A = torch.sum(A, dim=dims, keepdim=True)
-            assert A.shape[2:] == shape[1:], f'{self=} {A.shape=} {shape=}'  # skip the spec and batch dimension.
+            # Check the final shape - it should be compatible.
+            assert A.shape[2:] == shape[1:]  # skip the spec and batch dimension.
         else:
             pass
         return A
@@ -311,21 +376,20 @@ class Bound(nn.Module):
             grad_upstream: Upstream gradient in the gradient back-propagation.
 
         Returns:
-            module_grad (torch.nn.Module): Gradient node.
+            A list. Each item contains the following for computing the gradient
+            of each input:
+                module_grad (torch.nn.Module): Gradient node.
 
-            grad_input (list): Inputs to the gradient node. Values do not
-            matter. We only want the shapes.
+                grad_input (list): Inputs to the gradient node. Values do not
+                matter. We only want the shapes.
 
-            grad_extra_nodes (list): Extra nodes needed for the gradient.
+                grad_extra_nodes (list): Extra nodes needed for the gradient.
         """
         return not_implemented_op(self, 'build_gradient_node')
 
     def get_bias(self, A, bias):
         if A is None:
             return 0
-        if not Benchmarking:
-            assert not isnan(A)
-            assert not isnan(bias)
         if torch.isinf(bias).any():
             warnings.warn('There is an inf value in the bias of LiRPA bounds.')
 
@@ -378,8 +442,7 @@ class Bound(nn.Module):
 
     def make_axis_non_negative(self, axis, shape='input'):
         if isinstance(axis, (tuple, list)):
-            return tuple([self.make_axis_non_negative(item, shape)
-                          for item in axis])
+            return tuple([self.make_axis_non_negative(item, shape) for item in axis])
         if shape == 'input':
             shape = self.input_shape
         elif shape == 'output':
@@ -410,7 +473,7 @@ class Bound(nn.Module):
                 flag = flag or self.check_constraint_available(n, flag)
         return flag
 
-    def _ibp_constraint(self, node, delete_bounds_after_use=False):
+    def _ibp_constraint(self, node: 'Bound', delete_bounds_after_use=False):
         def _delete_unused_bounds(node_list):
             """Delete bounds from input layers after use to save memory. Used when
             sparse_intermediate_bounds_with_ibp is true."""
@@ -421,16 +484,14 @@ class Bound(nn.Module):
                     del n.cstr_upper
 
         if not node.perturbed and hasattr(node, 'forward_value'):
-            node.cstr_lower, node.cstr_upper = node.cstr_interval = (
-                node.forward_value, node.forward_value)
+            node.cstr_lower, node.cstr_upper = node.cstr_interval = node.forward_value, node.forward_value
 
         to_be_deleted_bounds = []
         if not hasattr(node, 'cstr_interval'):
             for n in node.inputs:
                 if not hasattr(n, 'cstr_interval'):
                     # Node n does not have interval bounds; we must compute it.
-                    self._ibp_constraint(
-                        n, delete_bounds_after_use=delete_bounds_after_use)
+                    self._ibp_constraint(n, delete_bounds_after_use=delete_bounds_after_use)
                     to_be_deleted_bounds.append(n)
             inp = [n_pre.cstr_interval for n_pre in node.inputs]
             node.cstr_interval = node.interval_propagate(*inp)
@@ -443,11 +504,9 @@ class Bound(nn.Module):
                 node.cstr_upper = torch.tensor(node.cstr_upper)
                 node.cstr_interval = (node.cstr_lower, node.cstr_upper)
 
-        if hasattr(node, 'lower'):
-            node.lower = torch.where(node.lower >= node.cstr_lower, node.lower,
-                            node.cstr_lower)
-            node.upper = torch.where(node.upper <= node.cstr_upper, node.upper,
-                            node.cstr_upper)
+        if node.is_lower_bound_current():
+            node.lower = torch.where(node.lower >= node.cstr_lower, node.lower, node.cstr_lower)
+            node.upper = torch.where(node.upper <= node.cstr_upper, node.upper, node.cstr_upper)
             node.interval = (node.lower, node.upper)
 
         _delete_unused_bounds(to_be_deleted_bounds)

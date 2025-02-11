@@ -1,15 +1,15 @@
+from typing import TYPE_CHECKING
 import multiprocessing
 import os
 
 from .beta_crown import SparseBeta
 from .bound_ops import *
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
 
 MULTIPROCESS_MODEL = None
-N_REFINE_LAYER = 10
+N_REFINE_LAYER = 5
 EAGER_OPTIMIZE = False
 N_PROC = os.cpu_count() // 2
 
@@ -56,7 +56,7 @@ def build_solver_module(self: 'BoundedModule', x=None, C=None, interm_bounds=Non
         value = roots[i].forward()
         # if isinstance(root[i], BoundInput) and not isinstance(root[i], BoundParams):
         if type(roots[i]) is BoundInput:
-            # create input vars for gurobi self.model
+            # create input vars for gurobi self.solver_model
             inp_gurobi_vars = self._build_solver_input(roots[i])
         else:
             # regular weights
@@ -87,11 +87,9 @@ def _build_solver_general(self: 'BoundedModule', node: Bound, C=None, model_type
             # when node is the last layer
             # merge the last BoundLinear node with the specification,
             # available when weights of this layer are not perturbed
-            solver_vars = node.build_solver(*inp, model=self.model, C=C,
-                model_type=model_type, solver_pkg=solver_pkg)
+            solver_vars = node.build_solver(*inp, model=self.solver_model, C=C, model_type=model_type, solver_pkg=solver_pkg)
         else:
-            solver_vars = node.build_solver(*inp, model=self.model, C=None,
-                    model_type=model_type, solver_pkg=solver_pkg)
+            solver_vars = node.build_solver(*inp, model=self.solver_model, C=None, model_type=model_type, solver_pkg=solver_pkg)
         # just return output node gurobi vars
         return solver_vars
 
@@ -122,14 +120,14 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 unstable_to_stable = []
                     
                 for neuron_idx in range(refine_node.lower.numel()):
-                    v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
+                    v = self.solver_model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
                     if v.ub * v.lb < 0: # unstable neuron
                         candidates.append((neuron_idx, v.VarName, timeout_per_neuron))
                         
                     # TODO: uncomment for speeding up
                     v.lb, v.ub = -np.inf, np.inf
                     
-                self.model.update()
+                self.solver_model.update()
                 
                 # store bounds
                 refine_node_lower = refine_node.lower.clone().detach().cpu().flatten(1)
@@ -140,7 +138,7 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                     if DEBUG:
                         print('#candidates =', len(candidates))
                         
-                    MULTIPROCESS_MODEL = self.model.copy()
+                    MULTIPROCESS_MODEL = self.solver_model.copy()
                     if (N_PROC > 1) and (len(candidates) > 1):
                         with multiprocessing.Pool(min(N_PROC, len(candidates))) as pool:
                             solver_result = pool.map(mip_solver_worker, candidates, chunksize=1)
@@ -162,14 +160,14 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                         
                 # restore bounds
                 for neuron_idx in range(refine_node.lower.numel()):
-                    v = self.model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
+                    v = self.solver_model.getVarByName(f'lay{refine_node.name}_{neuron_idx}')
                     v.lb = refine_node_lower[0, neuron_idx]
                     v.ub = refine_node_upper[0, neuron_idx]
                 
                 shape = refine_node.lower.shape
                 refine_node.lower = refine_node_lower.view(shape).to(self.device)
                 refine_node.upper = refine_node_upper.view(shape).to(self.device)
-                self.model.update()
+                self.solver_model.update()
 
                 # compute bounds
                 reference_bounds = self.get_refined_interm_bounds()
@@ -193,7 +191,7 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                     node.sparse_betas[0].sign[0, neuron_idx] = sign
                 
                 self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': True}})
-                lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds)
+                lb_, _ = self.compute_bounds(x=x, C=C, method="crown-optimized", reference_bounds=reference_bounds, bound_upper=False)
                 self.set_bound_opts({'optimize_bound_args': {'enable_beta_crown': False}})
                 if DEBUG:
                     print('optimized  (w/  beta):', lb_)
@@ -209,11 +207,9 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
                 not node.is_input_perturbed(1) and self.final_name == node.name:
             # when node is the last layer, merge node with the specification, 
             # available when weights of this layer are not perturbed
-            solver_vars = node.build_solver(*inp, model=self.model, C=C, 
-                    model_type=model_type, solver_pkg=solver_pkg)
+            solver_vars = node.build_solver(*inp, model=self.solver_model, C=C, model_type=model_type, solver_pkg=solver_pkg)
         else:
-            solver_vars = node.build_solver(*inp, model=self.model, C=None, 
-                    model_type=model_type, solver_pkg=solver_pkg)
+            solver_vars = node.build_solver(*inp, model=self.solver_model, C=None, model_type=model_type, solver_pkg=solver_pkg)
             
         return solver_vars
     
@@ -223,8 +219,9 @@ def _build_solver_refined(self, x, node, C=None, model_type="mip", solver_pkg="g
 def _reset_solver_vars(self: 'BoundedModule', node: Bound):
     if hasattr(node, 'solver_vars'):
         del node.solver_vars
-    for n in node.inputs:
-        self._reset_solver_vars(n)
+    if hasattr(node, 'inputs'):
+        for n in node.inputs:
+            self._reset_solver_vars(n)
 
 
 def _build_solver_input(self: 'BoundedModule', node):
@@ -232,11 +229,15 @@ def _build_solver_input(self: 'BoundedModule', node):
     assert isinstance(node, BoundInput)
     assert node.perturbation is not None
     assert node.perturbation.norm == float("inf")
+    
+    if self.solver_model is None:
+        self.solver_model = grb.Model()
+        
     inp_gurobi_vars = []
     # zero var will be shared within the solver model
-    zero_var = self.model.addVar(lb=0, ub=0, obj=0, vtype=grb.GRB.CONTINUOUS, name='zero')
-    one_var = self.model.addVar(lb=1, ub=1, obj=0, vtype=grb.GRB.CONTINUOUS, name='one')
-    neg_one_var = self.model.addVar(lb=-1, ub=-1, obj=0, vtype=grb.GRB.CONTINUOUS, name='neg_one')
+    zero_var = self.solver_model.addVar(lb=0, ub=0, obj=0, vtype=grb.GRB.CONTINUOUS, name='zero')
+    one_var = self.solver_model.addVar(lb=1, ub=1, obj=0, vtype=grb.GRB.CONTINUOUS, name='one')
+    neg_one_var = self.solver_model.addVar(lb=-1, ub=-1, obj=0, vtype=grb.GRB.CONTINUOUS, name='neg_one')
     x_L = node.value - node.perturbation.eps if node.perturbation.x_L is None else node.perturbation.x_L
     x_U = node.value + node.perturbation.eps if node.perturbation.x_U is None else node.perturbation.x_U
     x_L = x_L.squeeze(0)
@@ -244,14 +245,14 @@ def _build_solver_input(self: 'BoundedModule', node):
  
     this_layer_shape = x_L.shape
     for dim, (lb, ub) in enumerate(zip(x_L.flatten(), x_U.flatten())):
-        v = self.model.addVar(lb=lb, ub=ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'inp_{dim}')
+        v = self.solver_model.addVar(lb=lb, ub=ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'inp_{dim}')
         inp_gurobi_vars.append(v)
     inp_gurobi_vars = np.array(inp_gurobi_vars).reshape(this_layer_shape).tolist()
 
     node.solver_vars = inp_gurobi_vars
     # save the gurobi input variables so that we can later extract primal values in input space easily
     self.input_vars = inp_gurobi_vars
-    self.model.update()
+    self.solver_model.update()
     return inp_gurobi_vars
 
 

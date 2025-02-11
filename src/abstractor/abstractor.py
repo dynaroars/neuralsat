@@ -150,17 +150,21 @@ class NetworkAbstractor:
         
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
-            self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
-            lb, _ = self.net.compute_bounds(x=(x,), method=method) # FIXME: it uses a lot of RAM
+            self.net.init_alpha(x=(x,), bound_upper=False) if method == 'crown-optimized' else None
+            lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) # FIXME: it uses a lot of RAM
             # print('[+] _check_module:', method, lb)
             assert not torch.isnan(lb).any()
         except RuntimeError:
+            if os.environ.get('NEURALSAT_DEBUG'):
+                raise
             return False # FIXME: might affect other benchmarks
         except KeyboardInterrupt:
             exit()
         except SystemExit:
             exit()
         except:
+            if os.environ.get('NEURALSAT_DEBUG'):
+                raise
             # raise
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
@@ -197,6 +201,7 @@ class NetworkAbstractor:
                     C=objective.cs, 
                     method=self.method, 
                     reference_bounds=reference_bounds,
+                    bound_upper=False,
                 )
             logger.info(f'Initial bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
             if stop_criterion_func(lb).all().item():
@@ -255,6 +260,7 @@ class NetworkAbstractor:
             method='crown-optimized',
             aux_reference_bounds=aux_reference_bounds, 
             reference_bounds=reference_bounds,
+            bound_upper=False,
         )
         logger.info(f'Initial optimized bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
@@ -321,7 +327,8 @@ class NetworkAbstractor:
                     C=double_cs, 
                     method='backward', 
                     reuse_alpha=self.method == 'crown-optimized',
-                    interm_bounds=new_intermediate_layer_bounds
+                    interm_bounds=new_intermediate_layer_bounds,
+                    bound_upper=False,
                 )
             return AbstractResults(**{'output_lbs': double_output_lbs})
 
@@ -349,6 +356,7 @@ class NetworkAbstractor:
             decision_thresh=double_rhs,
             interm_bounds=new_intermediate_layer_bounds,
             reference_bounds=reference_bounds,
+            bound_upper=False,
         )
 
         # reorganize output
@@ -422,6 +430,7 @@ class NetworkAbstractor:
             method=self.method,
             decision_thresh=double_rhs,
             reference_bounds=self.init_reference_bounds,
+            bound_upper=False,
         )
 
         with torch.no_grad():

@@ -1,8 +1,8 @@
-import os
-import sys
-import torch
 from torch.utils.cpp_extension import load, BuildExtension, CUDAExtension
 from setuptools import setup
+import torch
+import sys
+import os
 
 class DummyCudaClass:
     """A dummy class with error message when a CUDA function is called."""

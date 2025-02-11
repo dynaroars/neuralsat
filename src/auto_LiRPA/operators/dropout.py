@@ -1,6 +1,7 @@
 from .base import *
 
 class BoundDropout(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         if 'ratio' in attr:
@@ -23,8 +24,7 @@ class BoundDropout(Bound):
             # We assume ratio must exist in the inputs.
             # We ignore training_mode, but will use self.training which can be
             # changed after BoundedModule is built.
-            assert (inputs[1].dtype == torch.float32 or
-                    inputs[1].dtype == torch.float64)
+            assert (inputs[1].dtype == torch.float32 or inputs[1].dtype == torch.float64)
             self.ratio = inputs[1]
         if self.ratio >= 1:
             raise ValueError('Ratio in dropout should be less than 1')
@@ -34,8 +34,7 @@ class BoundDropout(Bound):
     def _check_forward(self):
         """ If in the training mode, a forward pass should have been called."""
         if self.training and self.mask is None:
-            raise RuntimeError('For a model with dropout in the training mode, '\
-                'a clean forward pass must be called before bound computation')
+            raise RuntimeError('For a model with dropout in the training mode, a clean forward pass must be called before bound computation')
 
     def bound_backward(self, last_lA, last_uA, *args, **kwargs):
         empty_A = [(None, None)] * (len(args) -1)

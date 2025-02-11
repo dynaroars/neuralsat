@@ -1,14 +1,13 @@
-from .base import *
 from .solver_utils import grb
+from .base import *
 
 
 class BoundAdd(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         options = options or {}
-        # FIXME: This is not the right way to enable patches mode.
-        # Instead we must traverse the graph and determine when patches mode needs to be used.
-
+        # FIXME: This is not the right way to enable patches mode. Instead we must traverse the graph and determine when patches mode needs to be used.
         self.mode = options.get("conv_mode", "matrix")
 
     def forward(self, x, y):
@@ -58,26 +57,34 @@ class BoundAdd(Bound):
         # we have both gurobi vars as inputs
         this_layer_shape = self.output_shape
         gvar_array1 = np.array(v[0])
-        gvar_array2 = np.array(v[1])
-        assert gvar_array1.shape == gvar_array2.shape and gvar_array1.shape == this_layer_shape[1:]
+        if isinstance(v[1], Tensor):
+            var2 = v[1].cpu().numpy()
+            # flatten to create vars and constrs first
+            gvar_array1 = gvar_array1.reshape(-1)
+            new_layer_gurobi_vars = []
+            for neuron_idx, var1 in enumerate(gvar_array1):
+                var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0, vtype=grb.GRB.CONTINUOUS, name=f'lay{self.name}_{neuron_idx}')
+                model.addConstr(var == (var1 + var2), name=f'lay{self.name}_{neuron_idx}_eq')
+                new_layer_gurobi_vars.append(var)
+        else:
+            gvar_array2 = np.array(v[1])
+            assert gvar_array1.shape == gvar_array2.shape and gvar_array1.shape == this_layer_shape[1:]
 
-        # flatten to create vars and constrs first
-        gvar_array1 = gvar_array1.reshape(-1)
-        gvar_array2 = gvar_array2.reshape(-1)
-        new_layer_gurobi_vars = []
-        for neuron_idx, (var1, var2) in enumerate(zip(gvar_array1, gvar_array2)):
-            var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0,
-                            vtype=grb.GRB.CONTINUOUS,
-                            name=f'lay{self.name}_{neuron_idx}')
-            model.addConstr(var == (var1 + var2), name=f'lay{self.name}_{neuron_idx}_eq')
-            new_layer_gurobi_vars.append(var)
-
+            # flatten to create vars and constrs first
+            gvar_array1 = gvar_array1.reshape(-1)
+            gvar_array2 = gvar_array2.reshape(-1)
+            new_layer_gurobi_vars = []
+            for neuron_idx, (var1, var2) in enumerate(zip(gvar_array1, gvar_array2)):
+                var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0, vtype=grb.GRB.CONTINUOUS, name=f'lay{self.name}_{neuron_idx}')
+                model.addConstr(var == (var1 + var2), name=f'lay{self.name}_{neuron_idx}_eq')
+                new_layer_gurobi_vars.append(var)
         # reshape to the correct list shape of solver vars
         self.solver_vars = np.array(new_layer_gurobi_vars).reshape(this_layer_shape[1:]).tolist()
         model.update()
 
 
 class BoundSub(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         # FIXME: This is not the right way to enable patches mode. Instead we must traverse the graph and determine when patches mode needs to be used.
@@ -123,6 +130,7 @@ class BoundSub(Bound):
             else:
                 return y_w + torch.zeros_like(x_b)
 
+        # Some nodes such as BoundConstant does not have uw and lw.
         lw = add_w(x.lw, -y.uw if y.uw is not None else None, x.lb, y.lb)
         uw = add_w(x.uw, -y.lw if y.lw is not None else None, x.ub, y.ub)
 
@@ -147,12 +155,11 @@ class BoundSub(Bound):
         gvar_array2 = gvar_array2.reshape(-1)
         new_layer_gurobi_vars = []
         for neuron_idx, (var1, var2) in enumerate(zip(gvar_array1, gvar_array2)):
-            var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0,
-                            vtype=grb.GRB.CONTINUOUS,
-                            name=f'lay{self.name}_{neuron_idx}')
+            var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0, vtype=grb.GRB.CONTINUOUS, name=f'lay{self.name}_{neuron_idx}')
             model.addConstr(var == (var1 - var2), name=f'lay{self.name}_{neuron_idx}_eq')
             new_layer_gurobi_vars.append(var)
 
         # reshape to the correct list shape of solver vars
         self.solver_vars = np.array(new_layer_gurobi_vars).reshape(this_layer_shape[1:]).tolist()
         model.update()
+

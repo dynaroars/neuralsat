@@ -1,25 +1,23 @@
-import torch
-from .bound_ops import *
-from .utils import logger
-
 from typing import TYPE_CHECKING
+import torch
+
+from .utils import logger
+from .bound_ops import *
+
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
 
 
-def IBP_general(self: 'BoundedModule', node=None, C=None,
-                delete_bounds_after_use=False):
+def IBP_general(self: 'BoundedModule', node=None, C=None,delete_bounds_after_use=False):
 
     logger.debug('IBP for %s', node)
 
-    def _delete_unused_bounds(node_list):
-        """Delete bounds from input layers after use to save memory. Used when
-        sparse_intermediate_bounds_with_ibp is true."""
+    def _delete_unused_bounds(node_list: List[Bound]):
+        """Delete bounds from input layers after use to save memory. Used when sparse_intermediate_bounds_with_ibp is true."""
         if delete_bounds_after_use:
             for n in node_list:
                 del n.interval
-                del n.lower
-                del n.upper
+                n.delete_lower_and_upper_bounds()
 
     if self.bound_opts.get('loss_fusion', False):
         res = self._IBP_loss_fusion(node, C)
@@ -35,12 +33,10 @@ def IBP_general(self: 'BoundedModule', node=None, C=None,
         for n in node.inputs:
             if not hasattr(n, 'interval'):
                 # Node n does not have interval bounds; we must compute it.
-                self.IBP_general(
-                    n, delete_bounds_after_use=delete_bounds_after_use)
+                self.IBP_general(n, delete_bounds_after_use=delete_bounds_after_use)
                 to_be_deleted_bounds.append(n)
         inp = [n_pre.interval for n_pre in node.inputs]
-        if (C is not None and isinstance(node, BoundLinear)
-                and not node.is_input_perturbed(1)):
+        if (C is not None and isinstance(node, BoundLinear) and not node.is_input_perturbed(1)):
             # merge the last BoundLinear node with the specification, available
             # when weights of this layer are not perturbed
             ret = node.interval_propagate(*inp, C=C)
@@ -63,6 +59,7 @@ def IBP_general(self: 'BoundedModule', node=None, C=None,
     else:
         _delete_unused_bounds(to_be_deleted_bounds)
         return node.interval
+
 
 def _IBP_loss_fusion(self: 'BoundedModule', node, C):
     """Merge BoundLinear, BoundGatherElements and BoundSub.
@@ -95,18 +92,13 @@ def _IBP_loss_fusion(self: 'BoundedModule', node, C):
             labels = labels.lower
             batch_size = labels.shape[0]
             w = w.expand(batch_size, *w.shape)
-            w = w - torch.gather(
-                w, dim=1,
-                index=labels.unsqueeze(-1).repeat(1, w.shape[1], w.shape[2]))
+            w = w - torch.gather(w, dim=1, index=labels.unsqueeze(-1).repeat(1, w.shape[1], w.shape[2]))
             b = b.expand(batch_size, *b.shape)
-            b = b - torch.gather(b, dim=1,
-                                    index=labels.repeat(1, b.shape[1]))
+            b = b - torch.gather(b, dim=1, index=labels.repeat(1, b.shape[1]))
             lower, upper = node_start.interval
             lower, upper = lower.unsqueeze(1), upper.unsqueeze(1)
-            node.lower, node.upper = node_linear.interval_propagate(
-                (lower, upper), (w, w), (b.unsqueeze(1), b.unsqueeze(1)))
-            node.interval = node.lower, node.upper = (
-                node.lower.squeeze(1), node.upper.squeeze(1))
+            node.lower, node.upper = node_linear.interval_propagate((lower, upper), (w, w), (b.unsqueeze(1), b.unsqueeze(1)))
+            node.interval = node.lower, node.upper = (node.lower.squeeze(1), node.upper.squeeze(1))
             return node.interval
 
     return None
@@ -117,8 +109,20 @@ def check_IBP_intermediate(self: 'BoundedModule', node):
 
     Currently, assume all eligible operators have exactly one input.
     """
+    tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
+    directly_optimize_layer_names = self.bound_opts['optimize_bound_args']['directly_optimize']
+
+    if isinstance(node, BoundInput) and tighten_input_bounds:
+        return False
+    if node.name in directly_optimize_layer_names:
+        return False
+
+    if self.ibp_nodes is not None and node.name in self.ibp_nodes:
+        self.IBP_general(node)
+        return True
+
     if (isinstance(node, BoundReshape)
-            and hasattr(node.inputs[0], 'lower')
+            and node.inputs[0].is_lower_bound_current()
             and hasattr(node.inputs[1], 'value')):
         # Node for input value.
         val_input = node.inputs[0]
@@ -129,18 +133,16 @@ def check_IBP_intermediate(self: 'BoundedModule', node):
         node.interval = (node.lower, node.upper)
         return True
 
+    # Use IBP if node.ibp_intermediate == True (for nodes such as ReLU)
     nodes = []
-    while (getattr(node, 'lower', None) is None
-            or getattr(node, 'upper', None) is None):
+    while (not node.is_lower_bound_current() or not node.is_upper_bound_current()):
         if not node.ibp_intermediate:
             return False
-        assert len(node.inputs) == 1, (
-            'Nodes with ibp_intermediate=True cannot have more than one input')
         nodes.append(node)
-        node = node.inputs[0]  # FIXME: this cannot handle multiple inputs.
+        node = node.inputs[0]
     nodes.reverse()
     for n in nodes:
-        n.interval = self.IBP_general(n)
+        self.IBP_general(n)
 
     return True
 
@@ -151,19 +153,37 @@ def check_IBP_first_linear(self: 'BoundedModule', node):
     Disable this optimization when we need the A matrix of the first nonlinear
     layer, forcibly use CROWN to record A matrix.
     """
+    tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
+    directly_optimize_layer_names = self.bound_opts['optimize_bound_args']['directly_optimize']
+
+    if isinstance(node, BoundInput) and tighten_input_bounds:
+        return False
+    if node.name in directly_optimize_layer_names:
+        return False
+
     # This is the list of all intermediate layers where we need to refine.
     if self.intermediate_constr is not None:
-        intermediate_beta_enabled_layers = [
-            k for v in self.intermediate_constr.values() for k in v]
+        intermediate_beta_enabled_layers = [k for v in self.intermediate_constr.values() for k in v]
     else:
         intermediate_beta_enabled_layers = []
 
     if (node.name not in self.needed_A_dict.keys()
-            and (type(node) == BoundLinear
-                or type(node) == BoundConv
+            and (type(node) == BoundLinear or type(node) == BoundConv
                 and node.name not in intermediate_beta_enabled_layers)):
         if type(node.inputs[0]) == BoundInput:
             node.lower, node.upper = self.IBP_general(node)
             return True
 
     return False
+
+
+def compare_with_IBP(self, node, lower, upper, C=None):
+    """Re-compute the bounds by IBP given the existing intermediate bounds.
+    Update the bounds if IBP gives tighter bounds."""
+
+    lower_ibp, upper_ibp = self.IBP_general(node, C=C, delete_bounds_after_use=True)
+    if lower is not None:
+        lower = torch.max(lower, lower_ibp)
+    if upper is not None:
+        upper = torch.min(upper, upper_ibp)
+    return lower, upper

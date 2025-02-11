@@ -1,7 +1,8 @@
-from .base import *
 from ..utils import Patches
+from .base import *
 
 class BoundCast(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         self.to = attr['to']

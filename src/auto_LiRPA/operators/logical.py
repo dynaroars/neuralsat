@@ -1,8 +1,8 @@
-""" Logical operators"""
 from .base import *
 
 
 class BoundWhere(Bound):
+    
     def forward(self, condition, x, y):
         return torch.where(condition.to(torch.bool), x, y)
 
@@ -30,10 +30,12 @@ class BoundWhere(Bound):
         return [(None, None), (lA_x, uA_x), (lA_y, uA_y)], 0, 0
 
 class BoundNot(Bound):
+    
     def forward(self, x):
         return x.logical_not()
 
 
 class BoundEqual(Bound):
+    
     def forward(self, x, y):
         return x == y

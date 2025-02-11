@@ -1,13 +1,13 @@
-""" Convolution and padding operators"""
-from .base import *
 import numpy as np
-from .solver_utils import grb
+
 from ..patches import unify_shape, compute_patches_stride_padding, is_shape_used, create_valid_mask
-from .gradient_modules import Conv2dGrad
+from .solver_utils import grb
+from .base import *
 
 EPS = 1e-2
 
 class BoundConv(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
 
@@ -34,6 +34,8 @@ class BoundConv(Bound):
             self.has_bias = False
         self.relu_followed = False
         self.patches_start = True
+        if options is None:
+            options = {}
         self.mode = options.get("conv_mode", "matrix")
         # denote whether this Conv is followed by a ReLU
         # if self.relu_followed is False, we need to manually pad the conv patches.
@@ -43,15 +45,12 @@ class BoundConv(Bound):
     def forward(self, *x):
         # x[0]: input, x[1]: weight, x[2]: bias if self.has_bias
         bias = x[2] if self.has_bias else None
-
         output = self.F_conv(x[0], x[1], bias, self.stride, self.padding, self.dilation, self.groups)
-
         return output
 
     def bound_backward(self, last_lA, last_uA, *x, **kwargs):
         if self.is_input_perturbed(1):
-            raise NotImplementedError(
-                'Weight perturbation for convolution layers has not been implmented.')
+            raise NotImplementedError('Weight perturbation for convolution layers has not been implmented.')
 
         lA_y = uA_y = lA_bias = uA_bias = None
         weight = x[1].lower
@@ -67,25 +66,31 @@ class BoundConv(Bound):
                 shape = last_A.size()
                 # when (W−F+2P)%S != 0, construct the output_padding
                 if self.conv_dim == 2:
-                    output_padding0 = (
-                        int(self.input_shape[2]) - (int(self.output_shape[2]) - 1) * self.stride[0] + 2 *
-                        self.padding[0] - 1 - (int(weight.size()[2] - 1) * self.dilation[0]))
-                    output_padding1 = (
-                        int(self.input_shape[3]) - (int(self.output_shape[3]) - 1) * self.stride[1] + 2 *
-                        self.padding[1] - 1 - (int(weight.size()[3] - 1) * self.dilation[1]))
+                    output_padding0 = int(self.input_shape[2]) - (int(self.output_shape[2]) - 1) * self.stride[0] + 2 * self.padding[0] - 1 - (int(weight.size()[2] - 1) * self.dilation[0])
+                    output_padding1 = int(self.input_shape[3]) - (int(self.output_shape[3]) - 1) * self.stride[1] + 2 * self.padding[1] - 1 - (int(weight.size()[3] - 1) * self.dilation[1])
                     next_A = F.conv_transpose2d(
-                        last_A.reshape(shape[0] * shape[1], *shape[2:]), weight, None,
-                        stride=self.stride, padding=self.padding, dilation=self.dilation,
-                        groups=self.groups, output_padding=(output_padding0, output_padding1))
+                        last_A.reshape(shape[0] * shape[1], *shape[2:]), 
+                        weight, 
+                        None,
+                        stride=self.stride, 
+                        padding=self.padding, 
+                        dilation=self.dilation,
+                        groups=self.groups, 
+                        output_padding=(output_padding0, output_padding1),
+                    )
                 else:
                     # for 1d conv, we use conv_transpose1d()
-                    output_padding = (
-                            int(self.input_shape[2]) - (int(self.output_shape[2]) - 1) * self.stride[0] + 2 *
-                            self.padding[0] - 1 - (int(weight.size()[2] - 1) * self.dilation[0]))
+                    output_padding = int(self.input_shape[2]) - (int(self.output_shape[2]) - 1) * self.stride[0] + 2 * self.padding[0] - 1 - (int(weight.size()[2] - 1) * self.dilation[0])
                     next_A = F.conv_transpose1d(
-                        last_A.reshape(shape[0] * shape[1], *shape[2:]), weight, None,
-                        stride=self.stride, padding=self.padding, dilation=self.dilation,
-                        groups=self.groups, output_padding=output_padding)
+                        last_A.reshape(shape[0] * shape[1], *shape[2:]), 
+                        weight, 
+                        None,
+                        stride=self.stride, 
+                        padding=self.padding, 
+                        dilation=self.dilation,
+                        groups=self.groups, 
+                        output_padding=output_padding,
+                    )
 
                 next_A = next_A.view(shape[0], shape[1], *next_A.shape[1:])
                 if self.has_bias:
@@ -103,14 +108,17 @@ class BoundConv(Bound):
                     if not self.relu_followed:
                         # The last_A.patches was not padded, so we need to pad them here.
                         # If this Conv layer is followed by a ReLU layer, then the padding was already handled there and there is no need to pad again.
-                        one_d_unfolded_r = create_valid_mask(self.output_shape, last_A.patches.device,
-                                                             weight.dtype,
-                                                             last_A.patches.shape[-2:],
-                                                             last_A.stride,
-                                                             last_A.inserted_zeros,
-                                                             last_A.padding,
-                                                             last_A.output_padding,
-                                                             last_A.unstable_idx if last_A.unstable_idx else None)
+                        one_d_unfolded_r = create_valid_mask(
+                            output_shape=self.output_shape, 
+                            device=last_A.patches.device,
+                            dtype=weight.dtype,
+                            kernel_size=last_A.patches.shape[-2:],
+                            stride=last_A.stride,
+                            inserted_zeros=last_A.inserted_zeros,
+                            padding=last_A.padding,
+                            output_padding=last_A.output_padding,
+                            unstable_idx=last_A.unstable_idx if last_A.unstable_idx else None,
+                        )
                         patches = last_A.patches * one_d_unfolded_r
                     else:
                         patches = last_A.patches
@@ -123,23 +131,16 @@ class BoundConv(Bound):
                     else:
                         sum_bias = 0
 
-                    flattened_patches = patches.reshape(
-                        -1, patches.size(-3), patches.size(-2), patches.size(-1))
-                    pieces = F.conv_transpose2d(
-                        flattened_patches, insert_zeros(weight, last_A.inserted_zeros)
-                        , stride=self.stride)
+                    flattened_patches = patches.reshape(-1, patches.size(-3), patches.size(-2), patches.size(-1))
+                    pieces = F.conv_transpose2d(flattened_patches, insert_zeros(weight, last_A.inserted_zeros), stride=self.stride)
                     # New patch size: (out_c, batch, out_h, out_w, c, h, w) or (unstable_size, batch, c, h, w).
-                    pieces = pieces.view(
-                        *patches.shape[:-3], pieces.size(-3), pieces.size(-2),
-                        pieces.size(-1))
+                    pieces = pieces.view(*patches.shape[:-3], pieces.size(-3), pieces.size(-2), pieces.size(-1))
 
                 elif last_A.identity == 1:
                     # New patches have size [out_c, batch, out_h, out_w, c, h, w] if it is not sparse.
                     # New patches have size [unstable_size, batch, c, h, w] if it is sparse.
                     if last_A.unstable_idx is not None:
-                        pieces = weight.view(
-                            weight.size(0), 1, weight.size(1), weight.size(2),
-                            weight.size(3))
+                        pieces = weight.view(weight.size(0), 1, weight.size(1), weight.size(2), weight.size(3))
                         # Select based on the output channel (out_h and out_w are irrelevant here).
                         pieces = pieces[last_A.unstable_idx[0]]
                         # Expand the batch dimnension.
@@ -153,9 +154,7 @@ class BoundConv(Bound):
                             sum_bias = 0
                     else:
                         assert weight.size(0) == last_A.shape[0]
-                        pieces = weight.view(
-                            weight.size(0), 1, 1, 1, weight.size(1), weight.size(2),
-                            weight.size(3)).expand(-1, *last_A.shape[1:4], -1, -1, -1)
+                        pieces = weight.view(weight.size(0), 1, 1, 1, weight.size(1), weight.size(2), weight.size(3)).expand(-1, *last_A.shape[1:4], -1, -1, -1)
                         # The bias (x[2].lower) has shape (out_c,) need to make it (out_c, batch, out_h, out_w).
                         # Here we should transpose sum_bias to set the batch dim to 1, aiming to keep it consistent with the matrix version
                         if self.has_bias:
@@ -170,8 +169,14 @@ class BoundConv(Bound):
                 output_padding = last_A.output_padding if last_A is not None else (0, 0, 0, 0)
 
                 padding, stride, output_padding = compute_patches_stride_padding(
-                    self.input_shape, padding, stride, self.padding, self.stride,
-                    inserted_zeros, output_padding)
+                    input_shape=self.input_shape, 
+                    patches_padding=padding, 
+                    patches_stride=stride, 
+                    op_padding=self.padding, 
+                    op_stride=self.stride,
+                    inserted_zeros=inserted_zeros, 
+                    output_padding=output_padding,
+                )
 
                 if (inserted_zeros == 0 and not is_shape_used(output_padding)
                     and pieces.shape[-1] > self.input_shape[-1]):  # the patches is too large and from now on, we will use matrix mode instead of patches mode.
@@ -179,8 +184,13 @@ class BoundConv(Bound):
                     # After multiplication, the desired output is (batch_size, out_channel*output_x*output_y).
                     # A_matrix has size (batch, out_c*out_h*out_w, in_c*in_h*in_w)
                     A_matrix = patches_to_matrix(
-                        pieces, self.input_shape[1:], stride, padding,
-                        last_A.output_shape, last_A.unstable_idx)
+                        pieces=pieces, 
+                        input_shape=self.input_shape[1:], 
+                        stride=stride, 
+                        padding=padding, 
+                        output_shape=last_A.output_shape, 
+                        unstable_idx=last_A.unstable_idx,
+                    )
                     # print(f'Converting patches to matrix: old shape {pieces.shape}, size {pieces.numel()}; new shape {A_matrix.shape}, size {A_matrix.numel()}')
                     if isinstance(sum_bias, Tensor) and last_A.unstable_idx is None:
                         sum_bias = sum_bias.transpose(0, 1)
@@ -188,10 +198,13 @@ class BoundConv(Bound):
                     A_matrix = A_matrix.transpose(0,1)  # Spec dimension at the front.
                     return A_matrix, sum_bias
                 new_patches = last_A.create_similar(
-                        pieces, stride=stride, padding=padding, output_padding=output_padding,
-                        identity=0, input_shape=self.input_shape)
-                # if last_A is last_lA:
-                #     print(f'Conv : start_node {kwargs["start_node"].name} layer {self.name} {new_patches}')
+                    patches=pieces, 
+                    stride=stride, 
+                    padding=padding, 
+                    output_padding=output_padding,
+                    identity=0, 
+                    input_shape=self.input_shape,
+                )
                 return new_patches, sum_bias
             else:
                 raise NotImplementedError()
@@ -212,7 +225,7 @@ class BoundConv(Bound):
         # this layer shape (1,8,16,16)
         this_layer_shape = self.output_shape
         out_lbs, out_ubs = None, None
-        if hasattr(self, "lower"):
+        if self.is_lower_bound_current():
             # self.lower shape (1,8,16,16)
             out_lbs = self.lower.detach().cpu().numpy()
             out_ubs = self.upper.detach().cpu().numpy()
@@ -228,53 +241,26 @@ class BoundConv(Bound):
         stride0, stride1 = self.stride[0], self.stride[1]
 
         new_layer_gurobi_vars = []
-        new_layer_gurobi_constrs = []
 
         # precompute row and column index mappings
 
         # compute row mapping: from current row to input rows
-        # vectorization of following code:
-        # for out_row_idx in range(this_layer_shape[2]):
-        #     ker_row_min, ker_row_max = 0, weight_shape2
-        #     in_row_idx_min = -padding0 + stride0 * out_row_idx
-        #     in_row_idx_max = in_row_idx_min + weight_shape2 - 1
-        #     if in_row_idx_min < 0:
-        #         ker_row_min = -in_row_idx_min
-        #     if in_row_idx_max >= pre_layer_shape[2]:
-        #         ker_row_max = ker_row_max - in_row_idx_max + pre_layer_shape[2] - 1
-        #     in_row_idx_min, in_row_idx_max = max(in_row_idx_min, 0), min(in_row_idx_max,
-        #                                                                  pre_layer_shape[2] - 1)
         in_row_idx_mins = np.arange(this_layer_shape[2]) * stride0 - padding0
         in_row_idx_maxs = in_row_idx_mins + weight_shape2 - 1
         ker_row_mins = np.zeros(this_layer_shape[2], dtype=int)
         ker_row_maxs = np.ones(this_layer_shape[2], dtype=int) * weight_shape2
         ker_row_mins[in_row_idx_mins < 0] = -in_row_idx_mins[in_row_idx_mins < 0]
-        ker_row_maxs[in_row_idx_maxs >= pre_layer_shape[2]] = \
-            ker_row_maxs[in_row_idx_maxs >= pre_layer_shape[2]] - in_row_idx_maxs[in_row_idx_maxs >= pre_layer_shape[2]]\
-            + pre_layer_shape[2] - 1
+        ker_row_maxs[in_row_idx_maxs >= pre_layer_shape[2]] = ker_row_maxs[in_row_idx_maxs >= pre_layer_shape[2]] - in_row_idx_maxs[in_row_idx_maxs >= pre_layer_shape[2]] + pre_layer_shape[2] - 1
         in_row_idx_mins = np.maximum(in_row_idx_mins, 0)
         in_row_idx_maxs = np.minimum(in_row_idx_maxs, pre_layer_shape[2] - 1)
 
         # compute column mapping: from current column to input columns
-        # vectorization of following code:
-        # for out_col_idx in range(this_layer_shape[3]):
-        #     ker_col_min, ker_col_max = 0, weight_shape3
-        #     in_col_idx_min = -padding1 + stride1 * out_col_idx
-        #     in_col_idx_max = in_col_idx_min + weight_shape3 - 1
-        #     if in_col_idx_min < 0:
-        #         ker_col_min = -in_col_idx_min
-        #     if in_col_idx_max >= pre_layer_shape[3]:
-        #         ker_col_max = ker_col_max - in_col_idx_max + pre_layer_shape[3] - 1
-        #     in_col_idx_min, in_col_idx_max = max(in_col_idx_min, 0), min(in_col_idx_max,
-        #                                                                  pre_layer_shape[3] - 1)
         in_col_idx_mins = np.arange(this_layer_shape[3]) * stride1 - padding1
         in_col_idx_maxs = in_col_idx_mins + weight_shape3 - 1
         ker_col_mins = np.zeros(this_layer_shape[3], dtype=int)
         ker_col_maxs = np.ones(this_layer_shape[3], dtype=int) * weight_shape3
         ker_col_mins[in_col_idx_mins < 0] = -in_col_idx_mins[in_col_idx_mins < 0]
-        ker_col_maxs[in_col_idx_maxs >= pre_layer_shape[3]] = \
-            ker_col_maxs[in_col_idx_maxs >= pre_layer_shape[3]] - in_col_idx_maxs[in_col_idx_maxs >= pre_layer_shape[3]]\
-            + pre_layer_shape[3] - 1
+        ker_col_maxs[in_col_idx_maxs >= pre_layer_shape[3]] = ker_col_maxs[in_col_idx_maxs >= pre_layer_shape[3]] - in_col_idx_maxs[in_col_idx_maxs >= pre_layer_shape[3]] + pre_layer_shape[3] - 1
         in_col_idx_mins = np.maximum(in_col_idx_mins, 0)
         in_col_idx_maxs = np.minimum(in_col_idx_maxs, pre_layer_shape[3] - 1)
 
@@ -315,24 +301,16 @@ class BoundConv(Bound):
                     out_lb = out_lbs[0, out_chan_idx, out_row_idx, out_col_idx] if out_lbs is not None else -float('inf')
                     out_ub = out_ubs[0, out_chan_idx, out_row_idx, out_col_idx] if out_ubs is not None else float('inf')
                     if out_ub - out_lb < EPS:
-                        """
-                            If the inferred lb and ub are too close, it could lead to floating point disagreement
-                            between solver's inferred lb and ub constraints and the computed ones from ab-crown.
-                            Such disagreement can lead to "infeasible" result from the solver for feasible problem.
-                            To avoid so, we relax the box constraints.
-                            This should not affect the solver's result correctness,
-                            since the tighter lb and ub can be inferred by the solver.
-                        """
+                        # If the inferred lb and ub are too close, it could lead to floating point disagreement
+                        # between solver's inferred lb and ub constraints and the computed ones from ab-crown.
+                        # Such disagreement can lead to "infeasible" result from the solver for feasible problem.
+                        # To avoid so, we relax the box constraints.
+                        # This should not affect the solver's result correctness,
+                        # since the tighter lb and ub can be inferred by the solver.
                         out_lb, out_ub = (out_lb + out_ub - EPS) / 2., (out_lb + out_ub + EPS) / 2.
 
                     # add the output var and constraint
-                    var = model.addVar(lb=out_lb, ub=out_ub,
-                                            obj=0, vtype=grb.GRB.CONTINUOUS,
-                                            # name=f'lay{layer_idx}_[{out_chan_idx}, {out_row_idx}, {out_col_idx}]')
-                                            name=f'lay{self.name}_{neuron_idx}')
-                    # model.addConstr(lin_expr == var, name=f'lay{layer_idx}_[{out_chan_idx}, {out_row_idx}, {out_col_idx}]_eq')
-                    # new_layer_gurobi_constrs.append(
-                        # model.addConstr(lin_expr == var, name=f'lay{self.name}_{neuron_idx}_eq'))
+                    var = model.addVar(lb=out_lb, ub=out_ub, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'lay{self.name}_{neuron_idx}')
                     model.addConstr(lin_expr == var, name=f'lay{self.name}_{neuron_idx}_eq')
                     neuron_idx += 1
 
@@ -341,7 +319,6 @@ class BoundConv(Bound):
             new_layer_gurobi_vars.append(out_chan_vars)
 
         self.solver_vars = new_layer_gurobi_vars
-        # self.solver_constrs = new_layer_gurobi_constrs
         model.update()
 
     def interval_propagate(self, *v, C=None):
@@ -407,18 +384,13 @@ class BoundConv(Bound):
             if input.device != torch.device('cpu') and input.shape[0] > max_batch_size:
                 ret = []
                 for i in range((input.shape[0] + max_batch_size - 1) // max_batch_size):
-                    ret.append(self.F_conv(
-                        input[i*max_batch_size:(i+1)*max_batch_size],
-                        weight, bias, stride, padding, dilation, groups))
+                    ret.append(self.F_conv(input[i*max_batch_size:(i+1)*max_batch_size], weight, bias, stride, padding, dilation, groups))
                 return torch.cat(ret, dim=0)
             else:
                 return self.F_conv(input, weight, bias, stride, padding, dilation, groups)
-        w_new = conv2d(
-            w.reshape(shape_wconv), weight, None, self.stride, self.padding,
-            self.dilation, self.groups)
+        w_new = conv2d(w.reshape(shape_wconv), weight, None, self.stride, self.padding, self.dilation, self.groups)
         w_new = w_new.reshape(shape[0], -1, *w_new.shape[1:])
-        b_new = conv2d(
-            b, weight, bias, self.stride, self.padding, self.dilation, self.groups)
+        b_new = conv2d(b, weight, bias, self.stride, self.padding, self.dilation, self.groups)
         return LinearBound(w_new, b_new, w_new, b_new, x_L=x.x_L, x_U=x.x_U, tot_dim=x.tot_dim)
 
     def bound_forward(self, dim_in, *x):
@@ -436,38 +408,27 @@ class BoundConv(Bound):
         weight_abs = weight.abs()
         shape = mid_w.shape
         shape_wconv = [shape[0] * shape[1]] + list(shape[2:])
-        deviation_w = self.F_conv(
-            diff_w.reshape(shape_wconv), weight_abs, None,
-            self.stride, self.padding, self.dilation, self.groups)
-        deviation_b = self.F_conv(
-            diff_b, weight_abs, None,
-            self.stride, self.padding, self.dilation, self.groups)
-        center_w = self.F_conv(
-            mid_w.reshape(shape_wconv), weight, None,
-            self.stride, self.padding, self.dilation, self.groups)
-        center_b = self.F_conv(
-            mid_b, weight, bias,
-            self.stride, self.padding, self.dilation, self.groups)
+        deviation_w = self.F_conv(diff_w.reshape(shape_wconv), weight_abs, None, self.stride, self.padding, self.dilation, self.groups)
+        deviation_b = self.F_conv(diff_b,                      weight_abs, None, self.stride, self.padding, self.dilation, self.groups)
+        center_w    = self.F_conv(mid_w.reshape(shape_wconv),  weight,     None, self.stride, self.padding, self.dilation, self.groups)
+        center_b    = self.F_conv(mid_b,                       weight,     bias, self.stride, self.padding, self.dilation, self.groups)
         deviation_w = deviation_w.reshape(shape[0], -1, *deviation_w.shape[1:])
         center_w = center_w.reshape(shape[0], -1, *center_w.shape[1:])
 
         return LinearBound(
-            lw = center_w - deviation_w,
-            lb = center_b - deviation_b,
-            uw = center_w + deviation_w,
-            ub = center_b + deviation_b)
+            lw=center_w - deviation_w,
+            lb=center_b - deviation_b,
+            uw=center_w + deviation_w,
+            ub=center_b + deviation_b
+        )
 
-    def build_gradient_node(self, grad_upstream):
-        node_grad = Conv2dGrad(
-            self, self.inputs[1].param, self.stride, self.padding,
-            self.dilation, self.groups)
-        return node_grad, (grad_upstream,), []
 
     def update_requires_input_bounds(self):
         self._check_weight_perturbation()
 
 
 class BoundConvTranspose(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         assert (attr['pads'][0] == attr['pads'][2])
@@ -515,9 +476,7 @@ class BoundConvTranspose(Bound):
 
             if type(last_A) == Tensor:
                 shape = last_A.size()
-                next_A = F.conv2d(last_A.reshape(shape[0] * shape[1], *shape[2:]), weight, None,
-                                            stride=self.stride, padding=self.padding, dilation=self.dilation,
-                                            groups=self.groups)
+                next_A = F.conv2d(last_A.reshape(shape[0] * shape[1], *shape[2:]), weight, None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
                 next_A = next_A.view(shape[0], shape[1], *next_A.shape[1:])
                 if self.has_bias:
                     sum_bias = (last_A.sum((3, 4)) * x[2].lower).sum(2)
@@ -546,9 +505,9 @@ class BoundConvTranspose(Bound):
                     # pieces = F.conv_transpose2d(flattened_patches, weight.transpose(0,1).flip(-1,-2), stride=self.stride)
                     # pieces = F.conv_transpose2d(flattened_patches, weight.transpose(0,1).flip(-1,-2), stride=last_A.inserted_zeros + 1)
                     # Use padding in conv_transposed2d directly.
-                    pieces = F.conv_transpose2d(
-                            # Transpose because the weight has in_channel before out_channel.
-                            flattened_patches, insert_zeros(weight.transpose(0,1).flip(-1,-2), last_A.inserted_zeros))
+
+                    # Transpose because the weight has in_channel before out_channel.
+                    pieces = F.conv_transpose2d(flattened_patches, insert_zeros(weight.transpose(0,1).flip(-1,-2), last_A.inserted_zeros))
                     # New patch size: (out_c, batch, out_h, out_w, c, h, w) or (unstable_size, batch, c, h, w).
                     pieces = pieces.view(*patches.shape[:-3], pieces.size(-3), pieces.size(-2), pieces.size(-1))
 
@@ -602,12 +561,12 @@ class BoundConvTranspose(Bound):
                     A_matrix = A_matrix.transpose(0,1)  # Spec dimension at the front.
                     return A_matrix, sum_bias
                 new_patches = last_A.create_similar(
-                        pieces, padding=padding, inserted_zeros=inserted_zeros, output_padding=output_padding,
-                        input_shape=self.input_shape)
-                # if last_A is last_lA:
-                #     print(f'ConvT input : start_node {kwargs["start_node"].name} layer {self.name} {last_lA}')
-                #     print(f'ConvT layer : padding {self.padding} stride {self.stride} kernel {list(weight.shape[-2:])} input {list(self.input_shape)} output {list(self.output_shape)}')
-                #     print(f'ConvT output: start_node {kwargs["start_node"].name} layer {self.name} {new_patches}')
+                    patches=pieces, 
+                    padding=padding, 
+                    inserted_zeros=inserted_zeros, 
+                    output_padding=output_padding, 
+                    input_shape=self.input_shape,
+                )
                 return new_patches, sum_bias
             else:
                 raise NotImplementedError()
@@ -632,14 +591,14 @@ class BoundConvTranspose(Bound):
             diff = (h_U - h_L) / 2.0
             weight_abs = weight.abs()
             deviation = F.conv_transpose2d(diff, weight_abs, None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups, output_padding=self.output_padding)
-        elif norm > 0:
-            raise NotImplementedError()
-            norm, eps = Interval.get_perturbation(v[0])
-            # L2 norm, h_U and h_L are the same.
-            mid = h_U
-            # TODO: padding
-            deviation = torch.mul(weight, weight).sum((1, 2, 3)).sqrt() * eps
-            deviation = deviation.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        # elif norm > 0:
+        #     norm, eps = Interval.get_perturbation(v[0])
+        #     # L2 norm, h_U and h_L are the same.
+        #     mid = h_U
+        #     # TODO: padding
+        #     deviation = torch.mul(weight, weight).sum((1, 2, 3)).sqrt() * eps
+        #     deviation = deviation.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        #     raise NotImplementedError()
         else: # Here we calculate the L0 norm IBP bound using the bound proposed in [Certified Defenses for Adversarial Patches, ICLR 2020]
             raise NotImplementedError()
 
@@ -664,28 +623,23 @@ class BoundConvTranspose(Bound):
         weight_abs = weight.abs()
         shape = mid_w.shape
         shape_wconv = [shape[0] * shape[1]] + list(shape[2:])
-        deviation_w = self.F_convtranspose(
-            diff_w.reshape(shape_wconv), weight_abs, None, output_padding=self.output_padding,
-            stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
-        deviation_b = self.F_convtranspose(
-            diff_b, weight_abs, None, output_padding=self.output_padding,
-            stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
-        center_w = self.F_convtranspose(
-            mid_w.reshape(shape_wconv), weight, output_padding=self.output_padding,
-            stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
-        center_b = self.F_convtranspose(
-            mid_b, weight, bias, output_padding=self.output_padding,
-            stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
+        deviation_w = self.F_convtranspose(diff_w.reshape(shape_wconv), weight_abs, None, output_padding=self.output_padding, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
+        deviation_b = self.F_convtranspose(diff_b,                      weight_abs, None, output_padding=self.output_padding, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
+        center_w    = self.F_convtranspose(mid_w.reshape(shape_wconv),  weight,           output_padding=self.output_padding, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
+        center_b    = self.F_convtranspose(mid_b,                       weight,     bias, output_padding=self.output_padding, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
         deviation_w = deviation_w.reshape(shape[0], -1, *deviation_w.shape[1:])
         center_w = center_w.reshape(shape[0], -1, *center_w.shape[1:])
 
         return LinearBound(
-            lw = center_w - deviation_w,
-            lb = center_b - deviation_b,
-            uw = center_w + deviation_w,
-            ub = center_b + deviation_b)
+            lw=center_w - deviation_w,
+            lb=center_b - deviation_b,
+            uw=center_w + deviation_w,
+            ub=center_b + deviation_b
+        )
+
 
 class BoundPad(Bound):
+
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         if hasattr(attr, 'pads'):
@@ -754,9 +708,7 @@ class BoundPad(Bound):
                 for out_col_idx in range(this_layer_shape[3]):
                     col_pad = out_col_idx < top or out_col_idx >= this_layer_shape[3] - bottom
                     if row_pad or col_pad:
-                        v = model.addVar(lb=0, ub=0,
-                                    obj=0, vtype=grb.GRB.CONTINUOUS,
-                                    name=f'pad{self.name}_{neuron_idx}')
+                        v = model.addVar(lb=0, ub=0, obj=0, vtype=grb.GRB.CONTINUOUS, name=f'pad{self.name}_{neuron_idx}')
                     else:
                         v = gvars_array[out_chan_idx, out_row_idx - left, out_col_idx - top]
                     # print(out_chan_idx, out_row_idx, out_col_idx, row_pad, col_pad, v.LB, v.UB)

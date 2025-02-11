@@ -1,22 +1,23 @@
-import os
-import torch
-from torch import Tensor
+from typing import TYPE_CHECKING
 from collections import deque
+from torch import Tensor
 from tqdm import tqdm
-from .patches import Patches
-from .utils import *
-from .bound_ops import *
 import warnings
+import torch
+import os
 
-from typing import TYPE_CHECKING, List
+from .patches import Patches
+from .bound_ops import *
+from .utils import *
+
+
 if TYPE_CHECKING:
     from .bound_general import BoundedModule
 
 
-def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size,
-                     bound_lower=True, bound_upper=True, return_A=None):
-    if return_A is None: return_A = self.return_A
-    crown_batch_size = self.bound_opts['crown_batch_size']
+def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size, bound_lower=True, bound_upper=True, return_A=None):
+    if return_A is None: 
+        return_A = self.return_A
     output_shape = node.output_shape[1:]
     dim = int(prod(output_shape))
     if unstable_idx is None:
@@ -25,57 +26,69 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size,
     else:
         dense = False
     unstable_size = get_unstable_size(unstable_idx)
-    if self.verbose:
-        print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
-    num_batches = (unstable_size + crown_batch_size - 1) // crown_batch_size
+    print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
+    crown_batch_size = self.bound_opts['crown_batch_size']
+    auto_batch_size = AutoBatchSize(self.bound_opts['crown_batch_size'], self.device)
+
     ret = []
     ret_A = {} # if return_A, we will store A here
-    pbar = tqdm(range(num_batches)) if self.verbose else range(num_batches)
-    for i in pbar:
-        if isinstance(unstable_idx, tuple):
-            unstable_idx_batch = tuple(
-                u[i*crown_batch_size:(i+1)*crown_batch_size]
-                for u in unstable_idx
+    i = 0
+    torch.cuda.empty_cache()
+    with tqdm(total=unstable_size) as pbar:
+        while i < unstable_size:
+            crown_batch_size = auto_batch_size.batch_size
+            if isinstance(unstable_idx, tuple):
+                unstable_idx_batch = tuple(u[i : i + crown_batch_size] for u in unstable_idx)
+                unstable_size_batch = len(unstable_idx_batch[0])
+            else:
+                unstable_idx_batch = unstable_idx[i : i + crown_batch_size]
+                unstable_size_batch = len(unstable_idx_batch)
+            auto_batch_size.record_actual_batch_size(unstable_size_batch)
+
+            if node.patches_start and node.mode == "patches":
+                assert C is None or C.type == 'Patches'
+                C_batch = Patches(
+                    shape=[unstable_size_batch, batch_size, *node.output_shape[1:-2], 1, 1],
+                    identity=1, 
+                    unstable_idx=unstable_idx_batch,
+                    output_shape=[batch_size, *node.output_shape[1:]]
+                )
+            elif C.type == 'OneHot':
+                assert isinstance(node, (BoundLinear, BoundMatMul))
+                C_batch = OneHotC([batch_size, unstable_size_batch, *node.output_shape[1:]], self.device, unstable_idx_batch, None)
+            else:
+                assert C is None or C.type == 'eye'
+                C_batch = torch.zeros([1, unstable_size_batch, dim], device=self.device)
+                C_batch[0, torch.arange(unstable_size_batch), unstable_idx_batch] = 1.0
+                C_batch = C_batch.expand(batch_size, -1, -1).view(batch_size, unstable_size_batch, *output_shape)
+            # overwrite return_A options to run backward general
+            ori_return_A_option = self.return_A
+            self.return_A = return_A
+
+            batch_ret = self.backward_general(
+                bound_node=node, 
+                C=C_batch,
+                bound_lower=bound_lower, 
+                bound_upper=bound_upper,
+                average_A=False, 
+                need_A_only=False, 
+                unstable_idx=unstable_idx_batch,
+                verbose=False,
             )
-            unstable_size_batch = len(unstable_idx_batch[0])
-        else:
-            unstable_idx_batch = unstable_idx[i*crown_batch_size:(i+1)*crown_batch_size]
-            unstable_size_batch = len(unstable_idx_batch)
-        if node.patches_start and node.mode == "patches":
-            assert C in ['Patches', None]
-            C_batch = Patches(shape=[
-                unstable_size_batch, batch_size, *node.output_shape[1:-2], 1, 1],
-                identity=1, unstable_idx=unstable_idx_batch,
-                output_shape=[batch_size, *node.output_shape[1:]])
-        elif isinstance(node, (BoundLinear, BoundMatMul)):
-            assert C in ['OneHot', None]
-            C_batch = OneHotC(
-                [batch_size, unstable_size_batch, *node.output_shape[1:]],
-                self.device, unstable_idx_batch, None)
-        else:
-            assert C in ['eye', None]
-            C_batch = torch.zeros([1, unstable_size_batch, dim], device=self.device)
-            C_batch[0, torch.arange(unstable_size_batch), unstable_idx_batch] = 1.0
-            C_batch = C_batch.expand(batch_size, -1, -1).view(
-                batch_size, unstable_size_batch, *output_shape)
-        # overwrite return_A options to run backward general
-        ori_return_A_option = self.return_A
-        self.return_A = return_A
+            ret.append(batch_ret[:2])
 
-        batch_ret = self.backward_general(
-            bound_node=node, C=C_batch,
-            bound_lower=bound_lower, bound_upper=bound_upper,
-            average_A=False, need_A_only=False, unstable_idx=unstable_idx_batch,
-            verbose=False)
-        ret.append(batch_ret[:2])
+            if len(batch_ret) > 2:
+                # A found, we merge A
+                batch_A = batch_ret[2]
+                ret_A = merge_A(node, batch_A, ret_A)
 
-        if len(batch_ret) > 2:
-            # A found, we merge A
-            batch_A = batch_ret[2]
-            ret_A = merge_A(batch_A, ret_A)
+            # restore return_A options
+            self.return_A = ori_return_A_option
 
-        # restore return_A options
-        self.return_A = ori_return_A_option
+            pbar.update(unstable_size_batch)
+            i += unstable_size_batch
+            auto_batch_size.update()
+
     if bound_lower:
         lb = torch.cat([item[0].view(batch_size, -1) for item in ret], dim=1)
         if dense:
@@ -116,6 +129,7 @@ def backward_general(
     initial_ub: Optional[torch.tensor] = None,
 ):
     use_beta_crown = self.bound_opts['optimize_bound_args']['enable_beta_crown']
+    tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
 
     roots = self.roots()
 
@@ -133,23 +147,24 @@ def backward_general(
     if verbose:
         logger.debug(f'Bound backward from {start_backpropagation_at_node.__class__.__name__}({start_backpropagation_at_node.name}) '
                      f'to bound {bound_node.__class__.__name__}({bound_node.name})')
-        if isinstance(C, str):
+        if isinstance(C, BatchedCrownC):
             logger.debug(f'  C: {C}')
         elif C is not None:
             logger.debug(f'  C: shape {C.shape}, type {type(C)}')
     _print_time = bool(os.environ.get('AUTOLIRPA_PRINT_TIME', 0))
 
-    if isinstance(C, str):
+    if isinstance(C, BatchedCrownC):
         # If C is a str, use batched CROWN. If batched CROWN is not intended to
         # be enabled, C must be a explicitly provided non-str object for this function.
         if need_A_only or average_A:
-            raise ValueError(
-                'Batched CROWN is not compatible with '
-                f'need_A_only={need_A_only}, average_A={average_A}')
+            raise ValueError(f'Batched CROWN is not compatible with {need_A_only=}, {average_A=}')
         ret = self.batched_backward(
-            bound_node, C, unstable_idx,
+            node=bound_node, 
+            C=C, 
+            unstable_idx=unstable_idx,
             batch_size=roots[0].value.shape[0],
-            bound_lower=bound_lower, bound_upper=bound_upper,
+            bound_lower=bound_lower,
+            bound_upper=bound_upper,
         )
         bound_node.lower, bound_node.upper = ret[:2]
         return ret
@@ -180,14 +195,11 @@ def backward_general(
     # Save intermediate layer A matrices when required.
     A_record = {}
 
-    # print(f'- Bound backward from {start_backpropagation_at_node}')
-
     queue = deque([start_backpropagation_at_node])
     while len(queue) > 0:
         l = queue.popleft() # backward from l
-        self.backward_from[l.name].append(bound_node)
 
-        if l.name in self.root_names: 
+        if l.name in self.root_names:
             continue
 
         # if all the succeeds are done, then we can turn to this node in the next iteration.
@@ -201,12 +213,14 @@ def backward_general(
             if verbose:
                 logger.debug(f'  Bound backward to {l} (out shape {l.output_shape})')
                 if l.lA is not None:
-                    logger.debug('    lA type %s shape %s', type(l.lA), list(l.lA.shape))
+                    logger.debug(f'    lA type {type(l.lA)} shape {list(l.lA.shape)}')
                 if l.uA is not None:
-                    logger.debug('    uA type %s shape %s', type(l.uA), list(l.uA.shape))
+                    logger.debug(f'    uA type {type(l.uA)} shape {list(l.uA.shape)}')
 
             if _print_time:
                 start_time = time.time()
+
+            self.backward_from[l.name].append(bound_node)
 
             if not l.perturbed:
                 if not hasattr(l, 'forward_value'):
@@ -230,13 +244,16 @@ def backward_general(
                     start_shape = bound_node.output_shape[1:]
                 else:
                     start_shape = C.shape[0]
-                # l.preserve_mask = update_mask
             else:
                 start_shape = None
             A, lower_b, upper_b = l.bound_backward(
-                lA, uA, *l.inputs,
-                start_node=bound_node, unstable_idx=unstable_idx,
-                start_shape=start_shape)
+                lA, 
+                uA, 
+                *l.inputs,
+                start_node=bound_node, 
+                unstable_idx=unstable_idx,
+                start_shape=start_shape,
+            )
 
             # After propagation through this node, we delete its lA, uA variables.
             if bound_node.name != self.final_name:
@@ -287,15 +304,19 @@ def backward_general(
     if ub.ndim >= 2:
         ub = ub.transpose(0, 1)
 
+    lb, ub = concretize(self, batch_size, output_dim, lb, ub, average_A=average_A, node_start=bound_node)
     if self.return_A and self.needed_A_dict and bound_node.name in self.needed_A_dict:
-        save_A_record(
-            bound_node, A_record, self.A_dict, roots,
-            self.needed_A_dict[bound_node.name],
-            lb=lb, ub=ub, unstable_idx=unstable_idx)
+        save_root_A(bound_node, A_record, self.A_dict, roots, self.needed_A_dict[bound_node.name], lb=lb, ub=ub, unstable_idx=unstable_idx)
+    for root in self.roots():
+        # These are saved for `save_root_A`. We do not need them afterwards.
+        root.lb = root.ub = None
 
-    lb, ub = concretize(self, batch_size, output_dim, lb, ub,
-                        bound_lower, bound_upper,
-                        average_A=average_A, node_start=bound_node)
+    if tighten_input_bounds and isinstance(bound_node, BoundInput):
+        shape = bound_node.perturbation.x_L.shape
+        lb_reshaped = lb.reshape(shape)
+        bound_node.perturbation.x_L = lb_reshaped - lb_reshaped.detach() + torch.max(bound_node.perturbation.x_L.detach(), lb_reshaped.detach())
+        ub_reshaped = ub.reshape(shape)
+        bound_node.perturbation.x_U = ub_reshaped - ub_reshaped.detach() + torch.min(bound_node.perturbation.x_U.detach(), ub_reshaped.detach())
 
     lb = lb.view(batch_size, *output_shape) if bound_lower else None
     ub = ub.view(batch_size, *output_shape) if bound_upper else None
@@ -334,12 +355,11 @@ def check_optimized_variable_sparsity(self: 'BoundedModule', node):
     return alpha_sparsity
 
 
-def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
-                 ref_intermediate_lb=None, ref_intermediate_ub=None):
+def get_sparse_C(self: 'BoundedModule', node, ref_intermediate):
+    (sparse_intermediate_bounds, ref_intermediate_lb, ref_intermediate_ub) = ref_intermediate
     sparse_conv_intermediate_bounds = self.bound_opts.get('sparse_conv_intermediate_bounds', False)
     minimum_sparsity = self.bound_opts.get('minimum_sparsity', 0.9)
     crown_batch_size = self.bound_opts.get('crown_batch_size', 1e9)
-    # print(f'{node=} {node.output_shape=}')
     dim = int(prod(node.output_shape[1:]))
     batch_size = self.batch_size
 
@@ -351,60 +371,51 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
     alpha_is_sparse = self.check_optimized_variable_sparsity(node)
 
     # NOTE: batched CROWN is so far only supported for some of the cases below
-
     # FIXME: C matrix shape incorrect for BoundParams.
-    if (isinstance(node, BoundLinear) or isinstance(node, BoundMatMul)) and int(
-            os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0:
+    if (isinstance(node, BoundLinear) or isinstance(node, BoundMatMul)) and int(os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0:
         if sparse_intermediate_bounds:
             # If we are doing bound refinement and reference bounds are given,
             # we only refine unstable neurons.
             # Also, if we are checking against LP solver we will refine all
             # neurons and do not use this optimization.
             # For each batch element, we find the unstable neurons.
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub)
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
                 unstable_idx = []
             elif unstable_size > crown_batch_size:
                 # Create C in batched CROWN
-                newC = 'OneHot'
+                newC = BatchedCrownC('OneHot')
                 reduced_dim = True
-            elif ((0 < unstable_size <= minimum_sparsity * dim
-                    and alpha_is_sparse is None) or alpha_is_sparse):
+            elif (0 < unstable_size <= minimum_sparsity * dim and alpha_is_sparse is None) or alpha_is_sparse:
                 # When we already have sparse alpha for this layer, we always
                 # use sparse C. Otherwise we determine it by sparsity.
                 # Create an abstract C matrix, the unstable_idx are the non-zero
                 # elements in specifications for all batches.
-                newC = OneHotC(
-                    [batch_size, unstable_size, *node.output_shape[1:]],
-                    self.device, unstable_idx, None)
+                newC = OneHotC([batch_size, unstable_size, *node.output_shape[1:]], self.device, unstable_idx, None)
                 reduced_dim = True
             else:
                 unstable_idx = None
                 del ref_intermediate_lb, ref_intermediate_ub
         if not reduced_dim:
             if dim > crown_batch_size:
-                newC = 'eye'
+                newC = BatchedCrownC('eye')
             else:
                 newC = eyeC([batch_size, dim, *node.output_shape[1:]], self.device)
     elif node.patches_start and node.mode == "patches":
         if sparse_intermediate_bounds:
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub, conv=True)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub, conv=True)
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
                 unstable_idx = []
             elif unstable_size > crown_batch_size:
                 # Create C in batched CROWN
-                newC = 'Patches'
+                newC = BatchedCrownC('Patches')
                 reduced_dim = True
             # We sum over the channel direction, so need to multiply that.
-            elif (sparse_conv_intermediate_bounds
-                  and unstable_size <= minimum_sparsity * dim
-                  and alpha_is_sparse is None) or alpha_is_sparse:
+            elif (sparse_conv_intermediate_bounds and unstable_size <= minimum_sparsity * dim and alpha_is_sparse is None) or alpha_is_sparse:
                 # When we already have sparse alpha for this layer, we always
                 # use sparse C. Otherwise we determine it by sparsity.
                 # Create an abstract C matrix, the unstable_idx are the non-zero
@@ -412,8 +423,10 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 # The shape of patches is [unstable_size, batch, C, H, W].
                 newC = Patches(
                     shape=[unstable_size, batch_size, *node.output_shape[1:-2], 1, 1],
-                    identity=1, unstable_idx=unstable_idx,
-                    output_shape=[batch_size, *node.output_shape[1:]])
+                    identity=1, 
+                    unstable_idx=unstable_idx,
+                    output_shape=[batch_size, *node.output_shape[1:]],
+                )
                 reduced_dim = True
             else:
                 unstable_idx = None
@@ -421,45 +434,43 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
         # Here we create an Identity Patches object
         if not reduced_dim:
             newC = Patches(
-                None, 1, 0, [node.output_shape[1], batch_size, *node.output_shape[2:],
-                *node.output_shape[1:-2], 1, 1], 1,
-                output_shape=[batch_size, *node.output_shape[1:]])
-    elif (isinstance(node, (BoundAdd, BoundSub)) and node.mode == "patches"
-        and len(node.output_shape) >= 4):
+                patches=None, 
+                stride=1, 
+                padding=0, 
+                shape=[node.output_shape[1], batch_size, *node.output_shape[2:], *node.output_shape[1:-2], 1, 1], 
+                identity=1,
+                output_shape=[batch_size, *node.output_shape[1:]],
+            )
+    elif (isinstance(node, (BoundAdd, BoundSub)) and node.mode == "patches" and len(node.output_shape) >= 4):
         # FIXME: BoundAdd does not always have patches. Need to use a better way
         # to determine patches mode.
         # FIXME: We should not hardcode BoundAdd here!
         if sparse_intermediate_bounds:
             if crown_batch_size < 1e9:
                 warnings.warn('Batched CROWN is not supported in this case')
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub, conv=True)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub, conv=True)
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
                 unstable_idx = []
-            elif (sparse_conv_intermediate_bounds
-                  and unstable_size <= minimum_sparsity * dim
-                  and alpha_is_sparse is None) or alpha_is_sparse:
-                # When we already have sparse alpha for this layer, we always
-                # use sparse C. Otherwise we determine it by sparsity.
+            elif (sparse_conv_intermediate_bounds and unstable_size <= minimum_sparsity * dim and alpha_is_sparse is None) or alpha_is_sparse:
+                # When we already have sparse alpha for this layer, we always use sparse C. Otherwise we determine it by sparsity.
                 num_channel = node.output_shape[-3]
                 # Identity patch size: (ouc_c, 1, 1, 1, out_c, 1, 1).
-                patches = (
-                    torch.eye(num_channel, device=self.device,
-                    dtype=list(self.parameters())[0].dtype)).view(
-                        num_channel, 1, 1, 1, num_channel, 1, 1)
+                patches = torch.eye(num_channel, device=self.device, dtype=list(self.parameters())[0].dtype).view(num_channel, 1, 1, 1, num_channel, 1, 1)
                 # Expand to (out_c, 1, unstable_size, out_c, 1, 1).
-                patches = patches.expand(-1, 1, node.output_shape[-2],
-                                         node.output_shape[-1], -1, 1, 1)
-                patches = patches[unstable_idx[0], :,
-                                  unstable_idx[1], unstable_idx[2]]
-                # Expand with the batch dimension. Final shape
-                # (unstable_size, batch_size, out_c, 1, 1).
+                patches = patches.expand(-1, 1, node.output_shape[-2], node.output_shape[-1], -1, 1, 1)
+                patches = patches[unstable_idx[0], :, unstable_idx[1], unstable_idx[2]]
+                # Expand with the batch dimension. Final shape (unstable_size, batch_size, out_c, 1, 1).
                 patches = patches.expand(-1, batch_size, -1, -1, -1)
                 newC = Patches(
-                    patches, 1, 0, patches.shape, unstable_idx=unstable_idx,
-                    output_shape=[batch_size, *node.output_shape[1:]])
+                    patches=patches, 
+                    stride=1, 
+                    padding=0, 
+                    shape=patches.shape, 
+                    unstable_idx=unstable_idx,
+                    output_shape=[batch_size, *node.output_shape[1:]],
+                )
                 reduced_dim = True
             else:
                 unstable_idx = None
@@ -467,58 +478,47 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
         if not reduced_dim:
             num_channel = node.output_shape[-3]
             # Identity patch size: (ouc_c, 1, 1, 1, out_c, 1, 1).
-            patches = (
-                torch.eye(num_channel, device=self.device,
-                dtype=list(self.parameters())[0].dtype)).view(
-                    num_channel, 1, 1, 1, num_channel, 1, 1)
+            patches = torch.eye(num_channel, device=self.device, dtype=list(self.parameters())[0].dtype).view(num_channel, 1, 1, 1, num_channel, 1, 1)
             # Expand to (out_c, batch, out_h, out_w, out_c, 1, 1).
-            patches = patches.expand(-1, batch_size, node.output_shape[-2],
-                                     node.output_shape[-1], -1, 1, 1)
-            newC = Patches(patches, 1, 0, patches.shape, output_shape=[
-                batch_size, *node.output_shape[1:]])
+            patches = patches.expand(-1, batch_size, node.output_shape[-2], node.output_shape[-1], -1, 1, 1)
+            newC = Patches(patches, 1, 0, patches.shape, output_shape=[batch_size, *node.output_shape[1:]])
     else:
         if sparse_intermediate_bounds:
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub)
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
                 unstable_idx = []
             elif unstable_size > crown_batch_size:
                 # Create in C in batched CROWN
-                newC = 'eye'
+                newC = BatchedCrownC('eye')
                 reduced_dim = True
-            elif (unstable_size <= minimum_sparsity * dim
-                  and alpha_is_sparse is None) or alpha_is_sparse:
+            elif (unstable_size <= minimum_sparsity * dim and alpha_is_sparse is None) or alpha_is_sparse:
                 newC = torch.zeros([1, unstable_size, dim], device=self.device)
                 # Fill the corresponding elements to 1.0
                 newC[0, torch.arange(unstable_size), unstable_idx] = 1.0
-                newC = newC.expand(batch_size, -1, -1).view(
-                    batch_size, unstable_size, *node.output_shape[1:])
+                newC = newC.expand(batch_size, -1, -1).view(batch_size, unstable_size, *node.output_shape[1:])
                 reduced_dim = True
             else:
                 unstable_idx = None
                 del ref_intermediate_lb, ref_intermediate_ub
         if not reduced_dim:
-            if dim > 1000 and self.verbose:
+            if dim > 1000:
                 warnings.warn(
                     f"Creating an identity matrix with size {dim}x{dim} for node {node}. "
                     "This may indicate poor performance for bound computation. "
                     "If you see this message on a small network please submit "
                     "a bug report.", stacklevel=2)
             if dim > crown_batch_size:
-                newC = 'eye'
+                newC = BatchedCrownC('eye')
             else:
-                newC = torch.eye(dim, device=self.device).unsqueeze(0).expand(
-                    batch_size, -1, -1
-                ).view(batch_size, dim, *node.output_shape[1:])
+                newC = torch.eye(dim, device=self.device).unsqueeze(0).expand(batch_size, -1, -1).view(batch_size, dim, *node.output_shape[1:])
 
     return newC, reduced_dim, unstable_idx, unstable_size
 
 
-def restore_sparse_bounds(self: 'BoundedModule', node, unstable_idx,
-                          unstable_size, ref_intermediate_lb,
-                          ref_intermediate_ub, new_lower=None, new_upper=None):
+def restore_sparse_bounds(self: 'BoundedModule', node, unstable_idx, unstable_size, ref_intermediate, new_lower=None, new_upper=None):
+    ref_intermediate_lb, ref_intermediate_ub = ref_intermediate[1:]
     batch_size = self.batch_size
     if unstable_size == 0:
         # No unstable neurons. Skip the update.
@@ -585,25 +585,23 @@ def _preprocess_C(self: 'BoundedModule', C, node):
     else:
         batch_size, output_dim = C.shape[:2]
 
-    # The C matrix specified by the user has shape (batch, spec)
-    # but internally we have (spec, batch) format.
+    # The C matrix specified by the user has shape (batch, spec) but internally we have (spec, batch) format.
     if not isinstance(C, (eyeC, Patches, OneHotC)):
-        C = C.transpose(0, 1).reshape(
-            output_dim, batch_size, *node.output_shape[1:])
+        C = C.transpose(0, 1).reshape(output_dim, batch_size, *node.output_shape[1:])
     elif isinstance(C, eyeC):
         C = C._replace(shape=(C.shape[1], C.shape[0], *C.shape[2:]))
     elif isinstance(C, OneHotC):
         C = C._replace(
             shape=(C.shape[1], C.shape[0], *C.shape[2:]),
             index=C.index.transpose(0,-1),
-            coeffs=None if C.coeffs is None else C.coeffs.transpose(0,-1))
+            coeffs=None if C.coeffs is None else C.coeffs.transpose(0,-1)
+        )
 
     if isinstance(C, Patches) and C.unstable_idx is not None:
         # Sparse patches; the output shape is (unstable_size, ).
         output_shape = [C.shape[0]]
     elif prod(node.output_shape[1:]) != output_dim and not isinstance(C, Patches):
-        # For the output node, the shape of the bound follows C
-        # instead of the original output shape
+        # For the output node, the shape of the bound follows C instead of the original output shape
         #
         # TODO Maybe don't set node.lower and node.upper in this case?
         # Currently some codes still depend on node.lower and node.upper
@@ -615,59 +613,79 @@ def _preprocess_C(self: 'BoundedModule', C, node):
     return C, batch_size, output_dim, output_shape
 
 
-def concretize(self, batch_size, output_dim, lb, ub=None,
-               bound_lower=True, bound_upper=True,
-               average_A=False, node_start=None):
+def concretize_root(root, batch_size, output_dim, average_A=False, node_start=None, input_shape=None):
+    if average_A and isinstance(root, BoundParams):
+        lA = root.lA.mean(node_start.batch_dim + 1, keepdim=True).expand(root.lA.shape) if (root.lA is not None) else None
+        uA = root.uA.mean(node_start.batch_dim + 1, keepdim=True).expand(root.uA.shape) if (root.uA is not None) else None
+    else:
+        lA, uA = root.lA, root.uA
+    if not isinstance(root.lA, eyeC) and not isinstance(root.lA, Patches):
+        lA = root.lA.reshape(output_dim, batch_size, -1).transpose(0, 1) if (lA is not None) else None
+    if not isinstance(root.uA, eyeC) and not isinstance(root.uA, Patches):
+        uA = root.uA.reshape(output_dim, batch_size, -1).transpose(0, 1) if (uA is not None) else None
+    if hasattr(root, 'perturbation') and root.perturbation is not None:
+        if isinstance(root, BoundParams):
+            # add batch_size dim for weights node
+            lb = root.perturbation.concretize(root.center.unsqueeze(0), lA, sign=-1, aux=root.aux) if (lA is not None) else None
+            ub = root.perturbation.concretize(root.center.unsqueeze(0), uA, sign=+1, aux=root.aux) if (uA is not None) else None
+        else:
+            lb = root.perturbation.concretize(root.center, lA, sign=-1, aux=root.aux) if lA is not None else None
+            ub = root.perturbation.concretize(root.center, uA, sign=+1, aux=root.aux) if uA is not None else None
+    else:
+        fv = root.forward_value
+        if type(root) == BoundInput:
+            # Input node with a batch dimension
+            batch_size_ = batch_size
+        else:
+            # Parameter node without a batch dimension
+            batch_size_ = 1
+
+        def concretize_constant(A):
+            if isinstance(A, eyeC):
+                return fv.view(batch_size_, -1)
+            elif isinstance(A, Patches):
+                return A.matmul(fv, input_shape=input_shape)
+            elif type(root) == BoundInput:
+                return A.matmul(fv.view(batch_size_, -1, 1)).squeeze(-1)
+            else:
+                return A.matmul(fv.view(-1, 1)).squeeze(-1)
+
+        lb = concretize_constant(lA) if (lA is not None) else None
+        ub = concretize_constant(uA) if (uA is not None) else None
+
+    return lb, ub
+
+
+def concretize(self, batch_size, output_dim, lb=None, ub=None, average_A=False, node_start=None):
     roots = self.roots()
+    if isinstance(lb, torch.Tensor) and lb.ndim > 2:
+        lb = lb.reshape(lb.shape[0], -1)
+    if isinstance(ub, torch.Tensor) and ub.ndim > 2:
+        ub = ub.reshape(ub.shape[0], -1)
+
+    def add_b(b1, b2):
+        if b2 is None:
+            return b1
+        elif b1 is None:
+            return b2
+        else:
+            return b1 + b2
+
     for i in range(len(roots)):
-        if roots[i].lA is None and roots[i].uA is None: 
+        roots[i].lb = roots[i].ub = None
+        if roots[i].lA is None and roots[i].uA is None:
             continue
-        
-        if average_A and isinstance(roots[i], BoundParams):
-            lA = roots[i].lA.mean(node_start.batch_dim + 1, keepdim=True).expand(roots[i].lA.shape) if bound_lower else None
-            uA = roots[i].uA.mean(node_start.batch_dim + 1, keepdim=True).expand(roots[i].uA.shape) if bound_upper else None
-        else:
-            lA, uA = roots[i].lA, roots[i].uA
-        
-        if not isinstance(roots[i].lA, eyeC) and not isinstance(roots[i].lA, Patches):
-            lA = roots[i].lA.reshape(output_dim, batch_size, -1).transpose(0, 1) if bound_lower else None
-        if not isinstance(roots[i].uA, eyeC) and not isinstance(roots[i].uA, Patches):
-            uA = roots[i].uA.reshape(output_dim, batch_size, -1).transpose(0, 1) if bound_upper else None
-        
-        # save bias for input
-        roots[i].lbias = lb
-        roots[i].ubias = ub
+        roots[i].lb, roots[i].ub = concretize_root(
+            root=roots[i], 
+            batch_size=batch_size, 
+            output_dim=output_dim, 
+            average_A=average_A,
+            node_start=node_start, 
+            input_shape=roots[0].center.shape,
+        )
+        lb = add_b(lb, roots[i].lb)
+        ub = add_b(ub, roots[i].ub)
 
-        if hasattr(roots[i], 'perturbation') and roots[i].perturbation is not None:
-            if isinstance(roots[i], BoundParams):
-                # add batch_size dim for weights node
-                lb = lb + roots[i].perturbation.concretize(roots[i].center.unsqueeze(0), lA, sign=-1, aux=roots[i].aux) if bound_lower else None
-                ub = ub + roots[i].perturbation.concretize(roots[i].center.unsqueeze(0), uA, sign=+1, aux=roots[i].aux) if bound_upper else None
-            else:
-                lb = lb + roots[i].perturbation.concretize(roots[i].center, lA, sign=-1, aux=roots[i].aux) if bound_lower else None
-                ub = ub + roots[i].perturbation.concretize(roots[i].center, uA, sign=+1, aux=roots[i].aux) if bound_upper else None
-        else:
-            fv = roots[i].forward_value
-            if type(roots[i]) == BoundInput:
-                # Input node with a batch dimension
-                batch_size_ = batch_size
-            else:
-                # Parameter node without a batch dimension
-                batch_size_ = 1
-
-            def _add_constant(A, b):
-                if isinstance(A, eyeC):
-                    b = b + fv.view(batch_size_, -1)
-                elif isinstance(A, Patches):
-                    b = b + A.matmul(fv, input_shape=roots[0].center.shape)
-                elif type(roots[i]) == BoundInput:
-                    b = b + A.matmul(fv.view(batch_size_, -1, 1)).squeeze(-1)
-                else:
-                    b = b + A.matmul(fv.view(-1, 1)).squeeze(-1)
-                return b
-
-            lb = _add_constant(lA, lb) if bound_lower else None
-            ub = _add_constant(uA, ub) if bound_upper else None
     return lb, ub
 
 
@@ -684,7 +702,15 @@ def addA(A1, A2):
 
 
 def add_bound(node, node_pre, lA=None, uA=None):
-    """Propagate lA and uA to a preceding node."""
+    """
+    Propagate lA and uA to a preceding node.
+    @param node:        The current bounded node
+    @param node_pre:    An input of the current bounded node that needs lA, lbias ,etc. back propagated to it
+    @param lA:          lA matrix associated with the current bounded node
+    @param uA:          uA matrix associated with the current bounded node
+    @return:
+    """
+
     if lA is not None:
         if node_pre.lA is None:
             # First A added to this node.
@@ -716,10 +742,11 @@ def add_constant_node(lb, ub, node):
     return lb, ub
 
 
-def save_A_record(node, A_record, A_dict, roots, needed_A_dict, lb, ub, unstable_idx):
+def save_root_A(node, A_record, A_dict, roots, needed_A_dict, lb, ub, unstable_idx):
     root_A_record = {}
     for i in range(len(roots)):
-        if roots[i].lA is None and roots[i].uA is None: continue
+        if roots[i].lA is None and roots[i].uA is None:
+            continue
         if roots[i].name in needed_A_dict:
             if roots[i].lA is not None:
                 if isinstance(roots[i].lA, Patches):
@@ -728,7 +755,6 @@ def save_A_record(node, A_record, A_dict, roots, needed_A_dict, lb, ub, unstable
                     _lA = roots[i].lA.transpose(0, 1).detach()
             else:
                 _lA = None
-
             if roots[i].uA is not None:
                 if isinstance(roots[i].uA, Patches):
                     _uA = roots[i].uA
@@ -736,14 +762,21 @@ def save_A_record(node, A_record, A_dict, roots, needed_A_dict, lb, ub, unstable
                     _uA = roots[i].uA.transpose(0, 1).detach()
             else:
                 _uA = None
+
+            # Include all the bias terms except the one concretized from the
+            # current root node.
+            lb_ = lb - roots[i].lb if (roots[i].lb is not None) else lb
+            ub_ = ub - roots[i].ub if (roots[i].ub is not None) else ub
+
             root_A_record.update({roots[i].name: {
                 "lA": _lA,
                 "uA": _uA,
                 # When not used, lb or ub is tensor(0). They have been transposed above.
-                "lbias": lb.detach() if lb.ndim > 1 else None,
-                "ubias": ub.detach() if ub.ndim > 1 else None,
+                "lbias": lb_.detach() if lb_.ndim > 1 else None,
+                "ubias": ub_.detach() if ub_.ndim > 1 else None,
                 "unstable_idx": unstable_idx
             }})
+
     root_A_record.update(A_record)  # merge to existing A_record
     A_dict.update({node.name: root_A_record})
 
@@ -751,9 +784,7 @@ def save_A_record(node, A_record, A_dict, roots, needed_A_dict, lb, ub, unstable
 def select_unstable_idx(ref_intermediate_lb, ref_intermediate_ub, unstable_locs, max_crown_size):
     """When there are too many unstable neurons, only bound those
     with the loosest reference bounds."""
-    gap = (
-        ref_intermediate_ub[:, unstable_locs]
-        - ref_intermediate_lb[:, unstable_locs]).sum(dim=0)
+    gap = (ref_intermediate_ub[:, unstable_locs] - ref_intermediate_lb[:, unstable_locs]).sum(dim=0)
     indices = torch.argsort(gap, descending=True)
     indices_selected = indices[:max_crown_size]
     indices_selected, _ = torch.sort(indices_selected)
@@ -761,8 +792,7 @@ def select_unstable_idx(ref_intermediate_lb, ref_intermediate_ub, unstable_locs,
     return indices_selected
 
 
-def get_unstable_locations(self: 'BoundedModule', ref_intermediate_lb,
-                           ref_intermediate_ub, conv=False, channel_only=False):
+def get_unstable_locations(self: 'BoundedModule', ref_intermediate_lb, ref_intermediate_ub, conv=False, channel_only=False):
     # FIXME (2023): This function should be a member class of the Bound object, since the
     # definition of unstable neurons depends on the activation function.
     max_crown_size = self.bound_opts.get('max_crown_size', int(1e9))
@@ -792,8 +822,7 @@ def get_unstable_locations(self: 'BoundedModule', ref_intermediate_lb,
 
     unstable_size = get_unstable_size(unstable_idx)
     if unstable_size > max_crown_size:
-        indices_seleted = select_unstable_idx(
-            ref_intermediate_lb, ref_intermediate_ub, unstable_locs, max_crown_size)
+        indices_seleted = select_unstable_idx(ref_intermediate_lb, ref_intermediate_ub, unstable_locs, max_crown_size)
         if isinstance(unstable_idx, tuple):
             unstable_idx = tuple(u[indices_seleted] for u in unstable_idx)
         else:
@@ -803,14 +832,7 @@ def get_unstable_locations(self: 'BoundedModule', ref_intermediate_lb,
     return unstable_idx, unstable_size
 
 
-def get_alpha_crown_start_nodes(
-        self: 'BoundedModule',
-        node,
-        c=None,
-        share_alphas=False,
-        final_node_name=None,
-        backward_from_node: Bound = None,
-    ):
+def get_alpha_crown_start_nodes(self: 'BoundedModule', node, c=None, share_alphas=False, final_node_name=None):
     """
     Given a layer "node", return a list of following nodes after this node whose bounds
     will propagate through this node. Each element in the list is a tuple with 3 elements:
@@ -821,21 +843,14 @@ def get_alpha_crown_start_nodes(
     use_full_conv_alpha_thresh = self.bound_opts.get('use_full_conv_alpha_thresh', 512)
 
     start_nodes = []
-    # In most cases, backward_from_node == node
-    # Only if output constraints are used, will they differ: the node that should be
-    # bounded (node) needs alphas for *all* layers, not just those behind it.
-    # In this case, backward_from_node will be the input node
-    assert backward_from_node == node
 
-    for nj in self.backward_from[backward_from_node.name]:  # Pre-activation layers.
+    for nj in self.backward_from[node.name]:  # Pre-activation layers.
         unstable_idx = None
         use_sparse_conv = None  # Whether a sparse-spec alpha is used for a conv output node. None for non-conv output node.
         use_full_conv_alpha = self.bound_opts.get('use_full_conv_alpha', False)
 
         # Find the indices of unstable neuron, used for create sparse-feature alpha.
-        if (sparse_intermediate_bounds
-                and isinstance(node, BoundOptimizableActivation)
-                and nj.name != final_node_name and not share_alphas):
+        if (sparse_intermediate_bounds and isinstance(node, BoundOptimizableActivation) and nj.name != final_node_name and not share_alphas):
             # Create sparse optimization variables for intermediate neurons.
             # These are called "sparse-spec" alpha because we only create alpha only for
             # the intermediate of final output nodes whose bounds are needed.
@@ -844,20 +859,17 @@ def get_alpha_crown_start_nodes(
             # FIXME: whether an layer has unstable/stable neurons should be in Bound obj.
             # FIXME: get_unstable_locations should be a member class of ReLU.
             if len(nj.output_name) == 1 and isinstance(self[nj.output_name[0]], (BoundRelu, BoundSignMerge, BoundMaxPool)):
-                if ((isinstance(nj, (BoundLinear, BoundMatMul)))
-                        and int(os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0):
+                if ((isinstance(nj, (BoundLinear, BoundMatMul))) and int(os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0):
                     # unstable_idx has shape [neuron_size_of_nj]. Batch dimension is reduced.
                     unstable_idx, _ = self.get_unstable_locations(nj.lower, nj.upper)
                 elif isinstance(nj, (BoundConv, BoundAdd, BoundSub, BoundBatchNormalization)) and nj.mode == 'patches':
                     if nj.name in node.patch_size:
                         # unstable_idx has shape [channel_size_of_nj]. Batch and spatial dimensions are reduced.
-                        unstable_idx, _ = self.get_unstable_locations(
-                            nj.lower, nj.upper, channel_only=not use_full_conv_alpha, conv=True)
+                        unstable_idx, _ = self.get_unstable_locations(nj.lower, nj.upper, channel_only=not use_full_conv_alpha, conv=True)
                         use_sparse_conv = False  # alpha is shared among channels. Sparse-spec alpha in hw dimension not used.
                         if use_full_conv_alpha and unstable_idx[0].size(0) > use_full_conv_alpha_thresh:
                             # Too many unstable neurons. Using shared alpha per channel.
-                            unstable_idx, _ = self.get_unstable_locations(
-                                nj.lower, nj.upper, channel_only=True, conv=True)
+                            unstable_idx, _ = self.get_unstable_locations(nj.lower, nj.upper, channel_only=True, conv=True)
                             use_full_conv_alpha = False
                     else:
                         # Matrix mode for conv layers. Although the bound propagation started with patches mode,
@@ -898,13 +910,13 @@ def get_alpha_crown_start_nodes(
             assert not sparse_intermediate_bounds or use_sparse_conv is not False  # Double check our assumption holds. If this fails, then we created wrong shapes for alpha.
             output_shape = nj.lower.shape[1:]  # FIXME: for non-relu activations it's still expecting a prod.
         start_nodes.append((nj.name, output_shape, unstable_idx, False))
+
     return start_nodes
 
 
-def merge_A(batch_A, ret_A):
+def merge_A(node, batch_A, ret_A):
     for key0 in batch_A:
-        if key0 not in ret_A: 
-            ret_A[key0] = {}
+        if key0 not in ret_A: ret_A[key0] = {}
         for key1 in batch_A[key0]:
             value = batch_A[key0][key1]
             if key1 not in ret_A[key0]:
@@ -918,8 +930,7 @@ def merge_A(batch_A, ret_A):
                         "unstable_idx": value["unstable_idx"]
                     }
                 })
-            # elif key0 == node.name:
-            else:
+            elif key0 == node.name:
                 # merge:
                 # the batch splitting only happens for current node, i.e.,
                 # for other nodes the returned lA should be the same across different batches

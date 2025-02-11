@@ -1,14 +1,15 @@
-import logging
-import time
-import torch
-import torch.nn as nn
-import os
-import sys
 from collections import defaultdict, namedtuple
 from functools import reduce
+from typing import Tuple
+import torch.nn as nn
 import operator
 import warnings
-from typing import Tuple
+import logging
+import torch
+import time
+import sys
+import os
+
 from .patches import Patches
 
 logging.basicConfig(
@@ -24,6 +25,7 @@ warnings.simplefilter("once")
 # Special identity matrix. Avoid extra computation of identity matrix multiplication in various places.
 eyeC = namedtuple('eyeC', 'shape device')
 OneHotC = namedtuple('OneHotC', 'shape device index coeffs')
+BatchedCrownC = namedtuple('BatchedCrownC', 'type')
 
 def onehotc_to_dense(one_hot_c: OneHotC, dtype: torch.dtype) -> torch.Tensor:
     shape = one_hot_c.shape  # [spec, batch, C, H, W]
@@ -38,16 +40,12 @@ def onehotc_to_dense(one_hot_c: OneHotC, dtype: torch.dtype) -> torch.Tensor:
     dense = dense.view(shape[0], shape[1], *shape[2:])
     return dense
 
-# Benchmarking mode disable some expensive assertions.
-Benchmarking = True
-
 reduction_sum = lambda x: x.sum(1, keepdim=True)
 reduction_mean = lambda x: x.mean(1, keepdim=True)
 reduction_max = lambda x: x.max(1, keepdim=True).values
 reduction_min = lambda x: x.min(1, keepdim=True).values
 
 MIN_HALF_FP = 5e-8  # 2**-24, which is the smallest value that float16 can be represented
-
 
 def reduction_str2func(reduction_func):
     if type(reduction_func) == str:
@@ -100,82 +98,8 @@ def multi_spec_keep_func_all(x):
     return torch.all(x, dim=-1)
 
 
-
-class MultiAverageMeter(object):
-    """Computes and stores the average and current value for multiple metrics"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.sum_meter = defaultdict(float)
-        self.lasts = defaultdict(float)
-        self.counts_meter = defaultdict(int)
-        self.batch_size = 1
-
-    def set_batch_size(self, batch_size):
-        self.batch_size = batch_size
-
-    def update(self, key, val, n=None):
-        if val is None:
-            return
-        if n is None:
-            n = self.batch_size
-        if isinstance(val, torch.Tensor):
-            val = val.item()
-        self.lasts[key] = val
-        self.sum_meter[key] += val * n
-        self.counts_meter[key] += n
-
-    def last(self, key):
-        return self.lasts[key]
-
-    def avg(self, key):
-        if self.counts_meter[key] == 0:
-            return 0.0
-        else:
-            return self.sum_meter[key] / self.counts_meter[key]
-
-    def __repr__(self):
-        s = ""
-        for k in self.sum_meter:
-            s += "{}={:.4f} ".format(k, self.avg(k))
-        return s.strip()
-
-
-class MultiTimer(object):
-    """Count the time for each part of training."""
-    def __init__(self):
-        self.reset()
-    def reset(self):
-        self.timer_starts = defaultdict(float)
-        self.timer_total = defaultdict(float)
-    def start(self, key):
-        if self.timer_starts[key] != 0:
-            raise RuntimeError("start() is called more than once")
-        self.timer_starts[key] = time.time()
-    def stop(self, key):
-        if key not in self.timer_starts:
-            raise RuntimeError("Key does not exist; please call start() before stop()")
-        self.timer_total[key] += time.time() - self.timer_starts[key]
-        self.timer_starts[key] = 0
-    def total(self, key):
-        return self.timer_total[key]
-    def __repr__(self):
-        s = ""
-        for k in self.timer_total:
-            s += "{}_time={:.3f} ".format(k, self.timer_total[k])
-        return s.strip()
-
-
-class Flatten(nn.Flatten):
-    """Legacy Flatten class.
-
-    It was previously created when nn.Flatten was not supported. Simply use
-    nn.Flatten in the future."""
-    pass
-
-
 class Unflatten(nn.Module):
+    
     def __init__(self, wh):
         super().__init__()
         self.wh = wh # width and height of the feature maps
@@ -239,8 +163,7 @@ def prod(x):
 
 
 def batched_index_select(input, dim, index):
-    # Assuming the input has a batch dimension.
-    # index has dimensin [spec, batch].
+    # Assuming the input has a batch dimension. `index`` has dimensin [spec, batch].
     if input.ndim == 4:
         # Alphas for fully connected layers, shape [2, spec, batch, neurons]
         index = index.unsqueeze(-1).unsqueeze(0).expand(input.size(0), -1, -1, input.size(3))
@@ -261,17 +184,13 @@ def batched_index_select(input, dim, index):
 
 def get_spec_matrix(X, y, num_classes):
     with torch.no_grad():
-        c = (torch.eye(num_classes).type_as(X)[y].unsqueeze(1)
-            - torch.eye(num_classes).type_as(X).unsqueeze(0))
-        I = (~(y.unsqueeze(1) == torch.arange(num_classes).type_as(y).unsqueeze(0)))
-        c = (c[I].view(X.size(0), num_classes - 1, num_classes))
+        c = torch.eye(num_classes).type_as(X)[y].unsqueeze(1) - torch.eye(num_classes).type_as(X).unsqueeze(0)
+        I = ~(y.unsqueeze(1) == torch.arange(num_classes).type_as(y).unsqueeze(0))
+        c = c[I].view(X.size(0), num_classes - 1, num_classes)
     return c
 
 
-def unravel_index(
-    indices: torch.LongTensor,
-    shape: Tuple[int, ...],
-) -> torch.LongTensor:
+def unravel_index(indices: torch.LongTensor, shape: Tuple[int, ...]) -> torch.LongTensor:
     r"""Converts flat indices into unraveled coordinates in a target shape.
 
     Args:
@@ -294,18 +213,38 @@ def unravel_index(
     return list(reversed(coord))
 
 
-def fill_template(out, template):
-    if template is None:
-        return out.popleft()
-    elif isinstance(template, (list, tuple)):
-        res = []
-        for t in template:
-            res.append(fill_template(t))
-        return tuple(res) if isinstance(template, tuple) else res
-    elif isinstance(template, dict):
-        res = {}
-        for key in template:
-            res[key] = fill_template(template[key])
-        return res
-    else:
-        raise NotImplementedError
+class AutoBatchSize:
+    
+    def __init__(self, init_batch_size, device, vram_ratio=0.9, enable=True):
+        self.batch_size = init_batch_size
+        self.max_actual_batch_size = 0
+        self.device = device
+        self.vram_ratio = vram_ratio
+        self.enable = enable
+
+    def record_actual_batch_size(self, actual_batch_size):
+        """Record the actual batch size used.
+
+        It may be smaller than self.batch_size, especially for the early batches.
+        """
+        self.max_actual_batch_size = max(self.max_actual_batch_size, actual_batch_size)
+
+    def update(self):
+        """Check if the batch size can be enlarged."""
+        if not self.enable:
+            return None
+        # Only try to update the batch size if the current batch size has
+        # been actually used, as indicated by `max_actual_batch_size`
+        if self.device == 'cpu' or self.max_actual_batch_size < self.batch_size:
+            return None
+        total_vram = torch.cuda.get_device_properties(self.device).total_memory
+        current_vram = torch.cuda.memory_reserved(self.device)
+        if current_vram * 2 >= total_vram * self.vram_ratio:
+            return None
+        new_batch_size = self.batch_size * 2
+        self.batch_size = new_batch_size
+        logger.debug('Automatically updated batch size to %d', new_batch_size)
+        return {
+            'current_vram': current_vram,
+            'total_vram': total_vram,
+        }

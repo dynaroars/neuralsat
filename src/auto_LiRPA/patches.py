@@ -1,6 +1,6 @@
-import torch
 import torch.nn.functional as F
 from torch import Tensor
+import torch
 
 
 def insert_zeros(image, s):
@@ -22,19 +22,21 @@ def insert_zeros(image, s):
         return image
     matrix = torch.zeros(size=(image.size(0), image.size(1), image.size(2) * (s+1) - s, image.size(3) * (s+1) - s), dtype=image.dtype, device=image.device)
     matrix_stride = matrix.stride()
-    selected_matrix = torch.as_strided(matrix, [
-          # Shape of the output matrix.
-          matrix.size(0),  # Batch size.
-          matrix.size(1),  # Channel.
-          image.size(2),  # H (without zeros)
-          image.size(3),  # W (without zeros)
-          ], [
-          # Stride of the output matrix.
-          matrix_stride[0],  # Batch size dimension, keep using the old stride.
-          matrix_stride[1],  # Channel dimension.
-          matrix_stride[2] * (s + 1),  # Move s+1 rows.
-          s+1,  # Move s+1 pixels.
-    ])  # Move a pixel (on the width direction).
+    selected_matrix = torch.as_strided(
+        matrix, 
+        [ # Shape of the output matrix.
+            matrix.size(0),  # Batch size.
+            matrix.size(1),  # Channel.
+            image.size(2),  # H (without zeros)
+            image.size(3),  # W (without zeros)
+        ], 
+        [ # Stride of the output matrix.
+            matrix_stride[0],  # Batch size dimension, keep using the old stride.
+            matrix_stride[1],  # Channel dimension.
+            matrix_stride[2] * (s + 1),  # Move s+1 rows.
+            s+1,  # Move s+1 pixels.
+        ]
+    )  # Move a pixel (on the width direction).
     selected_matrix[:] = image
     return matrix
 
@@ -44,16 +46,17 @@ def remove_zeros(image, s, remove_zero_start_idx=(0,0)):
         return image
     matrix_stride = image.stride()
     storage_offset = image.storage_offset()
-    return torch.as_strided(image, [
-        # Shape of the output matrix.
-        *image.shape[:-2],
-        (image.size(-2) - remove_zero_start_idx[-2] + (s + 1) - 1) // (s + 1),  # H (without zeros)
-        (image.size(-1) - remove_zero_start_idx[-1] + (s + 1) - 1) // (s + 1),  # W (without zeros)
-        ], [
-        # Stride of the output matrix.
-        *matrix_stride[:-2],
-        matrix_stride[-2] * (s + 1),  # Move s+1 rows.
-        matrix_stride[-1] * (s + 1),  # Move s+1 pixels.
+    return torch.as_strided(
+        image, 
+        [ # Shape of the output matrix.
+            *image.shape[:-2],
+            (image.size(-2) - remove_zero_start_idx[-2] + (s + 1) - 1) // (s + 1),  # H (without zeros)
+            (image.size(-1) - remove_zero_start_idx[-1] + (s + 1) - 1) // (s + 1),  # W (without zeros)
+        ], 
+        [ # Stride of the output matrix.
+            *matrix_stride[:-2],
+            matrix_stride[-2] * (s + 1),  # Move s+1 rows.
+            matrix_stride[-1] * (s + 1),  # Move s+1 pixels.
         ],
         storage_offset + matrix_stride[-2] * remove_zero_start_idx[-2] + matrix_stride[-1] * remove_zero_start_idx[-1]
     )
@@ -64,14 +67,11 @@ def unify_shape(shape):
     Convert shapes to 4-tuple: (left, right, top, bottom).
     """
     if shape is not None:
-        if isinstance(shape, int):
-            # Same on all four directions.
+        if isinstance(shape, int): # Same on all four directions.
             shape = (shape, shape, shape, shape)
-        if len(shape) == 2:
-            # (height direction, width direction).
+        if len(shape) == 2: # (height direction, width direction).
             shape = (shape[1], shape[1], shape[0], shape[0])
         assert len(shape) == 4
-    # Returned: (left, right, top, bottom).
     return shape
 
 
@@ -81,12 +81,10 @@ def simplify_shape(shape):
     Used to avoid extra padding operation because the padding
     operation in F.conv2d is not general enough.
     """
-    if len(shape) == 4:
-        # 4-tuple: (left, right, top, bottom).
+    if len(shape) == 4: # 4-tuple: (left, right, top, bottom).
         if shape[0] == shape[1] and shape[2] == shape[3]:
             shape = (shape[2], shape[0])
-    if len(shape) == 2:
-        # 2-tuple: (height direction, width direction).
+    if len(shape) == 2: # 2-tuple: (height direction, width direction).
         if shape[0] == shape[1]:
             shape = shape[0]
     return shape
@@ -100,6 +98,7 @@ def is_shape_used(shape, expected=0):
 
 
 class Patches:
+    
     """
     A special class which denotes a convoluntional operator as a group of patches
     the shape of Patches.patches is [batch_size, num_of_patches, out_channel, in_channel, M, M]
@@ -108,6 +107,7 @@ class Patches:
     num_of_patches = ((N + padding * 2 - M)//stride + 1) ** 2
     Here we only consider kernels with the same H and W
     """
+
     def __init__(
             self, patches=None, stride=1, padding=0, shape=None, identity=0,
             unstable_idx=None, output_shape=None, inserted_zeros=0, output_padding=0, input_shape=None):
@@ -167,16 +167,21 @@ class Patches:
                 pieces = pieces.transpose(0, 1)
                 pieces = pieces.view(pieces.shape[0], -1, pieces.shape[3], pieces.shape[4], pieces.shape[5], pieces.shape[6], pieces.shape[7]).transpose(0,1)
             A1_matrix = patches_to_matrix(
-                pieces, input_shape, self.stride, self.padding,
-                output_shape=self.output_shape, unstable_idx=self.unstable_idx)
+                pieces=pieces, 
+                input_shape=input_shape, 
+                stride=self.stride, 
+                padding=self.padding,
+                output_shape=self.output_shape, 
+                unstable_idx=self.unstable_idx,
+            )
             return A1_matrix.transpose(0, 1) + matrix
 
     def __str__(self):
         return (
-                f"Patches(stride={self.stride}, padding={self.padding}, "
-                f"output_padding={self.output_padding}, inserted_zeros={self.inserted_zeros}, "
-                f"kernel_shape={list(self.patches.shape)}, input_shape={self.input_shape}, "
-                f"output_shape={self.output_shape}, unstable_idx={type(self.unstable_idx)})"
+            f"Patches(stride={self.stride}, padding={self.padding}, "
+            f"output_padding={self.output_padding}, inserted_zeros={self.inserted_zeros}, "
+            f"kernel_shape={list(self.patches.shape)}, input_shape={self.input_shape}, "
+            f"output_shape={self.output_shape}, unstable_idx={type(self.unstable_idx)})"
         )
 
     @property
@@ -190,9 +195,8 @@ class Patches:
                 return self.unstable_idx.device
         raise RuntimeError("Patches object is unintialized and cannot determine its device.")
 
-    def create_similar(self, patches=None, stride=None, padding=None, identity=None,
-                       unstable_idx=None, output_shape=None, inserted_zeros=None, output_padding=None,
-                       input_shape=None):
+    def create_similar(self, patches=None, stride=None, padding=None, identity=None, unstable_idx=None, 
+                       output_shape=None, inserted_zeros=None, output_padding=None, input_shape=None):
         """
         Create a new Patches object with new patches weights, and keep other properties the same.
         """
@@ -201,7 +205,7 @@ class Patches:
         if new_identity and (new_patches is not None):
             raise ValueError("Identity Patches should have .patches property set to 0.")
         return Patches(
-            new_patches,
+            patches=new_patches,
             stride=self.stride if stride is None else stride,
             padding=self.padding if padding is None else padding,
             shape=new_patches.shape,
@@ -216,15 +220,20 @@ class Patches:
     def to_matrix(self, input_shape):
         assert not is_shape_used(self.output_padding)
         return patches_to_matrix(
-            self.patches, input_shape, self.stride, self.padding,
-            self.output_shape, self.unstable_idx, self.inserted_zeros
+            pieces=self.patches, 
+            input_shape=input_shape, 
+            stride=self.stride, 
+            padding=self.padding,
+            output_shape=self.output_shape, 
+            unstable_idx=self.unstable_idx, 
+            inserted_zeros=self.inserted_zeros,
         )
 
     def simplify(self):
         """Merge stride and inserted_zeros; if they are the same they can cancel out."""
         stride = [self.stride, self.stride] if isinstance(self.stride, int) else self.stride
-        if (self.inserted_zeros > 0 and self.inserted_zeros + 1 == stride[0] and
-                stride[0] == stride[1] and (self.patches.size(-1) % stride[1]) == 0 and (self.patches.size(-2) % stride[0]) == 0):
+        if (self.inserted_zeros > 0 and self.inserted_zeros + 1 == stride[0] and stride[0] == stride[1] 
+                and (self.patches.size(-1) % stride[1]) == 0 and (self.patches.size(-2) % stride[0]) == 0):
             # print(f'before simplify: patches={self.patches.size()} padding={self.padding}, stride={self.stride}, output_padding={self.output_padding}, inserted_zeros={self.inserted_zeros}')
             full_stride = [stride[1], stride[1], stride[0], stride[0]]
             # output_padding = tuple(p // s for p, s in zip(output_padding, full_stride))
@@ -266,9 +275,13 @@ class Patches:
 
         # unfold the input as [batch_size, out_h, out_w, in_c, H, W]
         unfold_input = inplace_unfold(
-            input, kernel_size=patches.shape[-2:],
-            padding=self.padding, stride=self.stride,
-            inserted_zeros=self.inserted_zeros, output_padding=self.output_padding)
+            image=input, 
+            kernel_size=patches.shape[-2:],
+            padding=self.padding, 
+            stride=self.stride,
+            inserted_zeros=self.inserted_zeros, 
+            output_padding=self.output_padding,
+        )
         if self.unstable_idx is not None:
             # We need to add a out_c dimension and select from it.
             unfold_input = unfold_input.unsqueeze(0).expand(self.output_shape[1], -1, -1, -1, -1, -1, -1)
@@ -293,19 +306,19 @@ def compute_patches_stride_padding(input_shape, patches_padding, patches_stride,
     # If p is 4-tuple, then it is padding p[2], p[3] on top and bottom sides of H, p[0] and p[1] on left and right sides of W
 
     # If any of the inputs are not tuple/list, we convert them to tuple.
-    full_patch_padding, full_op_padding, full_patch_stride, full_op_stride = [
-            (p, p) if isinstance(p, int) else p for p in [patches_padding, op_padding, patches_stride, op_stride]]
-    full_patch_padding, full_op_padding, full_patch_stride, full_op_stride = [
-            (p[1], p[1], p[0], p[0]) if len(p) == 2 else p for p in [full_patch_padding, full_op_padding, full_patch_stride, full_op_stride]]
+    full_patch_padding, full_op_padding, full_patch_stride, full_op_stride = [(p, p) if isinstance(p, int) else p for p in [patches_padding, op_padding, patches_stride, op_stride]]
+    full_patch_padding, full_op_padding, full_patch_stride, full_op_stride = [(p[1], p[1], p[0], p[0]) if len(p) == 2 else p for p in [full_patch_padding, full_op_padding, full_patch_stride, full_op_stride]]
     # Compute the new padding and stride after this layer.
     new_padding = tuple(pp * os + op * (inserted_zeros + 1) for pp, op, os in zip(full_patch_padding, full_op_padding, full_op_stride))
     new_stride = tuple(ps * os for ps, os in zip(full_patch_stride, full_op_stride))
 
     output_padding = unify_shape(output_padding)
-    new_output_padding = (output_padding[0],  # Left
-          output_padding[1] + inserted_zeros * input_shape[3] % full_op_stride[2],  # Right
-          output_padding[2],  # Top
-          output_padding[3] + inserted_zeros * input_shape[2] % full_op_stride[0])  # Bottom
+    new_output_padding = (
+        output_padding[0],  # Left
+        output_padding[1] + inserted_zeros * input_shape[3] % full_op_stride[2],  # Right
+        output_padding[2],  # Top
+        output_padding[3] + inserted_zeros * input_shape[2] % full_op_stride[0]  # Bottom
+    )
 
     # Merge into a single number if all numbers are identical.
     if simplify:
@@ -317,19 +330,21 @@ def compute_patches_stride_padding(input_shape, patches_padding, patches_stride,
     return new_padding, new_stride, new_output_padding
 
 
-def patches_to_matrix(pieces, input_shape, stride, padding, output_shape=None,
-                      unstable_idx=None, inserted_zeros=0):
+def patches_to_matrix(pieces, input_shape, stride, padding, output_shape=None, unstable_idx=None, inserted_zeros=0):
     """Converting a Patches piece into a full dense matrix."""
+
+    # torch.as_strided may cause unpredictable error under deterministic mode,
+    # so we temporarily disable it.
+    deterministic = torch.are_deterministic_algorithms_enabled()
+    torch.use_deterministic_algorithms(False)
+
     if type(padding) == int:
         padding = (padding, padding, padding, padding)
 
     if pieces.ndim == 9:
         # Squeeze two additional dimensions for output and input respectively
         assert pieces.shape[1] == 1 and pieces.shape[5] == 1
-        pieces = pieces.reshape(
-            pieces.shape[0], *pieces.shape[2:5],
-            *pieces.shape[6:]
-        )
+        pieces = pieces.reshape(pieces.shape[0], *pieces.shape[2:5], *pieces.shape[6:])
 
     if unstable_idx is None:
         assert pieces.ndim == 7
@@ -351,7 +366,31 @@ def patches_to_matrix(pieces, input_shape, stride, padding, output_shape=None,
         orig_stride = A_matrix.stride()
         # This is the main trick - we create a *view* of the original matrix, and it contains all sliding windows for the convolution.
         # Since we only created a view (in fact, only metadata of the matrix changed), it should be very efficient.
-        matrix_strided = torch.as_strided(A_matrix, [batch_size, output_channel, output_x, output_y, output_x, output_y, input_channel, kernel_x, kernel_y], [orig_stride[0], orig_stride[1], orig_stride[2], orig_stride[3], (input_x + padding[2] + padding[3]) * stride, stride, orig_stride[4], input_y + padding[0] + padding[1], 1])
+        matrix_strided = torch.as_strided(
+            A_matrix, 
+            [
+                batch_size, 
+                output_channel, 
+                output_x, 
+                output_y, 
+                output_x, 
+                output_y, 
+                input_channel, 
+                kernel_x, 
+                kernel_y
+            ], 
+            [
+                orig_stride[0], 
+                orig_stride[1], 
+                orig_stride[2], 
+                orig_stride[3], 
+                (input_x + padding[2] + padding[3]) * stride, 
+                stride, 
+                orig_stride[4], 
+                input_y + padding[0] + padding[1], 
+                1
+            ]
+        )
         # Now we need to fill the conv kernel parameters into the last three dimensions of matrix_strided.
         first_indices = torch.arange(output_x * output_y, device=pieces.device)
         second_indices = torch.div(first_indices, output_y, rounding_mode="trunc")
@@ -369,7 +408,27 @@ def patches_to_matrix(pieces, input_shape, stride, padding, output_shape=None,
         orig_stride = A_matrix.stride()
         # This is the main trick - we create a *view* of the original matrix, and it contains all sliding windows for the convolution.
         # Since we only created a view (in fact, only metadata of the matrix changed), it should be very efficient.
-        matrix_strided = torch.as_strided(A_matrix, [batch_size, unstable_size, output_x, output_y, input_channel, kernel_x, kernel_y], [orig_stride[0], orig_stride[1], (input_x + padding[2] + padding[3]) * stride, stride, orig_stride[2], input_y + padding[0] + padding[1], 1])
+        matrix_strided = torch.as_strided(
+            A_matrix, 
+            [
+                batch_size, 
+                unstable_size, 
+                output_x, 
+                output_y, 
+                input_channel, 
+                kernel_x, 
+                kernel_y
+            ], 
+            [
+                orig_stride[0], 
+                orig_stride[1], 
+                (input_x + padding[2] + padding[3]) * stride, 
+                stride, 
+                orig_stride[2], 
+                input_y + padding[0] + padding[1], 
+                1
+            ]
+        )
         # pieces have shape (unstable_size, batch, c, h, w).
         first_indices = torch.arange(unstable_size, device=pieces.device)
         matrix_strided[:,first_indices,unstable_idx[1],unstable_idx[2],:,:,:] = pieces.transpose(0, 1).to(matrix_strided)
@@ -379,6 +438,9 @@ def patches_to_matrix(pieces, input_shape, stride, padding, output_shape=None,
 
     if inserted_zeros > 0:
         A_matrix = A_matrix[:,:,:, ::(inserted_zeros+1), ::(inserted_zeros+1)]
+
+    # Re-enable deterministic if needed.
+    torch.use_deterministic_algorithms(deterministic)
 
     return A_matrix
 
@@ -395,8 +457,8 @@ def check_patch_biases(lb, ub, lower_b, upper_b):
         ub = ub.expand(ub.size(0), ub.size(1), upper_b.size(0)//ub.size(1))
         ub = ub.reshape(ub.size(0), -1).t()
     elif lower_b.ndim > lb.ndim:
-        lower_b = lower_b.transpose(0,1).reshape(lower_b.size(1), -1).t()
-        upper_b = upper_b.transpose(0,1).reshape(upper_b.size(1), -1).t()
+        lower_b = lower_b.transpose(0, 1).reshape(lower_b.size(1), -1).t()
+        upper_b = upper_b.transpose(0, 1).reshape(upper_b.size(1), -1).t()
     return lb, ub, lower_b, upper_b
 
 
@@ -431,26 +493,32 @@ def inplace_unfold(image, kernel_size, stride=1, padding=0, inserted_zeros=0, ou
         image = torch.nn.functional.pad(image, padding)
     # Save its orignal stride.
     image_stride = image.stride()
-    matrix_strided = torch.as_strided(image, [
-        # Shape of the output matrix.
-        image.size(0),  # Batch size.
-        patches_h,  # indices for each patch.
-        patches_w,
-        image.size(1),  # Channel.
-        kernel_size[0],   # indices for each pixel on a patch.
-        kernel_size[1]], [
-        # Stride of the output matrix.
-        image_stride[0],  # Batch size dimension, keep using the old stride.
-        image_stride[2] * stride[0],  # Move patch in the height dimension.
-        image_stride[3] * stride[1],  # Move patch in the width dimension.
-        image_stride[1],  # Move to the next channel.
-        image_stride[2],  # Move to the next row.
-        image_stride[3]])  # Move a pixel (on the width direction).
+    matrix_strided = torch.as_strided(
+        image, 
+        [ # Shape of the output matrix.
+            image.size(0),  # Batch size.
+            patches_h,  # indices for each patch.
+            patches_w,
+            image.size(1),  # Channel.
+            kernel_size[0],   # indices for each pixel on a patch.
+            kernel_size[1]
+        ], 
+        [ # Stride of the output matrix.
+            image_stride[0],  # Batch size dimension, keep using the old stride.
+            image_stride[2] * stride[0],  # Move patch in the height dimension.
+            image_stride[3] * stride[1],  # Move patch in the width dimension.
+            image_stride[1],  # Move to the next channel.
+            image_stride[2],  # Move to the next row.
+            image_stride[3]
+        ]
+    )  # Move a pixel (on the width direction).
     # Output shape is (batch_size, patches_h, patches_w, channel, kernel_height, kernel_width)
     if sum(output_padding) > 0:
       output_padding = tuple(p if p > 0 else None for p in output_padding)
-      matrix_strided = matrix_strided[:, output_padding[2]:-output_padding[3] if output_padding[3] is not None else None,
-                                      output_padding[0]:-output_padding[1] if output_padding[1] is not None else None, :, :, :]
+      matrix_strided = matrix_strided[:, 
+                                      output_padding[2]:-output_padding[3] if output_padding[3] is not None else None, 
+                                      output_padding[0]:-output_padding[1] if output_padding[1] is not None else None, 
+                                      :, :, :]
     return matrix_strided
 
 
@@ -478,9 +546,13 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
     d_tensor = d_tensor.view(-1, *d_tensor.shape[-3:])
     # unfold the slope matrix as patches. Patch shape is [spec * batch, out_h, out_w, in_c, H, W).
     d_unfolded = inplace_unfold(
-        d_tensor, kernel_size=last_A.patches.shape[-2:], stride=last_A.stride,
-        padding=last_A.padding, inserted_zeros=last_A.inserted_zeros,
-        output_padding=last_A.output_padding)
+        image=d_tensor, 
+        kernel_size=last_A.patches.shape[-2:], 
+        stride=last_A.stride,
+        padding=last_A.padding, 
+        inserted_zeros=last_A.inserted_zeros,
+        output_padding=last_A.output_padding,
+    )
     # Reshape to the original shape of d, e.g., for non-sparse it is (out_c, batch, out_h, out_w, in_c, H, W).
     d_unfolded_r = d_unfolded.view(*d_shape[:-3], *d_unfolded.shape[1:])
     if last_A.unstable_idx is not None:
@@ -507,7 +579,7 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
             # The spec dimension may be sparse and contains unstable neurons for the spec layer only.
             if alpha_lookup_idx is None:
                 # alpha is spec-dense. Possible because the number of unstable neurons may decrease.
-                if last_A.shape[0] == d_unfolded_r.size(0):
+                if last_A.output_shape[1] == d_unfolded_r.size(0):
                     # Non spec-sparse, partially shared alpha among output channel dimension.
                     # Shape after unfolding is (out_c, batch, out_h, out_w, in_c, patch_h, patch_w).
                     d_unfolded_r = d_unfolded_r[last_A.unstable_idx[0], :, last_A.unstable_idx[1], last_A.unstable_idx[2]]
@@ -517,8 +589,7 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
                     # Reshaped to (out_c, out_h, out_w, batch, out_h, out_w, in_c, patch_h, patch_w).
                     d_unfolded_r = d_unfolded_r.view(last_A.shape[0], last_A.shape[2], last_A.shape[3], -1, *d_unfolded_r.shape[2:])
                     # Select on all out_c, out_h, out_w dimensions.
-                    d_unfolded_r = d_unfolded_r[last_A.unstable_idx[0], last_A.unstable_idx[1],
-                            last_A.unstable_idx[2], :, last_A.unstable_idx[1], last_A.unstable_idx[2]]
+                    d_unfolded_r = d_unfolded_r[last_A.unstable_idx[0], last_A.unstable_idx[1], last_A.unstable_idx[2], :, last_A.unstable_idx[1], last_A.unstable_idx[2]]
             elif alpha_lookup_idx.ndim == 1:
                 # sparse alpha: [spec, batch, in_c, in_h, in_w]
                 # Partially shared alpha on the spec dimension - all output neurons on the same channel use the same alpha.
@@ -531,10 +602,7 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
                 # We created alpha as full output shape; alpha not shared among channel dimension.
                 # Shape of alpha is (out_c*out_h*out_w, batch, in_c, in_h, in_w), note that the first 3 dimensions
                 # is merged into one to allow simpler selection.
-                _unstable_idx = alpha_lookup_idx[
-                    last_A.unstable_idx[0],
-                    last_A.unstable_idx[1],
-                    last_A.unstable_idx[2]]
+                _unstable_idx = alpha_lookup_idx[last_A.unstable_idx[0], last_A.unstable_idx[1], last_A.unstable_idx[2]]
                 # d_unfolded_r shape from (out_c, batch, out_h, out_w, in_c, in_h, in_w)
                 # to (out_c * out_h * out_w(sparse), batch, in_c, in_h, in_w)
                 # Note that the dimensions out_h, out_w come from unfolding, not specs in alpha, so they will be selected
@@ -550,8 +618,7 @@ def maybe_unfold_patches(d_tensor, last_A, alpha_lookup_idx=None):
         if last_A.patches.size(0) != d_unfolded_r.size(0) and d_unfolded_r.size(0) != 1:
             # Non-shared alpha, shape after unfolding is (out_c*out_h*out_w, batch, out_h, out_w, in_c, patch_h, patch_w).
             # Reshaped to (out_c, out_h*out_w, batch, out_h*out_w, in_c, patch_h, patch_w).
-            d_unfolded_r = d_unfolded_r.reshape(last_A.shape[0], last_A.shape[2] * last_A.shape[3], -1,
-                    d_unfolded_r.shape[2] * d_unfolded_r.shape[3], *d_unfolded_r.shape[4:])
+            d_unfolded_r = d_unfolded_r.reshape(last_A.shape[0], last_A.shape[2] * last_A.shape[3], -1, d_unfolded_r.shape[2] * d_unfolded_r.shape[3], *d_unfolded_r.shape[4:])
             # Select the "diagonal" elements in the out_h*out_w dimension.
             # New shape is (out_c, batch, in_c, patch_h, patch_w, out_h*out_w)
             d_unfolded_r = d_unfolded_r.diagonal(offset=0, dim1=1, dim2=3)
@@ -577,18 +644,18 @@ def create_valid_mask(output_shape, device, dtype, kernel_size, stride, inserted
         Can be used to mask out unused A cells
     :return: tensor of batch pieces shape, containing the binary mask
     """
-    one_d = torch.ones(
-        tuple(1 for i in output_shape[1:]),
-        device=device, dtype=dtype
-    ).expand(output_shape[1:])
+    one_d = torch.ones(tuple(1 for i in output_shape[1:]), device=device, dtype=dtype).expand(output_shape[1:])
     # Add batch dimension.
     one_d = one_d.unsqueeze(0)
     # After unfolding, the shape is (1, out_h, out_w, in_c, h, w)
     one_d_unfolded = inplace_unfold(
-        one_d, kernel_size=kernel_size,
-        stride=stride, padding=padding,
+        image=one_d, 
+        kernel_size=kernel_size,
+        stride=stride, 
+        padding=padding,
         inserted_zeros=inserted_zeros,
-        output_padding=output_padding)
+        output_padding=output_padding,
+    )
     if unstable_idx is not None:
         # Move out_h, out_w dimension to the front for easier selection.
         ans = one_d_unfolded.permute(1, 2, 0, 3, 4, 5)

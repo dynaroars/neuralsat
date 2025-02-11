@@ -1,13 +1,14 @@
-import copy
-import torch.nn as nn
 from torch import Tensor
+import torch.nn as nn
 import torch._C as _C
+import copy
 
 
 class BoundedTensor(Tensor):
+    
     @staticmethod
     # We need to override the __new__ method since Tensor is a C class
-    def __new__(cls, x, ptb, *args, **kwargs):
+    def __new__(cls, x, ptb=None, *args, **kwargs):
         if isinstance(x, Tensor):
             tensor = super().__new__(cls, [], *args, **kwargs)
             tensor.data = x.data
@@ -16,7 +17,7 @@ class BoundedTensor(Tensor):
         else:
             return super().__new__(cls, x, *args, **kwargs)
 
-    def __init__(self, x, ptb):
+    def __init__(self, x, ptb=None):
         self.ptb = ptb
 
     def __repr__(self):

@@ -1,16 +1,12 @@
-""" Resize operator """
-import itertools
-
+import numpy as np
 import torch
 
-from .base import *
-import numpy as np
-from .solver_utils import grb
 from ..patches import unify_shape, create_valid_mask, is_shape_used
-from .gradient_modules import Conv2dGrad
+from .base import *
 
 
 class BoundResize(Bound):
+    
     def __init__(self, attr=None, inputs=None, output_index=0, options=None):
         super().__init__(attr, inputs, output_index, options)
         # only support nearest mode for now
@@ -26,11 +22,9 @@ class BoundResize(Bound):
         assert (scale_factor[0:2].to(torch.long) == 1).all(), 'only support resize on the H and W dim'
         self.scale_factor = tuple([int(tmp) for tmp in scale_factor][2:])
         if x.ndim == 4:
-            final = F.interpolate(
-                x, None, self.scale_factor, mode=self.mode)
+            final = F.interpolate(x, None, self.scale_factor, mode=self.mode)
         else:
-            raise NotImplementedError(
-                "Interpolation in 3D or interpolation with parameter size has not been implmented.")
+            raise NotImplementedError("Interpolation in 3D or interpolation with parameter size has not been implmented.")
         return final
 
     def interval_propagate(self, *v):
@@ -40,16 +34,11 @@ class BoundResize(Bound):
     def bound_forward(self, dim_in, *inp):
         x = inp[0]
         lw, lb, uw, ub = x.lw, x.lb, x.uw, x.ub
-        new_lw, new_lb, new_uw, new_ub = \
-            torch.nn.functional.upsample(lw, scale_factor=([1] * (lw.ndim - 4)) + list(self.scale_factor), mode=self.mode), \
-            torch.nn.functional.upsample(lb, scale_factor=([1] * (lb.ndim - 4)) + list(self.scale_factor), mode=self.mode), \
-            torch.nn.functional.upsample(uw, scale_factor=([1] * (uw.ndim - 4)) + list(self.scale_factor), mode=self.mode), \
-            torch.nn.functional.upsample(ub, scale_factor=([1] * (ub.ndim - 4)) + list(self.scale_factor), mode=self.mode)
-        return LinearBound(
-            lw = new_lw,
-            lb = new_lb,
-            uw = new_uw,
-            ub = new_ub)
+        new_lw = torch.nn.functional.upsample(lw, scale_factor=([1] * (lw.ndim - 4)) + list(self.scale_factor), mode=self.mode)
+        new_lb = torch.nn.functional.upsample(lb, scale_factor=([1] * (lb.ndim - 4)) + list(self.scale_factor), mode=self.mode)
+        new_uw = torch.nn.functional.upsample(uw, scale_factor=([1] * (uw.ndim - 4)) + list(self.scale_factor), mode=self.mode)
+        new_ub = torch.nn.functional.upsample(ub, scale_factor=([1] * (ub.ndim - 4)) + list(self.scale_factor), mode=self.mode)
+        return LinearBound(lw=new_lw, lb=new_lb, uw=new_uw, ub=new_ub)
 
     def bound_backward(self, last_lA, last_uA, *x, **kwargs):
 
@@ -58,15 +47,17 @@ class BoundResize(Bound):
                 return None
             assert type(last_A) is Patches or last_A.ndim == 5
             # in case the kernel size cannot be divided by scale_factor, we round up the shape
-            split_shape = tuple((torch.tensor(
-                last_A.shape)[-2:] / torch.tensor(self.scale_factor)).ceil().to(torch.long).tolist())
+            split_shape = tuple((torch.tensor(last_A.shape)[-2:] / torch.tensor(self.scale_factor)).ceil().to(torch.long).tolist())
             new_shape = last_A.shape[:-2] + split_shape
             if not type(last_A) is Patches:
                 # classical mode is simple to handle by
                 # sum the grid elements by using avg_pool2d with divisor_override=1
                 return torch.nn.functional.avg_pool2d(
-                    last_A.reshape(-1, *last_A.shape[-2:]), kernel_size=self.scale_factor, stride=self.scale_factor,
-                    divisor_override=1).reshape(new_shape)
+                    last_A.reshape(-1, *last_A.shape[-2:]), 
+                    kernel_size=self.scale_factor, 
+                    stride=self.scale_factor,
+                    divisor_override=1,
+                ).reshape(new_shape)
             else:
                 # for patches mode
                 assert type(last_A) is Patches
@@ -82,12 +73,16 @@ class BoundResize(Bound):
                     padding = last_A.shape[-1] % self.scale_factor[-1]
                     new_patches = torch.nn.functional.pad(last_A.patches, (0, padding, 0, padding))
                     new_patches = torch.nn.functional.avg_pool2d(
-                        new_patches.reshape(-1, *new_patches.shape[-2:]), kernel_size=self.scale_factor,
-                        stride=self.scale_factor, divisor_override=1).reshape(new_shape)
-                    return last_A.create_similar(patches=new_patches,
-                                                 stride=last_A.stride//self.scale_factor[0],
-                                                 padding=last_A.padding//self.scale_factor[0],
-                                                 )
+                        new_patches.reshape(-1, *new_patches.shape[-2:]), 
+                        kernel_size=self.scale_factor,
+                        stride=self.scale_factor, 
+                        divisor_override=1,
+                    ).reshape(new_shape)
+                    return last_A.create_similar(
+                        patches=new_patches,
+                        stride=last_A.stride // self.scale_factor[0],
+                        padding=last_A.padding // self.scale_factor[0],
+                    )
                 else:
                     """
                         The following part is created and mainly maintained by Linyi
@@ -111,15 +106,17 @@ class BoundResize(Bound):
                         Like with inserted zeros = 2, [x 0 0 x 0 0 x]. Only "x" cells are kept
                         Borrowed from one_d generation from Conv patches
                     """
-                    one_d_unfolded_r = create_valid_mask(self.output_shape,
-                                                         last_A.patches.device,
-                                                         last_A.patches.dtype,
-                                                         last_A.patches.shape[-2:],
-                                                         last_A.stride,
-                                                         last_A.inserted_zeros,
-                                                         last_A.padding,
-                                                         last_A.output_padding,
-                                                         last_A.unstable_idx)
+                    one_d_unfolded_r = create_valid_mask(
+                        output_shape=self.output_shape,
+                        device=last_A.patches.device,
+                        dtype=last_A.patches.dtype,
+                        kernel_size=last_A.patches.shape[-2:],
+                        stride=last_A.stride,
+                        inserted_zeros=last_A.inserted_zeros,
+                        padding=last_A.padding,
+                        output_padding=last_A.output_padding,
+                        unstable_idx=last_A.unstable_idx,
+                    )
                     patches = last_A.patches * one_d_unfolded_r
 
                     """
@@ -168,10 +165,8 @@ class BoundResize(Bound):
                             [outC, batch, outH, outW, inC, kerH, kerW] * [outH, kerH, new_kerH] -> [outC, batch, outH, outW, inC, new_kerH, kerW]
                     """
                     tot_scale_fac = ((last_A.inserted_zeros + 1) * self.scale_factor[0], (last_A.inserted_zeros + 1) * self.scale_factor[1])
-                    new_ker_size_h, new_ker_size_w = \
-                        (tot_scale_fac[0] + ker_size_h - 2) // tot_scale_fac[0] + 1, \
-                        (tot_scale_fac[1] + ker_size_w - 2) // tot_scale_fac[1] + 1
-
+                    new_ker_size_h = (tot_scale_fac[0] + ker_size_h - 2) // tot_scale_fac[0] + 1
+                    new_ker_size_w = (tot_scale_fac[1] + ker_size_w - 2) // tot_scale_fac[1] + 1
                     min_h_idx, max_h_idx = h_idx_map[0], h_idx_map[-1] + ker_size_h
                     shrank_h_idx = (torch.arange(min_h_idx, max_h_idx) + last_A.inserted_zeros).div(tot_scale_fac[0], rounding_mode='floor')
                     if last_A.unstable_idx is None:
@@ -179,8 +174,7 @@ class BoundResize(Bound):
                         ker_h_indexer = torch.arange(0, ker_size_h).to(last_A.device)
                         sum_mask_h = torch.zeros(last_A.shape[2], ker_size_h, new_ker_size_h).to(last_A.device)
                         for i in range(last_A.shape[2]):
-                            sum_mask_h[i, ker_h_indexer, \
-                                shrank_h_idx[h_idx_map[i] - min_h_idx: h_idx_map[i] - min_h_idx + ker_size_h] - shrank_h_idx[h_idx_map[i] - min_h_idx]] = 1
+                            sum_mask_h[i, ker_h_indexer, shrank_h_idx[h_idx_map[i] - min_h_idx: h_idx_map[i] - min_h_idx + ker_size_h] - shrank_h_idx[h_idx_map[i] - min_h_idx]] = 1
                             # set zero to those in padding area
                             padding_place_mask = (ker_h_indexer + h_idx_map[i] < 0)
                             sum_mask_h[i, padding_place_mask] = 0
@@ -205,8 +199,7 @@ class BoundResize(Bound):
                         ker_w_indexer = torch.arange(0, ker_size_w).to(last_A.device)
                         sum_mask_w = torch.zeros(last_A.shape[3], ker_size_w, new_ker_size_w).to(last_A.device)
                         for i in range(last_A.shape[3]):
-                            sum_mask_w[i, ker_w_indexer, \
-                                shrank_w_idx[w_idx_map[i] - min_w_idx: w_idx_map[i] - min_w_idx + ker_size_w] - shrank_w_idx[w_idx_map[i] - min_w_idx]] = 1
+                            sum_mask_w[i, ker_w_indexer, shrank_w_idx[w_idx_map[i] - min_w_idx: w_idx_map[i] - min_w_idx + ker_size_w] - shrank_w_idx[w_idx_map[i] - min_w_idx]] = 1
                             # set zero to those in padding area
                             padding_place_mask = (ker_w_indexer + w_idx_map[i] < 0)
                             sum_mask_w[i, padding_place_mask] = 0
@@ -237,10 +230,8 @@ class BoundResize(Bound):
                         For example, scale_factor = 3, repeat patch [a,b] to [a,a,a,b,b,b]
                         Time complexity: O(A.numel * scale_factor)
                     """
-                    ext_new_ker_size_h, ext_new_ker_size_w = \
-                        new_ker_size_h * tot_scale_fac[0], new_ker_size_w * tot_scale_fac[1]
-                    ext_new_patches = torch.zeros(list(new_patches.shape[:-2]) +
-                                                  [ext_new_ker_size_h, ext_new_ker_size_w], device=new_patches.device)
+                    ext_new_ker_size_h, ext_new_ker_size_w = new_ker_size_h * tot_scale_fac[0], new_ker_size_w * tot_scale_fac[1]
+                    ext_new_patches = torch.zeros(list(new_patches.shape[:-2]) + [ext_new_ker_size_h, ext_new_ker_size_w], device=new_patches.device)
                     for i in range(ext_new_ker_size_h):
                         for j in range(ext_new_ker_size_w):
                             ext_new_patches[..., i, j] = new_patches[..., i // tot_scale_fac[0], j // tot_scale_fac[1]]
@@ -268,28 +259,12 @@ class BoundResize(Bound):
                     """
                         Package and create
                     """
-                    # sparse tensor doesn't support einsum which is necessary for subsequent computes, so deprecated
-                    # if inserted_zeros >= 3:
-                    #     # mask unused cells
-                    #     input_shape = list(self.output_shape)
-                    #     input_shape[-2], input_shape[-1] = input_shape[-2] // self.scale_factor[-2], \
-                    #         input_shape[-1] // self.scale_factor[-1]
-                    #     one_unfolded = create_valid_mask(input_shape, ext_new_patches.device,
-                    #                                       ext_new_patches.dtype, ext_new_patches.shape[-2:],
-                    #                                       last_A.stride, inserted_zeros, new_padding,
-                    #                                       last_A.output_padding,
-                    #                                       last_A.unstable_idx if last_A.unstable_idx else None)
-                    #     ext_new_patches = (ext_new_patches * one_unfolded).to_sparse()
-
-                    # print the shape change after upsampling, if needed
-                    # print(f'After upsampling, '
-                    #       f'{last_A.patches.shape} (pad={padding}, iz={last_A.inserted_zeros}, s={last_A.stride}) -> '
-                    #       f'{ext_new_patches.shape} (pad={new_padding}, iz={inserted_zeros}, s={last_A.stride})')
-                    ret_patches_A = last_A.create_similar(patches=ext_new_patches,
-                                                          padding=new_padding,
-                                                          inserted_zeros=inserted_zeros)
-                    if self.input_shape[-2] < ret_patches_A.shape[-2] and self.input_shape[-1] < ret_patches_A.shape[-2] \
-                            and not is_shape_used(ret_patches_A.output_padding):
+                    ret_patches_A = last_A.create_similar(
+                        patches=ext_new_patches,
+                        padding=new_padding,
+                        inserted_zeros=inserted_zeros,
+                    )
+                    if self.input_shape[-2] < ret_patches_A.shape[-2] and self.input_shape[-1] < ret_patches_A.shape[-2] and not is_shape_used(ret_patches_A.output_padding):
                         # using matrix mode could be more memory efficient
                         ret_matrix_A = ret_patches_A.to_matrix(self.input_shape)
                         # print(f'After upsampling, to_matrix: {ret_matrix_A.shape}')
@@ -301,3 +276,18 @@ class BoundResize(Bound):
         last_lA = _bound_oneside(last_lA)
         last_uA = _bound_oneside(last_uA)
         return [(last_lA, last_uA), (None, None), (None, None)], 0, 0
+
+
+class BoundExpand(Bound):
+    
+    def forward(self, x, y):
+        y = y.clone()
+        assert y.ndim == 1
+        n, m = x.ndim, y.shape[0]
+        assert n <= m
+        for i in range(n):
+            if y[m - n + i] == 1:
+                y[m - n + i] = x.shape[i]
+            else:
+                assert x.shape[i] == 1 or x.shape[i] == y[m - n + i]
+        return x.expand(*list(y))

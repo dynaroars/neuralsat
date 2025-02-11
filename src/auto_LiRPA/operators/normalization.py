@@ -1,22 +1,26 @@
-""" Normalization operators"""
+import torch.nn as nn
+import torch
 import copy
 
-import torch
-
-from .base import *
+from .constant import BoundConstant
+from .leaf import BoundParams
 from .solver_utils import grb
+from .base import *
 
 
 class BoundBatchNormalization(Bound):
+    
     def __init__(self, attr, inputs, output_index, options, training):
         super().__init__(attr, inputs, output_index, options)
         self.eps = attr['epsilon']
         self.momentum = round(1 - attr['momentum'], 5)  # take care!
         self.options = options.get("bn", {})
+        
         # modes:
         #   - forward: use mean and variance estimated from clean forward pass
         #   - ibp: use mean and variance estimated from ibp
         self.bn_mode = self.options.get("mode", "forward")
+        
         self.use_mean = self.options.get("mean", True)
         self.use_var = self.options.get("var", True)
         self.use_affine = self.options.get("affine", True)
@@ -72,18 +76,8 @@ class BoundBatchNormalization(Bound):
             weight = torch.ones_like(weight)
             bias = torch.zeros_like(bias)
 
-
         tmp_bias = bias - self.current_mean / torch.sqrt(self.current_var + self.eps) * weight
         tmp_weight = weight / torch.sqrt(self.current_var + self.eps)
-
-        # for debug: this checking is passed, i.e., we derived the forward bound
-        # from the following correct computation procedure
-        # tmp_x = ((x[0].lb + x[0].ub) / 2.).detach()
-        # expect_output = self(tmp_x, *[_.lower for _ in x[1:]])
-        # tmp_weight = tmp_weight.view(*((1, -1) + (1,) * (tmp_x.ndim - 2)))
-        # tmp_bias = tmp_bias.view(*((1, -1) + (1,) * (tmp_x.ndim - 2)))
-        # computed_output = tmp_weight * tmp_x + tmp_bias
-        # assert torch.allclose(expect_output, computed_output, 1e-5, 1e-5)
 
         tmp_weight = tmp_weight.view(*((1, 1, -1) + (1,) * (inp.lw.ndim - 3)))
         new_lw = torch.clamp(tmp_weight, min=0.) * inp.lw + torch.clamp(tmp_weight, max=0.) * inp.uw
@@ -98,14 +92,24 @@ class BoundBatchNormalization(Bound):
             lw = new_lw,
             lb = new_lb,
             uw = new_uw,
-            ub = new_ub)
+            ub = new_ub,
+        )
 
     def bound_backward(self, last_lA, last_uA, *x, **kwargs):
-        assert not self.is_input_perturbed(1) and not self.is_input_perturbed(2), \
-            'Weight perturbation is not supported for BoundBatchNormalization'
+        assert not self.is_input_perturbed(1) and not self.is_input_perturbed(2), f'Weight perturbation is not supported for BoundBatchNormalization'
+
+        def get_param(p):
+            if isinstance(p, BoundConstant):
+                # When affine is disabled in BN
+                return p.value
+            elif isinstance(p, BoundParams):
+                return p.param
+            else:
+                raise TypeError(p)
 
         # x[0]: input, x[1]: weight, x[2]: bias, x[3]: running_mean, x[4]: running_var
-        weight, bias = x[1].param, x[2].param
+        weight = get_param(x[1])
+        bias = get_param(x[2])
         if not self.training:
             self.current_mean = x[3].value
             self.current_var = x[4].value
@@ -140,8 +144,14 @@ class BoundBatchNormalization(Bound):
                     # bias to size (c,), need expansion before unfold.
                     bias = tmp_bias.view(-1,1,1).expand(self.input_shape[1:]).unsqueeze(0)
                     # Unfolded bias has shape (1, out_h, out_w, in_c, H, W).
-                    bias_unfolded = inplace_unfold(bias, kernel_size=last_A.patches.shape[-2:], padding=last_A.padding, stride=last_A.stride,
-                            inserted_zeros=last_A.inserted_zeros, output_padding=last_A.output_padding)
+                    bias_unfolded = inplace_unfold(
+                        image=bias, 
+                        kernel_size=last_A.patches.shape[-2:], 
+                        padding=last_A.padding, 
+                        stride=last_A.stride, 
+                        inserted_zeros=last_A.inserted_zeros, 
+                        output_padding=last_A.output_padding,
+                    )
                     if last_A.unstable_idx is not None:
                         # Sparse bias has shape (unstable_size, batch, in_c, H, W).
                         bias_unfolded = bias_unfolded[:, last_A.unstable_idx[1], last_A.unstable_idx[2]]
@@ -182,10 +192,8 @@ class BoundBatchNormalization(Bound):
 
         return [(lA, uA), (None, None), (None, None), (None, None), (None, None)], lbias, ubias
 
-
     def interval_propagate(self, *v):
-        assert not self.is_input_perturbed(1) and not self.is_input_perturbed(2), \
-            'Weight perturbation is not supported for BoundBatchNormalization'
+        assert not self.is_input_perturbed(1) and not self.is_input_perturbed(2), f'Weight perturbation is not supported for BoundBatchNormalization'
 
         h_L, h_U = v[0]
         weight, bias = v[1][0], v[2][0]
@@ -237,11 +245,8 @@ class BoundBatchNormalization(Bound):
         return lower, upper
 
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
-        # e.g., last layer input gurobi vars (3,32,32)
+        # e.g., last layer input gurobi vars (3,32,32), pre_layer_shape (1,3,32,32), this layer shape (1,8,16,16)
         gvars_array = np.array(v[0])
-        # pre_layer_shape (1,3,32,32)
-        pre_layer_shape = np.expand_dims(gvars_array, axis=0).shape
-        # this layer shape (1,8,16,16)
         this_layer_shape = self.output_shape
 
         weight, bias = v[1], v[2]
@@ -265,9 +270,7 @@ class BoundBatchNormalization(Bound):
                 for out_col_idx in range(this_layer_shape[3]):
                     # print(this_layer_bias.shape, out_chan_idx, out_lbs.size(1))
                     lin_expr = tmp_bias[out_chan_idx].item() + tmp_weight[out_chan_idx].item() * gvars_array[out_chan_idx, out_row_idx, out_col_idx]
-                    var = model.addVar(lb=-float('inf'), ub=float('inf'),
-                                            obj=0, vtype=grb.GRB.CONTINUOUS,
-                                            name=f'lay{self.name}_{neuron_idx}')
+                    var = model.addVar(lb=-float('inf'), ub=float('inf'), obj=0, vtype=grb.GRB.CONTINUOUS, name=f'lay{self.name}_{neuron_idx}')
                     model.addConstr(lin_expr == var, name=f'lay{self.name}_{neuron_idx}_eq')
                     neuron_idx += 1
 
@@ -280,3 +283,35 @@ class BoundBatchNormalization(Bound):
 
     def update_requires_input_bounds(self):
         self._check_weight_perturbation()
+
+
+class LayerNormImpl(nn.Module):
+    
+    def __init__(self, axis, epsilon):
+        super().__init__()
+        self.axis = axis
+        self.epsilon = epsilon
+
+    def forward(self, x, scale, bias):
+        mean = x.mean(self.axis, keepdim=True)
+        d = x - mean
+        dd = d**2
+        var = dd.mean(self.axis, keepdim=True)
+        var_eps = var + self.epsilon
+        std_dev = torch.sqrt(var_eps)
+        inv_std_dev = torch.reciprocal(std_dev)
+        normalized = d * inv_std_dev
+        normalized_scaled = normalized * scale + bias
+        return normalized_scaled
+
+
+class BoundLayerNormalization(Bound):
+    
+    def __init__(self, attr, inputs, output_index, options):
+        super().__init__(attr, inputs, output_index, options)
+        self.complex = True
+        self.model = LayerNormImpl(self.attr['axis'], self.attr['epsilon'])
+
+    def forward(self, x, scale, bias):
+        self.input = (x, scale, bias)
+        return self.model(x, scale, bias)

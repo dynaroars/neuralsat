@@ -322,7 +322,13 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
     self.net.set_bound_opts(get_branching_opt_params()) 
     self.net.init_alpha(x=(new_x,), c=c)
     
-    lb, _ = self.net.compute_bounds(x=(new_x,), C=c, method="backward", reference_bounds=intermediate_layer_bounds)
+    lb, _ = self.net.compute_bounds(
+        x=(new_x,), 
+        C=c, 
+        method="backward", 
+        reference_bounds=intermediate_layer_bounds, 
+        bound_upper=False,
+    )
     if rhs is not None:
         if (lb > rhs).all():
             return None
@@ -430,6 +436,7 @@ def compute_stability(self: 'abstractor.abstractor.NetworkAbstractor', objective
             x=(x,), 
             C=cs, 
             method=self.method, 
+            bound_upper=False,
         )
         lower_bounds, upper_bounds = [], []
         for node in self.net.relus:
