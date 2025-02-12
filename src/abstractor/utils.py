@@ -303,17 +303,17 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
     assert model_type in ['lp', 'mip']
     # delete old LP model
     self.net._reset_solver_vars(self.net.final_node())
-    if hasattr(self.net, 'model'): 
-        del self.net.model
+    if hasattr(self.net, 'solver_model'): 
+        del self.net.solver_model
     
     # gurobi solver
-    self.net.model = grb.Model(model_type)
-    self.net.model.setParam('OutputFlag', False)
-    self.net.model.setParam("FeasibilityTol", 1e-5)
-    # self.net.model.setParam('TimeLimit', timeout)
+    self.net.solver_model = grb.Model(model_type)
+    self.net.solver_model.setParam('OutputFlag', False)
+    self.net.solver_model.setParam("FeasibilityTol", 1e-5)
+    # self.net.solver_model.setParam('TimeLimit', timeout)
     if model_type == 'mip':
-        self.net.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
-        self.net.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
+        self.net.solver_model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
+        self.net.solver_model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
 
     # create new inputs
     new_x = self.new_input(input_lower, input_upper)
@@ -344,14 +344,14 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
         timeout_per_neuron=timeout_per_neuron,
         refine=refine,
     )
-    self.net.model.update()
+    self.net.solver_model.update()
 
 
 @beartype
 def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input_lower: torch.Tensor, input_upper: torch.Tensor, 
                           lower_bounds: dict, upper_bounds: dict, c: torch.Tensor, rhs: torch.Tensor) -> tuple[bool, torch.Tensor | None]:
     logger.debug('Full assignment')
-    tmp_model = self.net.model.copy()
+    tmp_model = self.net.solver_model.copy()
     tmp_model.update()
 
     # assert all activation layers are ReLU
