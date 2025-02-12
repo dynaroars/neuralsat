@@ -217,14 +217,14 @@ class MIPAttacker:
         self.pre_relu_names = {i: layer.inputs[0].name for (i, layer) in enumerate(self.abstractor.net.perturbed_optimizable_activations)}
         self.relu_names = {i: layer.name for (i, layer) in enumerate(self.abstractor.net.perturbed_optimizable_activations)}
         
-        # if (not hasattr(self.abstractor, 'model')) or ('mip' not in self.abstractor.net.model.ModelName):
+        # if (not hasattr(self.abstractor, 'solver_model')) or ('mip' not in self.abstractor.net.solver_model.ModelName):
         #     self.init_mip_model(
         #         input_lowers=self.objectives.lower_bounds[0:1],
         #         input_uppers=self.objectives.upper_bounds[0:1],
         #         cs=self.objectives.cs.transpose(0, 1),
         #     )
             
-        # self.mip_model = self.abstractor.net.model.copy()
+        # self.mip_model = self.abstractor.net.solver_model.copy()
         # self.mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
         # self.mip_model.setParam('BestObjStop', -1e-5)  # Terminiate as long as we find a adversarial example.
         # self.mip_model.setParam('TimeLimit', 5.0)
@@ -459,7 +459,7 @@ class MIPAttacker:
 
         self.output_names = [v.VarName for v in self.abstractor.net[self.abstractor.net.final_name].solver_vars]#[-1:]
         
-        current_model = self.abstractor.net.model.copy()
+        current_model = self.abstractor.net.solver_model.copy()
         # current_model.setParam('Threads', 1)
         current_model.setParam('MIPGap', 0.01)
         current_model.setParam('MIPGapAbs', 0.01)

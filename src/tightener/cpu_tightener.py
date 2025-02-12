@@ -147,7 +147,7 @@ class MILPTightener:
         except:
             raise NotImplementedError()
         
-        current_model = self.abstractor.net.model.copy()
+        current_model = self.abstractor.net.solver_model.copy()
         current_model.setParam('Threads', 1)
         current_model.setParam('MIPGap', 0.01)
         current_model.setParam('MIPGapAbs', 0.01)

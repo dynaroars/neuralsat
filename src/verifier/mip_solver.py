@@ -57,7 +57,7 @@ class MIPSolver:
             timeout=None,
         )
         print(f'Initialize new MIP model in {time.time() - tic} seconds, {timeout=}')
-        mip_model = self.abstractor.net.model
+        mip_model = self.abstractor.net.solver_model
         print(mip_model)
         output_names = [v.VarName for v in self.abstractor.net.final_node().solver_vars]
         assert len(output_names) == len(self.cs)
