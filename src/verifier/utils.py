@@ -637,6 +637,17 @@ def _check_adv_f64(self: verifier.verifier.Verifier, adv: torch.Tensor, objectiv
 
 
 @beartype
+def _check_adv(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: typing.Any) -> bool:
+    lower_bounds = objective.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+    upper_bounds = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+    cs = objective.cs.to(self.device)
+    rhs = objective.rhs.to(self.device)
+    for i in range(len(lower_bounds)):
+        if check_solution(self.net, adv, cs[i], rhs[i], lower_bounds[i:i+1], upper_bounds[i:i+1]):
+            return True
+    return False
+
+@beartype
 def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
     if self.status != ReturnStatus.UNSAT:
         return None

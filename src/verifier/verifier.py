@@ -119,7 +119,10 @@ class Verifier:
             print('[+] Invoking MIP presolving')
             try:
                 mip_verifier = MIPSolver(net=self.net, input_shape=self.input_shape)
-                status, self.adv = mip_verifier.verify(dnf_objectives, timeout=0.2 * timeout)
+                status, self.adv = mip_verifier.verify(
+                    dnf_objective=copy.deepcopy(dnf_objectives), 
+                    timeout=0.2 * timeout,
+                )
                 if status in [ReturnStatus.SAT, ReturnStatus.UNSAT]:
                     return status
             except AttributeError:
@@ -127,7 +130,6 @@ class Verifier:
                     raise
             except:
                 raise NotImplementedError
-        
         
         status = self._verify_with_restart(
             dnf_objectives=copy.deepcopy(dnf_objectives),
@@ -304,7 +306,7 @@ class Verifier:
                 
             # check adv founded
             if self.adv is not None:
-                if self._check_adv_f64(self.adv, objective):
+                if self._check_adv(self.adv, objective):
                     return ReturnStatus.SAT
                 logger.debug("[!] Invalid counter-example")
                 # FIXME
@@ -504,7 +506,7 @@ class Verifier:
         _init_abstractor,
         _check_timeout,
         _setup_restart, _setup_restart_naive,
-        _pre_attack, _attack, _mip_attack, _check_adv_f64,
+        _pre_attack, _attack, _mip_attack, _check_adv,
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_cpu_tightening, _update_tightening_patience,
         _check_invoke_gpu_tightening,
