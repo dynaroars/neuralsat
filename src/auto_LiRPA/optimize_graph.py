@@ -1,10 +1,15 @@
 from typing import TYPE_CHECKING
 
-from auto_LiRPA.bound_ops import (BoundActivation, BoundMul, BoundSqr, BoundDiv,
-                                  BoundPow, BoundReciprocal, BoundBuffers, BoundConstant,
-                                  BoundCos, BoundSec, BoundMin, BoundMax, BoundAdd, BoundSub,
-                                  BoundRelu)
-from auto_LiRPA.utils import logger
+from .bound_ops import (
+    BoundActivation, 
+    BoundMul, BoundSqr, BoundDiv,
+    BoundPow, BoundReciprocal, 
+    BoundBuffers, BoundConstant,
+    BoundCos, BoundSec, BoundMin, BoundMax, 
+    BoundAdd, BoundSub,
+    BoundRelu,
+)
+from .utils import logger
 
 if TYPE_CHECKING:
     from .bound_general import BoundedModule

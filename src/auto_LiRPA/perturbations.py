@@ -12,8 +12,7 @@ from .utils import logger, eyeC
 class Perturbation:
     
     r"""
-    Base class for a perturbation specification. Please see examples
-    at `auto_LiRPA/perturbations.py`.
+    Base class for a perturbation specification. 
 
     Examples:
 

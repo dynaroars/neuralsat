@@ -1,4 +1,4 @@
-from auto_LiRPA.bound_ops import Bound
+from .bound_ops import Bound
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

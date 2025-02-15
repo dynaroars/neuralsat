@@ -10,8 +10,7 @@ class BoundRNN(Bound):
         raise NotImplementedError(
             'torch.nn.RNN is not supported at this time.'
             'Please implement your RNN with torch.nn.RNNCell and a manual for-loop.'
-            'See an example of LSTM:'
-            'https://github.com/Verified-Intelligence/auto_LiRPA/blob/10a9b30/examples/sequence/lstm.py#L9')
+        )
 
     def forward(self, x, weight_input, weight_recurrent, bias, sequence_length, initial_h):
         assert (torch.sum(torch.abs(initial_h)) == 0)

@@ -82,8 +82,7 @@ class Interval(tuple):
 
 class Bound(nn.Module):
     r"""
-    Base class for supporting the bound computation of an operator. Please see examples
-    at `auto_LiRPA/operators`.
+    Base class for supporting the bound computation of an operator. 
 
     Args:
         attr (dict): Attributes of the operator.
