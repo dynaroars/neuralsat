@@ -1376,6 +1376,7 @@ class BoundedModule(nn.Module):
     from .beta_crown import beta_crown_backward_bound, reset_beta, set_beta, get_split_nodes
     from .edit_graph import add_nodes, add_input_node, delete_node, replace_node
     from .optimize_graph import _optimize_graph
+    from .stabilization import stabilize
     from .backward_bound import (
         backward_general, get_sparse_C, concretize, _preprocess_C,
         check_optimized_variable_sparsity, restore_sparse_bounds,
