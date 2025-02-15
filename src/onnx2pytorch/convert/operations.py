@@ -108,7 +108,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             next_node = onnx_graph.node[i + 1]
             if constant.ndim == 1 and len(constant) == 2 and (-1 in constant) and next_node.op_type == 'Reshape' \
                     and len(node.input) == 0 and len(node.output) == 1:
-                op = Flatten()
+                op = nn.Flatten(1)
                 node.input.extend([n_i for n_i in next_node.input if n_i != node.output[0]])
                 node.output.pop()
                 node.output.extend(next_node.output)
@@ -157,7 +157,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
         elif node.op_type == "Expand":
             op = Expand()
         elif node.op_type == "Flatten":
-            op = Flatten(**extract_attributes(node))
+            op = nn.Flatten(**extract_attributes(node))
             op.feature_dim = batch_dim + 1  # Necessary for transformers
         elif node.op_type == "Floor":
             op = OperatorWrapper(torch.floor)
@@ -289,7 +289,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             shape = np.copy(numpy_helper.to_array(shape[0])) if shape else None
             # print(shape)
             if (shape is not None) and len(shape) == 2 and ((-1 in shape) or (1 in shape)):
-                op = Flatten()
+                op = nn.Flatten(1)
                 for n_idx, n_name in enumerate(node.input):
                     if n_name in onnx_initializers:
                         node.input.pop(n_idx)

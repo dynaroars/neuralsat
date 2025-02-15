@@ -1370,8 +1370,7 @@ class BoundedModule(nn.Module):
         # Based on "used" and "perturbed" properties, find out which layer requires intermediate layer bounds.
         self.layers_requiring_bounds = self.get_layers_requiring_bounds()
 
-    from .optimized_bounds import _get_optimized_bounds, init_alpha, update_best_beta, opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype
-    from .solver_module import build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars
+    from .solver_module import build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars, _build_solver_refined
     from .interval_bound import IBP_general, _IBP_loss_fusion, check_IBP_intermediate, check_IBP_first_linear
     from .forward_bound import forward_general, forward_general_dynamic, forward_refinement, init_forward
     from .beta_crown import beta_crown_backward_bound, reset_beta, set_beta, get_split_nodes
@@ -1381,5 +1380,10 @@ class BoundedModule(nn.Module):
         backward_general, get_sparse_C, concretize, _preprocess_C,
         check_optimized_variable_sparsity, restore_sparse_bounds,
         get_alpha_crown_start_nodes, get_unstable_locations, batched_backward,
+    )
+    from .optimized_bounds import (
+        _get_optimized_bounds, init_alpha, update_best_beta, 
+        opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype, 
+        get_refined_interm_bounds
     )
     

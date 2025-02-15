@@ -116,13 +116,15 @@ class Verifier:
             return ReturnStatus.SAT 
         
         if self._check_invoke_mip_presolving():
+            print('[+] Invoking MIP presolving')
             try:
-                mip_verifier = MIPSolver(self.net, dnf_objectives, self.input_shape)
-                status, self.adv = mip_verifier.verify(timeout=0.2 * timeout)
+                mip_verifier = MIPSolver(net=self.net, input_shape=self.input_shape)
+                status, self.adv = mip_verifier.verify(dnf_objectives, timeout=0.2 * timeout)
                 if status in [ReturnStatus.SAT, ReturnStatus.UNSAT]:
                     return status
             except AttributeError:
-                pass
+                if os.environ.get('NEURALSAT_DEBUG'):
+                    raise
             except:
                 raise NotImplementedError
         

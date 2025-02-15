@@ -10,26 +10,16 @@ from util.misc.result import ReturnStatus
 
 class MIPSolver:
     
-    def __init__(self, net, dnf_objective, input_shape):
+    def __init__(self, net, input_shape):
         self.device = 'cpu'
         self.net = net.to(self.device)
         self.input_shape = input_shape
         self.input_split = False
-        
-        assert dnf_objective.cs.shape[1] == 1 # c shape: [#props, 1, #outputs]
-        self.objectives = copy.deepcopy(dnf_objective)
-        
-        self.input_lowers = self.objectives.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
-        self.input_uppers = self.objectives.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
-        self.cs = self.objectives.cs.to(self.device)
-        self.rhs = self.objectives.rhs.to(self.device)
-        
         self.initialize_abstractor('backward')
                 
 
     def initialize_abstractor(self, method: str) -> None:
         if hasattr(self, 'abstractor'):
-            # del self.abstractor.net
             del self.abstractor
 
         self.abstractor = NetworkAbstractor(
@@ -40,19 +30,41 @@ class MIPSolver:
             device=self.device,
         )
         
-        self.abstractor.setup(self.objectives)
-        self.abstractor.net.get_split_nodes(input_split=False)
+        self.abstractor.setup(None)
+        self.abstractor.net.get_split_nodes()
         
-    def verify(self, timeout):
+    def verify(self, dnf_objective, timeout):
+        if len(dnf_objective) > 10:
+            return ReturnStatus.UNKNOWN
+        start = time.time()
+        while len(dnf_objective):
+            if time.time() - start > timeout:
+                return ReturnStatus.UNKNOWN, None
+
+            objective = dnf_objective.pop(1)
+            status, adv = self.verify_one(objective=objective, timeout=timeout)
+            assert status in [ReturnStatus.UNSAT, ReturnStatus.UNKNOWN], f'{status=}'
+            if status in [ReturnStatus.UNKNOWN]:
+                break
+        
+        return status, adv
+            
+        
+    def verify_one(self, objective, timeout):
         # print(input_lowers.shape)
-        # print(cs.shape)
+        # print(self.cs.shape)
+        assert len(objective.upper_bounds) == len(objective.lower_bounds) == 1
+        input_upper = objective.upper_bounds.view(self.input_shape).to(self.device)
+        input_lower = objective.lower_bounds.view(self.input_shape).to(self.device)
+        cs = objective.cs.to(self.device)
+        rhs = objective.rhs
         
         tic = time.time()
         self.abstractor.build_lp_solver(
             model_type='mip', 
-            input_lower=self.input_lowers, 
-            input_upper=self.input_uppers, 
-            c=self.cs,
+            input_lower=input_lower, 
+            input_upper=input_upper, 
+            c=cs,
             refine=False,
             timeout=None,
         )
@@ -60,16 +72,15 @@ class MIPSolver:
         mip_model = self.abstractor.net.solver_model
         print(mip_model)
         output_names = [v.VarName for v in self.abstractor.net.final_node().solver_vars]
-        assert len(output_names) == len(self.cs)
+        assert len(output_names) == len(cs)
         
-        print(output_names)
-        print(self.rhs)
+        print(output_names, rhs)
         # for var_name in output_names:
         #     print(var_name)
         feasible = False
         adv = None
         for out_idx in range(len(output_names)):
-            assert len(self.rhs[out_idx]) == 1
+            assert len(rhs[out_idx]) == 1
             objective_var = mip_model.getVarByName(output_names[out_idx])
             mip_model.setObjective(objective_var, grb.GRB.MINIMIZE)
             mip_model.update()
@@ -82,7 +93,7 @@ class MIPSolver:
                 # output_lb = float('inf')
                 return ReturnStatus.UNKNOWN, None
                 
-            if output_lb < self.rhs[out_idx][0]:
+            if output_lb < rhs[out_idx][0]:
                 return ReturnStatus.UNKNOWN, None
                 # cannot verify
                 feasible = True

@@ -230,7 +230,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             
             # forward with refinement
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
-            ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
+            ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds, short_cut=True)
             
             # pruning
             remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
@@ -390,9 +390,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             )
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
     
-    # abstractor
-    if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
-        self._init_abstractor(abstract_method, objective)
+    # main abstractor
+    self._init_abstractor(abstract_method, objective)
         
     return refined_intermediate_bounds
 

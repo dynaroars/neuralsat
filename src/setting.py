@@ -110,6 +110,7 @@ class GlobalSettings:
         # self.gpu_tightening_timeout = 2
         # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
+        # self.use_mip_verify = 0
         # self.use_attack = 0
         # self.use_restart = 0
         # self.use_mip_tightening = 0

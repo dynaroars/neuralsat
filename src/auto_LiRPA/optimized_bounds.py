@@ -689,3 +689,18 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         return init_intermediate_bounds
     else:
         return l, u, init_intermediate_bounds
+
+
+def get_refined_interm_bounds(self):
+    intermediate_bounds = {}
+    for node in self.splittable_activations:
+        for i in node.requires_input_bounds:
+            input_node = node.inputs[i]
+            if (not input_node.perturbed
+                    or node.inputs[i].lower is None
+                    and node.inputs[i].upper is None):
+                continue
+            intermediate_bounds[node.inputs[i].name] = [node.inputs[i].lower.detach(), node.inputs[i].upper.detach()]
+
+    return intermediate_bounds
+    
