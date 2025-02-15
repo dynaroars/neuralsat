@@ -7,10 +7,10 @@ import time
 import math
 import copy
 
-from util.misc.result import AbstractResults
-from util.misc.check import check_solution
+from helper.misc.result import AbstractResults
+from helper.misc.check import check_solution
 
-from util.misc.logger import logger
+from helper.misc.logger import logger
 from setting import Settings
 
 multiprocess_mip_attack_model = None

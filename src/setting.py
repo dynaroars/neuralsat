@@ -195,7 +195,7 @@ class GlobalSettings:
         
         
     def __repr__(self):
-        return (
+        str = (
             '\n[!] Current settings:\n'
             f'\t- restart_current_hidden_branches        : {int(self.restart_current_hidden_branches)}\n'
             f'\t- restart_visited_hidden_branches        : {int(self.restart_visited_hidden_branches)}\n'
@@ -209,15 +209,19 @@ class GlobalSettings:
             f'\t- stabilize (GPU)                        : {bool(self.use_gpu_tightening)}\n'
             f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
             f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
-            f'\n[!] Decomposition:\n'
-            f'\t- use_decompose                          : {bool(self.use_decompose)}\n'
-            f'\t- share_alphas                           : {bool(self.share_alphas)}\n'
-            f'\t- skip_preprocess                        : {bool(self.skip_preprocess)}\n'
-            f'\t- min_layer                              : {self.min_layer}\n'
-            f'\t- init_abstraction_method                : {self.init_abstraction_method}\n'
-            f'\t- subverifier_decision_method            : {self.subverifier_decision_method}\n'
-            f'\t- use_decompose_incomplete               : {self.use_decompose_incomplete}\n'
-            f'\n'
         )
+        if Settings.use_decompose:
+            str += (
+                f'\n[!] Decomposition:\n'
+                f'\t- use_decompose                          : {bool(self.use_decompose)}\n'
+                f'\t- share_alphas                           : {bool(self.share_alphas)}\n'
+                f'\t- skip_preprocess                        : {bool(self.skip_preprocess)}\n'
+                f'\t- min_layer                              : {self.min_layer}\n'
+                f'\t- init_abstraction_method                : {self.init_abstraction_method}\n'
+                f'\t- subverifier_decision_method            : {self.subverifier_decision_method}\n'
+                f'\t- use_decompose_incomplete               : {self.use_decompose_incomplete}\n'
+                f'\n'
+            )
+        return str
 
 Settings = GlobalSettings()

@@ -14,9 +14,9 @@ import sys
 import os
 
 
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from util.misc.result import ReturnStatus, CoefficientMatrix
-from util.misc.logger import logger
+from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from helper.misc.result import ReturnStatus, CoefficientMatrix
+from helper.misc.logger import logger
 
 from tightener.utils import optimize_dnn, verify_dnf_pairs
 from verifier.utils import get_used_gpu_memory

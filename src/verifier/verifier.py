@@ -10,7 +10,7 @@ import time
 import copy
 import os
 
-from onnx2pytorch.convert.model import ConvertModel
+from helper.network.onnx2pytorch import ConvertModel
 
 from heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES, INPUT_SPLIT_RESTART_STRATEGIES
 from heuristic.domains_list import DomainsList
@@ -23,11 +23,11 @@ from verifier.mip_solver import MIPSolver
 
 from abstractor.utils import new_slopes
 
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from util.misc.error import VerifierInitializeError
-from util.misc.result import ReturnStatus
-from util.misc.logger import logger
-from util.misc.timer import Timers
+from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from helper.misc.error import VerifierInitializeError
+from helper.misc.result import ReturnStatus
+from helper.misc.logger import logger
+from helper.misc.timer import Timers
 
 from setting import Settings
 

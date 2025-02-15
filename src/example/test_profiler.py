@@ -4,7 +4,7 @@ import torch
 
 from verifier.verifier import Verifier 
 from .test_function import extract_instance
-from util.misc.logger import logger
+from helper.misc.logger import logger
 from setting import Settings
 
 

@@ -2,7 +2,7 @@ from beartype import beartype
 import numpy as np
 import torch
 
-from util.network.read_onnx import custom_quirks
+from helper.network.read_onnx import custom_quirks
 
 
 class Objective:

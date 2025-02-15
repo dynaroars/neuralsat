@@ -7,10 +7,10 @@ import time
 import os
 
 from verifier.verifier import Verifier 
-from util.spec.read_vnnlib import read_vnnlib
-from util.network.read_onnx import parse_onnx
+from helper.spec.read_vnnlib import read_vnnlib
+from helper.network.read_onnx import parse_onnx
 from verifier.objective import Objective, DnfObjectives
-from util.misc.logger import logger
+from helper.misc.logger import logger
 from setting import Settings
 
 

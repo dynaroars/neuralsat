@@ -194,21 +194,6 @@ def test_relu3():
     )
     
     
-def load(path):
-    import onnx2pytorch
-    import onnx
-    # cifar10_8_255_simplified.onnx
-    # path = '/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_8_255_simplified.onnx'
-    
-    onnx_model = onnx.load(path)
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks={'Reshape': {'fix_batch_size': True}})
-    pytorch_model.eval()
-    
-    print(pytorch_model)
-    
-    
-
-    
 class NetConv(nn.Module):
     
     def __init__(self):
@@ -271,8 +256,8 @@ class NetConv2(nn.Module):
    
 
 def extract_instance(net_path, vnnlib_path):
-    from util.spec.read_vnnlib import read_vnnlib
-    from util.network.read_onnx import parse_onnx
+    from helper.spec.read_vnnlib import read_vnnlib
+    from helper.network.read_onnx import parse_onnx
     from verifier.objective import Objective, DnfObjectives
     
     vnnlibs = read_vnnlib(vnnlib_path)
@@ -328,7 +313,7 @@ def test():
     return status, verifier.iteration
     
 def trail1():
-    from util.misc.logger import logger
+    from helper.misc.logger import logger
     import logging
     logger.setLevel(logging.INFO)
     

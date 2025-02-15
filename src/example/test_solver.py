@@ -7,11 +7,11 @@ import warnings
 warnings.filterwarnings(action='ignore')
 
 from verifier.objective import Objective, DnfObjectives
-from util.spec.read_vnnlib import read_vnnlib
-from util.network.read_onnx import parse_onnx
+from helper.spec.read_vnnlib import read_vnnlib
+from helper.network.read_onnx import parse_onnx
 from verifier.verifier import Verifier 
-from util.misc.result import ReturnStatus
-from util.misc.logger import logger
+from helper.misc.result import ReturnStatus
+from helper.misc.logger import logger
 from auto_LiRPA.bound_ops import BoundRelu
 
 def extract_instance(net_path, vnnlib_path):

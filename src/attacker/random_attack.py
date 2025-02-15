@@ -5,7 +5,7 @@ import torch
 import time
 import os
 
-from onnx2pytorch.convert.model import ConvertModel
+from helper.network.onnx2pytorch import ConvertModel
 from verifier.objective import DnfObjectives
 
 class RandomAttacker:

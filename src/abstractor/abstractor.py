@@ -13,9 +13,9 @@ import os
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
 
-from util.misc.result import AbstractResults, CoefficientMatrix
-from onnx2pytorch.convert.model import ConvertModel
-from util.misc.logger import logger
+from helper.misc.result import AbstractResults, CoefficientMatrix
+from helper.network.onnx2pytorch import ConvertModel
+from helper.misc.logger import logger
 from abstractor.params import *
 
 

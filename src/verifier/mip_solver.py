@@ -6,7 +6,7 @@ import time
 import math
 
 from abstractor.abstractor import NetworkAbstractor
-from util.misc.result import ReturnStatus
+from helper.misc.result import ReturnStatus
 
 class MIPSolver:
     

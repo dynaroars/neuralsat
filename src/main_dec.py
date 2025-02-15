@@ -5,17 +5,16 @@ import time
 import copy
 import os
 
+from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from helper.misc.logger import logger, LOGGER_LEVEL
+from helper.misc.result import ReturnStatus
+from helper.misc.timer import Timers
 
-from util.network.read_onnx import parse_onnx, parse_pth
-from util.spec.read_vnnlib import read_vnnlib
+from helper.network.read_onnx import parse_onnx, parse_pth
+from helper.spec.read_vnnlib import read_vnnlib
 
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from util.misc.logger import logger, LOGGER_LEVEL
-from util.misc.result import ReturnStatus
-from util.misc.timer import Timers
-
-from verifier.objective import Objective, DnfObjectives
 from decomposer.dec_verifier import DecompositionalVerifier
+from verifier.objective import Objective, DnfObjectives
 from attacker.attacker import Attacker
 
 from setting import Settings

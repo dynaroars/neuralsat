@@ -3,11 +3,11 @@ import torch
 import time
 import os
 
-from util.misc.logger import logger, LOGGER_LEVEL
-from util.spec.read_vnnlib import read_vnnlib
-from util.network.read_onnx import parse_onnx, parse_pth
-from util.misc.export import get_adv_string
-from util.misc.timer import Timers
+from helper.network.read_onnx import parse_onnx, parse_pth
+from helper.misc.logger import logger, LOGGER_LEVEL
+from helper.spec.read_vnnlib import read_vnnlib
+from helper.misc.export import get_adv_string
+from helper.misc.timer import Timers
 
 from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 

@@ -3,12 +3,12 @@ import random
 import torch
 import os
 
-from onnx2pytorch.convert.model import ConvertModel
+from helper.network.onnx2pytorch import ConvertModel
 from verifier.objective import DnfObjectives
 
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from util.misc.check import check_solution
-from util.misc.logger import logger
+from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from helper.misc.check import check_solution
+from helper.misc.logger import logger
 
 from attacker.random_attack import RandomAttacker
 from attacker.pgd_attack.general import attack

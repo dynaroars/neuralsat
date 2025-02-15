@@ -12,8 +12,8 @@ if typing.TYPE_CHECKING:
     import abstractor
     
 from heuristic.util import _compute_babsr_scores
-from util.misc.result import AbstractResults
-from util.misc.logger import logger
+from helper.misc.result import AbstractResults
+from helper.misc.logger import logger
 from setting import Settings
 
 LARGE = 1e6

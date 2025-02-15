@@ -26,10 +26,10 @@ from attacker.attacker import Attacker
 
 from abstractor.abstractor import NetworkAbstractor
 
-from util.misc.result import AbstractResults, ReturnStatus
-from util.proof.create_aptp import create_aptp
-from util.misc.check import check_solution
-from util.misc.logger import logger
+from helper.misc.result import AbstractResults, ReturnStatus
+from helper.proof.create_aptp import create_aptp
+from helper.misc.check import check_solution
+from helper.misc.logger import logger
 
 
 from setting import Settings

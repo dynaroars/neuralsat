@@ -6,8 +6,8 @@ import copy
 
 from abstractor.utils import _append_tensor
 from solver.sat_solver import SATSolver
-from util.misc.logger import logger
-from util.misc.result import AbstractResults
+from helper.misc.logger import logger
+from helper.misc.result import AbstractResults
 from auto_LiRPA.bound_ops import *
 
 if typing.TYPE_CHECKING:

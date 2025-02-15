@@ -8,10 +8,10 @@ import copy
 import os
 import io
 
-from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
-from util.network.read_onnx import parse_onnx, decompose_pytorch
+from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from helper.network.read_onnx import parse_onnx, decompose_pytorch
 from attacker.pgd_attack.general import attack as pgd_attack
-from util.spec.write_vnnlib import write_vnnlib_classify
+from helper.spec.write_vnnlib import write_vnnlib_classify
 from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 

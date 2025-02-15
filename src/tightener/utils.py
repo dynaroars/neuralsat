@@ -6,9 +6,9 @@ import os
 
 from attacker.pgd_attack.general import attack as pgd_attack
 from verifier.objective import Objective, DnfObjectives
-from util.misc.adam_clipping import AdamClipping
-from util.misc.check import check_solution
-from util.misc.logger import logger
+from helper.misc.adam_clipping import AdamClipping
+from helper.misc.check import check_solution
+from helper.misc.logger import logger
 
 def generate_simple_specs(dnf_pairs, n_outputs):
     """

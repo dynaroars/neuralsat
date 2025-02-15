@@ -5,11 +5,11 @@ import os
 import warnings
 warnings.filterwarnings(action='ignore')
 
-from util.spec.read_vnnlib import read_vnnlib
-from util.network.read_onnx import parse_onnx
+from helper.spec.read_vnnlib import read_vnnlib
+from helper.network.read_onnx import parse_onnx
 from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
-from util.misc.result import ReturnStatus
+from helper.misc.result import ReturnStatus
 
 def evaluate_one(net_path, vnnlib_path, device='cuda', batch=1000):
     vnnlib_path = Path(vnnlib_path)
