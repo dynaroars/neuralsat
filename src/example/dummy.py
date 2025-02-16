@@ -23,7 +23,7 @@ def rand(total_samples, num_samples, device='cpu'):
 
 
 def test_solver():
-    from solver.sat_solver import SATSolver
+    from heuristic.sat_solver import SATSolver
     import time
     
     init_alls = []

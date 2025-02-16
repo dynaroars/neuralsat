@@ -110,8 +110,8 @@ class ReLUNet(nn.Module):
     
 def test_relu2():
     
-    from auto_LiRPA.perturbations import PerturbationLpNorm
-    from auto_LiRPA import BoundedModule, BoundedTensor
+    from auto_LiRPA.abstractor.perturbations import PerturbationLpNorm
+    from auto_LiRPA.abstractor import BoundedModule, BoundedTensor
 
     net = ReLUNet()
     x_U = torch.tensor([[1.0, 2.0]])

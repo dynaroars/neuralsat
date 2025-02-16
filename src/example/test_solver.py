@@ -12,7 +12,7 @@ from helper.network.read_onnx import parse_onnx
 from verifier.verifier import Verifier 
 from helper.misc.result import ReturnStatus
 from helper.misc.logger import logger
-from auto_LiRPA.bound_ops import BoundRelu
+from auto_LiRPA.abstractor.bound_ops import BoundRelu
 
 def extract_instance(net_path, vnnlib_path):
     vnnlibs = read_vnnlib(vnnlib_path)
@@ -30,7 +30,7 @@ def extract_instance(net_path, vnnlib_path):
 
 
 def refine_layer(node):
-    from auto_LiRPA.bound_ops import BoundLinear
+    from auto_LiRPA.abstractor.bound_ops import BoundLinear
     
     for n in node.inputs:
         refine_layer(n)

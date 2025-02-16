@@ -29,9 +29,9 @@ from train.models.vit.vit import *
 from train.models.resnet.resnet import *
 
 from abstractor.params import get_initialize_opt_params
-from auto_LiRPA.perturbations import PerturbationLpNorm
-from auto_LiRPA.utils import stop_criterion_batch_any
-from auto_LiRPA import BoundedTensor, BoundedModule
+from auto_LiRPA.abstractor.perturbations import PerturbationLpNorm
+from auto_LiRPA.abstractor.utils import stop_criterion_batch_any
+from auto_LiRPA.abstractor import BoundedTensor, BoundedModule
 
 InOutBounds = namedtuple('InputOutputBounds', ['under_input', 'under_output', 'over_input', 'over_output'], defaults=(None,) * 4)
 

@@ -15,8 +15,8 @@ from helper.spec.write_vnnlib import write_vnnlib_classify
 from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 
-from auto_LiRPA.perturbations import PerturbationLpNorm
-from auto_LiRPA import BoundedModule, BoundedTensor
+from auto_LiRPA.abstractor.perturbations import PerturbationLpNorm
+from auto_LiRPA.abstractor import BoundedModule, BoundedTensor
 
 SubNetworks = namedtuple('SubNetworks', ['network', 'input_shape', 'output_shape'])
 

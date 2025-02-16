@@ -7,15 +7,16 @@ import time
 import os
 
 if typing.TYPE_CHECKING:
-    import auto_LiRPA
+    import abstractor
 
 from helper.misc.tensor_storage import TensorStorage
 from helper.misc.result import AbstractResults
+from helper.misc.logger import logger
+
 from abstractor.utils import _copy_history
 from heuristic.util import compute_masks
 from setting import Settings
 
-from helper.misc.logger import logger
 
 class DomainsList:
     
@@ -23,7 +24,7 @@ class DomainsList:
 
     @beartype
     def __init__(self: 'DomainsList', 
-                 net: auto_LiRPA.BoundedModule | torch._dynamo.OptimizedModule,
+                 net: 'abstractor.auto_LiRPA.BoundedModule',
                  objective_ids: torch.Tensor,
                  output_lbs: torch.Tensor,
                  input_lowers: torch.Tensor, 

@@ -13,11 +13,11 @@ from verifier.objective import Objective, DnfObjectives
 from helper.misc.logger import logger
 from setting import Settings
 
-from auto_LiRPA import BoundedModule
-from auto_LiRPA.perturbations import PerturbationLpNorm
-from auto_LiRPA import BoundedTensor
+from auto_LiRPA.abstractor import BoundedModule
+from auto_LiRPA.abstractor.perturbations import PerturbationLpNorm
+from auto_LiRPA.abstractor import BoundedTensor
 from abstractor.params import *
-from auto_LiRPA.utils import stop_criterion_batch_any, multi_spec_keep_func_all, stop_criterion_all
+from auto_LiRPA.abstractor.utils import stop_criterion_batch_any, multi_spec_keep_func_all, stop_criterion_all
 
 custom_quirks['Reshape']['fix_batch_size'] = False
 

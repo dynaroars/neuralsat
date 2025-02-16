@@ -4,11 +4,12 @@ import typing
 import torch
 import copy
 
-from abstractor.utils import _append_tensor
-from solver.sat_solver import SATSolver
-from helper.misc.logger import logger
 from helper.misc.result import AbstractResults
-from auto_LiRPA.bound_ops import *
+from heuristic.sat_solver import SATSolver
+from helper.misc.logger import logger
+
+from abstractor.auto_LiRPA.bound_ops import *
+from abstractor.utils import _append_tensor
 
 if typing.TYPE_CHECKING:
     import abstractor
