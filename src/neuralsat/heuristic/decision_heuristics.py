@@ -216,7 +216,6 @@ class DecisionHeuristic:
             for idx, value in zip(topk_scores_indices[:, k], topk_scores_values[:, k]):
                 if value == 0.0:
                     decision_candidates.append(topk_decisions[0][0])
-                    print(idx)
                     continue
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
@@ -608,6 +607,7 @@ class DecisionHeuristic:
 
 
     def get_branching_scores(self, abstractor, domain_params) -> list[list]:
+        device = abstractor.device
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in abstractor.net.split_nodes]
         split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
@@ -637,12 +637,12 @@ class DecisionHeuristic:
 
         scores_all_dict = {
             k: torch.stack([
-                scores_1[k],
-                scores_2[k],
-                scores_3[k],
-                scores_4[k],
-                scores_5[k],
-                scores_6[k],
+                scores_1[k].to(device),
+                scores_2[k].to(device),
+                scores_3[k].to(device),
+                scores_4[k].to(device),
+                scores_5[k].to(device),
+                scores_6[k].to(device),
             ], dim=-1)
             for k in split_node_names
         }

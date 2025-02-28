@@ -35,25 +35,27 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
                           batch: int, number_bounds: int) -> tuple[list, list]:
     score = []
     intercept_tb = []
+    device = abstractor.device
+
 
     # last to first layer
     for layer in reversed(abstractor.net.split_nodes):
         assert len(abstractor.net.split_activations[layer.name]) == 1
         # layer data
-        this_layer_mask = masks[layer.name].unsqueeze(1)
+        this_layer_mask = masks[layer.name].unsqueeze(1).to(device)
         pre_act_layer = abstractor.net.split_activations[layer.name][0][0]
         assert len(pre_act_layer.inputs) == 1
-        ratio = lAs[pre_act_layer.name]
+        ratio = lAs[pre_act_layer.name].to(device)
 
         # ratio
-        ratio_temp_0, ratio_temp_1 = _compute_ratio(lower_bounds[layer.name], upper_bounds[layer.name])
+        ratio_temp_0, ratio_temp_1 = _compute_ratio(lower_bounds[layer.name].to(device), upper_bounds[layer.name].to(device))
 
         # intercept scores, backup scores, lower score is better
         intercept_temp = torch.clamp(ratio, max=0)
         intercept_candidate = intercept_temp * ratio_temp_1.unsqueeze(1)
 
         # (batch, neuron)
-        reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
+        reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask.to(intercept_candidate)
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1))
 
         # bias
@@ -124,7 +126,7 @@ def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
         print(type(input_node))
         raise NotImplementedError()
 
-    return bias * ratio
+    return bias * ratio.to(bias)
 
 
 # @beartype

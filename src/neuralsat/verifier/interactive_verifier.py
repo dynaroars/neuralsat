@@ -109,8 +109,11 @@ class InteractiveVerifier:
         # given action (selected neuron)
         # return minimum lowerbound on two branches of that neuron
         reward = abstraction_ret.output_lbs.min(dim=-1).values
+        # print(reward)
         r1, r2 = torch.chunk(reward, 2)
         reward, reward_indices = torch.min(torch.stack((r1, r2)), dim=0)
+        # DEBUG
+        # reward, reward_indices = torch.max(torch.stack((r1, r2)), dim=0)
         #
         split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
                                                              domain_params=abstraction_ret)
