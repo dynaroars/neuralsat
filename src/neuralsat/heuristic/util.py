@@ -95,6 +95,7 @@ def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tupl
     upper_temp = upper_bound.clamp(min=0)
     slope_ratio = upper_temp / (upper_temp - lower_temp)
     intercept = -1 * lower_temp * slope_ratio
+    assert not slope_ratio.isnan().any()
     return slope_ratio, intercept
 
 

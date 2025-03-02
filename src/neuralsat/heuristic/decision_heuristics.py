@@ -629,11 +629,22 @@ class DecisionHeuristic:
             number_bounds=domain_params.cs.shape[1]
         )
         scores_1 = {split_node_names[i]: scores_1[i] for i in range(len(scores_1))}
+        assert all([not _.isnan().any() for _ in scores_1.values()])
+        
         scores_2 = {split_node_names[i]: scores_2[i] for i in range(len(scores_1))}
+        assert all([not _.isnan().any() for _ in scores_2.values()])
+        
         scores_3 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_3.values()])
+        
         scores_4 = {k: (domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k]) for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_4.values()])
+        
         scores_5 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_5.values()])
+        
         scores_6 = {k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_6.values()])
 
         scores_all_dict = {
             k: torch.stack([

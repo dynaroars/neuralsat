@@ -112,12 +112,15 @@ class InteractiveVerifier:
         # print(reward)
         r1, r2 = torch.chunk(reward, 2)
         reward, reward_indices = torch.min(torch.stack((r1, r2)), dim=0)
+        assert not reward.isnan().any()
         # DEBUG
         # reward, reward_indices = torch.max(torch.stack((r1, r2)), dim=0)
         #
         split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
                                                              domain_params=abstraction_ret)
 
+        assert all([not _.isnan().any() for _ in split_observation[0]])
+        
         info = {
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
