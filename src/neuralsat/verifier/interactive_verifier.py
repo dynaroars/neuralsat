@@ -7,7 +7,6 @@ import copy
 
 from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
-from ..onnx2pytorch.convert.model import ConvertModel
 from ..heuristic.domains_list import DomainsList
 from ..abstractor.utils import new_slopes
 
@@ -17,7 +16,7 @@ class InteractiveVerifier:
     "Branch-and-Bound Interactive Verifier"
 
     # @beartype
-    def __init__(self: 'InteractiveVerifier', net: ConvertModel | torch.nn.Module , input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
+    def __init__(self: 'InteractiveVerifier', net: torch.nn.Module , input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device

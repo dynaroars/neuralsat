@@ -3,7 +3,6 @@ import random
 import torch
 import os
 
-from ..onnx2pytorch.convert.model import ConvertModel
 from ..verifier.objective import DnfObjectives
 
 from ..util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
@@ -20,7 +19,7 @@ DBG = pdb.set_trace
 class Attacker:
 
     # @beartype
-    def __init__(self: 'Attacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
+    def __init__(self, net, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
         self.attackers = [
             RandomAttacker(net, objective, input_shape, device=device),
             PGDAttacker(net, objective, input_shape, device=device),
@@ -59,7 +58,7 @@ class Attacker:
 class PGDAttacker:
 
     # @beartype
-    def __init__(self: 'PGDAttacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str = 'cpu') -> None:
+    def __init__(self: 'PGDAttacker', net, objective: DnfObjectives, input_shape: tuple, device: str = 'cpu') -> None:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape

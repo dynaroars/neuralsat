@@ -1,7 +1,6 @@
 from beartype import beartype
 import onnxruntime as ort
 import torch.nn as nn
-from ... import onnx2pytorch
 import numpy as np
 import collections
 # import onnx2torch
@@ -11,6 +10,7 @@ import torch
 import onnx
 import gzip
 
+from .onnx2pytorch import ConvertModel
 from ..misc.error import *
 
 
@@ -71,7 +71,7 @@ def _parse_onnx(path: str) -> tuple:
     batched_input_shape = add_batch(orig_input_shape)
     batched_output_shape = add_batch(orig_output_shape)
 
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    pytorch_model = ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
     pytorch_model.eval()
 
     pytorch_model.to(torch.get_default_dtype())

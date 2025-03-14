@@ -11,7 +11,6 @@ import math
 import os
 
 from ..auto_LiRPA.utils import stop_criterion_batch_any
-from ..onnx2pytorch.convert.model import ConvertModel
 from ..util.misc.result import AbstractResults
 from ..auto_LiRPA import BoundedModule
 from ..util.misc.logger import logger
@@ -34,7 +33,7 @@ class NetworkAbstractor:
     "Over-approximation method alpha-beta-CROWN"
 
     # @beartype
-    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
+    def __init__(self, pytorch_model, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
 
         self.pytorch_model = copy.deepcopy(pytorch_model)
         self.device = device

@@ -2,14 +2,12 @@ from beartype import beartype
 import torch
 import time
 
-from ...onnx2pytorch.convert.model import ConvertModel
-
 from .util import get_loss, check_adv_multi, serialize_specs
 from ...util.misc.adam_clipping import AdamClipping
 
 
 # @beartype
-def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor,
+def attack(model, x: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor,
            cs: torch.Tensor, rhs: torch.Tensor, timeout: float,
            attack_iters: int = 100, num_restarts: int = 30) -> tuple[bool, torch.Tensor | None]:
     # set all parameters without gradient, this can speedup things significantly.
@@ -68,7 +66,7 @@ def attack(model: ConvertModel, x: torch.Tensor, data_min: torch.Tensor, data_ma
 
 
 # @beartype
-def general_attack(model: ConvertModel, X: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor,
+def general_attack(model, X: torch.Tensor, data_min: torch.Tensor, data_max: torch.Tensor,
                    serialized_conditions: tuple[torch.Tensor, torch.Tensor, list[list[int]]], timeout: float,
                    use_gama: bool = False, num_restarts: int = 10, attack_iters: int = 100,
                    only_replicate_restarts: bool = False) -> torch.Tensor | None:

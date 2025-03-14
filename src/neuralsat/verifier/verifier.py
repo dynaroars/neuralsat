@@ -9,8 +9,6 @@ import torch
 import time
 import copy
 
-from ..onnx2pytorch.convert.model import ConvertModel
-
 from ..heuristic.restart_heuristics import HIDDEN_SPLIT_RESTART_STRATEGIES, INPUT_SPLIT_RESTART_STRATEGIES
 from ..heuristic.domains_list import DomainsList
 
@@ -34,7 +32,7 @@ class Verifier:
     "Branch-and-Bound verifier"
 
     # @beartype
-    def __init__(self: 'Verifier', net: 'ConvertModel', input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
+    def __init__(self: 'Verifier', net, input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device
