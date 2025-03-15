@@ -310,12 +310,17 @@ class NetworkAbstractor:
         self.net.set_bound_opts(get_beta_opt_params(stop_criterion_batch_any(double_rhs)))
 
         # compute outputs
+        if Settings.update_interm_bounds:
+            bound_dict = {'reference_bounds': new_intermediate_layer_bounds}
+        else:
+            bound_dict = {'interm_bounds': new_intermediate_layer_bounds}
+            
         double_output_lbs, _ = self.net.compute_bounds(
             x=(new_x,),
             C=double_cs,
             method=self.method,
             decision_thresh=double_rhs,
-            interm_bounds=new_intermediate_layer_bounds,
+            **bound_dict
         )
 
         # reorganize output

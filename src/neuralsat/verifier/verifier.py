@@ -265,7 +265,7 @@ class Verifier:
             lower_bounds=ret.lower_bounds,
             upper_bounds=ret.upper_bounds,
             lAs=ret.lAs,
-            slopes=slopes, # pruned slopes
+            slopes=ret.slopes if Settings.update_interm_bounds else slopes, # pruned slopes
             histories=copy.deepcopy(ret.histories),
             cs=ret.cs,
             rhs=ret.rhs,
