@@ -181,7 +181,7 @@ class InteractiveVerifier:
                 for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
                     if (len(mask_item[layer].nonzero(as_tuple=False)) != 0) or (split_node_points[layer] is None):
                         if split_node_points[layer] is not None: # relu
-                            final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item().int(), split_node_points[layer]])
+                            final_decision[b].append([layer, int(mask_item[layer].nonzero(as_tuple=False)[0].item()), split_node_points[layer]])
                             mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
                         else:
                             # TODO: general activation
