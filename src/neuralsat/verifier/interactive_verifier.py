@@ -1,13 +1,14 @@
 from __future__ import annotations
 import warnings
 warnings.filterwarnings(action='ignore')
-from beartype import beartype
+import numpy as np
 import torch
 import copy
 
 from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..heuristic.domains_list import DomainsList
+from ..util.misc.result import AbstractResults
 from ..abstractor.utils import new_slopes
 
 
@@ -91,12 +92,12 @@ class InteractiveVerifier:
         return obs, pick_ret
 
     def get_rewards(self, pick_ret, reduce_op=torch.max):
-        topk_output_lbs, topk_decisions = self.scorer.get_all_branching_rewards(
+        all_output_lbs, all_decisions = self.scorer.get_all_branching_rewards(
             abstractor=self.abstractor,
             domain_params=pick_ret,
             reduce_op=reduce_op,
         )
-        return topk_output_lbs, topk_decisions
+        return all_output_lbs, all_decisions
 
     def step(self, action):
         decisions, pick_ret = action
@@ -130,26 +131,123 @@ class InteractiveVerifier:
             'reward_indices': reward_indices,
         }
         return reward, done, info
+    
+    def topk_action(self, scores, domain_params, topk=1):
+        batch = len(domain_params.input_lowers)
+        split_node_names = [_.name for _ in self.abstractor.net.split_nodes]
+        split_node_points = {k: self.abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        
+        # print(f'{batch=} {topk=}')
+        # print([(k, v.shape) for k, v in scores.items()])
+        # print(f'{split_node_points=}')
+        
+        score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
+        # print(f'{score_length=}')
+        
+        topk_scores = torch.topk(torch.cat(scores, dim=1), topk)
+        
+        topk_output_lbs, topk_decisions = self.get_topk_scores(
+            domain_params=domain_params,
+            topk_scores=topk_scores,
+            score_length=score_length,
+            topk=topk,
+        )
+        
+        # print(f'{topk_output_lbs=}')
+        # print(f'{topk_decisions=}')
+        
+        best = topk_output_lbs.topk(1, 0)
+        best_output_lbs = best.values.cpu().numpy()[0]
+        best_output_lbs_indices = best.indices.cpu().numpy()[0]
+        
+        all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch)]
+        # print(f'{all_topk_decisions=}')
+        final_decision = [[] for b in range(batch)]
+        
+        for b in range(batch):
+            mask_item = {k: domain_params.masks[k][b].clone() for k in split_node_names}
+            assert best_output_lbs[b] > -1e6, f'{best_output_lbs[b]=}'
+            # valid scores
+            n_name, n_id, n_point = all_topk_decisions[b]
+            if n_point is not None: # relu
+                if mask_item[n_name][n_id]: # unstable relu
+                    final_decision[b].append([n_name, n_id, n_point])
+                    mask_item[n_name][n_id] = 0
+            else:
+                raise NotImplementedError
+            # invalid scores
+            if len(final_decision[b]) == 0:
+                selected = False
+                for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
+                    if (len(mask_item[layer].nonzero(as_tuple=False)) != 0) or (split_node_points[layer] is None):
+                        if split_node_points[layer] is not None: # relu
+                            final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item().int(), split_node_points[layer]])
+                            mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                        else:
+                            # TODO: general activation
+                            raise NotImplementedError
+                        selected = True
+                        break
+                assert selected
+                
+        final_decision = sum(final_decision, [])
+        # print(f'{final_decision=}')
+        return final_decision
+        
+        
+    def get_topk_scores(self: 'DecisionHeuristic', domain_params: AbstractResults,
+                        topk_scores: torch.return_types.topk, score_length: np.ndarray,
+                        topk: int, reduce_op=torch.max) -> tuple[torch.Tensor, list]:
+
+        topk_decisions = []
+        batch = len(domain_params.input_lowers)
+        topk_output_lbs = torch.empty(
+            size=(topk, batch),
+            device=domain_params.input_lowers.device,
+            requires_grad=False,
+        )
+        topk_scores_indices = topk_scores.indices.cpu()
+
+        for k in range(topk):
+            # top-k candidates from scores
+            decision_max = [] # higher is better
+            for idx in topk_scores_indices[:, k]:
+                idx = idx.item()
+                layer_idx = np.searchsorted(score_length, idx, side='right') - 1
+                layer_name = self.abstractor.net.split_nodes[layer_idx].name
+                layer_split_point = self.abstractor.net.split_activations[layer_name][0][0].get_split_point()
+                neuron_idx = int(idx - score_length[layer_idx])
+                if layer_split_point is not None: # relu
+                    decision_max.append([layer_name, neuron_idx, layer_split_point])
+                else: # general activation
+                    raise NotImplementedError
+
+            # top-k candidates
+            topk_decisions.append(decision_max)
+
+            k_domain_params = AbstractResults(**{
+                'input_lowers': domain_params.input_lowers,
+                'input_uppers': domain_params.input_uppers,
+                'lower_bounds': domain_params.lower_bounds,
+                'upper_bounds': domain_params.upper_bounds,
+                'slopes': domain_params.slopes if k == 0 else [],
+                'cs': domain_params.cs,
+                'rhs': domain_params.rhs,
+            })
+
+            abs_ret = self.abstractor._forward_hidden(
+                domain_params=k_domain_params,
+                decisions=topk_decisions[-1],
+                simplify=True
+            )
+            # improvements over specification
+            k_output_lbs = (abs_ret.output_lbs - torch.cat([domain_params.rhs, domain_params.rhs])).max(-1).values
+
+            # invalid scores for stable neurons
+            topk_output_lbs[k] = reduce_op(k_output_lbs.flatten().reshape(2, -1), dim=0).values
+            # print(f'{k=} {topk_output_lbs.shape=} {k_output_lbs.shape=}')
+            # print(f'{k=} {k_output_lbs=} {topk_output_lbs[k]=}')
+
+        return topk_output_lbs, topk_decisions
 
     from .utils import _preprocess, _init_abstractor, _setup_restart
-
-
-
-
-    '''
-    - [ ] Input: n subproblem step t
-    - [ ] Output: 2n subproblem at most
-
-    '''
-
-
-
-
-
-
-
-
-
-
-
-    # comment

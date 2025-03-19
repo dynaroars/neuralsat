@@ -281,7 +281,6 @@ class DecisionHeuristic:
 
         # convert an index to its layer and offset
         score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
-
         # top-k candidates
         topk_scores = torch.topk(torch.cat(scores, dim=1), topk)
         topk_backup_scores = torch.topk(torch.cat(backup_scores, dim=1), topk, largest=False)
