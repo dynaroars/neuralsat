@@ -644,6 +644,7 @@ class BoundedModule(nn.Module):
                     )
                 )
 
+            # print(i, str(nodesIn[i].bound_node))
         unsupported_ops = []
 
         # Convert other operation nodes.
@@ -834,6 +835,7 @@ class BoundedModule(nn.Module):
         tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
         directly_optimize_layer_names = self.bound_opts['optimize_bound_args']['directly_optimize']
 
+        # print('[+] check_prior_bounds:', node)
         for i in range(len(node.inputs)):
             if (i in node.requires_input_bounds
                     or not node.inputs[i].perturbed
@@ -854,6 +856,7 @@ class BoundedModule(nn.Module):
                 node.clamp_interim_bounds()
             return
 
+        # print(f'\t- Getting the bounds of {node}')
         logger.debug(f'Getting the bounds of {node}')
 
         if not prior_checked:
@@ -936,7 +939,6 @@ class BoundedModule(nn.Module):
         # Sparse intermediate bounds can be enabled if aux_reference_bounds are given.
         # (this is enabled for ReLU only, and not for other activations.)
         sparse_intermediate_bounds = (self.bound_opts.get('sparse_intermediate_bounds', False) and isinstance(self[node.output_name[0]], BoundRelu))
-
         ref_intermediate_lb, ref_intermediate_ub = None, None
         if sparse_intermediate_bounds:
             if node.name not in self.aux_reference_bounds:
@@ -1141,8 +1143,6 @@ class BoundedModule(nn.Module):
         # doing backward bound propagation starting from node x.
         self.backward_from = dict([(node, []) for node in self._modules])
 
-        if not bound_lower and not bound_upper:
-            raise ValueError('At least one of bound_lower and bound_upper in compute_bounds should be True')
         A_dict = {} if return_A else None
 
         if x is not None:
@@ -1369,6 +1369,35 @@ class BoundedModule(nn.Module):
                         queue.append(n_pre)
         # Based on "used" and "perturbed" properties, find out which layer requires intermediate layer bounds.
         self.layers_requiring_bounds = self.get_layers_requiring_bounds()
+    
+    
+    def visualize(self, output_path):
+        from graphviz import Digraph
+
+        nodes = list(self.nodes())
+        # Create a directed graph
+        dot = Digraph(format='png', engine='dot')
+        # Add nodes with optional attributes
+        for node in nodes:
+            label = f"""<
+                <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="4">
+                    <TR><TD><FONT FACE="Arial" COLOR="black">{node.name}</FONT></TD></TR>
+                    <TR><TD><FONT FACE="Courier" COLOR="blue">{node.__class__.__name__}</FONT></TD></TR>
+                    <TR><TD><FONT FACE="Courier" COLOR="grey">{
+                        tuple(node.output_shape) if node.output_shape is not None else None}</FONT></TD></TR>
+                </TABLE>
+            >"""
+            if node.__class__.__name__ == "BoundParams" or node.__class__.__name__ == "BoundConstant":
+                dot.node(node.name, label=label, shape="ellipse")
+            elif node.__class__.__name__ == "BoundInput":
+                dot.node(node.name, label=label, shape="diamond")
+            else:
+                dot.node(node.name, label=label, shape="square")
+            for inp in node.inputs:
+                dot.edge(inp.name, node.name)
+        # Render graph
+        dot.render(output_path, cleanup=True)
+        print(f"Graph saved to {output_path}.png")
 
     from .solver_module import build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars, _build_solver_refined
     from .interval_bound import IBP_general, _IBP_loss_fusion, check_IBP_intermediate, check_IBP_first_linear

@@ -94,8 +94,8 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     if custom_quirks.get('Squeeze', {}).get('skip_last_layer', False):
         custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
-    print(pytorch_model)
-    print('nhwc:', is_nhwc, batched_input_shape, batched_output_shape)
+    # print(pytorch_model)
+    # print('nhwc:', is_nhwc, batched_input_shape, batched_output_shape)
     
     # check conversion
     correct_conversion = True
@@ -108,7 +108,7 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
-        print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
+        # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
     except:
         raise OnnxConversionError
     

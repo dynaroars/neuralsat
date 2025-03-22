@@ -79,6 +79,10 @@ class GlobalSettings:
         self.verify_candidate_num = 128
         self.verify_last_timeout = 200.0
         self.verify_interm_timeout = 10.0
+        
+        # debug
+        self.max_iterations = 1e9
+        self.skip_initial_worst_bound = -1e6
 
     def __getitem__(self, key):
         return self.__dict__[key]
@@ -110,10 +114,10 @@ class GlobalSettings:
         # self.gpu_tightening_timeout = 2
         # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
-        # self.use_mip_verify = 0
+        self.use_mip_verify = 0
         # self.use_attack = 0
-        # self.use_restart = 0
-        # self.use_mip_tightening = 0
+        self.use_restart = 0
+        self.use_mip_tightening = 0
         # self.restart_visited_input_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256
@@ -121,6 +125,8 @@ class GlobalSettings:
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
         # self.share_alphas = 0 # sharing alphas may lose precision
+        self.max_iterations = 100
+        self.skip_initial_worst_bound = -5.0
             
         
     def setup_dec_test(self, args):

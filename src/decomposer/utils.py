@@ -6,17 +6,15 @@ import torch
 import time
 import copy
 import os
-import io
 
-from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
+from abstractor.auto_LiRPA import BoundedModule, BoundedTensor, PerturbationLpNorm
 from helper.network.read_onnx import parse_onnx, decompose_pytorch
 from attacker.pgd_attack.general import attack as pgd_attack
 from helper.spec.write_vnnlib import write_vnnlib_classify
+from helper.misc.torch_cuda_memory import gc_cuda
 from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 
-from auto_LiRPA.abstractor.perturbations import PerturbationLpNorm
-from auto_LiRPA.abstractor import BoundedModule, BoundedTensor
 
 SubNetworks = namedtuple('SubNetworks', ['network', 'input_shape', 'output_shape'])
 

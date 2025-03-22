@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 def IBP_general(self: 'BoundedModule', node=None, C=None,delete_bounds_after_use=False):
 
     logger.debug('IBP for %s', node)
+    # print('\t\t-IBP for', node)
 
     def _delete_unused_bounds(node_list: List[Bound]):
         """Delete bounds from input layers after use to save memory. Used when sparse_intermediate_bounds_with_ibp is true."""

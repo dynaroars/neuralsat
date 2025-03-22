@@ -214,7 +214,7 @@ class Verifier:
                 Timers.toc('Save stats') if Settings.use_timer else None
                 
                 # handle returning status
-                if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
+                if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN, ReturnStatus.EARLY_STOP]:
                     return status 
                 if status == ReturnStatus.UNSAT:
                     break # objective is verified
@@ -229,7 +229,7 @@ class Verifier:
                         for k, v in self._get_learned_conflict_clauses().items():
                             learned_clauses[k].extend(v)
                     continue
-                raise NotImplementedError()
+                raise NotImplementedError(status)
             
             logger.info(f'Verified: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
             
@@ -298,6 +298,10 @@ class Verifier:
         start_iteration = self.iteration
 
         while len(self.domains_list) > 0:
+            # early stop
+            if self.domains_list.minimum_lowers < Settings.skip_initial_worst_bound:
+                return ReturnStatus.EARLY_STOP
+            
             # search
             Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
@@ -327,6 +331,11 @@ class Verifier:
             # gpu tightening early stop
             if self._stop_gpu_tightening():
                 return ReturnStatus.UNKNOWN
+            
+            # early stop
+            if self.iteration >= Settings.max_iterations:
+                return ReturnStatus.EARLY_STOP
+            
         
         return ReturnStatus.UNSAT
     

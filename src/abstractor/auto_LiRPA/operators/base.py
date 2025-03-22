@@ -156,7 +156,7 @@ class Bound(nn.Module):
         self._upper = None
 
     def __repr__(self, attrs=None):
-        inputs = ', '.join([node.name for node in self.inputs])
+        inputs = ', '.join([str(node.name) for node in self.inputs])
         ret = f'{self.__class__.__name__}(name={self.name}, inputs=[{inputs}], perturbed={self.perturbed}'
         if attrs is not None:
             for k, v in attrs.items():

@@ -30,3 +30,4 @@ class ReturnStatus:
     TIMEOUT     = 'timeout'
     RESTART     = 'restart'
     INVALID_CEX = 'invalid_counterexample'
+    EARLY_STOP  = 'early_stop'
