@@ -373,15 +373,15 @@ def simplify_network():
 def test_cnn():
     # torch.manual_seed(0)
     net = nn.Sequential(
-        nn.Conv2d(3, 2, 10, 9), 
+        nn.Conv2d(3, 2, 5, 5), 
         nn.ReLU(),
         # nn.Conv2d(5, 7, 5, 3), 
         # nn.ReLU(),
         nn.Flatten(), 
-        nn.Linear(18, 10), 
+        nn.Linear(8, 2), 
     )
     
-    x = torch.randn(1, 3, 32, 32)
+    x = torch.randn(1, 3, 10, 10)
     print(net(x).shape)
    
     net.eval()
@@ -396,4 +396,4 @@ def test_cnn():
     
     
 if __name__ == '__main__':
-    test()
+    test_cnn()
