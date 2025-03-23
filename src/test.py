@@ -82,6 +82,32 @@ class TestVerifier(unittest.TestCase):
         
         
         
+    def test_mnist_unsat_wo_mip(self):
+        reset_settings()
+        Settings.use_mip_verify = False
+        
+        net_path = 'example/onnx/mnist-net_256x2.onnx'
+        vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
+        device = 'cuda'
+
+        print('\n\nRunning test with', net_path, vnnlib_path)
+        
+        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+        model.to(device)
+        
+        verifier = Verifier(
+            net=model, 
+            input_shape=input_shape, 
+            batch=1000,
+            device=device,
+        )
+        
+        status = verifier.verify(objectives)
+        
+        self.assertEqual(status, ReturnStatus.UNSAT)
+        
+        
+        
     def test_mnist_unsat(self):
         reset_settings()
         net_path = 'example/onnx/mnist-net_256x2.onnx'
@@ -108,6 +134,7 @@ class TestVerifier(unittest.TestCase):
         
     def test_mnist_unsat_w_restart(self):
         reset_settings()
+        Settings.use_mip_verify = False
         Settings.use_mip_tightening = False
         Settings.use_restart = True
         Settings.max_hidden_visited_branches = 100
@@ -135,6 +162,7 @@ class TestVerifier(unittest.TestCase):
         
     def test_mnist_unsat_w_stablize(self):
         reset_settings()
+        Settings.use_mip_verify = False
         Settings.use_mip_tightening = True
         Settings.use_restart = False
         Settings.mip_tightening_timeout_per_neuron = 2.0
@@ -162,6 +190,7 @@ class TestVerifier(unittest.TestCase):
         
     def test_mnist_unsat_w_stablize_and_restart(self):
         reset_settings()
+        Settings.use_mip_verify = False
         Settings.use_mip_tightening = True
         Settings.use_restart = True
         Settings.mip_tightening_timeout_per_neuron = 2.0

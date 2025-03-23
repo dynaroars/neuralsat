@@ -73,6 +73,7 @@ class BoundedModule(nn.Module):
             'verbosity': 1 if verbose else 0,
             'optimize_graph': {'optimizer': None},
             'compare_crown_with_ibp': False,
+            'fixed_reducemax_index': True,
         }
         default_bound_opts.update(bound_opts)
         self.bound_opts = default_bound_opts

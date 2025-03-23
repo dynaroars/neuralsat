@@ -49,30 +49,32 @@ class NetworkAbstractor:
         
     @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> None:
-        new_extra_opts = copy.deepcopy(extra_opts)
-        
-        if self.select_params(objective, extra_opts=new_extra_opts):
+        if self.select_params(objective, extra_opts=extra_opts):
             return None
         
         # FIXME: try special settings for large CNNs
+        new_extra_opts = copy.deepcopy(extra_opts)
         new_extra_opts.update({'use_full_conv_alpha': False})
         Settings.use_restart = False
         Settings.use_attack = False
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
             
+        # FIXME: try special settings for ViT
+        Settings.backward_batch_size = float('inf')
+        new_extra_opts = copy.deepcopy(extra_opts)
+        new_extra_opts.update({'sparse_intermediate_bounds': False})
+        if self.select_params(objective, extra_opts=new_extra_opts):
+            return None
+        
         # FIXME: try smaller backward batch size
+        new_extra_opts = copy.deepcopy(extra_opts)
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
             if self.select_params(objective, extra_opts=new_extra_opts):
                 return None 
-            Settings.backward_batch_size = Settings.backward_batch_size // 2
+            Settings.backward_batch_size = Settings.backward_batch_size // 4
 
-        # FIXME: try special settings for ViT
-        # new_extra_opts.update({'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True}})
-        new_extra_opts.update({'sparse_intermediate_bounds': False})
-        if self.select_params(objective, extra_opts=new_extra_opts):
-            return None
         
         logger.info('[setup] Initialization failed')
         raise

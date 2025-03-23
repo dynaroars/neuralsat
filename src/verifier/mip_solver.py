@@ -70,11 +70,13 @@ class MIPSolver:
         )
         print(f'Initialize new MIP model in {time.time() - tic} seconds, {timeout=}')
         mip_model = self.abstractor.net.solver_model
+        mip_model.setParam('BestBdStop', 1e-5)  # Terminiate as long as we find a positive lower bound.
+        
         print(mip_model)
         output_names = [v.VarName for v in self.abstractor.net.final_node().solver_vars]
         assert len(output_names) == len(cs)
         
-        print(output_names, rhs)
+        # print(output_names, rhs)
         # for var_name in output_names:
         #     print(var_name)
         feasible = False
@@ -88,6 +90,9 @@ class MIPSolver:
             if mip_model.status == grb.GRB.OPTIMAL:
                 output_lb = objective_var.X
                 print(f'Optimal! {output_lb=}')
+            elif mip_model.status == grb.GRB.USER_OBJ_LIMIT:
+                output_lb = mip_model.objbound
+                print(f'Early stop! {output_lb=}')
             else:
                 print(f"Infeasible! Model status {mip_model.status=}")
                 # output_lb = float('inf')
