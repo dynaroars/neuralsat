@@ -76,7 +76,6 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
     
     for i, node in enumerate(onnx_graph.node):
         # extract only useful inputs
-        is_nhwc = False
         is_last_removed = False
         params = [weights[par_name] for par_name in node.input if par_name in weights]
 
@@ -342,27 +341,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             op = TopK()
         elif node.op_type == "Transpose":
             # op = Transpose(**extract_attributes(node))
-            if i == 0 and extract_attributes(node)['dims'] == (0, 3, 1, 2): 
-                # nhwc
-                next_node = onnx_graph.node[i + 1]
-                assert next_node.op_type == 'Conv'
-                for i_, inp in enumerate(next_node.input):
-                    if inp == node.output[0]:
-                        next_node.input[i_] = node.input[0]
-                        break
-                op = None
-                is_nhwc = True
-                
-            elif i == 0 and extract_attributes(node)['dims'] == (0, 2, 3, 1) \
-                    and inputs[0].type.tensor_type.shape.dim[1].dim_value == 1 and quirks.get(node.op_type, {}).get('remove_gdvb_transpose', False):
-                next_node = onnx_graph.node[i + 1]
-                for i_, inp in enumerate(next_node.input):
-                    if inp == node.output[0]:
-                        next_node.input[i_] = node.input[0]
-                        break
-                op = None
-                 
-            elif quirks.get(node.op_type, {}).get('remove_spare_permute', False):
+            if quirks.get(node.op_type, {}).get('remove_spare_permute', False):
                 dims = extract_attributes(node)['dims']
                 if dims == (0, 2, 3, 1):
                     remove_transpose = False
@@ -414,4 +393,4 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
 
         op_name = "{}_{}".format(node.op_type, node.output[0])
         op_id = node.output[0]
-        yield op_id, op_name, op, is_nhwc, node.op_type, is_last_removed
+        yield op_id, op_name, op, node.op_type, is_last_removed

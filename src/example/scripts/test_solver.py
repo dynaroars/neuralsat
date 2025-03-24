@@ -6,27 +6,14 @@ import os
 import warnings
 warnings.filterwarnings(action='ignore')
 
-from verifier.objective import Objective, DnfObjectives
+from helper.spec.objective import Objective, DnfObjectives
 from helper.spec.read_vnnlib import read_vnnlib
 from helper.network.read_onnx import parse_onnx
 from verifier.verifier import Verifier 
 from helper.misc.result import ReturnStatus
 from helper.misc.logger import logger
 from auto_LiRPA.abstractor.bound_ops import BoundRelu
-
-def extract_instance(net_path, vnnlib_path):
-    vnnlibs = read_vnnlib(vnnlib_path)
-    model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
-    
-    # objective
-    objectives = []
-    for spec in vnnlibs:
-        bounds = spec[0]
-        for prop_i in spec[1]:
-            objectives.append(Objective((bounds, prop_i)))
-    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
-
-    return model, input_shape, objectives
+from test import extract_instance
 
 
 def refine_layer(node):

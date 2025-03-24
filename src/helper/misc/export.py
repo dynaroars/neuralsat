@@ -4,10 +4,7 @@ import torch
 from helper.network.read_onnx import inference_onnx
 
 @beartype
-def get_adv_string(inputs: torch.Tensor, net_path: str, is_nhwc: bool = False) -> str:
-    if is_nhwc:
-        assert inputs.ndim == 4
-        inputs = inputs.permute(0, 2, 3, 1)
+def get_adv_string(inputs: torch.Tensor, net_path: str) -> str:
     x = inputs.detach().cpu().float().numpy()
     y = inference_onnx(net_path, x)[0]
     # flatten

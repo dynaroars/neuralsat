@@ -5,7 +5,7 @@ import time
 import os
 
 from attacker.pgd_attack.general import attack as pgd_attack
-from verifier.objective import Objective, DnfObjectives
+from helper.spec.objective import Objective, DnfObjectives
 from helper.misc.adam_clipping import AdamClipping
 from helper.misc.check import check_solution
 from helper.misc.logger import logger
@@ -227,7 +227,6 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_ne
     dnf_objectives = DnfObjectives(
         objectives=objectives, 
         input_shape=verifier.input_shape, 
-        is_nhwc=False,
     )
     # print(f'{dnf_objectives.cs.shape = }, {dnf_objectives.rhs.shape = }')
     

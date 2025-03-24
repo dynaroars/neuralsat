@@ -1,32 +1,19 @@
 
 import torch
 
-from helper.network.read_onnx import parse_onnx, custom_quirks
-from verifier.objective import Objective, DnfObjectives
-from helper.spec.read_vnnlib import read_vnnlib
+from helper.network.read_onnx import custom_quirks
 
 from abstractor.auto_LiRPA import PerturbationLpNorm, BoundedTensor, BoundedModule
 from abstractor.auto_LiRPA.utils import stop_criterion_all
 from abstractor.params import *
+
+from test import extract_instance
 
 custom_quirks['Reshape']['fix_batch_size'] = False
 
 def new_input(x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
     return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(x_L.device)
 
-def extract_instance(net_path, vnnlib_path):
-    vnnlibs = read_vnnlib(vnnlib_path)
-    model, input_shape, output_shape, is_nhwc = parse_onnx(net_path)
-    
-    # objective
-    objectives = []
-    for spec in vnnlibs:
-        bounds = spec[0]
-        for prop_i in spec[1]:
-            objectives.append(Objective((bounds, prop_i)))
-    objectives = DnfObjectives(objectives, input_shape=input_shape, is_nhwc=is_nhwc)
-
-    return model, input_shape, objectives
 
 
 if __name__ == "__main__":

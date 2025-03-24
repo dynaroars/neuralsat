@@ -28,6 +28,7 @@ from abstractor.abstractor import NetworkAbstractor
 
 from helper.misc.result import AbstractResults, ReturnStatus
 from helper.proof.create_aptp import create_aptp
+from helper.spec.objective import DnfObjectives
 from helper.misc.check import check_solution
 from helper.misc.logger import logger
 
@@ -401,7 +402,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 
 @beartype
-def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
+def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: DnfObjectives, 
                 timeout: int | float = 20.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
@@ -670,7 +671,7 @@ def get_proof_tree(self: verifier.verifier.Verifier) -> None | dict:
         
     
 @beartype
-def export_proof(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, output_dir: str) -> None:
+def export_proof(self: verifier.verifier.Verifier, dnf_objectives: DnfObjectives, output_dir: str) -> None:
     os.system(f'rm -rf {output_dir}')
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f'Exporting APTP proofs at {output_dir=}')

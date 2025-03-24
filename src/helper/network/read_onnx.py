@@ -86,8 +86,6 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     
     pytorch_model.to(torch.get_default_dtype())
     
-    is_nhwc = getattr(pytorch_model, 'is_nhwc', False)
-    
     if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
         custom_quirks['Softmax']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Softmax', False)
     
@@ -95,7 +93,7 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
     # print(pytorch_model)
-    # print('nhwc:', is_nhwc, batched_input_shape, batched_output_shape)
+    # print(batched_input_shape, batched_output_shape)
     
     # check conversion
     correct_conversion = True
@@ -105,22 +103,20 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         # print(dummy.shape)
         output_onnx = torch.cat([torch.from_numpy(inference_onnx(path, dummy[i].view(orig_input_shape).float().numpy())[0]).view(batched_output_shape) for i in range(batch)])
         # print('output_onnx:', output_onnx)
-        output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
+        output_pytorch = pytorch_model(dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
         # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
     except:
         raise OnnxConversionError
     
-    assert correct_conversion
-
-    return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
-
     if not correct_conversion and custom_quirks.get('Conv', {}).get('merge_batch_norm', False):
         raise OnnxMergeBatchNormError
     
     if not correct_conversion and not custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
         raise OnnxOutputAllCloseError
+
+    assert correct_conversion
 
     # print(pytorch_model)
     # print(batched_input_shape)
@@ -128,12 +124,7 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     # print('DEBUG: correct')
     # exit()
         
-    if is_nhwc:
-        assert len(batched_input_shape) == 4
-        n_, h_, w_, c_ = batched_input_shape
-        batched_input_shape = (n_, c_, h_, w_)
-    
-    return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
+    return pytorch_model, batched_input_shape, batched_output_shape
 
 @beartype
 def is_activation_node(node: onnx.NodeProto):
@@ -247,28 +238,11 @@ def parse_onnx(path: str | io.BytesIO) -> tuple:
             
 def parse_pth(pth_path: str) -> tuple:
     # onnx_path = pth_path.replace('.pth', '.onnx')
-    # onnx_model, input_shape, output_shape, is_nhwc = parse_onnx(onnx_path)
     pytorch_model = torch.load(pth_path)
     # FIXME: generalize
     input_shape = (1, 3, 32, 32)
     output_shape = (1, 10)
-    is_nhwc = False
     
-    # # check conversion
-    # correct_conversion = True
-    # batch = 2
-    # dummy = torch.randn(batch, *input_shape[1:], dtype=torch.get_default_dtype())
-    # # print(dummy.shape)
-    # output_onnx = torch.cat([
-    #     torch.from_numpy(inference_onnx(onnx_path, dummy[i].view(input_shape).float().numpy())[0]).view(output_shape) 
-    #         for i in range(batch)
-    # ])
-    # # print('output_onnx:', output_onnx)
-    # output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach()
-    # # print('output_pytorch:', output_pytorch)
-    # correct_conversion = torch.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
-    # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
+    # check conversion
     
-    # assert correct_conversion
-
-    return pytorch_model, input_shape, output_shape, is_nhwc
+    return pytorch_model, input_shape, output_shape

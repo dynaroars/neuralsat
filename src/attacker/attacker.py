@@ -4,7 +4,7 @@ import torch
 import os
 
 from helper.network.onnx2pytorch import ConvertModel
-from verifier.objective import DnfObjectives
+from helper.spec.objective import DnfObjectives
 
 from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from helper.misc.check import check_solution

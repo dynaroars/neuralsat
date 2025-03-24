@@ -16,11 +16,12 @@ import os
 
 from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from helper.misc.result import ReturnStatus, CoefficientMatrix
+from helper.spec.objective import DnfObjectives
 from helper.misc.logger import logger
 
 from tightener.utils import optimize_dnn, verify_dnf_pairs
+
 from verifier.utils import get_used_gpu_memory
-from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 
 from setting import Settings

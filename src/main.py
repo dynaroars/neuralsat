@@ -5,11 +5,10 @@ import os
 
 from helper.network.read_onnx import parse_onnx, parse_pth
 from helper.misc.logger import logger, LOGGER_LEVEL
-from helper.spec.read_vnnlib import read_vnnlib
+from helper.spec.objective import parse_vnnlib
 from helper.misc.export import get_adv_string
 from helper.misc.timer import Timers
 
-from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
 
 from setting import Settings
@@ -76,9 +75,9 @@ if __name__ == '__main__':
     # network
     Timers.tic('Load network') if Settings.use_timer else None
     if args.net.endswith('.onnx'):
-        model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
+        model, input_shape, output_shape = parse_onnx(args.net)
     elif args.net.endswith('.pth'):
-        model, input_shape, output_shape, is_nhwc = parse_pth(args.net)
+        model, input_shape, output_shape = parse_pth(args.net)
     else:
         raise NotImplementedError('Unsupported network type')
     
@@ -92,8 +91,8 @@ if __name__ == '__main__':
     
     # specification
     Timers.tic('Load specification') if Settings.use_timer else None
-    vnnlibs = read_vnnlib(args.spec)
-    logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
+    objectives = parse_vnnlib(args.spec, input_shape)
+    logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     Timers.toc('Load specification') if Settings.use_timer else None
     
@@ -103,19 +102,6 @@ if __name__ == '__main__':
         input_shape=input_shape, 
         batch=args.batch,
         device=args.device,
-    )
-    
-    # objective
-    objectives = []
-    for spec in vnnlibs:
-        bounds = spec[0]
-        for prop_i in spec[1]:
-            objectives.append(Objective((bounds, prop_i)))
-            
-    objectives = DnfObjectives(
-        objectives=objectives, 
-        input_shape=input_shape, 
-        is_nhwc=is_nhwc,
     )
     
     print(Settings)
@@ -139,7 +125,7 @@ if __name__ == '__main__':
         with open(args.result_file, 'w') as fp:
             print(f'{status},{runtime:.06f}', file=fp)
             if (verifier.adv is not None) and args.export_cex:
-                print(get_adv_string(inputs=verifier.adv, net_path=args.net, is_nhwc=is_nhwc), file=fp)
+                print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')

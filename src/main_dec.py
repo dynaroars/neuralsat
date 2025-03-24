@@ -11,10 +11,9 @@ from helper.misc.result import ReturnStatus
 from helper.misc.timer import Timers
 
 from helper.network.read_onnx import parse_onnx, parse_pth
-from helper.spec.read_vnnlib import read_vnnlib
+from helper.spec.objective import parse_vnnlib
 
 from decomposer.dec_verifier import DecompositionalVerifier
-from verifier.objective import Objective, DnfObjectives
 from attacker.attacker import Attacker
 
 from setting import Settings
@@ -25,9 +24,8 @@ def parse_pth(pth_path: str) -> tuple:
     
     input_shape = (1, 3, 32, 32)
     output_shape = tuple(pytorch_model(torch.zeros(input_shape)).shape)
-    is_nhwc = False
 
-    return pytorch_model, input_shape, output_shape, is_nhwc
+    return pytorch_model, input_shape, output_shape
 
 
 def print_w_b(model):
@@ -87,11 +85,11 @@ def main():
     if args.net.endswith('.onnx'):
         pth_path = args.net[:-5] + '.pth'
         if os.path.exists(pth_path):
-            model, input_shape, output_shape, is_nhwc = parse_pth(pth_path)
+            model, input_shape, output_shape = parse_pth(pth_path)
         else:
-            model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
+            model, input_shape, output_shape = parse_onnx(args.net)
     elif args.net.endswith('.pth'):
-        model, input_shape, output_shape, is_nhwc = parse_pth(args.net)
+        model, input_shape, output_shape = parse_pth(args.net)
     else:
         raise NotImplementedError('Unsupported network type')
     
@@ -106,23 +104,10 @@ def main():
     
     # specification
     Timers.tic('Load specification') if Settings.use_timer else None
-    vnnlibs = read_vnnlib(args.spec)
-    logger.info(f'[!] Input shape: {input_shape} (is_nhwc={is_nhwc})')
+    dnf_objectives = parse_vnnlib(args.spec, input_shape)
+    logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     Timers.toc('Load specification') if Settings.use_timer else None
-    
-    # objective
-    objectives = []
-    for spec in vnnlibs:
-        bounds = spec[0]
-        for prop_i in spec[1]:
-            objectives.append(Objective((bounds, prop_i)))
-            
-    dnf_objectives = DnfObjectives(
-        objectives=objectives, 
-        input_shape=input_shape, 
-        is_nhwc=is_nhwc,
-    )
     
     # attacker
     if Settings.use_attack or 1:

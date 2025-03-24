@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from helper.network.read_onnx import custom_quirks
+from helper.spec.read_vnnlib import read_vnnlib
 
 
 class Objective:
@@ -59,9 +60,8 @@ class DnfObjectives:
     "List of objectives"
     
     @beartype
-    def __init__(self, objectives: list[Objective], input_shape: tuple, is_nhwc: bool) -> None:
+    def __init__(self, objectives: list[Objective], input_shape: tuple) -> None:
         self.objectives = objectives
-        self.is_nhwc = is_nhwc
         self.input_shape = input_shape
         
         self._extract()
@@ -165,17 +165,6 @@ class DnfObjectives:
         magic_number = 3
         self.ids = torch.arange(0, len(self.cs)) + magic_number
         
-        if self.is_nhwc:
-            n_, c_, h_, w_ = self.input_shape
-            orig_input_shape = (-1, h_, w_, c_)
-            # f32
-            self.lower_bounds = self.lower_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            self.upper_bounds = self.upper_bounds.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            
-            # f64
-            self.lower_bounds_f64 = self.lower_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            self.upper_bounds_f64 = self.upper_bounds_f64.view(orig_input_shape).permute(0, 3, 1, 2).flatten(1)
-            
         assert torch.all(self.lower_bounds <= self.upper_bounds)
         assert torch.all(self.lower_bounds_f64 <= self.upper_bounds_f64)
             
@@ -192,3 +181,14 @@ class DnfObjectives:
     def add(self: 'DnfObjectives', objective) -> None:
         self.num_used -= len(objective.cs)
         
+
+
+def parse_vnnlib(vnnlib_path, input_shape):
+    vnnlibs = read_vnnlib(vnnlib_path)
+    objectives = []
+    for spec in vnnlibs:
+        bounds = spec[0]
+        for prop_i in spec[1]:
+            objectives.append(Objective((bounds, prop_i)))
+    objectives = DnfObjectives(objectives, input_shape=input_shape)
+    return objectives

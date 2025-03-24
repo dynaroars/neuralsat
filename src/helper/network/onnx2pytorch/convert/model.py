@@ -112,7 +112,6 @@ class ConvertModel(nn.Module):
         self.experimental = experimental
         self.debug = debug
         self.enable_pruning = enable_pruning
-        self.is_nhwc = False
         self.is_last_removed = {}
         self.enable_recording = enable_recording
 
@@ -123,7 +122,7 @@ class ConvertModel(nn.Module):
 
         # Create mapping from node (identified by first output) to submodule
         self.mapping = {}
-        for op_id, op_name, op, is_nhwc, op_type, is_last_removed in convert_operations(
+        for op_id, op_name, op, op_type, is_last_removed in convert_operations(
             onnx_model.graph,
             opset_version,
             batch_dim,
@@ -134,7 +133,6 @@ class ConvertModel(nn.Module):
             if isinstance(op, Loop) and debug:
                 raise NotImplementedError("debug-mode with Loop node not implemented.")
             self.mapping[op_id] = op_name
-            self.is_nhwc = self.is_nhwc or is_nhwc
             if is_last_removed:
                 self.is_last_removed[op_type] = is_last_removed
 
