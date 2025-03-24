@@ -157,10 +157,10 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         return objectives, None
     
     try:
-        # self._init_abstractor('crown-optimized', objectives)
+        print('[_preprocess] _init_abstractor')
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
-        print('Failed to initialize abstractor')
+        print('[_preprocess] Failed to initialize abstractor')
         return objectives, None
     
     # prune objectives
@@ -330,6 +330,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_method=params['decision_method'],
     )
         
+    print('[_setup_restart_naive] _init_abstractor')
     self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
         
 
@@ -370,6 +371,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # skip refine for general activation layers
             pass
         else:
+            print('[_setup_restart] refine')
             self._init_abstractor('backward', objective)
             
             tmp_objective = copy.deepcopy(objective)
@@ -389,9 +391,11 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
                 timeout_per_neuron=Settings.mip_tightening_timeout_per_neuron,
             )
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
+            # del self.abstractor
     
     # main abstractor
-    self._init_abstractor(abstract_method, objective)
+    if not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method:
+        self._init_abstractor(abstract_method, objective)
         
     return refined_intermediate_bounds
 
@@ -595,14 +599,6 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
     remaining_indices = torch.where(n_unstables > 0)[0]
     
     return None, remaining_indices
-
-    
-@beartype
-def compute_stability(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives) -> tuple[int, int, list, list]:
-    if not (hasattr(self, 'abstractor')):
-        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
-        
-    return self.abstractor.compute_stability(dnf_objectives)
 
         
 @beartype

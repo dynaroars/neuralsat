@@ -67,16 +67,6 @@ class Verifier:
         objective = dnf_objectives.pop(max(1, max_domain))
         return objective
     
-    
-    @beartype
-    def compute_stability(self: 'Verifier', dnf_objectives: 'DnfObjectives'):
-        print('compute_stability')
-        if not (hasattr(self, 'abstractor')):
-            self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
-            
-        return self.abstractor.compute_stability(dnf_objectives)
-    
-    
     @beartype
     def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: int | float = 3600.0, force_split: str | None = None) -> str:
         self.start_time = time.time()
@@ -518,7 +508,7 @@ class Verifier:
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_cpu_tightening, _update_tightening_patience,
         _check_invoke_gpu_tightening,
-        compute_stability, _save_stats, get_stats,
+        _save_stats, get_stats,
         _prune_objective,
         get_unsat_core, get_proof_tree, export_proof,
         _check_invoke_mip_presolving,
