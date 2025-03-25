@@ -59,6 +59,25 @@ def mnist_256x5(*args, **kwargs):
 def mnist_256x6(*args, **kwargs):
     return MNISTFC(n_layers=6)
 
+def mnist_small(*args, **kwargs):
+    class PaperNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(784, 8),
+                nn.ReLU(),
+                nn.Linear(8, 6),
+                nn.ReLU(),
+                nn.Linear(6, 5),
+                nn.ReLU(),
+                nn.Linear(5, 10),
+            ])
+            
+        def forward(self, x):
+            return self.layers(x)
+    return PaperNet()
+
 # if __name__ == "__main__":
 #     model = mnist_256x3()
 #     x = torch.randn(1, 1, 28, 28)

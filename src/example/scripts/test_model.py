@@ -353,6 +353,27 @@ def simplify_network():
             print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
             
  
+ 
+class CifarConvRes(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.conv1 = nn.Conv2d(3, 2, 3, 3)
+        self.conv2 = nn.Conv2d(2, 4, 3, 3)
+        self.conv3 = nn.Conv2d(2, 4, 3, 3)
+        self.linear = nn.Linear(4, 2)
+        
+    def forward(self, x):
+        # return self.layers(x)
+        x = self.conv1(x)
+        x = x.relu()
+        x = self.conv2(x).relu() + self.conv3(x)
+        x = x.flatten(1)
+        x = self.linear(x)
+        return x
+    
+    
 def test_cnn():
     # torch.manual_seed(0)
     net = nn.Sequential(
@@ -364,11 +385,13 @@ def test_cnn():
         nn.Linear(8, 2), 
     )
     
+    net = CifarConvRes()
+    
     x = torch.randn(1, 3, 10, 10)
     print(net(x).shape)
    
     net.eval()
-    output_name = "example/onnx/cifar_relu.onnx"
+    output_name = "example/onnx/cifar_res.onnx"
     torch.onnx.export(
         net,
         x,

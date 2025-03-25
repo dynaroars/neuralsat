@@ -50,7 +50,7 @@ def evaluate_one(net_path, vnnlib_path, device):
     
     visited = verifier.domains_list.visited
     print(f'{status=} {verifier.iteration=} {visited=}')
-    return 200 <= visited
+    return visited >= 8
         
     # print(f'{ret.output_lbs=}')
     # return (-2.0 < ret.output_lbs < 0).all()
