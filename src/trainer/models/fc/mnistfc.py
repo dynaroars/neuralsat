@@ -65,13 +65,11 @@ def mnist_small(*args, **kwargs):
             super().__init__()
             self.layers = nn.Sequential(*[
                 nn.Flatten(),
-                nn.Linear(784, 8),
+                nn.Linear(784, 6),
                 nn.ReLU(),
-                nn.Linear(8, 6),
+                nn.Linear(6, 6),
                 nn.ReLU(),
-                nn.Linear(6, 5),
-                nn.ReLU(),
-                nn.Linear(5, 10),
+                nn.Linear(6, 10),
             ])
             
         def forward(self, x):

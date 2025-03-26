@@ -33,13 +33,13 @@ def evaluate_one(net_path, vnnlib_path, device):
     # objective = objectives.pop(100)
     # verifier._init_abstractor('crown-optimized', objective)
     # ret = verifier.abstractor.initialize(objective)
-    status = verifier.verify(objectives, timeout=50.0)
+    status = verifier.verify(objectives, timeout=10.0)
     if status == 'sat':
         assert verifier.adv is not None
         return False
 
-    assert status in ['early_stop', 'unsat']
-    if status == 'early_stop':
+    assert status in ['early_stop', 'unsat', 'timeout']
+    if status in ['early_stop', 'timeout']:
         return False
 
     if not hasattr(verifier, 'domains_list'):
@@ -50,7 +50,7 @@ def evaluate_one(net_path, vnnlib_path, device):
     
     visited = verifier.domains_list.visited
     print(f'{status=} {verifier.iteration=} {visited=}')
-    return visited >= 8
+    return visited >= 5 and verifier.iteration >= 5
         
     # print(f'{ret.output_lbs=}')
     # return (-2.0 < ret.output_lbs < 0).all()
