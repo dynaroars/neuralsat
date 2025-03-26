@@ -401,5 +401,26 @@ def test_cnn():
     )
     
     
+def test_vit():
+    # torch.manual_seed(0)
+    from trainer.models.vit.synthetic_vit import ViT_synthetic
+    
+    x = torch.randn(1, 3, 4, 4)
+    net = ViT_synthetic(in_ch=x.shape[1], img_size=x.shape[-1])
+    net.eval()
+    
+    print(net(x).shape)
+   
+    output_name = "example/onnx/vit.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+    )
+    
+    os.system(f'onnxsim {output_name} {output_name}')
+    
 if __name__ == '__main__':
-    test_cnn()
+    test_vit()
