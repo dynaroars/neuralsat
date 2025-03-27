@@ -317,12 +317,12 @@ def vit_8_8_128_3_16_2(img_size=32, positional_embedding='none', num_classes=10,
 @register_model
 def vit_toy(img_size=32, positional_embedding='none', num_classes=10, *args, **kwargs):
     return _vit_lite_relu(
-        num_layers=5, 
-        kernel_size=8,
-        embedding_dim=128, 
-        num_heads=3,
-        head_dim=16,
-        mlp_ratio=2, 
+        num_layers=1, 
+        kernel_size=2,
+        embedding_dim=4, 
+        num_heads=1,
+        head_dim=4,
+        mlp_ratio=1, 
         img_size=img_size, 
         positional_embedding=positional_embedding,
         num_classes=num_classes,

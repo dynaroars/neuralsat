@@ -404,9 +404,12 @@ def test_cnn():
 def test_vit():
     # torch.manual_seed(0)
     from trainer.models.vit.synthetic_vit import ViT_synthetic
+    from trainer.models.vit.vit import vit_toy
     
-    x = torch.randn(1, 3, 4, 4)
+    x = torch.randn(2, 3, 4, 4)
     net = ViT_synthetic(in_ch=x.shape[1], img_size=x.shape[-1])
+    # net = vit_toy(img_size=4, n_input_channels=3, num_classes=2)
+
     net.eval()
     
     print(net(x).shape)
@@ -418,6 +421,14 @@ def test_vit():
         output_name,
         verbose=False,
         opset_version=12,
+        input_names=["input"],
+        output_names=["output"],
+        export_params=True,
+        do_constant_folding=True,
+        dynamic_axes={
+            'input': {0: 'batch'},
+            'output': {0: 'batch'},
+        }
     )
     
     os.system(f'onnxsim {output_name} {output_name}')

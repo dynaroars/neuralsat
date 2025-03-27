@@ -22,18 +22,15 @@ class PatchEmbedding(nn.Module):
         self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Conv2d(in_channels, emb_size, kernel_size=patch_size, stride=patch_size)
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, emb_size))
-        self.positions = nn.Parameter(torch.zeros((img_size // patch_size) * (img_size // patch_size) + 1, emb_size))
-
+        self.cls_token = nn.Parameter(torch.randn(emb_size))
+        self.emb_size = emb_size
+        
     def forward(self, x: Tensor) -> Tensor:
-        b, _, _, _ = x.shape
+        batch = x.shape[0]
         x = self.projection(x)
+        cls_tokens = torch.zeros(batch, 1, self.emb_size, device=x.device) + self.cls_token
         x = x.flatten(2).transpose(1, 2)
-        cls_tokens = self.cls_token.expand(b, -1, -1)
-        # prepend the cls token to the input
         x = torch.cat([cls_tokens, x], dim=1)
-        # add position embedding
-        x += self.positions
         return x
 
 
