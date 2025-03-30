@@ -272,10 +272,8 @@ def boolean_propagation(self: 'heuristic.domains_list.DomainsList', domain_param
 
 
 @beartype
-def save_conflict_clauses(self: 'heuristic.domains_list.DomainsList', domain_params: AbstractResults, remaining_index: torch.Tensor) -> None:
+def save_conflict_clauses(self: 'heuristic.domains_list.DomainsList', domain_params: AbstractResults, select_index: torch.Tensor) -> None:
     assert domain_params.objective_ids is not None
-    for i in range(len(domain_params.histories)):
-        if i in remaining_index:
-            continue
-        # print('Verified:', domain_params.histories[i])
+    for i in select_index:
         self.all_conflict_clauses[int(domain_params.objective_ids[i])].append(domain_params.histories[i])
+        

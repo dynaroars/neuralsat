@@ -8,7 +8,7 @@ class TensorStorage:
     """
     
     @beartype
-    def __init__(self: 'TensorStorage', full_shape: torch.Tensor, 
+    def __init__(self: 'TensorStorage', full_shape: torch.Tensor | torch.Size, 
                  initial_size: int = 1024, switching_size: int = 65536, 
                  device: str = 'cpu', concat_dim: int = 0) -> None:
        

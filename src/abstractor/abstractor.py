@@ -439,12 +439,19 @@ class NetworkAbstractor:
             # slopes
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
             double_lAs = self.get_lAs()
+            
+            # hidden bounds
+            double_lower_bounds, double_upper_bounds = None, None
+            if Settings.use_save_reasoning_step:
+                double_lower_bounds, double_upper_bounds = self.get_hidden_bounds(double_output_lbs)
 
         return AbstractResults(**{
             'objective_ids': double_objective_ids,
             'output_lbs': double_output_lbs, 
             'input_lowers': new_input_lowers, 
             'input_uppers': new_input_uppers,
+            'lower_bounds': double_lower_bounds, 
+            'upper_bounds': double_upper_bounds, 
             'slopes': double_slopes, 
             'lAs': double_lAs, 
             'cs': double_cs, 

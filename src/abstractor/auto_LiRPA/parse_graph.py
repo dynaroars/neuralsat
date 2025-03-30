@@ -10,9 +10,16 @@ import os
 from .bounded_tensor import BoundedTensor, BoundedParameter
 from .utils import logger, unpack_inputs
 
-Node = namedtuple('Node', (
-    'name', 'ori_name', 'inputs', 'attr', 'op', 'param', 'input_index',
-    'bound_node', 'output_index', 'perturbation'), defaults=(None,) * 10)
+Node = namedtuple(
+    'Node', 
+    (
+        'name', 'ori_name', 
+        'inputs', 'attr', 'op', 'param', 
+        'input_index', 'output_index',
+        'bound_node', 'perturbation'
+    ), 
+    defaults=(None,) * 10
+)
 
 def get_node_name(node):
     return node.debugName()

@@ -43,15 +43,18 @@ if __name__ == '__main__':
     parser.add_argument('--result_file', type=str, required=False,
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
-                        help="export counter-example to result file.")
+                        help="enable exporting counter-example to result file.")
     parser.add_argument('--disable_restart', action='store_false',
                         help="disable RESTART heuristic.")
     parser.add_argument('--disable_stabilize', action='store_false',
                         help="disable STABILIZE heuristic.")
     parser.add_argument('--force_split', type=str, choices=['input', 'hidden'],
                         help="select SPLITTING strategy.")
+    parser.add_argument('--reasoning_file', type=str, required=False,
+                        help="file to save reasoning steps.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
+    
     args = parser.parse_args()   
     
     
@@ -127,12 +130,17 @@ if __name__ == '__main__':
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
-    logger.info(f'[!] Result: {status}')
-    logger.info(f'[!] Runtime: {runtime:.04f}')
-    # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
-    
+    if args.reasoning_file and Settings.use_save_reasoning_step:
+        if hasattr(verifier, 'domains_list') and not isinstance(verifier.domains_list, list):
+            verifier.domains_list.reasoning_domains.export(args.reasoning_file)
+        else:
+            print(f'[!] Does not have any reasoning step')
+
     if Settings.use_timer:
         Timers.toc('Main')
         Timers.print_stats()
-        
+    
+    logger.info(f'[!] Result: {status}')
+    logger.info(f'[!] Runtime: {runtime:.04f}')
+    
     print(f'{status},{runtime:.04f}')

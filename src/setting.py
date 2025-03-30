@@ -80,6 +80,9 @@ class GlobalSettings:
         self.verify_last_timeout = 200.0
         self.verify_interm_timeout = 10.0
         
+        # proof
+        self.use_save_reasoning_step = 1
+        
         # debug
         self.max_iterations = 1e9
         self.skip_initial_worst_bound = -1e6
@@ -127,6 +130,7 @@ class GlobalSettings:
         # self.share_alphas = 0 # sharing alphas may lose precision
         # self.max_iterations = 100
         # self.skip_initial_worst_bound = -5.0
+        self.use_save_reasoning_step = 0
             
         
     def setup_dec_test(self, args):

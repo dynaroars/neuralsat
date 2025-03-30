@@ -9,6 +9,7 @@ import os
 if typing.TYPE_CHECKING:
     import abstractor
 
+from helper.proof.reasoning_domains import ReasoningDomains
 from helper.misc.tensor_storage import TensorStorage
 from helper.misc.result import AbstractResults
 from helper.misc.logger import logger
@@ -43,7 +44,7 @@ class DomainsList:
         self.final_name = self.net.final_node_name
 
         self.input_split = input_split
-        self.visited = 0
+        self.visited = len(input_lowers)
         self.all_conflict_clauses = {int(_): [] for _ in objective_ids}
         self.use_restart = Settings.use_restart and (lower_bounds is not None) and (not input_split)
         
@@ -97,6 +98,10 @@ class DomainsList:
         
         if self.input_split:
             self.all_lower_bounds = self.all_upper_bounds = self.all_histories = self.all_betas = None
+            if Settings.use_save_reasoning_step:
+                # hidden bounds
+                self.all_lower_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lower_bounds.items() if k != self.final_name}
+                self.all_upper_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in upper_bounds.items() if k != self.final_name}
         else: # hidden spliting 
             # hidden bounds
             self.all_lower_bounds = {k: TensorStorage(v[remain_idx].cpu()) for k, v in lower_bounds.items() if k != self.final_name}
@@ -105,6 +110,36 @@ class DomainsList:
             self.all_histories = [all_histories[_] for _ in remain_idx]
             self.all_betas = [all_betas[_] for _ in remain_idx]
             
+        # proof
+        if Settings.use_save_reasoning_step:
+            # net architecture
+            input_name = [_.name for _ in self.net.roots() if _.perturbed]
+            assert len(input_name) == 1
+            net_info = {
+                'input_name': input_name[0],
+                'output_name': self.final_name,
+                'graph': []
+            }
+            for n in self.net.nodes():
+                if n.perturbed:
+                    net_info['graph'].append({n.name: [_.name for _ in n.inputs if _.perturbed]})
+
+            # reasoning domains
+            self.reasoning_domains = ReasoningDomains(
+                net_info=net_info,
+                objective_ids=objective_ids,
+                input_lowers=input_lowers,
+                input_uppers=input_uppers,
+                output_lbs=output_lbs,
+                lower_bounds={k: v for k, v in lower_bounds.items() if k != self.final_name},
+                upper_bounds={k: v for k, v in upper_bounds.items() if k != self.final_name},
+                cs=cs,
+                rhs=rhs,
+                histories=all_histories,
+                input_split=input_split,
+                select_index=torch.tensor([i for i in range(len(input_lowers)) if i not in remain_idx]).int(),
+            )
+        
         self._check_consistent()
         
         
@@ -142,11 +177,13 @@ class DomainsList:
         if self.all_lAs is not None:
             assert all([len(_) == len(self) for _ in self.all_lAs.values()])
         
-        if not self.input_split:
-            assert len(self.all_betas) == len(self.all_histories) == len(self)
+        if self.all_lower_bounds is not None:
             assert len(self.all_lower_bounds) == len(self.all_upper_bounds) 
             assert all([len(_) == len(self) for _ in self.all_lower_bounds.values()])
             assert all([len(_) == len(self) for _ in self.all_upper_bounds.values()])
+            
+        if not self.input_split:
+            assert len(self.all_betas) == len(self.all_histories) == len(self)
             if self.all_sat_solvers is not None:
                 assert len(self.all_sat_solvers) == len(self), print(f'len(self.all_sat_solvers)={len(self.all_sat_solvers)}, len(self)={len(self)}')
 
@@ -181,20 +218,20 @@ class DomainsList:
             
         # lAs
         new_lAs = {k: lA.pop(batch).to(device=device, non_blocking=True) for (k, lA) in self.all_lAs.items()} if self.all_lAs is not None else None
+    
+        # hidden spliting 
+        new_lower_bounds = {k: lb.pop(batch).to(device=device, non_blocking=True) for (k, lb) in self.all_lower_bounds.items()} if self.all_lower_bounds is not None else None
+        new_upper_bounds = {k: ub.pop(batch).to(device=device, non_blocking=True) for (k, ub) in self.all_upper_bounds.items()} if self.all_upper_bounds is not None else None
         
         if self.input_split:
             # input splitting
-            new_lower_bounds = new_upper_bounds = None
             new_masks = new_betas = new_histories = None
             new_sat_solvers = None
         else: 
-            # hidden spliting 
-            new_lower_bounds = {k: lb.pop(batch).to(device=device, non_blocking=True) for (k, lb) in self.all_lower_bounds.items()}
-            new_upper_bounds = {k: ub.pop(batch).to(device=device, non_blocking=True) for (k, ub) in self.all_upper_bounds.items()}
-            
             # pop batch
             new_betas = self.all_betas[-batch:]
             new_histories = self.all_histories[-batch:]
+
             # remove batch
             self.all_betas = self.all_betas[:-batch]
             self.all_histories = self.all_histories[:-batch]
@@ -281,10 +318,11 @@ class DomainsList:
             # conflict clauses
             self.save_conflict_clauses(
                 domain_params=domain_params, 
-                remaining_index=remaining_index,
+                select_index=torch.tensor([i for i in range(len(domain_params.input_lowers)) if i not in remaining_index]).int(),
             )
-            
-            # hidden bounds
+
+        # hidden bounds
+        if self.all_lower_bounds is not None:
             [v.append(domain_params.lower_bounds[k][remaining_index]) for k, v in self.all_lower_bounds.items()]
             [v.append(domain_params.upper_bounds[k][remaining_index]) for k, v in self.all_upper_bounds.items()]
         
@@ -307,6 +345,13 @@ class DomainsList:
             
         # lAs
         [v.append(domain_params.lAs[k][remaining_index]) for k, v in self.all_lAs.items()] if self.all_lAs is not None else None
+
+        # proof
+        if Settings.use_save_reasoning_step:
+            self.reasoning_domains.add(
+                domain_params=domain_params, 
+                select_index=torch.tensor([i for i in range(len(domain_params.input_lowers)) if i not in remaining_index]).int(),
+            )
         
         # checking
         self._check_consistent()
