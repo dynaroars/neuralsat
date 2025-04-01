@@ -407,6 +407,7 @@ def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input
         
         input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(math.prod(self.input_shape))]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+        adv = torch.clamp(torch.clamp(adv, max=input_upper), min=input_lower)
         if check_solution(net=self.pytorch_model, adv=adv, cs=c, rhs=rhs, data_min=input_lower, data_max=input_upper):
             return True, adv
         

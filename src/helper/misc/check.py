@@ -10,7 +10,6 @@ def check_solution(net: ConvertModel | torch.nn.Module, adv: torch.Tensor,
                    data_min: torch.Tensor, data_max: torch.Tensor) -> torch.Tensor:
     old_dtype = adv.dtype
     new_adv = adv.clone().to(data_min.dtype)
-    # new_adv = torch.clamp(torch.clamp(new_adv, max=data_max), min=data_min)
     assert torch.all(data_min <= new_adv) and torch.all(new_adv <= data_max)
     net.to(data_min.dtype)
     output = net(new_adv).detach().flatten(1)

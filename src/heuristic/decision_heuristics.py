@@ -391,7 +391,7 @@ class DecisionHeuristic:
         best_scores_all_layers = torch.cat([s.values for s in best_scores], dim=1)
         best_scores_all_layers_indices = torch.cat([s.indices for s in best_scores], dim=1).detach().cpu().numpy()
         best_scores_all = best_scores_all_layers.topk(1, 1)
-        assert (best_scores_all.values > 0.0).all()
+        assert (best_scores_all.values >= 0.0).all(), f'{best_scores_all.values=}'
         
         layer_ids = best_scores_all.indices[:, 0].detach().cpu().numpy()
         assert len(layer_ids) == batch

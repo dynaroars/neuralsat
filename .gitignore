@@ -1,3 +1,4 @@
+*.json
 generated_benchmark/
 benchmark/
 benchmark
