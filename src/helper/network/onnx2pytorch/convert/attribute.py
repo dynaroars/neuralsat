@@ -102,6 +102,8 @@ def extract_attributes(node):
                 )
         elif attr.name == "dilations":
             kwargs["dilation"] = extract_attr_values(attr)
+        elif attr.name == "count_include_pad":
+            kwargs["count_include_pad"] = bool(extract_attr_values(attr))
         elif attr.name == "direction":
             kwargs["direction"] = extract_attr_values(attr)
         elif attr.name == "ends":
@@ -178,6 +180,8 @@ def extract_attributes(node):
         elif attr.name == "value_string":
             kwargs["constant"] = extract_attr_values(attr)
         elif attr.name == "value_strings":
+            kwargs["constant"] = extract_attr_values(attr)
+        elif attr.name == "broadcast":
             kwargs["constant"] = extract_attr_values(attr)
         elif node.op_type == "Resize":
             # These parameters are not used, warn in Resize operator

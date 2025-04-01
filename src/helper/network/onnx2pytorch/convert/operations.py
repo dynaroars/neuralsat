@@ -190,42 +190,32 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                 if node.input[0] in weights:
                     # op = nn.Linear(weight.shape[1], weight.shape[0], bias=False)
                     # op.weight.data = weight
-                    if weight.ndim == 2:
+                    if weight.ndim == 2 and node.input[1] not in weights:
                         op = nn.Linear(weight.shape[1], weight.shape[0], bias=False)
                         op.weight.data = weight
                     else:
                         op = MatMul()
                 else:
-                    op = nn.Linear(weight.shape[0], weight.shape[1], bias=False)
-                    op.weight.data = weight.t()
+                    if weight.ndim == 2:
+                        op = nn.Linear(weight.shape[0], weight.shape[1], bias=False)
+                        op.weight.data = weight.t()
+                    else:
+                        op = MatMul()
                     
                 # check if next node Add to add bias
-                if i < len(onnx_graph.node) - 1:
+                if isinstance(op, nn.Linear) and i < len(onnx_graph.node) - 1:
                     next_node = onnx_graph.node[i + 1]
-                    # print(next_node.op_type)
-                    # print('weights:', list(weights.keys()))
-                    # print('next input[0]', next_node.input[0])
-                    # print('next input[1]', next_node.input[1])
-                    # print('current input[0]:', node.input[0])
-                    # print('current input[1]:', node.input[1])
-                    # print('current output[0]:', node.output[0])
-                    if len(next_node.input) == 2 and next_node.op_type == "Add":
-                        use_bias = False
-                        if ((next_node.input[0] in weights) or (next_node.input[1] in weights)) and (node.output[0] in next_node.input):
-                            if   (next_node.input[1] in weights):
-                                bias = torch.tensor(onnx.numpy_helper.to_array(weights[next_node.input[1]]))
-                                use_bias = True
-                            elif (next_node.input[0] in weights):
-                                bias = torch.tensor(onnx.numpy_helper.to_array(weights[next_node.input[0]]))
-                                use_bias = True
-                        if use_bias:
+                    if next_node.op_type == "Add" and len(node.output) == 1:
+                        bias = None
+                        if (next_node.input[0] == node.output[0] and next_node.input[1] in weights):
+                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[1]]))
+                        elif (next_node.input[1] == node.output[0] and next_node.input[0] in weights):
+                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[0]]))
+                        if bias is not None:
                             op.bias = nn.Parameter(bias)
                             node.output.pop()
                             node.output.extend(next_node.output)
                             onnx_graph.node.pop(i + 1)  # remove next node
-                #         print('bias:', use_bias)
-                # print(i, op, len(onnx_graph.node))
-                # print()
             else:
                 op = MatMul()
         elif node.op_type == "Max":
@@ -273,7 +263,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
         elif node.op_type == "ReduceSum":
             op = ReduceSum(opset_version=opset_version, **extract_attributes(node))
         elif node.op_type == "Relu":
-            op = nn.ReLU(inplace=True)
+            op = nn.ReLU()
         elif node.op_type == "Reshape":
             shape = list(
                 filter(lambda x: x.name == node.input[1], onnx_graph.initializer)
