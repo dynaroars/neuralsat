@@ -94,7 +94,10 @@ class Verifier:
         # refine
         Timers.tic('Preprocess') if Settings.use_timer else None
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
-        print(f'[+] verify _preprocess:', get_used_gpu_memory(), 'MB')
+        
+        if os.environ.get('NEURALSAT_DEBUG'):
+            print(f'[+] verify _preprocess:', get_used_gpu_memory(), 'MB')
+            
         Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
@@ -273,7 +276,9 @@ class Verifier:
         except:
             raise NotImplementedError
         Timers.toc('Initialization') if Settings.use_timer else None
-        print(f'[+] verify _initialize:', get_used_gpu_memory(), 'MB')
+        
+        if os.environ.get('NEURALSAT_DEBUG'):
+            print(f'[+] verify _initialize:', get_used_gpu_memory(), 'MB')
                 
         # cleaning
         torch.cuda.empty_cache()

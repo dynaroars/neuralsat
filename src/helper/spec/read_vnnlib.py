@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import tqdm
 import re
+import os
 
 from helper.misc.logger import logger
 
@@ -20,7 +21,6 @@ def read_statements(vnnlib_filename: Path):
 
     useful to get rid of comments and blank lines and combine multi-line statements
     '''
-    
     with open(vnnlib_filename, 'r') as f:
         lines = f.readlines()
 

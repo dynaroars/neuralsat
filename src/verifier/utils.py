@@ -48,7 +48,6 @@ def get_used_gpu_memory(return_percentage: bool = False):
 
 
 def _check_invoke_mip_presolving(self):
-    print('[+] _check_invoke_mip_presolving')
     if not Settings.use_mip_verify:
         return False
     count_relu = 0
@@ -58,7 +57,10 @@ def _check_invoke_mip_presolving(self):
             return False
         if isinstance(layer, torch.nn.ReLU):
             count_relu += 1
-    print(f'[+] {count_relu=}')
+    
+    if os.environ.get('NEURALSAT_DEBUG'):            
+        print(f'[+] _check_invoke_mip_presolving {count_relu=}')
+        
     if count_relu > Settings.mip_verify_threshold:
         return False
     return True
