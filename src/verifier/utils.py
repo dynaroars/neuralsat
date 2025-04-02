@@ -160,10 +160,13 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         return objectives, None
     
     try:
-        print('[_preprocess] _init_abstractor')
+        if os.environ.get('NEURALSAT_DEBUG'):
+            print('[_preprocess] _init_abstractor')
+            
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
-        print('[_preprocess] Failed to initialize abstractor')
+        if os.environ.get('NEURALSAT_DEBUG'):
+            print('[_preprocess] Failed to initialize abstractor')
         return objectives, None
     
     # prune objectives
@@ -641,6 +644,8 @@ def _check_adv(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: t
     upper_bounds = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
     cs = objective.cs.to(self.device)
     rhs = objective.rhs.to(self.device)
+    adv = adv.to(self.device)
+    self.net.to(self.device)
     for i in range(len(lower_bounds)):
         if check_solution(self.net, adv, cs[i], rhs[i], lower_bounds[i:i+1], upper_bounds[i:i+1]):
             return True

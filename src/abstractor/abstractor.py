@@ -249,7 +249,10 @@ class NetworkAbstractor:
             c=objective.cs, 
             bound_upper=False,
         )
-        print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=} {lb_init.flatten()=}',)
+        
+        if os.environ.get('NEURALSAT_DEBUG'):
+            print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=} {lb_init.flatten()=}',)
+            
         logger.info(f'Initial bounds (fisrt 10): {lb_init.detach().cpu().flatten()[:10]}')
         
         if stop_criterion_func(lb_init).all().item():
