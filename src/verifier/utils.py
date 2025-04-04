@@ -644,8 +644,6 @@ def _check_adv(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: t
     upper_bounds = objective.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
     cs = objective.cs.to(self.device)
     rhs = objective.rhs.to(self.device)
-    adv = adv.to(self.device)
-    self.net.to(self.device)
     for i in range(len(lower_bounds)):
         if check_solution(self.net, adv, cs[i], rhs[i], lower_bounds[i:i+1], upper_bounds[i:i+1]):
             return True
