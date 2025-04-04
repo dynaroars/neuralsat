@@ -10,7 +10,7 @@ from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..heuristic.domains_list import DomainsList
 from ..util.misc.result import AbstractResults
 from ..abstractor.utils import new_slopes
-
+from ..setting import Settings
 
 class InteractiveVerifier:
 
@@ -35,6 +35,7 @@ class InteractiveVerifier:
 
     # @beartype
     def _initialize(self: 'InteractiveVerifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
+        # print(f'[+] Initialized InteractiveVerifier with {Settings.update_interm_bounds=}')
         # initialization params
         ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds)
 
@@ -56,7 +57,7 @@ class InteractiveVerifier:
             lower_bounds=ret.lower_bounds,
             upper_bounds=ret.upper_bounds,
             lAs=ret.lAs,
-            slopes=slopes, # pruned slopes
+            slopes=ret.slopes if Settings.update_interm_bounds else slopes, # pruned slopes
             histories=copy.deepcopy(ret.histories),
             cs=ret.cs,
             rhs=ret.rhs,
@@ -97,38 +98,59 @@ class InteractiveVerifier:
             domain_params=pick_ret,
             reduce_op=reduce_op,
         )
+        all_output_lbs
         return all_output_lbs, all_decisions
 
+    def full_feedback(self, pick_ret, return_min_max_rewards=False):
+        min_rewards, actions = self.get_rewards(pick_ret, reduce_op=torch.min)
+        max_rewards, _       = self.get_rewards(pick_ret, reduce_op=torch.max)
+        min_rewards          = min_rewards.permute(1, 0)
+        max_rewards          = max_rewards.permute(1, 0)
+        
+        lbs_before            = pick_ret.output_lbs.to(min_rewards)
+        lbs_after             = 0.5 * (min_rewards + max_rewards)
+        active_neuron_rewards = lbs_after - lbs_before
+        
+        if return_min_max_rewards:
+            return (min_rewards, max_rewards), actions
+        # print(f'{min_rewards.shape=} {pick_ret.output_lbs.shape=}')
+        return active_neuron_rewards, actions
+        
+        
     def step(self, action):
         decisions, pick_ret = action
+        lb_before = pick_ret.output_lbs.min(dim=-1).values
+        
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         self.domains_list.add(abstraction_ret, decisions)
         done = len(self.domains_list) == 0
 
-        # reward = self.domains_list.minimum_lowers
         # given action (selected neuron)
         # return minimum lowerbound on two branches of that neuron
-        reward = abstraction_ret.output_lbs.min(dim=-1).values
-        # print(reward)
-        r1, r2 = torch.chunk(reward, 2)
-        reward, reward_indices = torch.min(torch.stack((r1, r2)), dim=0)
+        rewards         = abstraction_ret.output_lbs.min(dim=-1).values # .min(dim=-1) to merge objectives
+        r1, r2          = torch.chunk(rewards, 2)
+        min_reward, _   = torch.min(torch.stack((r1, r2)), dim=0)
+        max_reward, _   = torch.max(torch.stack((r1, r2)), dim=0)
+        lb_after        = 0.5 * (min_reward + max_reward)
+        
+        # print(f'before: {reward.shape=} {max_reward.shape=} {lb_before.shape=} {lb_after.shape=}')
+        reward = lb_after - lb_before.to(lb_after)
         assert not reward.isnan().any()
-        # DEBUG
-        # reward, reward_indices = torch.max(torch.stack((r1, r2)), dim=0)
-        #
-        split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
-                                                             domain_params=abstraction_ret)
+        # print(f'after: {reward.shape=}')
+        
+        unpruned_next_observations = self.scorer.get_branching_scores(abstractor=self.abstractor,
+                                                                      domain_params=abstraction_ret)
 
-        assert all([not _.isnan().any() for _ in split_observation[0]])
+        assert all([not _.isnan().any() for _ in unpruned_next_observations[0]])
         
         info = {
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
             'remaining': len(self.domains_list),
+            'unpruned_next_observations': unpruned_next_observations,
+            # extra
             'pick_ret': pick_ret, # subproblem before
             'abstraction_ret': abstraction_ret, # subproblem after
-            'split_observation': split_observation,
-            'reward_indices': reward_indices,
         }
         return reward, done, info
     

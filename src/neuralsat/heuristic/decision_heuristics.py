@@ -10,7 +10,7 @@ import os
 if typing.TYPE_CHECKING:
     from .. import abstractor
 
-from ..heuristic.util import _compute_babsr_scores
+from ..heuristic.util import _compute_babsr_scores, compute_masks
 from ..util.misc.result import AbstractResults
 from ..setting import Settings
 
@@ -609,12 +609,19 @@ class DecisionHeuristic:
         device = abstractor.device
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in abstractor.net.split_nodes]
-        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        # split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
 
-        masks = {
-            k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
-                for k in split_node_points
-        }
+        # masks = {
+        #     k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
+        #         for k in split_node_points
+        # }
+        
+        masks = compute_masks(
+            lower_bounds=domain_params.lower_bounds,
+            upper_bounds=domain_params.upper_bounds,
+            device=device,
+            non_blocking=False,
+        )
 
         # features
         scores_1, scores_2 = _compute_babsr_scores(
@@ -623,26 +630,26 @@ class DecisionHeuristic:
             upper_bounds=domain_params.upper_bounds,
             lAs=domain_params.lAs,
             batch=batch,
-            masks=domain_params.masks,
+            masks=masks,
             reduce_op=self.decision_reduceop,
             number_bounds=domain_params.cs.shape[1]
         )
-        scores_1 = {split_node_names[i]: scores_1[i] for i in range(len(scores_1))}
+        scores_1 = {split_node_names[i]: scores_1[i] * masks[split_node_names[i]] for i in range(len(scores_1))}
         assert all([not _.isnan().any() for _ in scores_1.values()])
         
-        scores_2 = {split_node_names[i]: scores_2[i] for i in range(len(scores_1))}
+        scores_2 = {split_node_names[i]: scores_2[i] * masks[split_node_names[i]] for i in range(len(scores_2))}
         assert all([not _.isnan().any() for _ in scores_2.values()])
         
-        scores_3 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) for k in split_node_names}
+        scores_3 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_3.values()])
         
-        scores_4 = {k: (domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k]) for k in split_node_names}
+        scores_4 = {k: ((domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k])).to(device) * masks[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_4.values()])
         
-        scores_5 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) for k in split_node_names}
+        scores_5 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_5.values()])
         
-        scores_6 = {k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) for k in split_node_names}
+        scores_6 = {k: (torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_6.values()])
 
         scores_all_dict = {

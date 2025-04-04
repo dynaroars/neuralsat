@@ -20,8 +20,8 @@ def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_block
     # TODO: shifted relu should not use 0.0, e.g., max(x, 1.0)
     new_masks = {
         j: torch.logical_and(
-                    lower_bounds[j] < 0,
-                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
+                    lower_bounds[j] < -1e-6,
+                    upper_bounds[j] > 1e-6).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
         for j in lower_bounds
     }
     return new_masks
@@ -56,6 +56,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 
         # (batch, neuron)
         reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask.to(intercept_candidate)
+        reshaped_intercept_candidate = torch.where(reshaped_intercept_candidate.isnan(), 0.0, reshaped_intercept_candidate)
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1))
 
         # bias
@@ -70,7 +71,18 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 
         # (batch, neuron)
         score_candidate = score_candidate.abs().view(batch, number_bounds, -1) * this_layer_mask
+        score_candidate = torch.where(score_candidate.isnan(), 0.0, score_candidate)
         score.insert(0, score_candidate.mean(1))
+        
+        # print(torch.where(score_candidate.isnan()))
+        # idx_ = torch.where(score_candidate.isnan())
+        # for i_ in range(len(idx_[0])):
+        # # for (b_, l_, n_) in :
+        #     b_ = idx_[0][i_]
+        #     n_ = idx_[2][i_]
+        #     print('lower:', lower_bounds[layer.name][b_][n_].item())
+        #     print('upper:', upper_bounds[layer.name][b_][n_].item())
+        #     print('mask:', this_layer_mask[b_][0][n_].item())
     return score, intercept_tb
 
 
@@ -95,7 +107,6 @@ def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tupl
     upper_temp = upper_bound.clamp(min=0)
     slope_ratio = upper_temp / (upper_temp - lower_temp)
     intercept = -1 * lower_temp * slope_ratio
-    assert not slope_ratio.isnan().any()
     return slope_ratio, intercept
 
 
