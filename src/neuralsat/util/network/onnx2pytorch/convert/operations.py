@@ -191,7 +191,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             op = convert_lstm_layer(node, weights)
         elif node.op_type == "MatMul":
             if params:
-                weight = torch.tensor(numpy_helper.to_array(params[0]))
+                weight = torch.from_numpy(numpy_helper.to_array(params[0]))
                 # print(weight.ndim)
                 # print(node.input)
                 # print(list(weights.keys()))
@@ -221,10 +221,10 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                         use_bias = False
                         if ((next_node.input[0] in weights) or (next_node.input[1] in weights)) and (node.output[0] in next_node.input):
                             if   (next_node.input[1] in weights):
-                                bias = torch.tensor(numpy_helper.to_array(weights[next_node.input[1]]))
+                                bias = torch.from_numpy(numpy_helper.to_array(weights[next_node.input[1]]))
                                 use_bias = True
                             elif (next_node.input[0] in weights):
-                                bias = torch.tensor(numpy_helper.to_array(weights[next_node.input[0]]))
+                                bias = torch.from_numpy(numpy_helper.to_array(weights[next_node.input[0]]))
                                 use_bias = True
                         if use_bias:
                             op.bias = nn.Parameter(bias)

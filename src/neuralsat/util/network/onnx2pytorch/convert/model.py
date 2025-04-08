@@ -149,7 +149,7 @@ class ConvertModel(nn.Module):
             buffer_name = get_buffer_name(tensor.name)
             self.register_buffer(
                 buffer_name,
-                torch.tensor(numpy_helper.to_array(tensor)),
+                torch.from_numpy(numpy_helper.to_array(tensor)),
             )
 
         # Compute activation dependencies, mapping each node to its dependents

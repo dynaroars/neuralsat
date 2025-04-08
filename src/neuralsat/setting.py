@@ -90,7 +90,7 @@ class GlobalSettings:
         # self.max_restart_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
-        self.update_interm_bounds = 1
+        self.update_interm_bounds = 0
 
 
     def __repr__(self):

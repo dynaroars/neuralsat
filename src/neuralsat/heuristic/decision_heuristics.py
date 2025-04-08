@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
 from beartype import beartype
 import numpy as np
@@ -609,13 +611,7 @@ class DecisionHeuristic:
         device = abstractor.device
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in abstractor.net.split_nodes]
-        # split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
 
-        # masks = {
-        #     k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
-        #         for k in split_node_points
-        # }
-        
         masks = compute_masks(
             lower_bounds=domain_params.lower_bounds,
             upper_bounds=domain_params.upper_bounds,
@@ -634,36 +630,87 @@ class DecisionHeuristic:
             reduce_op=self.decision_reduceop,
             number_bounds=domain_params.cs.shape[1]
         )
-        scores_1 = {split_node_names[i]: scores_1[i] * masks[split_node_names[i]] for i in range(len(scores_1))}
+        scores_1 = {split_node_names[i]: scores_1[i] for i in range(len(scores_1))}
         assert all([not _.isnan().any() for _ in scores_1.values()])
         
-        scores_2 = {split_node_names[i]: scores_2[i] * masks[split_node_names[i]] for i in range(len(scores_2))}
+        scores_2 = {split_node_names[i]: scores_2[i] for i in range(len(scores_2))}
         assert all([not _.isnan().any() for _ in scores_2.values()])
         
-        scores_3 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
+        scores_3 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k])) for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_3.values()])
         
-        scores_4 = {k: ((domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k])).to(device) * masks[k] for k in split_node_names}
+        scores_4 = {k: ((domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k])) for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_4.values()])
         
-        scores_5 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
+        scores_5 = {k: (torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k])) for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_5.values()])
         
-        scores_6 = {k: (torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k])).to(device) * masks[k] for k in split_node_names}
+        scores_6 = {k: (torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k])) for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_6.values()])
+        
+        scores_7 = {k: domain_params.upper_bounds[k] for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_7.values()])
 
+        scores_8 = {k: domain_params.lower_bounds[k] for k in split_node_names}
+        assert all([not _.isnan().any() for _ in scores_8.values()])
+        
+        # scores_1 = {k: scores_1[k].flatten(1)[masks[k].bool()] for k in split_node_names}
+        # print('score:', [scores_1[k].shape for k in split_node_names])
+        
+        scores_1, nonzero_masks = masked_scores(scores_1, masks, return_nonzero_masks=True)
+        scores_2                = masked_scores(scores_2, masks)
+        scores_3                = masked_scores(scores_3, masks)
+        scores_4                = masked_scores(scores_4, masks)
+        scores_5                = masked_scores(scores_5, masks)
+        scores_6                = masked_scores(scores_6, masks)
+        scores_7                = masked_scores(scores_7, masks)
+        scores_8                = masked_scores(scores_8, masks)
+        # print('score:', [scores_1[k].shape for k in split_node_names])
+        
         scores_all_dict = {
             k: torch.stack([
-                scores_1[k].to(device),
-                scores_2[k].to(device),
-                scores_3[k].to(device),
-                scores_4[k].to(device),
-                scores_5[k].to(device),
-                scores_6[k].to(device),
+                scores_1[k],
+                scores_2[k],
+                scores_3[k],
+                scores_4[k],
+                scores_5[k],
+                scores_6[k],
+                scores_7[k],
+                scores_8[k],
             ], dim=-1)
             for k in split_node_names
         }
 
         scores_all_list = [scores_all_dict[k] for k in split_node_names]
-        masks_all_list = [masks[k] for k in split_node_names]
+        masks_all_list  = [nonzero_masks[k]   for k in split_node_names]
+        
+        print('bound:', [domain_params.lower_bounds[k].shape for k in split_node_names])
+        print('mask :', [masks[k].shape for k in split_node_names])
+        print('score:', [scores_1[k].shape for k in split_node_names])
+        
+        print('return masks: ', [_.shape for _ in masks_all_list])
+        print('return scores:', [_.shape for _ in scores_all_list])
+        print(masks_all_list[-1])
+        
         return scores_all_list, masks_all_list
+
+def masked_scores(scores_dict, masks_dict, return_nonzero_masks=False):
+    returned_scores = {}
+    returned_masks = {}
+    for name in scores_dict:
+        flat_scores = scores_dict[name].flatten(1)
+        batch = flat_scores.size(0)
+        
+        masked_batch_scores = [flat_scores[i][masks_dict[name][i].bool()] for i in range(batch)]
+        # print([_.shape for _ in masked_batch_scores])
+        masked_batch_scores = pad_sequence(masked_batch_scores, batch_first=True)
+        returned_scores[name] = masked_batch_scores
+        if return_nonzero_masks:
+            nonzero_batch_masks = [masks_dict[name][i].nonzero().squeeze(-1) for i in range(batch)]
+            # print([_.shape for _ in nonzero_batch_masks])
+            nonzero_batch_masks = pad_sequence(nonzero_batch_masks, batch_first=True)
+            returned_masks[name] = nonzero_batch_masks
+    if return_nonzero_masks:
+        return returned_scores, returned_masks
+    return returned_scores
+    
