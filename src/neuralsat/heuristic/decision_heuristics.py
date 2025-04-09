@@ -340,6 +340,8 @@ class DecisionHeuristic:
                 assert selected
 
         final_decision = sum(final_decision, [])
+        # print(split_node_names)
+        # print(final_decision)
         return final_decision
 
 
@@ -651,20 +653,20 @@ class DecisionHeuristic:
         scores_7 = {k: domain_params.upper_bounds[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_7.values()])
 
-        scores_8 = {k: domain_params.lower_bounds[k] for k in split_node_names}
+        scores_8 = {k: -domain_params.lower_bounds[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_8.values()])
         
         # scores_1 = {k: scores_1[k].flatten(1)[masks[k].bool()] for k in split_node_names}
         # print('score:', [scores_1[k].shape for k in split_node_names])
         
-        scores_1, nonzero_masks = masked_scores(scores_1, masks, return_nonzero_masks=True)
-        scores_2                = masked_scores(scores_2, masks)
-        scores_3                = masked_scores(scores_3, masks)
-        scores_4                = masked_scores(scores_4, masks)
-        scores_5                = masked_scores(scores_5, masks)
-        scores_6                = masked_scores(scores_6, masks)
-        scores_7                = masked_scores(scores_7, masks)
-        scores_8                = masked_scores(scores_8, masks)
+        scores_1, nonzero_masks, n_actives = masked_scores(scores_1, masks, device=device, return_nonzero_masks=True)
+        scores_2 = masked_scores(scores_2, masks, device=device)
+        scores_3 = masked_scores(scores_3, masks, device=device)
+        scores_4 = masked_scores(scores_4, masks, device=device)
+        scores_5 = masked_scores(scores_5, masks, device=device)
+        scores_6 = masked_scores(scores_6, masks, device=device)
+        scores_7 = masked_scores(scores_7, masks, device=device)
+        scores_8 = masked_scores(scores_8, masks, device=device)
         # print('score:', [scores_1[k].shape for k in split_node_names])
         
         scores_all_dict = {
@@ -677,40 +679,48 @@ class DecisionHeuristic:
                 scores_6[k],
                 scores_7[k],
                 scores_8[k],
-            ], dim=-1)
+            ], dim=-1).to(device)
             for k in split_node_names
         }
 
         scores_all_list = [scores_all_dict[k] for k in split_node_names]
         masks_all_list  = [nonzero_masks[k]   for k in split_node_names]
+        n_active_all_list = [n_actives[k]   for k in split_node_names]
+        # print('bound:', [domain_params.lower_bounds[k].shape for k in split_node_names])
+        # print('mask :', [masks[k].shape for k in split_node_names])
+        # print('score:', [scores_1[k].shape for k in split_node_names])
         
-        print('bound:', [domain_params.lower_bounds[k].shape for k in split_node_names])
-        print('mask :', [masks[k].shape for k in split_node_names])
-        print('score:', [scores_1[k].shape for k in split_node_names])
+        # print('active neuron index:', [_.shape for _ in masks_all_list])
+        # print('feature            :', [_.shape for _ in scores_all_list])
+        # print('active neuron mask :', [_.shape for _ in n_active_all_list])
         
-        print('return masks: ', [_.shape for _ in masks_all_list])
-        print('return scores:', [_.shape for _ in scores_all_list])
-        print(masks_all_list[-1])
+        # print('n_active_neuron:', [_ for _ in n_active_all_list])
+        # print(masks_all_list[-1])
         
-        return scores_all_list, masks_all_list
+        return scores_all_list, masks_all_list, n_active_all_list
 
-def masked_scores(scores_dict, masks_dict, return_nonzero_masks=False):
+def masked_scores(scores_dict, masks_dict, device, return_nonzero_masks=False):
     returned_scores = {}
     returned_masks = {}
+    returned_n_unstable = {}
     for name in scores_dict:
-        flat_scores = scores_dict[name].flatten(1)
+        flat_scores = scores_dict[name].flatten(1).to(device)
         batch = flat_scores.size(0)
+        # print(f'{flat_scores.device=} {masks_dict[name].device=}')
         
-        masked_batch_scores = [flat_scores[i][masks_dict[name][i].bool()] for i in range(batch)]
+        masked_batch_scores = [flat_scores[i][masks_dict[name][i].bool().to(device)] for i in range(batch)]
         # print([_.shape for _ in masked_batch_scores])
         masked_batch_scores = pad_sequence(masked_batch_scores, batch_first=True)
         returned_scores[name] = masked_batch_scores
         if return_nonzero_masks:
             nonzero_batch_masks = [masks_dict[name][i].nonzero().squeeze(-1) for i in range(batch)]
+            n_unstable = torch.stack([torch.tensor(nonzero_batch_masks[i].numel()) for i in range(batch)])
             # print([_.shape for _ in nonzero_batch_masks])
             nonzero_batch_masks = pad_sequence(nonzero_batch_masks, batch_first=True)
             returned_masks[name] = nonzero_batch_masks
+            returned_n_unstable[name] = n_unstable
+            
     if return_nonzero_masks:
-        return returned_scores, returned_masks
+        return returned_scores, returned_masks, returned_n_unstable
     return returned_scores
     
