@@ -362,7 +362,7 @@ class Bound(nn.Module):
             if dims:
                 A = torch.sum(A, dim=dims, keepdim=True)
             # Check the final shape - it should be compatible.
-            assert A.shape[2:] == shape[1:]  # skip the spec and batch dimension.
+            assert A.shape[2:] == shape[1:], f"{self=} {A.shape=} {shape=}"  # skip the spec and batch dimension.
         else:
             pass
         return A

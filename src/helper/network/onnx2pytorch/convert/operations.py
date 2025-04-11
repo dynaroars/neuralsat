@@ -183,7 +183,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             op = convert_lstm_layer(node, weights)
         elif node.op_type == "MatMul":
             if params:
-                weight = torch.tensor(onnx.numpy_helper.to_array(params[0]))
+                weight = torch.from_numpy(onnx.numpy_helper.to_array(params[0]))
                 # print(weight.ndim)
                 # print(node.input)
                 # print(list(weights.keys()))

@@ -403,12 +403,10 @@ def test_cnn():
     
 def test_vit():
     # torch.manual_seed(0)
-    from trainer.models.vit.synthetic_vit import ViT_synthetic
-    from trainer.models.vit.vit import vit_toy
+    from src.trainer.models.vit.vit import ViTLite
     
     x = torch.randn(2, 3, 4, 4)
-    net = ViT_synthetic(in_ch=x.shape[1], img_size=x.shape[-1])
-    # net = vit_toy(img_size=4, n_input_channels=3, num_classes=2)
+    net = ViTLite(in_ch=x.shape[1], img_size=x.shape[-1])
 
     net.eval()
     

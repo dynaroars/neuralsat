@@ -26,9 +26,9 @@ def extract_params(params):
 
 def load_params(layer, weight, bias):
     """Load weight and bias to a given layer from onnx format."""
-    layer.weight.data = torch.tensor(onnx.numpy_helper.to_array(weight))
+    layer.weight.data = torch.from_numpy(onnx.numpy_helper.to_array(weight))
     if bias is not None:
-        layer.bias.data = torch.tensor(onnx.numpy_helper.to_array(bias))
+        layer.bias.data = torch.from_numpy(onnx.numpy_helper.to_array(bias))
 
 
 def convert_layer(node, layer_type, params=None):
@@ -85,7 +85,7 @@ def convert_batch_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = BatchNormWrapper
-    torch_params = [torch.tensor(onnx.numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param)) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)
@@ -96,7 +96,7 @@ def convert_instance_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = InstanceNormWrapper
-    torch_params = [torch.tensor(onnx.numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param)) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)
