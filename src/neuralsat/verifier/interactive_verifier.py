@@ -92,24 +92,21 @@ class InteractiveVerifier:
         # topk_decisions: (topk, batch)
         return obs, pick_ret
 
-    def get_rewards(self, pick_ret, reduce_op=torch.max):
-        all_output_lbs, all_decisions = self.scorer.get_all_branching_rewards(
+    def get_rewards(self, pick_ret):
+        all_min_rewards, all_max_rewards, all_decisions = self.scorer.get_all_branching_rewards(
             abstractor=self.abstractor,
             domain_params=pick_ret,
-            reduce_op=reduce_op,
         )
-        all_output_lbs
-        return all_output_lbs, all_decisions
+
+        return all_min_rewards, all_max_rewards, all_decisions
 
     def full_feedback(self, pick_ret, return_min_max_rewards=False):
-        min_rewards, actions = self.get_rewards(pick_ret, reduce_op=torch.min)
-        max_rewards, _       = self.get_rewards(pick_ret, reduce_op=torch.max)
-        min_rewards          = min_rewards.permute(1, 0)
-        max_rewards          = max_rewards.permute(1, 0)
-        
-        lbs_before            = pick_ret.output_lbs.to(min_rewards)
-        lbs_after             = 0.5 * (min_rewards + max_rewards)
-        active_neuron_rewards = lbs_after - lbs_before
+        min_rewards, max_rewards, actions = self.get_rewards(pick_ret)
+        min_rewards = min_rewards.permute(1, 0)
+        max_rewards = max_rewards.permute(1, 0)
+        lb_before   = pick_ret.output_lbs.to(min_rewards)
+        lb_after    = 0.5 * (min_rewards + max_rewards)
+        active_neuron_rewards = torch.clamp(lb_after - lb_before, min=0.)
         
         if return_min_max_rewards:
             return (min_rewards, max_rewards), actions
@@ -134,20 +131,20 @@ class InteractiveVerifier:
         lb_after        = 0.5 * (min_reward + max_reward)
         
         # print(f'before: {reward.shape=} {max_reward.shape=} {lb_before.shape=} {lb_after.shape=}')
-        reward = lb_after - lb_before.to(lb_after)
+        reward = torch.clamp(lb_after - lb_before.to(lb_after), min=0.)
         assert not reward.isnan().any()
         # print(f'after: {reward.shape=}')
         
-        unpruned_next_observations = self.scorer.get_branching_scores(abstractor=self.abstractor,
+        unpruned_next_features, _, _ = self.scorer.get_branching_scores(abstractor=self.abstractor,
                                                                       domain_params=abstraction_ret)
 
-        assert all([not _.isnan().any() for _ in unpruned_next_observations[0]])
+        assert all([not _.isnan().any() for _ in unpruned_next_features])
         
         info = {
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
             'remaining': len(self.domains_list),
-            'unpruned_next_observations': unpruned_next_observations,
+            'unpruned_next_features': unpruned_next_features,
             # extra
             'pick_ret': pick_ret, # subproblem before
             'abstraction_ret': abstraction_ret, # subproblem after
@@ -271,5 +268,64 @@ class InteractiveVerifier:
             # print(f'{k=} {k_output_lbs=} {topk_output_lbs[k]=}')
 
         return topk_output_lbs, topk_decisions
+
+
+    def top_k_reward(self, actions, domain_params):
+        # actions: layer of (b, k)
+        batch = len(domain_params.input_lowers)
+        split_node_names = [_.name for _ in self.abstractor.net.split_nodes]
+        split_node_points = {k: self.abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        # print(f'{batch=}')
+        # print(f'{split_node_names=}')
+        # print(f'{split_node_points=}')
+        
+        
+        rewards = [] # relative improvements: layer of (b, k)
+        scores  = [] # absolute improvements: layer of (b, k)
+        for layer_id, layer_action in enumerate(actions):
+            assert len(layer_action) == batch
+            top_k_rewards = []
+            top_k_scores = []
+            for k in range(layer_action.shape[1]):
+                action_to_use = layer_action[:, k].numpy().tolist()
+                action_to_use = [(split_node_names[layer_id], a, split_node_points[split_node_names[layer_id]]) for a in action_to_use]
+                # print(action_to_use)
+                
+                k_domain_params = AbstractResults(**{
+                    'input_lowers': domain_params.input_lowers,
+                    'input_uppers': domain_params.input_uppers,
+                    'lower_bounds': domain_params.lower_bounds,
+                    'upper_bounds': domain_params.upper_bounds,
+                    'slopes': domain_params.slopes if k == 0 else [],
+                    'cs': domain_params.cs,
+                    'rhs': domain_params.rhs,
+                })
+
+                abs_ret = self.abstractor._forward_hidden(
+                    domain_params=k_domain_params,
+                    decisions=action_to_use,
+                    simplify=True
+                )
+                # improvements over specification
+                lb_before = domain_params.output_lbs.min(dim=-1).values
+                
+                raw_reward = (abs_ret.output_lbs - torch.cat([domain_params.rhs, domain_params.rhs])).min(dim=-1).values
+                min_reward = torch.min(raw_reward.flatten().reshape(2, -1), dim=0).values
+                max_reward = torch.max(raw_reward.flatten().reshape(2, -1), dim=0).values
+                
+                lb_after = 0.5 * (min_reward + max_reward)
+                # print(f'[+] {raw_reward.shape=} {reward.shape=}')
+                reward = torch.clamp(lb_after - lb_before.to(lb_after), min=0.)
+                
+                top_k_scores.append(lb_after)
+                top_k_rewards.append(reward)
+                
+            top_k_rewards = torch.stack(top_k_rewards, dim=-1)
+            rewards.append(top_k_rewards.cpu())
+
+            top_k_scores = torch.stack(top_k_scores, dim=-1)
+            scores.append(top_k_scores.cpu())
+        return rewards, scores
+                
 
     from .utils import _preprocess, _init_abstractor, _setup_restart
