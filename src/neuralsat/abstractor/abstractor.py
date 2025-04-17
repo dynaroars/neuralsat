@@ -314,7 +314,7 @@ class NetworkAbstractor:
             bound_dict = {'reference_bounds': new_intermediate_layer_bounds}
         else:
             bound_dict = {'interm_bounds': new_intermediate_layer_bounds}
-            
+
         double_output_lbs, _ = self.net.compute_bounds(
             x=(new_x,),
             C=double_cs,

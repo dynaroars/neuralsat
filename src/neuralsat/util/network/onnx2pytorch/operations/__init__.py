@@ -7,7 +7,6 @@ from .constant import Constant
 from .constantofshape import ConstantOfShape
 from .div import Div
 from .expand import Expand
-from .flatten import Flatten
 from .gather import Gather
 from .gathernd import GatherND
 from .globalaveragepool import GlobalAveragePool
@@ -48,7 +47,6 @@ __all__ = [
     "ConstantOfShape",
     "Div",
     "Expand",
-    "Flatten",
     "Gather",
     "GatherND",
     "GlobalAveragePool",

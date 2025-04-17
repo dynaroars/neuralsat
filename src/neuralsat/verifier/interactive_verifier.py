@@ -84,15 +84,21 @@ class InteractiveVerifier:
     def get_observation(self, batch):
         pick_ret = self.domains_list.pick_out(batch, self.device)
 
-        obs = self.scorer.get_branching_scores(
+        scores_all_list, masks_all_list, n_active_all_list = self.scorer.get_branching_scores(
             abstractor=self.abstractor,
             domain_params=pick_ret,
         )
+        
+        features, scores = self.extract_scores(scores_all_list)
+        
+        
+        obs = (features, scores, masks_all_list, n_active_all_list)
         # topk_output_lbs: (topk, batch)
         # topk_decisions: (topk, batch)
         return obs, pick_ret
 
     def get_rewards(self, pick_ret):
+        raise
         all_min_rewards, all_max_rewards, all_decisions = self.scorer.get_all_branching_rewards(
             abstractor=self.abstractor,
             domain_params=pick_ret,
@@ -101,6 +107,7 @@ class InteractiveVerifier:
         return all_min_rewards, all_max_rewards, all_decisions
 
     def full_feedback(self, pick_ret, return_min_max_rewards=False):
+        raise
         min_rewards, max_rewards, actions = self.get_rewards(pick_ret)
         min_rewards = min_rewards.permute(1, 0)
         max_rewards = max_rewards.permute(1, 0)
@@ -117,7 +124,6 @@ class InteractiveVerifier:
     def step(self, action):
         decisions, pick_ret = action
         lb_before = pick_ret.output_lbs.min(dim=-1).values
-        
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         self.domains_list.add(abstraction_ret, decisions)
         done = len(self.domains_list) == 0
@@ -138,6 +144,8 @@ class InteractiveVerifier:
         unpruned_next_features, _, _ = self.scorer.get_branching_scores(abstractor=self.abstractor,
                                                                       domain_params=abstraction_ret)
 
+        unpruned_next_features, _ = self.extract_scores(unpruned_next_features)
+
         assert all([not _.isnan().any() for _ in unpruned_next_features])
         
         info = {
@@ -152,6 +160,7 @@ class InteractiveVerifier:
         return reward, done, info
     
     def topk_action(self, scores, domain_params, topk=1):
+        raise
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in self.abstractor.net.split_nodes]
         split_node_points = {k: self.abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
@@ -217,7 +226,7 @@ class InteractiveVerifier:
     def get_topk_scores(self: 'DecisionHeuristic', domain_params: AbstractResults,
                         topk_scores: torch.return_types.topk, score_length: np.ndarray,
                         topk: int, reduce_op=torch.max) -> tuple[torch.Tensor, list]:
-
+        raise
         topk_decisions = []
         batch = len(domain_params.input_lowers)
         topk_output_lbs = torch.empty(
@@ -281,14 +290,12 @@ class InteractiveVerifier:
         
         
         rewards = [] # relative improvements: layer of (b, k)
-        scores  = [] # absolute improvements: layer of (b, k)
         for layer_id, layer_action in enumerate(actions):
             assert len(layer_action) == batch
             top_k_rewards = []
-            top_k_scores = []
             for k in range(layer_action.shape[1]):
-                action_to_use = layer_action[:, k].numpy().tolist()
-                action_to_use = [(split_node_names[layer_id], a, split_node_points[split_node_names[layer_id]]) for a in action_to_use]
+                action_to_use_raw = layer_action[:, k].numpy().tolist()
+                action_to_use = [(split_node_names[layer_id], a, split_node_points[split_node_names[layer_id]]) for a in action_to_use_raw]
                 # print(action_to_use)
                 
                 k_domain_params = AbstractResults(**{
@@ -307,7 +314,6 @@ class InteractiveVerifier:
                     simplify=True
                 )
                 # improvements over specification
-                lb_before = domain_params.output_lbs.min(dim=-1).values
                 
                 raw_reward = (abs_ret.output_lbs - torch.cat([domain_params.rhs, domain_params.rhs])).min(dim=-1).values
                 min_reward = torch.min(raw_reward.flatten().reshape(2, -1), dim=0).values
@@ -315,17 +321,29 @@ class InteractiveVerifier:
                 
                 lb_after = 0.5 * (min_reward + max_reward)
                 # print(f'[+] {raw_reward.shape=} {reward.shape=}')
-                reward = torch.clamp(lb_after - lb_before.to(lb_after), min=0.)
+                # lb_before = domain_params.output_lbs.min(dim=-1).values
+                # reward = torch.clamp(lb_after - lb_before.to(lb_after), min=0.)
                 
-                top_k_scores.append(lb_after)
-                top_k_rewards.append(reward)
+                top_k_rewards.append(lb_after)
                 
             top_k_rewards = torch.stack(top_k_rewards, dim=-1)
             rewards.append(top_k_rewards.cpu())
 
-            top_k_scores = torch.stack(top_k_scores, dim=-1)
-            scores.append(top_k_scores.cpu())
-        return rewards, scores
+        # scores = self.scorer.get_branching_scores(
+        #     abstractor=self.abstractor,
+        #     domain_params=domain_params,
+        # )[0]
+        # _, scores = self.extract_scores(scores)
+        
+        # print(f'rewards: {[_.shape for _ in rewards]}')
+        # print(f'scores : {[_.shape for _ in scores]}')
+        
+        return rewards
                 
-
+                
+    def extract_scores(self, scores_list):
+        features = [ s[..., 2:] for s in scores_list]
+        scores   = [-s[..., 1]  for s in scores_list] # lower is better
+        return features, scores
+    
     from .utils import _preprocess, _init_abstractor, _setup_restart
