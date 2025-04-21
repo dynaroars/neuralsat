@@ -657,10 +657,10 @@ class DecisionHeuristic:
         scores_6 = {k: (torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k])) for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_6.values()])
         
-        scores_7 = {k: domain_params.upper_bounds[k] for k in split_node_names}
+        scores_7 = {k: domain_params.lower_bounds[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_7.values()])
 
-        scores_8 = {k: -domain_params.lower_bounds[k] for k in split_node_names}
+        scores_8 = {k: domain_params.upper_bounds[k] for k in split_node_names}
         assert all([not _.isnan().any() for _ in scores_8.values()])
         
         # scores_1 = {k: scores_1[k].flatten(1)[masks[k].bool()] for k in split_node_names}

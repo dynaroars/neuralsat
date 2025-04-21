@@ -342,7 +342,7 @@ class InteractiveVerifier:
                 
                 
     def extract_scores(self, scores_list):
-        features = [ s[..., 2:] for s in scores_list]
+        features = [ s[..., -2:] for s in scores_list]
         scores   = [-s[..., 1]  for s in scores_list] # lower is better
         return features, scores
     
