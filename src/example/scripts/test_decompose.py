@@ -4,9 +4,10 @@ import os
 
 from abstractor.auto_LiRPA.perturbations import PerturbationLpNorm
 from abstractor.auto_LiRPA import BoundedModule, BoundedTensor
+from helper.misc.torch_cuda_memory import gc_cuda
 from helper.misc.logger import logger
 
-from trainer.models.vit.vit import vit_medium
+from trainer.models.vit.vit import vit_medium_2, vit_medium_3
 from test import extract_instance
 
 def get_hidden_bounds(self, device):
@@ -20,7 +21,7 @@ def get_hidden_bounds(self, device):
    
 def get_model_params(model):
     total_params = sum(p.numel() for p in model.parameters())
-    print(f'{total_params = }')
+    # print(f'{total_params = }')
     return total_params
         
 def execute(net, shape, lower, upper, device, method='backward', cs=None, verbose=True):
@@ -38,23 +39,140 @@ def execute(net, shape, lower, upper, device, method='backward', cs=None, verbos
     abstract.get_split_nodes()
 
     # lb, ub = abstract.compute_bounds(x=(x_new,), method=method, C=cs, bound_upper=cs is None)
-    lb, ub, _ = abstract.init_alpha(x=(x_new,), c=cs, bound_upper=cs is None, method=method)
+    bound_upper = cs is None
+    lb, ub, aux = abstract.init_alpha(x=(x_new,), c=cs, bound_upper=bound_upper, method='backward')
 
     if verbose:
-        print(f'[{method}] {lb = }')
-        print(f'[{method}] {ub = }')
+        print(f'[{method}] {bound_upper=} {lb = }')
+        print(f'[{method}] {bound_upper=} {ub = }')
+    else:
+        print(f'[{method}] {bound_upper=} {lb.shape = }')
+        print(f'[{method}] {bound_upper=} {ub.shape = }')
+        
+        
+    if method == 'crown-optimized' and cs is not None:
+        lb, _ = abstract.compute_bounds(x=(x_new,), method=method, bound_upper=False, aux_reference_bounds=aux, C=cs) 
+
+        if verbose:
+            print(f'[{method}] {bound_upper=} {lb = }')
+            print(f'[{method}] {bound_upper=} {ub = }')
+        else:
+            print(f'[{method}] {bound_upper=} {lb.shape = }')
+            print(f'[{method}] {bound_upper=} {ub.shape = }')
+
     return abstract, lb, ub
 
 
+def split_vit(model, split):
+    subnets = list(model.children())
+    print([get_model_params(s) for s in subnets], sum([get_model_params(s) for s in subnets]), get_model_params(model))
+    assert len(subnets) == split
+    assert sum([get_model_params(s) for s in subnets]) == get_model_params(model)
+    return subnets
+    
+    
+def test_vit_2(model, input_shape, n_outputs, device, method):
+
+    subnet0, subnet1 = split_vit(model, 2)
+
+    for i in tqdm.tqdm(range(10)):
+        x = torch.randn(i+1, *input_shape[1:])
+        y1 = model(x)
+        y2 = subnet1(subnet0(x))
+        assert torch.equal(y1, y2)
+    print('Matched')
+
+
+    input_lower = torch.randn(input_shape, device=device)
+    input_upper = input_lower + 0.001
+
+    indices = torch.arange(0, 1)
+    cs = torch.nn.functional.one_hot(indices, num_classes=n_outputs)[None].to(input_lower)
+    
+    print('abstract subnet0')
+    abstract_pre1, lb_pre1, ub_pre1 = execute(subnet0, input_shape, input_lower, input_upper, device, method=method, verbose=False)
+    gc_cuda()
+    
+    print('abstract subnet1')
+    abstract_pre2, lb_pre2, ub_pre2 = execute(subnet1, lb_pre1.shape, lb_pre1, ub_pre1, device, method=method, verbose=True, cs=cs)
+    gc_cuda()
+    
+
+    
+def test_vit_3(model, input_shape, n_outputs, device, method):
+
+    subnet0, subnet1, subnet2 = split_vit(model, 3)
+
+    for i in tqdm.tqdm(range(10)):
+        x = torch.randn(i+1, *input_shape[1:])
+        y1 = model(x)
+        y2 = subnet2(subnet1(subnet0(x)))
+        assert torch.equal(y1, y2)
+    print('Matched')
+
+
+    input_lower = torch.randn(input_shape, device=device)
+    input_upper = input_lower + 0.001
+
+    indices = torch.arange(0, 1)
+    cs = torch.nn.functional.one_hot(indices, num_classes=n_outputs)[None].to(input_lower)
+    
+    print('abstract subnet0')
+    abstract_pre1, lb_pre1, ub_pre1 = execute(subnet0, input_shape, input_lower, input_upper, device, method=method, verbose=False)
+    gc_cuda()
+
+    print('abstract subnet1')
+    abstract_pre2, lb_pre2, ub_pre2 = execute(subnet1, lb_pre1.shape, lb_pre1, ub_pre1, device, method=method, verbose=False)
+    gc_cuda()
+    
+    print('abstract subnet2')
+    abstract_pre3, lb_pre3, ub_pre3 = execute(subnet2, lb_pre2.shape, lb_pre2, ub_pre2, device, method=method, verbose=True, cs=cs)
+    gc_cuda()
+    
+
 if __name__ == "__main__":
     logger.setLevel(2)
+    # torch.manual_seed(4)
+    
     input_shape = (1, 3, 32, 32)
     n_outputs = 10
     device = 'cuda'
-    torch.manual_seed(0)
+
+    method = 'crown-optimized'        
+    # method = 'backward'        
+    # method = 'forward+backward'
+    # method = 'forward'
+    if 0:
+        print('abstract full')
+        model_2 = vit_medium_2()
+        input_lower = torch.randn(input_shape, device=device)
+        input_upper = input_lower + 0.001
+        abstract_full, lb_full, ub_full = execute(model_2, input_shape, input_lower, input_upper, device, method=method)
+
+    if 0:
+        model_2 = vit_medium_2()
+        model_2.eval()
+        test_vit_2(
+            model=model_2, 
+            input_shape=input_shape, 
+            n_outputs=n_outputs, 
+            device=device, 
+            method=method,
+        )
+    else:
+        model_3 = vit_medium_3()
+        model_3.eval()
+        test_vit_3(
+            model=model_3, 
+            input_shape=input_shape, 
+            n_outputs=n_outputs, 
+            device=device, 
+            method=method,
+        )
+    exit()
     
     if 1:
-        model = vit_medium()
+        model = vit_medium_2()
         model.eval()
         # print(model)
         get_model_params(model)
@@ -107,8 +225,9 @@ if __name__ == "__main__":
     # method = 'forward+backward'
     # method = 'forward'
     input_lower = torch.randn(input_shape, device=device)
-    input_upper = input_lower + .01
-    model = model.to(device)
+    input_upper = input_lower + 0.001
+    # input_upper[:, 0] = input_lower[:, 0] + .001
+    # model = model.to(device)
     
     # print(model)
     
@@ -117,13 +236,23 @@ if __name__ == "__main__":
     indices = torch.arange(0, 1)
     cs = torch.nn.functional.one_hot(indices, num_classes=n_outputs)[None].to(input_lower)
     
-    print('abstract full')
-    abstract_full, lb_full, ub_full = execute(model, input_shape, input_lower, input_upper, device, method=method, cs=cs)
-    exit()
+    # print('abstract full')
+    # abstract_full, lb_full, ub_full = execute(model, input_shape, input_lower, input_upper, device, method=method, cs=cs)
+    # exit()
     
     print('abstract subnet0')
-    print(subnet0)
-    abstract_pre, lb_pre, ub_pre = execute(subnet0, input_shape, input_lower, input_upper, device, method=method, verbose=True)
+    abstract_pre1, lb_pre1, ub_pre1 = execute(subnet0, input_shape, input_lower, input_upper, device, method=method, verbose=False)
+    gc_cuda()
+    
+    print('abstract subnet1')
+    abstract_pre2, lb_pre2, ub_pre2 = execute(subnet1, lb_pre1.shape, lb_pre1, ub_pre1, device, method=method, verbose=False)
+    gc_cuda()
+    
+    print('abstract subnet2')
+    abstract_pre3, lb_pre3, ub_pre3 = execute(subnet2, lb_pre2.shape, lb_pre2, ub_pre2, device, method=method, verbose=True, cs=cs)
+    gc_cuda()
+    
+    
     exit()
     # print()
     

@@ -140,7 +140,7 @@ def parse_args():
     parser.add_argument('--data_root', default='data')
     parser.add_argument('--save_dir', default='weights')
     parser.add_argument('--model', type=str, default='vit', choices=['vit', 'resnet'])
-    parser.add_argument('--lr', type=float, default=5e-3)
+    parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_epoch', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36)

@@ -172,11 +172,20 @@ class ViTLite(nn.Sequential):
                  *args, 
                  **kwargs):
         
-        if split < 3:
+        if split == 1:
             super().__init__(
                 PatchEmbedding(in_channels, patch_size, emb_size),
                 TransformerEncoder(depth, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs),
                 ClassificationHead(emb_size, n_classes)
+            )
+        elif split == 2:
+            assert depth % split == 0
+            n_layers = depth // split
+            first_block = [PatchEmbedding(in_channels, patch_size, emb_size), TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs)]
+            last_block = [TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs), ClassificationHead(emb_size, n_classes)]
+            super().__init__(
+                nn.Sequential(*first_block),
+                nn.Sequential(*last_block),
             )
         else:
             assert depth % split == 0
@@ -201,17 +210,37 @@ def vit_toy(*args, **kwargs):
         **kwargs
     )
     
+DEPTH = 6
+EMB_SIZE = 32
+EXPANSION = 1
+
 @register_model
-def vit_medium(*args, **kwargs):
+def vit_medium_3(*args, **kwargs):
     return ViTLite(
         in_channels=3,
-        depth=6,
+        depth=DEPTH,
         split=3,
         patch_size=8,
-        emb_size=16,
+        emb_size=EMB_SIZE,
         num_heads=2,
         n_classes=10,
-        forward_expansion=2,
+        forward_expansion=EXPANSION,
+        *args, 
+        **kwargs
+    )
+    
+    
+@register_model
+def vit_medium_2(*args, **kwargs):
+    return ViTLite(
+        in_channels=3,
+        depth=DEPTH,
+        split=2,
+        patch_size=8,
+        emb_size=EMB_SIZE,
+        num_heads=2,
+        n_classes=10,
+        forward_expansion=EXPANSION,
         *args, 
         **kwargs
     )
@@ -224,7 +253,7 @@ if __name__ == "__main__":
         return total_params
 
     # model = vit_toy(in_channels=1, depth=3)
-    model = vit_medium()
+    model = vit_medium_3()
     x = torch.randn(2, 3, 32, 32)
     print(model)
     
