@@ -2,65 +2,70 @@ from collections import namedtuple
 from beartype import beartype
 import torch.nn as nn
 import traceback
-import logging
-import random
 import typing
 import torch
 import time
 import copy
 import tqdm
 import math
-import sys
 import os
 
 
 from helper.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from helper.misc.result import ReturnStatus, CoefficientMatrix
 from helper.spec.objective import DnfObjectives
-from helper.misc.logger import logger
 
 from tightener.utils import optimize_dnn, verify_dnf_pairs
 
 from verifier.utils import get_used_gpu_memory
 from verifier.verifier import Verifier
 
-from setting import Settings
-
-from trainer.models.resnet.resnet import *
-from trainer.models.vit.vit import *
-
 from abstractor.auto_LiRPA import PerturbationLpNorm, BoundedTensor, BoundedModule
 from abstractor.auto_LiRPA.utils import stop_criterion_batch_any
 from abstractor.params import get_initialize_opt_params
 
+from setting import Settings
+
 InOutBounds = namedtuple('InputOutputBounds', ['under_input', 'under_output', 'over_input', 'over_output'], defaults=(None,) * 4)
 
-def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backward'):
-    assert method in ['backward', 'crown-optimized']
-    new_x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(input_uppers)
-    
+def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backward', device='cpu'):
+    # assert method in ['backward', 'crown-optimized']
+    print(f'{device=}')
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(input_lowers <= input_uppers)
+    new_x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers.clone(), x_U=input_uppers.clone())).to(device)
+    abstract = None
     abstract = BoundedModule(
-        model=net, 
-        global_input=torch.zeros(input_lowers.shape, device=input_lowers.device),
-        bound_opts={'conv_mode': 'patches', 'verbosity': 0},
-        device=input_lowers.device,
+        model=copy.deepcopy(net).to(device), 
+        global_input=torch.zeros(input_lowers.shape, device=device),
+        bound_opts={'conv_mode': 'patches', 'verbosity': 0, **Settings.verify_extra_opts},
+        device=device,
         verbose=False,
     )
-    print(net)
+    abstract.eval()
+    abstract(new_x)
+    print(f'{Settings.share_alphas=}')
     l, u, aux_reference_bounds = abstract.init_alpha(
         x=(new_x,), 
         share_alphas=Settings.share_alphas, 
-        c=cs, 
+        c=cs.to(device), 
         bound_lower=True,
         bound_upper=True,
     )
-    
-    if method == 'backward':
+
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(l <= u), f'{(l > u).sum()} {l[l > u]} {u[l > u]}'
+        
+    if method != 'crown-optimized':
+        del abstract
+        print(l)
+        print(u)
+        l = l.detach().cpu()
+        u = u.detach().cpu()
         return (l, u), None
     
     abstract.set_bound_opts(get_initialize_opt_params(lambda x: False))
     # abstract.set_bound_opts({'optimize_bound_args': {'iteration': 50}})
-    
     l, _ = abstract.compute_bounds(
         x=(new_x,), 
         C=cs,
@@ -69,7 +74,6 @@ def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backwa
         bound_lower=True, 
         bound_upper=False, 
     )
-    return (l.clone(), l.clone()), None
     
     _, u = abstract.compute_bounds(
         x=(new_x,), 
@@ -80,18 +84,19 @@ def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backwa
         bound_upper=True, 
     )
     
-    assert torch.all(l <= u)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.all(l <= u)
     del abstract
     return (l, u), None
-    
+  
+
 class DecompositionalVerifier:
     
     @beartype
-    def __init__(self, net: nn.Module, input_shape: tuple, min_layer: int, device: str = 'cpu') -> None:
+    def __init__(self, net: nn.Module, input_shape: tuple, device: str = 'cpu') -> None:
         self.net = net.to(device) # pytorch model
         self.device = device
         self.input_shape = input_shape
-        self.min_layer = min_layer
         
     @beartype
     def reset(self) -> None:
@@ -108,54 +113,52 @@ class DecompositionalVerifier:
         
         diff = (input_uppers - input_lowers).clone()
         eps = diff.max().item()
+        perturbed = (diff > 0).int().sum().item()
+        input_dim = input_lowers.numel()
+        print(f'{cs=} {eps=} {perturbed=} {input_dim=}')
         
         if not output_sequential:
-            print(f'{cs.device=} {cs.shape=} {eps=}')
-            # return abstractor.compute_bounds(
-            #     input_lowers=input_lowers,
-            #     input_uppers=input_uppers,
-            #     cs=cs,
-            #     method=method,
-            # )
             return redundant_compute_bounds(
-                net = abstractor.pytorch_model,
+                net=abstractor.pytorch_model,
                 input_lowers=input_lowers,
                 input_uppers=input_uppers,
-                cs=cs,
-                method=method
+                cs=cs.to(self.device),
+                method=method,
+                device=self.device,
             )
             
         assert len(input_lowers) == 1, f'Only support batch=1: {len(input_lowers)=}'
-        n_outputs = abstractor.net(input_lowers).flatten(1).shape[1]
+        n_outputs = abstractor.net(input_lowers.to(self.device)).flatten(1).shape[1]
         
-        # print(f'{n_outputs=}')
         output_lowers, output_uppers = [], []
         output_coeffs = []
         
+        
         pbar = tqdm.tqdm(range(0, n_outputs, output_batch), desc=f'Compute bounds: {output_batch=} {method=} {eps=:.06f}')
-        for i in pbar:
+        for i_, i in enumerate(pbar):
             indices = torch.arange(i, min(i+output_batch, n_outputs))
             ci = torch.nn.functional.one_hot(indices, num_classes=n_outputs)[None].to(input_lowers)
             # TODO: reuse optimized slopes
             (lb, ub), coeffs = abstractor.compute_bounds(
-                input_lowers=input_lowers,
-                input_uppers=input_uppers,
-                cs=ci,
+                input_lowers=input_lowers.to(self.device),
+                input_uppers=input_uppers.to(self.device),
+                cs=ci.to(self.device),
                 method=method,
-                # reuse_alpha=i!=0,
             )
-            # assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
-            # print(ci.shape, lb.shape)
-            output_lowers.append(lb)
-            output_uppers.append(ub)
-            # print(f'{coeffs.lA.shape=}')
+            if i_ % 100 == 0:
+                print(f'[+] abstractor.compute_bounds {method=}:', get_used_gpu_memory(), 'MB')
+                
+            gc_cuda()
+            
+            if os.environ.get('NEURALSAT_ASSERT'):
+                assert torch.all(lb <= ub + 1e-5), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
+            output_lowers.append(lb.clone())
+            output_uppers.append(ub.clone())
             if coeffs:
                 output_coeffs.append(coeffs)
-                # raise # TODO: disabling coeffs might save memory
             
         output_lowers = torch.cat(output_lowers, dim=-1)
         output_uppers = torch.cat(output_uppers, dim=-1)
-        
         
         if output_coeffs:
             output_coeffs = CoefficientMatrix(
@@ -164,48 +167,33 @@ class DecompositionalVerifier:
                 lbias=torch.cat([c.lbias for c in output_coeffs], dim=-1),
                 ubias=torch.cat([c.ubias for c in output_coeffs], dim=-1),
             )
-            # raise # TODO: disabling coeffs might save memory
-        
+        else:
+            output_coeffs = None
+            
         return (output_lowers, output_uppers), output_coeffs
         
     @beartype
     def _init_interm_bounds(self, objective: typing.Any, use_extra: bool = True, method='crown-optimized', interm_batch: int = 200) -> tuple:
-        # assert method == 'backward'
         print(f'Init interm bounds {method=}')
         # input 
         input_shape = self.sub_networks[0].input_shape
-        input_lb_0 = objective.lower_bounds.view(input_shape).to(self.device)
-        input_ub_0 = objective.upper_bounds.view(input_shape).to(self.device)
+        input_lb_0 = objective.lower_bounds.view(input_shape).to(self.device).detach().cpu()
+        input_ub_0 = objective.upper_bounds.view(input_shape).to(self.device).detach().cpu()
         if self.input_output_bounds[0] is None:
             self.input_output_bounds[0] = InOutBounds(over_input=(input_lb_0.clone(), input_ub_0.clone()))
         
         n_subnets = len(self.sub_networks)
-        
-        # TODO: try computing bounds with original network first
-        
         # try computing bounds with sub-networks
         for idx in range(n_subnets):
-            # if idx == n_subnets - 1:
-            #     method = 'backward'
-                
-            # if idx <= 1:
-            #     method = 'backward'
-            # else:
-            #     method = 'crown-optimized'
-                
-            if (idx != n_subnets-1) and (self.input_output_bounds[idx].over_output is not None):
-                # no need to re-init for different objectives, only need to update last over_output due to cs
-                # TODO: recheck input property
-                print(f'Reuse computed bounds subnet {idx=}')
-                continue
+            # if (idx != n_subnets-1) and (self.input_output_bounds[idx].over_output is not None):
+            #     # no need to re-init for different objectives, only need to update last over_output due to cs
+            #     # TODO: recheck input property
+            #     print(f'Reuse computed bounds subnet {idx=}')
+            #     continue
             verifier = self._setup_subnet_verifier(idx)
-            # print(f'{verifier.abstractor.net=}')
-            # print(verifier.net)
-            # print(self.sub_networks[idx].input_shape)
-            # print(self.sub_networks[idx].output_shape)
-            
+            print(verifier.net)
             print(f'Processing subnet {idx+1}/{n_subnets} {method=}')
-            cs_to_use = objective.cs.to(input_lb_0)
+            cs_to_use = objective.cs.clone()
             (output_lb, output_ub), output_coeffs = self.compute_bounds(
                 abstractor=verifier.abstractor,
                 input_lowers=self.input_output_bounds[idx].over_input[0],
@@ -217,27 +205,9 @@ class DecompositionalVerifier:
             )
             
             print(f'[+] Init bounds subnet {idx+1}/{n_subnets} {method=}:', get_used_gpu_memory(), 'MB')
-            # exit()
+            gc_cuda()
             
-            # # DEBUG: check correctness
-            # (output_lb2, output_ub2), output_coeffs2 = verifier.abstractor.compute_bounds(
-            #     input_lowers=self.input_output_bounds[idx].over_input[0],
-            #     input_uppers=self.input_output_bounds[idx].over_input[1],
-            #     cs=objective.cs if idx==n_subnets-1 else None,
-            #     method=method,
-            # )
-            # assert torch.allclose(output_ub, output_ub2), f'{torch.norm(output_ub - output_ub2)}'
-            # print('Pass ub', torch.norm(output_ub - output_ub2))
-            # assert torch.allclose(output_lb, output_lb2), f'{torch.norm(output_lb - output_lb2)}'
-            # print('Pass lb', torch.norm(output_lb - output_lb2))
-            
-            # for field in ['lA', 'uA', 'lbias', 'ubias']:
-            #     f1 = getattr(output_coeffs, field)
-            #     f2 = getattr(output_coeffs2, field)
-            #     assert torch.allclose(f1, f2, atol=1e-5), f'{torch.norm(f1 - f2)}'
-            #     print(f'Pass {field}', torch.norm(f1 - f2))
-                
-            if idx == 0 and use_extra and output_coeffs is not None: 
+            if idx == 0 and use_extra and output_coeffs is not None and len(output_coeffs): 
                 assert len(output_coeffs)
                 # TODO: generalize for more than 2 subnets
                 # additional backsub up to the original input 
@@ -254,7 +224,6 @@ class DecompositionalVerifier:
                 output_lb = output_lb.view(subnet_params.output_shape)
                 output_ub = output_ub.view(subnet_params.output_shape)
 
-            # print(f'{output_lb=}')
             print(f'{output_lb.shape=}')
             
             # update bounds
@@ -265,12 +234,14 @@ class DecompositionalVerifier:
             if self.input_output_bounds.get(idx + 1, False) is None:
                 self.input_output_bounds[idx + 1] = InOutBounds(over_input=(output_lb.clone(), output_ub.clone()))
         
+        for i in range(n_subnets):
+            print(i, 'input ', self.input_output_bounds[i].over_input[0].device, self.input_output_bounds[i].over_input[1].device)
+            print(i, 'output', self.input_output_bounds[i].over_output[0].device, self.input_output_bounds[i].over_output[1].device)
         
         return self.input_output_bounds[n_subnets-1].over_output
     
     @beartype
-    def _under_estimate(self, subnet_idx: int, verify_batch: int, verify_timeout: int | float, tighten_batch: int) -> None:
-        # release memory
+    def _under_estimate(self, subnet_idx: int, verify_batch: int, verify_timeout: int | float) -> None:
         gc_cuda()
             
         subnet_input_outputs = self.input_output_bounds[subnet_idx]
@@ -279,26 +250,21 @@ class DecompositionalVerifier:
         if (subnet_params.output_shape is not None) and len(subnet_params.output_shape) > 2:
             network = torch.nn.Sequential(subnet_params.network, torch.nn.Flatten(1))
         else:
-            # network = torch.nn.Sequential(torch.nn.Identity(), subnet_params.network)
             network = subnet_params.network
         network = network.to(self.device)
         network.eval()
         
         if subnet_input_outputs.under_output is None:
-            # TODO: sampling from input to split layer
-            min_i = optimize_dnn(network, subnet_input_outputs.over_input[0], subnet_input_outputs.over_input[1], is_min=True).view(subnet_params.output_shape)
-            max_i = optimize_dnn(network, subnet_input_outputs.over_input[0], subnet_input_outputs.over_input[1], is_min=False).view(subnet_params.output_shape)
+            min_i = optimize_dnn(network, subnet_input_outputs.over_input[0].to(self.device), subnet_input_outputs.over_input[1].to(self.device), is_min=True).view(subnet_params.output_shape)
+            max_i = optimize_dnn(network, subnet_input_outputs.over_input[0].to(self.device), subnet_input_outputs.over_input[1].to(self.device), is_min=False).view(subnet_params.output_shape)
             assert torch.all(min_i <= max_i), f'{min_i=} {max_i=}'
             self.input_output_bounds[subnet_idx] = subnet_input_outputs._replace(under_output=(min_i.clone(), max_i.clone()))
             subnet_input_outputs = self.input_output_bounds[subnet_idx]
-            if os.environ.get("NEURALSAT_LOG_SUBVERIFIER"):
-                print(f'Setup under output {subnet_idx=}:')
-                print(f'\t- Lower: {subnet_input_outputs.under_output[0].detach().cpu().numpy().tolist()}')
-                print(f'\t- Upper: {subnet_input_outputs.under_output[1].detach().cpu().numpy().tolist()}')
 
         candidate_neurons = self.extract_candidate(
             subnet_idx=subnet_idx, 
-            batch=tighten_batch,
+            num_candidate=Settings.verify_candidate_num, # number of tightening candidates,
+            interpolate_factor=Settings.verify_interpolate_factor
         )
         
         verifier = self._setup_subnet_verifier(
@@ -318,57 +284,17 @@ class DecompositionalVerifier:
         )
         
         print(f'[+] verify_dnf_pairs:', get_used_gpu_memory(), 'MB')
-        
-        # print(f'{len(verified_candidates)=}')
-        # FIXME: handle attack
-        # if len(attack_samples) and subnet_idx==0:
-        #     print(f'Attacked {len(attack_samples)=} {subnet_input_outputs.over_input[0].sum().item()=} {subnet_input_outputs.over_input[1].sum().item()=}')
-        #     assert torch.all(attack_samples <= subnet_input_outputs.over_input[1])
-        #     assert torch.all(attack_samples >= subnet_input_outputs.over_input[0])
-        #     attack_outputs = network(attack_samples)
-        #     # print(f'{attack_outputs=}')
-        #     attack_outputs_min = attack_outputs.amin(dim=0)
-        #     attack_outputs_max = attack_outputs.amax(dim=0)
-        #     # print(f'{attack_outputs_min=}')
-        #     # print(f'{attack_outputs_max=}')
-        #     old_under_output_lower, old_under_output_upper = subnet_input_outputs.under_output
-        #     # print(f'{old_under_output_lower=}')
-        #     # print(f'{old_under_output_upper=}')
-        #     indices_min = attack_outputs_min < old_under_output_lower
-        #     indices_max = attack_outputs_max > old_under_output_upper
-        #     print(f'{indices_min=}')
-        #     print(f'Update under_output lower {subnet_idx=}:')
-        #     for idx, iv in enumerate(indices_min.flatten()):
-        #         if iv:
-        #             print(f'[{idx}] {old_under_output_lower.flatten()[idx]} => {attack_outputs_min.flatten()[idx]}')
-        #     print()
-        #     print(f'Update under_output upper {subnet_idx=}:')
-        #     for idx, iv in enumerate(indices_max.flatten()):
-        #         if iv:
-        #             print(f'[{idx}] {old_under_output_upper.flatten()[idx]} => {attack_outputs_max.flatten()[idx]}')
-        #     # exit()
-        #     new_under_output_lower = torch.where(indices_min, attack_outputs_min, old_under_output_lower)
-        #     new_under_output_upper = torch.where(indices_max, attack_outputs_max, old_under_output_upper)
-            
-        #     assert torch.all(new_under_output_lower <= new_under_output_upper)
-        #     self.input_output_bounds[subnet_idx] = subnet_input_outputs._replace(under_output=(new_under_output_lower.clone(), new_under_output_upper.clone()))
-        #     subnet_input_outputs = self.input_output_bounds[subnet_idx]
+        # TODO: handle attack
         
         new_over_output_lower = subnet_input_outputs.over_output[0].clone()
         new_over_output_upper = subnet_input_outputs.over_output[1].clone()
         
-        # print(f'{new_over_output_lower.shape=}')
         improved_neuron_indices = []
-        # improved_lower, improved_upper = 0.0, 0.0
         for (neuron_idx, neuron_bound, neuron_direction) in verified_candidates:
             assert neuron_direction in ['lt', 'gt']
             if neuron_direction == 'lt': # lower bound
-                # assert new_over_output_lower[0][neuron_idx] <= neuron_bound, f'{neuron_idx=} {new_over_output_lower[0][neuron_idx]=} <= {neuron_bound=}'
-                # improved_lower += abs(new_over_output_lower[0][neuron_idx] - neuron_bound)
                 new_over_output_lower[0].flatten()[neuron_idx] = max(new_over_output_lower[0].flatten()[neuron_idx], neuron_bound)
             else: # upper bound
-                # assert new_over_output_upper[0][neuron_idx] >= neuron_bound, f'{neuron_idx=} {new_over_output_upper[0][neuron_idx]=} >= {neuron_bound=}'
-                # improved_upper += abs(new_over_output_upper[0][neuron_idx] - neuron_bound)
                 new_over_output_upper[0].flatten()[neuron_idx] = min(new_over_output_upper[0].flatten()[neuron_idx], neuron_bound)
             improved_neuron_indices.append(neuron_idx)
         
@@ -384,11 +310,10 @@ class DecompositionalVerifier:
         self.input_output_bounds[subnet_idx+1] = self.input_output_bounds[subnet_idx+1]._replace(over_input=(new_over_output_lower.clone(), new_over_output_upper.clone()))
             
     @beartype
-    def extract_candidate(self, subnet_idx: int, batch: int, eps: float=0.0) -> list:
+    def extract_candidate(self, subnet_idx: int, num_candidate: int, interpolate_factor: float, eps: float=0.0) -> list:
         
-        # TODO: remove
-        random.seed(36)
-        if (subnet_idx not in self.tightening_candidates) or len(self.tightening_candidates[subnet_idx]) < batch // 4:
+        print(f'[+] Generating candidates using {num_candidate=} {interpolate_factor=}')
+        if (subnet_idx not in self.tightening_candidates) or len(self.tightening_candidates[subnet_idx]) < num_candidate // 8:
             subnet_input_outputs = self.input_output_bounds[subnet_idx]
             under_output = subnet_input_outputs.under_output
             over_output = subnet_input_outputs.over_output
@@ -401,34 +326,37 @@ class DecompositionalVerifier:
             
             over_output_min = over_output[0].flatten()
             over_output_max = over_output[1].flatten()
-            assert torch.all(best_interm_min <= best_interm_max)
-            assert torch.all(over_output_min <= over_output_max)
             
-            assert torch.all(over_output_min <= best_interm_min), f'{over_output_min=} {best_interm_min=} {over_output_min < best_interm_min}'
-            assert torch.all(over_output_max >= best_interm_max), f'{over_output_max=} {best_interm_max=} {over_output_max < best_interm_max}'
-
-            candidates = []
+            unsorted_candidates = []
             for i in range(len(best_interm_min)):
-                if (over_output_min[i] * over_output_max[i] < 0) or 1: # unstable neurons
-                    candidates.append([(i, (2*best_interm_min[i] + over_output_min[i]) / 3 + eps, 'lt')])
-                    candidates.append([(i, (2*best_interm_max[i] + over_output_max[i]) / 3 - eps, 'gt')])
-                    # candidates.append([(i, (best_interm_min[i] + over_output_min[i]) / 2 + eps, 'lt')])
-                    # candidates.append([(i, (best_interm_max[i] + over_output_max[i]) / 2 - eps, 'gt')])
-                    if len(best_interm_min) < 500:
-                        print(f'[{over_output_min[i]:.04f}, {over_output_max[i]:.04f}],\t[{best_interm_min[i]:.04f}, {best_interm_max[i]:.04f}]\t=>\t{candidates[-2:]}')
+                score = best_interm_max[i] - best_interm_min[i]
+                if score <= 1e-4:
+                    continue
+                
+                candidate_lower = (1 - interpolate_factor) * best_interm_min[i] + interpolate_factor * over_output_min[i] + eps
+                candidate_upper = (1 - interpolate_factor) * best_interm_max[i] + interpolate_factor * over_output_max[i] - eps
+                if os.environ.get('NEURALSAT_ASSERT'):
+                    assert over_output_min[i] <= candidate_lower <= best_interm_min[i] <= best_interm_max[i] <= candidate_upper <= over_output_max[i], f'{over_output_min[i]=}\n{candidate_lower=}\n{best_interm_min[i]=}\n{best_interm_max[i]=}\n{candidate_upper=}\n{over_output_max[i]=}'
+                
+                unsorted_candidates.append((score, [(i, candidate_lower, 'lt')]))
+                unsorted_candidates.append((score, [(i, candidate_upper, 'gt')]))
+                
+                if len(best_interm_min) < 500:
+                    print(f'[{over_output_min[i]:.04f}, {over_output_max[i]:.04f}],\t[{best_interm_min[i]:.04f}, {best_interm_max[i]:.04f}]\t=>\t{unsorted_candidates[-2:]}')
                     
-            random.shuffle(candidates)
+            unsorted_candidates = sorted(unsorted_candidates, key=lambda x: x[0], reverse=True)
+            candidates = [_[1] for _ in unsorted_candidates]
             self.tightening_candidates[subnet_idx] = candidates
         
         assert len(self.tightening_candidates[subnet_idx]) > 0
-        candidates = self.tightening_candidates[subnet_idx][:batch]
+        candidates = self.tightening_candidates[subnet_idx][:num_candidate]
         print(f'Extracted {len(candidates)=} from {len(self.tightening_candidates[subnet_idx])} candidates')
         self.tightening_candidates[subnet_idx] = self.tightening_candidates[subnet_idx][len(candidates):]
     
         return candidates
         
     # @beartype
-    def verify_one(self, objective: typing.Any, verify_batch: int, tighten_batch: int, timeout: int | float = 3600, use_extra: bool = True, interm_batch: int = 200) -> str:
+    def verify_one(self, objective: typing.Any, verify_batch: int, timeout: int | float = 3600, use_extra: bool = True, interm_batch: int = 200) -> str:
         self.iteration = 0
         self.start_time = time.time()
         self.reset()
@@ -437,8 +365,6 @@ class DecompositionalVerifier:
         print('[+] _init_interm_bounds:', lb.flatten())
         print('[+] _init_interm_bounds:', get_used_gpu_memory(), 'MB')
         
-        # lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method='backward', interm_batch=interm_batch)
-        # assert all([i == 0.0 for i in objective.rhs.flatten()]), f'{objective.rhs=}'
         stop_criterion_func = stop_criterion_batch_any(objective.rhs.to(lb))
         
         if stop_criterion_func(lb).all().item():
@@ -451,83 +377,61 @@ class DecompositionalVerifier:
         gc_cuda()
         
         n_subnets = len(self.sub_networks)
-        while True:
+        while self.iteration < Settings.verify_max_iteration:
             print('[+] Iteration:', self.iteration)
+            remain_timeout = timeout - (time.time() - self.start_time)
+            if remain_timeout <= 0:
+                return ReturnStatus.TIMEOUT
+            
             for subnet_idx in range(n_subnets-1):
-                if tighten_batch and self.iteration > 0:
+                if self.iteration > 0:
                     self._under_estimate(
                         subnet_idx=subnet_idx,
                         verify_batch=verify_batch,
                         verify_timeout=Settings.verify_interm_timeout,
-                        tighten_batch=tighten_batch,
                     )
                     print(f'[+] _under_estimate {subnet_idx=}:', get_used_gpu_memory(), 'MB')
-                    
-                    if os.environ.get("NEURALSAT_LOG_SUBVERIFIER"):
-                        print('###################')
-                        print(f'Bounds {subnet_idx=}')
-                        subnet_input_outputs = self.input_output_bounds[subnet_idx]
-                        print(f'Over output: {subnet_input_outputs.over_output[0].shape}')
-                        print(f'\t- Lower: {subnet_input_outputs.over_output[0].detach().cpu().numpy().tolist()}')
-                        print(f'\t- Upper: {subnet_input_outputs.over_output[1].detach().cpu().numpy().tolist()}')
-                        print(f'Under output:')
-                        print(f'\t- Lower: {subnet_input_outputs.under_output[0].detach().cpu().numpy().tolist()}')
-                        print(f'\t- Upper: {subnet_input_outputs.under_output[1].detach().cpu().numpy().tolist()}')
-                    
                 
             # last subnet
-            
-            # subnet_params = self.sub_networks[n_subnets-1]
-            # network = torch.nn.Sequential(subnet_params.network, torch.nn.Flatten(1))
-            # x = torch.ones(subnet_params.input_shape)
-            # y = network(x)
-            # model_scripted = torch.jit.script(network) # Export to TorchScript
-            # model_scripted.save('test_last.pth')
-            # print(y)
-            # exit()
+            remain_timeout = timeout - (time.time() - self.start_time)
+            if remain_timeout <= 0:
+                return ReturnStatus.TIMEOUT
             
             status = self._verify_subnet(
                 subnet_idx=n_subnets-1, 
                 objective=copy.deepcopy(objective), 
                 verify_batch=verify_batch,
-                timeout=min(timeout, Settings.verify_last_timeout),
+                timeout=Settings.verify_last_timeout,
             )
             print(f'[+] verify last:', get_used_gpu_memory(), 'MB')
-            # exit()
             
-            if status not in [ReturnStatus.TIMEOUT, ReturnStatus.SAT]:
+            if status not in [ReturnStatus.TIMEOUT, ReturnStatus.SAT, ReturnStatus.UNKNOWN]:
                 return status
             
             self.iteration += 1
+            
             if time.time() - self.start_time > timeout:
                 return status
+        return status
     
     # @beartype
-    def decompositional_verify(self, objectives: DnfObjectives, timeout: int |float = 3600, batch: int = 500, interm_batch: int = 200) -> str:
+    def decompositional_verify(self, objectives: DnfObjectives, timeout: int |float = 3600, 
+                               batch: int = 500, interm_batch: int = 200) -> str:
         # decomposition
-        # step 1: Extract Tokenizer ViT (if needed) + Convert objectives
-        new_network, new_objectives, new_input_shape = self.extract_tokenizer(
-            net=self.net, 
-            objectives=copy.deepcopy(objectives), 
-            input_shape=self.input_shape,
-        )
         gc_cuda()
-        
-        # step 2: Extract Prefix + Suffix of Classifier     
+         
         self.decompose_network(
-            net=new_network, 
-            input_shape=new_input_shape,
-            min_layer=self.min_layer,
+            net=self.net, 
+            input_shape=self.input_shape,
+            objectives=copy.deepcopy(objectives),
         )
         self.reset()
         
-        # step 3: Verify each objecive
-        while len(new_objectives):
-            objective = new_objectives.pop(1)
+        while len(objectives):
+            objective = objectives.pop(1)
             status = self.verify_one(
                 objective=objective,
                 verify_batch=batch, # batch size of sub-verifiers
-                tighten_batch=Settings.verify_candidate_num, # number of tightening candidates
                 timeout=timeout,
                 use_extra=True, # FIXME: only work with 2 subnets
                 interm_batch=interm_batch,
@@ -565,6 +469,7 @@ class DecompositionalVerifier:
                 objectives=objectives,
                 timeout=timeout,
                 batch=batch,
+                interm_batch=Settings.sequential_batch,
             )
             
         try:
@@ -589,12 +494,12 @@ class DecompositionalVerifier:
 
 
     from .utils import (
-        extract_tokenizer, 
         decompose_network,
         _setup_subnet_verifier,
         new_input,
         _verify_subnet,
     )
+
 
 def formatted_print(a, b, name):
     if a.numel() > 5:
@@ -608,123 +513,3 @@ def formatted_print(a, b, name):
 def get_model_params(model):
     total_params = sum(p.numel() for p in model.parameters())
     return total_params
-
-
-def test1():    
-    
-    seed = int(sys.argv[1])
-    print(f'{seed=}')
-    torch.manual_seed(seed)
-    
-    from example.scripts.test_function import extract_instance
-    logger.setLevel(logging.DEBUG)
-    
-    Settings.setup(None)
-    print(Settings)
-    
-    model_name = 'resnet36B'
-    benchmark_dir = 'example/generated_benchmark/resnet_no_bn'
-    eps = 0.0005
-    
-    instances = [l.split(',')[:-1] for l in open(f'{benchmark_dir}/eps_{eps:.06f}_{model_name}/instances.csv').read().strip().split('\n')]
-    
-    net_path = f'{benchmark_dir}/eps_{eps:.06f}_{model_name}/{instances[seed][0]}'
-    vnnlib_path = f'{benchmark_dir}/eps_{eps:.06f}_{model_name}/{instances[seed][1]}'
-    
-    device = 'cuda'
-  
-    print(f'{net_path=}')
-    print(f'{vnnlib_path=}')
-    pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
-
-    # TODO: remove
-    pytorch_model = resnet_toy()
-    
-    # Apply fusion
-    # print(pytorch_model)
-    # fuse_model(pytorch_model)
-    # exit()
-
-
-    pytorch_model.eval()
-    print(pytorch_model)
-    print(get_model_params(pytorch_model))
-    # exit()
-     
-    verifier = DecompositionalVerifier(
-        net=pytorch_model,
-        input_shape=input_shape,
-        min_layer=6,
-        device=device,
-    )    
-
-    tic = time.time()
-    
-    oracle_verify = verifier.decompositional_verify
-    # oracle_verify = verifier.original_verify
-    
-    status = oracle_verify(
-        objectives=dnf_objectives, 
-        timeout=10000,
-        batch=11,
-    )
-    
-    print(status, time.time() - tic)
-    
-    
-    
-def test2():    
-    
-    seed = int(sys.argv[1])
-    print(f'{seed=}')
-    torch.manual_seed(seed)
-    
-    from example.scripts.test_function import extract_instance
-    logger.setLevel(logging.DEBUG)
-    
-    Settings.setup(None)
-    print(Settings)
-    
-    model_name = 'cifar10_3'
-    eps = 0.0005
-    benchmark_dir = f'example/generated_benchmark/{model_name}/eps_{eps:.06f}'
-
-    
-    instances = [l.split(',')[:-1] for l in open(f'{benchmark_dir}/instances.csv').read().strip().split('\n')]
-    
-    net_path = f'{benchmark_dir}/{instances[seed][0]}'
-    vnnlib_path = f'{benchmark_dir}/{instances[seed][1]}'
-    
-    device = 'cuda'
-    # device = 'cpu'
-  
-    print(f'{net_path=}')
-    print(f'{vnnlib_path=}')
-    pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
-    pytorch_model.eval()
-    print(pytorch_model)
-    print(get_model_params(pytorch_model))
-    # exit()
-     
-    verifier = DecompositionalVerifier(
-        net=pytorch_model,
-        input_shape=input_shape,
-        min_layer=1,
-        device=device,
-    )    
-
-    tic = time.time()
-    
-    oracle_verify = verifier.decompositional_verify
-    # oracle_verify = verifier.original_verify
-    
-    status = oracle_verify(
-        objectives=dnf_objectives, 
-        timeout=10000,
-        batch=50,
-    )
-    
-    print(status, time.time() - tic)
-
-if __name__ == "__main__":
-    test2()

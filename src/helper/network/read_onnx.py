@@ -1,5 +1,6 @@
 from beartype import beartype
 import onnxruntime as ort
+import torch.nn as nn
 import numpy as np
 import traceback
 import warnings
@@ -232,17 +233,3 @@ def parse_onnx(path: str | io.BytesIO) -> tuple:
             warnings.warn(f'Unable to convert onnx to pytorch model')
             traceback.print_exc()
             exit()
-            
-            
-            
-            
-def parse_pth(pth_path: str) -> tuple:
-    # onnx_path = pth_path.replace('.pth', '.onnx')
-    pytorch_model = torch.load(pth_path)
-    # FIXME: generalize
-    input_shape = (1, 3, 32, 32)
-    output_shape = (1, 10)
-    
-    # check conversion
-    
-    return pytorch_model, input_shape, output_shape

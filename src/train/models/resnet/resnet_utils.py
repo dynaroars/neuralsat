@@ -50,10 +50,14 @@ class BasicBlockBN(nn.Module):
 
     def __init__(self, in_planes, planes, stride=1, option='A', expansion=1):
         super(BasicBlockBN, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=True)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=True)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.seq1 = nn.Sequential(
+            nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=True),
+            nn.BatchNorm2d(planes)
+        )
+        self.seq2 = nn.Sequential(
+            nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.BatchNorm2d(planes)
+        )
         self.expansion = expansion
         
         self.shortcut = nn.Identity()
@@ -66,7 +70,7 @@ class BasicBlockBN(nn.Module):
             )
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x.relu())))
-        out = self.bn2(self.conv2(out))
+        out = F.relu(self.seq1(x.relu()))
+        out = self.seq2(out)
         out += self.shortcut(x)
         return out

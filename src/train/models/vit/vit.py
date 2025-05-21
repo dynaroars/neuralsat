@@ -158,7 +158,7 @@ class ClassificationHead(nn.Sequential):
 
 
 
-class ViTLite(nn.Sequential):
+class ViTLite(nn.Module):
     
     def __init__(self, 
                  in_channels,
@@ -166,84 +166,44 @@ class ViTLite(nn.Sequential):
                  patch_size: int = 2,
                  emb_size: int = 4,
                  depth: int = 1,
-                 split: int = 1,
                  n_classes: int = 2,
                  forward_expansion: int = 1,
                  *args, 
                  **kwargs):
+
+        super().__init__()
+        assert depth >= 2
+        first_block = nn.Sequential(
+            PatchEmbedding(in_channels, patch_size, emb_size), 
+            TransformerEncoder(emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs))
+        last_block = nn.Sequential(
+            TransformerEncoder(emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs), 
+            ClassificationHead(emb_size, n_classes))
+        middle_blocks = [TransformerEncoder(emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs) for _ in range(depth-2)]
         
-        if split == 1:
-            super().__init__(
-                PatchEmbedding(in_channels, patch_size, emb_size),
-                TransformerEncoder(depth, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs),
-                ClassificationHead(emb_size, n_classes)
-            )
-        elif split == 2:
-            assert depth % split == 0
-            n_layers = depth // split
-            first_block = [PatchEmbedding(in_channels, patch_size, emb_size), TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs)]
-            last_block = [TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs), ClassificationHead(emb_size, n_classes)]
-            super().__init__(
-                nn.Sequential(*first_block),
-                nn.Sequential(*last_block),
-            )
-        else:
-            assert depth % split == 0
-            n_layers = depth // split
-            first_block = [PatchEmbedding(in_channels, patch_size, emb_size), TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs)]
-            last_block = [TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs), ClassificationHead(emb_size, n_classes)]
-            middle_blocks = [TransformerEncoder(n_layers, emb_size=emb_size, num_heads=num_heads, forward_expansion=forward_expansion, **kwargs) for _ in range(split-2)]
-            super().__init__(
-                nn.Sequential(*first_block),
-                *[nn.Sequential(*block) for block in middle_blocks],
-                nn.Sequential(*last_block),
-            )
-            
-
-def vit_toy(*args, **kwargs):
-    return ViTLite(
-        num_heads=5,
-        patch_size=4,
-        emb_size=10,
-        n_classes=2,
-        *args, 
-        **kwargs
-    )
-    
-DEPTH = 6
-EMB_SIZE = 32
-EXPANSION = 1
+        layers = [first_block, *middle_blocks, last_block]
+        self.layers = nn.ModuleList(layers)
+        
+    def forward(self, x):
+        for layer in self.layers:
+            # print(f'{x.shape=}')
+            x = layer(x)
+        return x
 
 @register_model
-def vit_medium_3(*args, **kwargs):
+def vit_3_32(*args, **kwargs):
     return ViTLite(
         in_channels=3,
-        depth=DEPTH,
-        split=3,
+        depth=3,
+        emb_size=32,
         patch_size=8,
-        emb_size=EMB_SIZE,
         num_heads=2,
         n_classes=10,
-        forward_expansion=EXPANSION,
+        forward_expansion=2,
         *args, 
         **kwargs
     )
     
-    
-@register_model
-def vit_medium_2(*args, **kwargs):
-    return ViTLite(
-        in_channels=3,
-        depth=DEPTH,
-        split=2,
-        patch_size=8,
-        emb_size=EMB_SIZE,
-        num_heads=2,
-        n_classes=10,
-        forward_expansion=EXPANSION,
-        *args, 
-        **kwargs
-    )
     
 if __name__ == "__main__":
     
@@ -253,7 +213,7 @@ if __name__ == "__main__":
         return total_params
 
     # model = vit_toy(in_channels=1, depth=3)
-    model = vit_medium_3()
+    model = vit_3_32()
     x = torch.randn(2, 3, 32, 32)
     print(model)
     
@@ -261,6 +221,7 @@ if __name__ == "__main__":
     
     y = model(x)
     print(x.shape, y.shape)
+    exit()
     
     model.eval()
     output_name = f'weights/vit_toy_new.onnx'    

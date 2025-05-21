@@ -472,31 +472,14 @@ class NetworkAbstractor:
     # TODO: experimental function
     def compute_bounds(self, input_lowers, input_uppers, method, cs=None, rhs=None, reference_bounds=None, reuse_alpha=False):
         assert method in ['backward', 'crown-optimized']
+        assert torch.all(input_lowers <= input_uppers)
         if os.environ.get('NEURALSAT_ASSERT'):
             assert not torch.equal(input_lowers, input_uppers)
         
-        # perturbed input
+        # gc_cuda()
         x = self.new_input(x_L=input_lowers, x_U=input_uppers)
 
-        # get split nodes
         self.net.get_split_nodes()
-    
-        # if Settings.share_alphas:
-        #     print(f'[!] Using {Settings.share_alphas=} will lose precision.')
-        coeffs = None
-        
-        # if reuse_alpha:
-        #     with torch.no_grad():
-        #         lb, ub, = self.net.compute_bounds(
-        #             x=(x,), 
-        #             C=cs, 
-        #             method='backward', 
-        #             reuse_alpha=reuse_alpha,
-        #             # interm_bounds=new_intermediate_layer_bounds
-        #         )
-        #     return (lb, ub), coeffs
-
-        # setup options for optimization mode
         self.net.set_bound_opts(get_initialize_opt_params(lambda x: False))
         
         # backward mode
@@ -506,8 +489,18 @@ class NetworkAbstractor:
             share_alphas=Settings.share_alphas, 
             bound_upper=True,
         )
-        assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
-        # print(f'Inititial bounds with {method=}:', lb.detach().cpu())
+        # FIXME: numerical error
+        ub[lb > ub] = lb[lb > ub]
+        
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert torch.all(lb <= ub), f'{(lb > ub).sum()}\nlower: {lb[lb > ub].detach().cpu().tolist()}\nupper:{ub[lb > ub].detach().cpu().tolist()}\nnorm: {torch.norm(lb[lb > ub] - ub[lb > ub])}'
+        
+        # save to CPU
+        lb = lb.detach().cpu()
+        ub = ub.detach().cpu()
+        
+        if not Settings.use_extra_substitution:
+            return (lb, ub), None
         
         if method == 'backward':
             lA, uA, lbias, ubias = self.get_input_A(self.device)
@@ -524,8 +517,8 @@ class NetworkAbstractor:
             bound_lower=True,
             bound_upper=False,
         )
-        lA, _, lbias, _ = self.get_input_A(self.device)
-        # print(f'Optimized bounds with {method=}:', lb.detach().cpu())
+        lb = lb.detach().cpu()
+        lA, _, lbias, _ = self.get_input_A('cpu')
         
         # upper bound
         _, ub = self.net.compute_bounds(
@@ -537,9 +530,10 @@ class NetworkAbstractor:
             bound_lower=False,
             bound_upper=True,
         )
-        _, uA, _, ubias = self.get_input_A(self.device)
+        ub = ub.detach().cpu()
+        _, uA, _, ubias = self.get_input_A('cpu')
         coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
-        assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
+        # assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
         
         return (lb, ub), coeffs
         

@@ -403,7 +403,7 @@ def test_cnn():
     
 def test_vit():
     # torch.manual_seed(0)
-    from src.trainer.models.vit.vit import ViTLite
+    from src.train.models.vit.vit import ViTLite
     
     x = torch.randn(2, 3, 4, 4)
     net = ViTLite(in_ch=x.shape[1], img_size=x.shape[-1])

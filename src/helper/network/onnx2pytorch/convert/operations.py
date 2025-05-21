@@ -111,7 +111,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             op = ConstantOfShape(**extract_attributes(node))
         elif node.op_type == "Conv":
             op = convert_layer(node, "Conv", params)
-            if (i < len(onnx_graph.node) + 1) and (onnx_graph.node[i + 1].op_type == "BatchNormalization") and quirks.get(node.op_type, {}).get('merge_batch_norm', False):
+            if (i < len(onnx_graph.node) - 1) and (onnx_graph.node[i + 1].op_type == "BatchNormalization") and quirks.get(node.op_type, {}).get('merge_batch_norm', False):
                 next_node = onnx_graph.node[i+1]
                 next_params = [weights[par_name] for par_name in next_node.input if par_name in weights]
                 next_layer = convert_batch_norm_layer(next_node, params=next_params)

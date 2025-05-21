@@ -45,11 +45,8 @@ class GlobalSettings:
         # attack
         self.use_attack = 1
         self.use_mip_attack = 0 # in progress
-        self.attack_interval = 10
         
-        # MIP verify
-        self.use_mip_verify = 1
-        self.mip_verify_threshold = 2
+        self.attack_interval = 10
         
         # timing statistic
         self.use_timer = 0
@@ -73,35 +70,26 @@ class GlobalSettings:
         self.use_decompose = 0
         self.use_decompose_incomplete = 0
         self.init_abstraction_method = 'crown-optimized'
-        self.min_layer = 100
         self.subverifier_decision_method = 'smart'
         self.verify_candidate_batch = 3
-        self.verify_candidate_num = 128
         self.verify_last_timeout = 200.0
-        self.verify_interm_timeout = 10.0
+        self.verify_interm_timeout = 20.0
+        self.sequential_batch = 100
+        self.use_sequential_abstract_forward = 0
         
-        # proof
-        self.use_save_reasoning_step = 1
+        self.verify_extra_opts = {'sparse_intermediate_bounds': True}
+        self.verify_splitting_strategy = 'hidden'
+        self.use_extra_substitution = True
         
-        # debug
-        self.max_iterations = 1e9
-        self.skip_initial_worst_bound = -1e6
+        self.verify_max_iteration = 4
+        self.verify_candidate_num = 128
+        self.verify_interpolate_factor = 1 / 2.0
 
     def __getitem__(self, key):
         return self.__dict__[key]
 
     def __setitem__(self, key, value):
         self.__dict__[key] = value
-        
-    def setup_test(self):
-        self.restart_current_hidden_branches = 100
-        self.restart_visited_hidden_branches = 200
-        self.use_mip_tightening = 0
-        self.use_restart = 1
-        self.use_attack = 1
-        self.test = 1
-        self.use_gpu_tightening = 0
-        
     
     def setup(self, args):
         if args is not None:
@@ -131,107 +119,97 @@ class GlobalSettings:
         # self.max_iterations = 100
         # self.skip_initial_worst_bound = -5.0
         self.use_save_reasoning_step = 0
-            
         
-    def setup_dec_test(self, args):
-        print('[+] setup_dec_test')
-        self.use_decompose = 1
-        self.min_layer = 4
-        self.share_alphas = 1 # sharing alphas may lose precision
-        self.init_abstraction_method = 'backward'
+    def setup_decompose(self, args):
+        self.use_attack = 0
+        self.use_restart = 0
+        self.use_mip_tightening = 0
+        self.share_alphas = 0 
         self.skip_preprocess = 1
-        self.use_decompose_incomplete = 0
-
-        self.verify_candidate_batch = 1
-        self.verify_candidate_num = 3
-        self.verify_last_timeout = 20.0
-        self.verify_interm_timeout = 5.0
-    
-    def setup_crown(self, args):
-        print('[+] setup_crown')
-        self.use_decompose = 1
-        self.min_layer = 1
-        self.share_alphas = 0
-        # self.init_abstraction_method = 'backward'
-        self.init_abstraction_method = 'crown-optimized'
-        self.skip_preprocess = 1
-        self.verify_candidate_batch = 1
         
-    def setup_vae_small(self, args):
-        print('[+] setup_vae_small')
+        category = args.category.lower()
+        if category in ['resnet6']:
+            self.setup_resnet_small(args)
+        elif category in ['resnet12', 'resnet18']:
+            self.setup_resnet_large(args)
+        elif category in ['resnet36']:
+            self.setup_resnet_extra_large(args)
+        elif category in ['vae_base', 'vae_wide']:
+            self.setup_vae_base(args)
+        elif category in ['vae_deep']:
+            self.setup_vae_deep(args)
+        else:
+            raise ValueError(f'[!] Unsupported settings for {category=}')
+        
+        
+    def setup_vae_base(self, args):
+        print('[+] setup_vae_base')
         self.use_decompose = 1
-        self.min_layer = 1
         self.share_alphas = 0 
         self.init_abstraction_method = 'crown-optimized'
-        self.skip_preprocess = 1
         
-        
-    def setup_vae_large(self, args):
-        print('[+] setup_vae_large')
+    def setup_vae_deep(self, args):
+        print('[+] setup_vae_deep')
         self.use_decompose = 1
-        self.min_layer = 1
         self.share_alphas = 1 # sharing alphas may lose precision
-        # self.init_abstraction_method = 'backward'
         self.init_abstraction_method = 'crown-optimized'
         self.subverifier_decision_method = 'greedy'
-        self.skip_preprocess = 1
+        self.verify_candidate_batch = 32
+        self.verify_interm_timeout = 30.0
+        self.verify_last_timeout = 300.0
     
     
     def setup_resnet_small(self, args):
         print('[+] setup_resnet_small')
         self.use_decompose = 0
-        self.min_layer = 100
         self.share_alphas = 1 # sharing alphas may lose precision
-        self.skip_preprocess = 1
+        self.use_restart = 1
         
-        
-    def setup_resnet_small_oom(self, args):
-        print('[+] setup_resnet_small')
-        self.use_decompose = 1
-        self.min_layer = 6
-        self.share_alphas = 1 # sharing alphas may lose precision
-        self.init_abstraction_method = 'backward'
-        self.skip_preprocess = 1
         
     def setup_resnet_large(self, args):
         print('[+] setup_resnet_large')
         self.use_decompose = 1
-        self.min_layer = 6
         self.share_alphas = 1 # sharing alphas may lose precision
         self.init_abstraction_method = 'backward'
-        self.skip_preprocess = 1
         self.verify_candidate_batch = 1
-        self.use_decompose_incomplete = 1
+        self.verify_last_timeout = 20.0
+        self.verify_splitting_strategy = 'input'
+        self.verify_interm_timeout = 10.0
+        self.use_sequential_abstract_forward = 1
         
+        
+    def setup_resnet_extra_large(self, args):
+        self.setup_resnet_large(args)
+        
+        print('[+] setup_resnet_extra_large')
+        self.use_extra_substitution = 0
         
     def __repr__(self):
-        str = (
+        return (
             '\n[!] Current settings:\n'
-            f'\t- restart_current_hidden_branches        : {int(self.restart_current_hidden_branches)}\n'
-            f'\t- restart_visited_hidden_branches        : {int(self.restart_visited_hidden_branches)}\n'
-            f'\t- restart_current_input_branches         : {int(self.restart_current_input_branches)}\n'
-            f'\t- restart_visited_input_branches         : {int(self.restart_visited_input_branches)}\n'
-            f'\t- gpu_tightening_current_hidden_branches : {int(self.gpu_tightening_current_hidden_branches)}\n'
-            f'\t- gpu_tightening_visited_hidden_branches : {int(self.gpu_tightening_visited_hidden_branches)}\n'
-            f'\t- attack                                 : {bool(self.use_attack)}\n'
-            f'\t- restart                                : {bool(self.use_restart)}\n'
-            f'\t- stabilize (CPU)                        : {bool(self.use_mip_tightening)}\n'
-            f'\t- stabilize (GPU)                        : {bool(self.use_gpu_tightening)}\n'
-            f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
-            f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
+            f'\t- attack                          : {bool(self.use_attack)}\n'
+            f'\t- restart                         : {bool(self.use_restart)}\n'
+            f'\t- stabilize (CPU)                 : {bool(self.use_mip_tightening)}\n'
+            f'\t- stabilize (GPU)                 : {bool(self.use_gpu_tightening)}\n'
+            f'\t- assertion                       : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
+            f'\t- debug                           : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
+            f'\n[!] Decomposition:\n'
+            f'\t- use_decompose                   : {bool(self.use_decompose)}\n'
+            f'\t- share_alphas                    : {bool(self.share_alphas)}\n'
+            f'\t- skip_preprocess                 : {bool(self.skip_preprocess)}\n'
+            f'\t- init_abstraction_method         : {self.init_abstraction_method}\n'
+            f'\t- subverifier_decision_method     : {self.subverifier_decision_method}\n'
+            f'\t- use_decompose_incomplete        : {bool(self.use_decompose_incomplete)}\n'
+            f'\t- verify_candidate_num            : {self.verify_candidate_num}\n'
+            f'\t- verify_interpolate_factor       : {self.verify_interpolate_factor}\n'
+            f'\t- verify_interm_timeout           : {self.verify_interm_timeout}\n'
+            f'\t- verify_last_timeout             : {self.verify_last_timeout}\n'
+            f'\t- verify_max_iteration            : {self.verify_max_iteration}\n'
+            f'\t- verify_candidate_batch          : {self.verify_candidate_batch}\n'
+            f'\t- sequential_batch                : {self.sequential_batch}\n'
+            f'\t- use_extra_substitution          : {bool(self.use_extra_substitution)}\n'
+            f'\t- use_sequential_abstract_forward : {bool(self.use_sequential_abstract_forward)}\n'
+            f'\n'
         )
-        if Settings.use_decompose:
-            str += (
-                f'\n[!] Decomposition:\n'
-                f'\t- use_decompose                          : {bool(self.use_decompose)}\n'
-                f'\t- share_alphas                           : {bool(self.share_alphas)}\n'
-                f'\t- skip_preprocess                        : {bool(self.skip_preprocess)}\n'
-                f'\t- min_layer                              : {self.min_layer}\n'
-                f'\t- init_abstraction_method                : {self.init_abstraction_method}\n'
-                f'\t- subverifier_decision_method            : {self.subverifier_decision_method}\n'
-                f'\t- use_decompose_incomplete               : {self.use_decompose_incomplete}\n'
-                f'\n'
-            )
-        return str
 
 Settings = GlobalSettings()

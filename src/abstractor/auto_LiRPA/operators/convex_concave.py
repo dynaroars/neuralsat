@@ -258,7 +258,7 @@ class BoundExp(BoundOptimizableActivation):
             assert not self.lb.isnan().any()
             assert not self.ub.isnan().any()
             A_ = A.view(-1, *A.shape[2:]).clone()
-            bias_ = bias.view(-1).clone()
+            bias_ = bias.contiguous().view(-1).clone()
             mask = bias_.isnan()
             A_[mask] = 0
             assert (last_A >= 0).all()

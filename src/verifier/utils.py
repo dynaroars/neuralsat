@@ -145,7 +145,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         self.input_split = force_split == 'input'
     elif eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
-    elif np.prod(self.input_shape) <= 200: # small inputs
+    elif np.prod(self.input_shape) <= 200 or perturbed <= 200: # small inputs
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True

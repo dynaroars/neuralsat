@@ -173,6 +173,15 @@ def resnet_toy(*args, **kwargs):
     return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
 
 
+@register_model
+def resnet36BN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [16, 12, 8], 10, 'B')
+
+@register_model
+def resnet30BN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [12, 10, 8], 10, 'B')
+
+
 if __name__ == "__main__":
     model = resnet_toy()
     x = torch.randn(1, 3, 32, 32)
