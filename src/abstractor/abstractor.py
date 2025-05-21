@@ -6,6 +6,7 @@ import traceback
 import logging
 import typing
 import torch
+import tqdm
 import copy
 import math
 import os
@@ -148,6 +149,9 @@ class NetworkAbstractor:
         self.net(x) 
     
         if math.prod(self.input_shape) >= 100000:
+            return True
+        
+        if Settings.use_decompose or Settings.skip_preprocess:
             return True
         
         try:
@@ -461,11 +465,61 @@ class NetworkAbstractor:
             'rhs': double_rhs, 
         })
         
+    @beartype
+    def _forward_input_sequential(self: 'NetworkAbstractor', domain_params: AbstractResults, decisions: torch.Tensor, simplify: bool) -> AbstractResults:
+        assert len(decisions) == len(domain_params.cs) == len(domain_params.rhs) == \
+               len(domain_params.input_lowers) == len(domain_params.input_uppers) == len(domain_params.objective_ids)
+               
+        batch = len(decisions)
+        assert batch > 0
+        
+        # splitting input by decisions (perform splitting)
+        new_input_lowers, new_input_uppers = self.input_split_idx(
+            input_lowers=domain_params.input_lowers, 
+            input_uppers=domain_params.input_uppers, 
+            split_idx=decisions,
+        )
+        
+        # 2 * batch
+        double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
+        double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
+        double_rhs = torch.cat([domain_params.rhs, domain_params.rhs], dim=0)
+        
+        sequential_output_lbs = []
+        for b in tqdm.tqdm(range(2*batch), desc=f'_forward_input_sequential {double_cs.device}'):
+            # create new inputs
+            x_b = self.new_input(x_L=new_input_lowers[b:b+1], x_U=new_input_uppers[b:b+1])
+            self.net.set_bound_opts(get_input_opt_params(stop_criterion_batch_any(double_rhs[b:b+1])))
+            
+            output_lb, _ = self.net.compute_bounds(
+                x=(x_b,), 
+                C=double_cs[b:b+1], 
+                method=self.method,
+                decision_thresh=double_rhs[b:b+1],
+                reference_bounds=self.init_reference_bounds,
+            )
+            sequential_output_lbs.append(output_lb[0])
+        sequential_output_lbs = torch.stack(sequential_output_lbs)
+
+        return AbstractResults(**{
+            'objective_ids': double_objective_ids,
+            'output_lbs': sequential_output_lbs, 
+            'input_lowers': new_input_lowers, 
+            'input_uppers': new_input_uppers,
+            'cs': double_cs, 
+            'rhs': double_rhs, 
+        })
         
     @beartype
     def forward(self: 'NetworkAbstractor', decisions: list | torch.Tensor, domain_params: AbstractResults) -> AbstractResults:
         self.iteration += 1
-        forward_func = self._forward_input if self.input_split else self._forward_hidden
+        if self.input_split:
+            if Settings.use_sequential_abstract_forward:
+                forward_func = self._forward_input_sequential
+            else:
+                forward_func = self._forward_input  
+        else:
+            forward_func = self._forward_hidden
         return forward_func(domain_params=domain_params, decisions=decisions, simplify=False)
 
     

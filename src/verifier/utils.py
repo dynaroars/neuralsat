@@ -315,14 +315,15 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         # if eps > 0.5:
         #     self.input_split = True
     
-    if self.input_split:
-        params = {'input_split': True, 'abstract_method': 'backward', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
-        # params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
+    if Settings.verify_splitting_strategy == 'input':
+        params = {'input_split': True, 'abstract_method': 'backward', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': Settings.verify_extra_opts}
+        # params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': Settings.verify_extra_opts}
+        self.input_split = True
     else:
         if Settings.subverifier_decision_method == 'smart':
-            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method':  'smart', 'decision_topk':  5, 'extra_opts': {'sparse_intermediate_bounds': True}}
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method':  'smart', 'decision_topk':  5, 'extra_opts': Settings.verify_extra_opts}
         elif Settings.subverifier_decision_method == 'greedy':
-            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': {'sparse_intermediate_bounds': True}}
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': Settings.verify_extra_opts}
         else:
             raise NotImplementedError
 

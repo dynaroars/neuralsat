@@ -14,6 +14,8 @@ from abstractor.params import get_branching_opt_params
 from helper.misc.check import check_solution
 from helper.misc.logger import logger
 
+from setting import Settings
+
 if typing.TYPE_CHECKING:
     import abstractor
 
@@ -53,6 +55,8 @@ def _to_device(tensor: torch.Tensor, device: str = 'cpu', half: bool = False) ->
 @beartype
 def get_slope(self: 'abstractor.abstractor.NetworkAbstractor', half=True, device='cpu') -> dict:
     if len(self.net.perturbed_optimizable_activations) == 0:
+        return {}
+    if Settings.use_sequential_abstract_forward:
         return {}
     slopes = {
         m.name: {
@@ -100,6 +104,8 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
 @beartype
 def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu') -> dict:
     lAs = {}
+    if Settings.use_sequential_abstract_forward:
+        return lAs
     # list_nodes = [n for n in self.net.nodes() if n.name == self.net.input_name[0]] if self.input_split else self.net.get_splittable_activations()
     list_nodes = [self.net[self.net.input_name[0]]] if self.input_split else self.net.get_splittable_activations()
     for node in list_nodes:
