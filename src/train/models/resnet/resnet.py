@@ -133,26 +133,21 @@ def resnet10(*args, **kwargs):
 def resnet11(*args, **kwargs):
     return ResNet(BasicBlock, [9, 1, 1], 10, 'B')
 
-
 @register_model
 def resnet12(*args, **kwargs):
     return ResNet(BasicBlock, [9, 2, 1], 10, 'B')
-    
     
 @register_model
 def resnet13(*args, **kwargs):
     return ResNet(BasicBlock, [9, 3, 1], 10, 'B')
 
-
 @register_model
 def resnet14(*args, **kwargs):
     return ResNet(BasicBlock, [9, 3, 2], 10, 'B')
     
-    
 @register_model
 def resnet15(*args, **kwargs):
     return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
-
 
 @register_model
 def resnet16(*args, **kwargs):
@@ -162,25 +157,29 @@ def resnet16(*args, **kwargs):
 def resnet17(*args, **kwargs):
     return ResNet(BasicBlock, [9, 5, 3], 10, 'B')
 
-
 @register_model
 def resnet18(*args, **kwargs):
     return ResNet(BasicBlock, [9, 6, 3], 10, 'B')
 
-
 @register_model
 def resnet_toy(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
-
-
-@register_model
-def resnet36BN(*args, **kwargs):
-    return ResNet(BasicBlockBN, [16, 12, 8], 10, 'B')
+    return ResNet(BasicBlockBN, [12, 8, 4], 10, 'B')
 
 @register_model
 def resnet30BN(*args, **kwargs):
-    return ResNet(BasicBlockBN, [12, 10, 8], 10, 'B')
+    return ResNet(BasicBlockBN, [10, 10, 10], 10, 'B')
 
+@register_model
+def resnet21BN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [12, 6, 3], 10, 'B')
+
+@register_model
+def resnet24BN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [12, 8, 4], 10, 'B')
+
+@register_model
+def resnet36BN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [12, 12, 12], 10, 'B')
 
 if __name__ == "__main__":
     model = resnet_toy()
