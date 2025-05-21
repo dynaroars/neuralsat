@@ -3,9 +3,12 @@ import torch
 import time
 import os
 
-from helper.network.read_onnx import parse_onnx, parse_pth
-from helper.misc.logger import logger, LOGGER_LEVEL
+from helper.network.read_onnx import parse_onnx
+from helper.network.read_pth import parse_pth
+
 from helper.spec.objective import parse_vnnlib
+
+from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.misc.export import get_adv_string
 from helper.misc.timer import Timers
 

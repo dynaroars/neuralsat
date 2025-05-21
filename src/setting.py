@@ -44,9 +44,12 @@ class GlobalSettings:
         
         # attack
         self.use_attack = 1
-        self.use_mip_attack = 0 # in progress
-        
         self.attack_interval = 10
+        
+        # mip verify
+        self.use_mip_verify = 1 
+        self.use_mip_attack = 0 # in progress
+        self.mip_verify_threshold = 2
         
         # timing statistic
         self.use_timer = 0
@@ -65,6 +68,13 @@ class GlobalSettings:
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000
         self.forward_dynamic = 0
+        
+        # proof
+        self.use_save_reasoning_step = 1
+        
+        # debug
+        self.max_iterations = 1e9
+        self.skip_initial_worst_bound = -1e6
         
         # decomposition
         self.use_decompose = 0

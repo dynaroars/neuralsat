@@ -493,7 +493,7 @@ class Verifier:
             if (not self.input_split) and (unstable is not None):
                 msg += f'Unstable neurons: {unstable:<10}'
             
-            msg += f'Memory (%): {mem_used_percentage:<10.02f}'
+            msg += f'GPU Mem (%): {mem_used_percentage:<10.02f}'
             
         logger.info(msg)
         
