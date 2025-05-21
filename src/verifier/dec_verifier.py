@@ -17,8 +17,8 @@ from helper.spec.objective import DnfObjectives
 
 from tightener.utils import optimize_dnn, verify_dnf_pairs
 
-from verifier.utils import get_used_gpu_memory
-from verifier.verifier import Verifier
+from .utils import get_used_gpu_memory
+from .verifier import Verifier
 
 from abstractor.auto_LiRPA import PerturbationLpNorm, BoundedTensor, BoundedModule
 from abstractor.auto_LiRPA.utils import stop_criterion_batch_any
@@ -493,7 +493,7 @@ class DecompositionalVerifier:
             raise NotImplementedError()
 
 
-    from .utils import (
+    from .dec_utils import (
         decompose_network,
         _setup_subnet_verifier,
         new_input,

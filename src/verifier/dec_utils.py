@@ -13,7 +13,7 @@ from attacker.pgd_attack.general import attack as pgd_attack
 from helper.spec.write_vnnlib import write_vnnlib_classify
 from helper.misc.torch_cuda_memory import gc_cuda
 from abstractor.auto_LiRPA import BoundedTensor
-from verifier.verifier import Verifier
+from .verifier import Verifier
 
 
 SubNetworks = namedtuple('SubNetworks', ['network', 'input_shape', 'output_shape'])

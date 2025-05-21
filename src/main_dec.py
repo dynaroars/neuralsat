@@ -13,7 +13,7 @@ from helper.network.read_pth import parse_pth
 from helper.misc.result import ReturnStatus
 from helper.misc.timer import Timers
 
-from decomposer.dec_verifier import DecompositionalVerifier
+from verifier.dec_verifier import DecompositionalVerifier
 from attacker.attacker import Attacker
 from setting import Settings
 
