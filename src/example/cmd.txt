@@ -4,6 +4,7 @@ python3 main.py --net example/onnx/mnist_small.onnx --spec example/vnnlib/spec_i
 
 # test
 python3 main.py --net example/model_fnn_signmoid.onnx --spec example/prop_2_0.03.vnnlib
+python3 main_dec.py --net ~/submissions/nips_25/CoVeNN/benchmarks/resnet/resnet12/net/resnet12.pth --spec ~/submissions/nips_25/CoVeNN/benchmarks/resnet/resnet12/spec/spec_idx_0_net_resnet12_eps_0.020000_seed_37.vnnlib --category resnet12
 
 python3 main.py --net example/onnx/mnistfc-medium-net-554.onnx --spec example/vnnlib/test.vnnlib
 python3 main.py --net example/onnx/mnistfc-medium-net-151.onnx --spec example/vnnlib/prop_2_0.03.vnnlib

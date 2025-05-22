@@ -304,6 +304,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
 
 @beartype
 def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+    print(f'[+] _setup_restart_naive')
     self.num_restart = nth_restart + 1
     # TODO: select splitting method (input/hidden)
     if objective is not None:

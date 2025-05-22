@@ -38,7 +38,7 @@ def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
             'init_alpha': False,
             'fix_interm_bounds': True,
             'stop_criterion_func': stop_criterion_func,
-            'iteration': 50, 
+            'iteration': 100, 
             'lr_alpha': 0.1, 
             'lr_decay': 0.98, 
         }

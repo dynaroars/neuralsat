@@ -89,7 +89,7 @@ class GlobalSettings:
         
         self.verify_extra_opts = {'sparse_intermediate_bounds': True}
         self.verify_splitting_strategy = 'hidden'
-        self.use_extra_substitution = True
+        self.use_extra_substitution = False # TODO: in progress
         
         self.verify_max_iteration = 4
         self.verify_candidate_num = 128
@@ -190,9 +190,7 @@ class GlobalSettings:
         
     def setup_resnet_extra_large(self, args):
         self.setup_resnet_large(args)
-        
-        print('[+] setup_resnet_extra_large')
-        self.use_extra_substitution = 0
+
         
     def __repr__(self):
         return (

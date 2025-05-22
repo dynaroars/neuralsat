@@ -97,7 +97,7 @@ class NetworkAbstractor:
             logger.debug(f'[select_params] Try {mode=}, {method=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
-                self.mode = mode
+                self.mode = self.net.conv_mode
                 self.method = method
                 return True
             

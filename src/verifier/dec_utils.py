@@ -122,6 +122,7 @@ def attack_subnet(self, model, objective, timeout=5.0):
 @beartype
 def _verify_subnet(self, subnet_idx: int, objective: typing.Any, verify_batch: int, timeout: int | float = 20.0) -> str:
     # release memory
+    print(f'[+] _verify_subnet {subnet_idx=}')
     gc_cuda()
         
     subnet_input_outputs = self.input_output_bounds[subnet_idx]
@@ -147,7 +148,6 @@ def _verify_subnet(self, subnet_idx: int, objective: typing.Any, verify_batch: i
         batch=verify_batch,
     )
     # print(verifier.net)
-    print(f'{objective.cs.shape=}')
 
     verifier.start_time = time.time()
 

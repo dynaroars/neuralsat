@@ -5,6 +5,7 @@ import torch
 import copy
 import onnx
 
+from .read_onnx import custom_quirks
             
 def inference_onnx(path, *inputs: np.ndarray):
     sess = ort.InferenceSession(onnx.load(path).SerializeToString())
@@ -57,6 +58,8 @@ def simplify_model(pytorch_model):
 
 
 def parse_pth(pth_path: str) -> tuple:
+    custom_quirks['Softmax']['skip_last_layer'] = False
+    
     for iter in range(10):
         pytorch_model_raw = torch.load(pth_path, weights_only=False)
         pytorch_model = simplify_model(pytorch_model_raw)

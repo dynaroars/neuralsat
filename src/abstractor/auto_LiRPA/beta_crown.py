@@ -56,8 +56,8 @@ def get_split_nodes(self: 'BoundedModule'):
             if activation in splittable_activations:
                 split_activations_.append((activation, activation.inputs.index(layer)))
         if split_activations_:
-            if layer.lower is None and layer.upper is None:
-                continue
+            # if layer.lower is None and layer.upper is None:
+            #     continue
             self.split_nodes.append(layer)
             self.split_activations[layer.name] = split_activations_
     return self.split_nodes, self.split_activations
