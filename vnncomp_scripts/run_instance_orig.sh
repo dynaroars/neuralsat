@@ -18,7 +18,7 @@ TIMEOUT=$6
 TOOL_DIR=$(dirname $(dirname $(realpath $0)))
 SCRIPT_DIR=$(dirname $(realpath $0))
 OUTPUT_DIR=$TOOL_DIR/tmp_simplified_model_output
-NEURALSAT_MAIN=$TOOL_DIR/neuralsat-pt201/main.py
+NEURALSAT_MAIN=$TOOL_DIR/src/main.py
 
 # remove old result
 if [ -f $RESULTS_FILE ]; then

@@ -1,0 +1,435 @@
+import torch.nn.functional as F
+import onnxruntime as ort
+import torch.nn as nn
+import numpy as np
+import torch
+import time
+import onnx
+import os
+
+from test import extract_instance
+
+class CifarConv(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.layers = nn.Sequential(
+            nn.Conv2d(3, 2, 2, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(512, 32),
+            nn.ReLU(),
+            nn.Linear(32, 10)
+        )
+        
+    def forward(self, x):
+        return self.layers(x)
+    
+    
+class NetSigmoid(nn.Module):
+    
+    def __init__(self):
+        super(NetSigmoid, self).__init__()
+        
+        self.layer = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(784, 5),
+            nn.Sigmoid(),
+            nn.Linear(5, 7),
+            nn.Sigmoid(),
+            nn.Linear(7, 10),
+        )
+
+    def forward(self, x):
+        return self.layer(x)
+    
+    
+def test_sigmoid():
+    net = NetSigmoid()
+    x = torch.randn(1, 2)
+    print(net(x).shape)
+    
+    torch.onnx.export(
+        net,
+        x,
+        "example/onnx/fnn_sigmoid.onnx",
+        verbose=False,
+    )
+    
+    
+def test_relu():
+    net = nn.Sequential(
+        nn.Flatten(), 
+        nn.Linear(2, 3), 
+        nn.ReLU(), 
+        nn.Linear(3, 4), 
+        nn.ReLU(), 
+        nn.Linear(4, 2)
+    )
+    print(net)
+    x = torch.tensor([[1.0, 2.0]])
+    y = net(x)
+    print(y)
+    torch.onnx.export(
+        net, 
+        x, 
+        "example/onnx/fnn.onnx", 
+        verbose=False,
+    )
+    
+    
+class ReLUNet(nn.Module):
+    
+    def __init__(self):
+        super(ReLUNet, self).__init__()
+        
+        self.linear1 = nn.Linear(2, 3)
+        self.linear1.weight.data = nn.Parameter(torch.tensor([[1, 2], [3, 4], [5, 6]]).float())
+        self.linear1.bias.data = nn.Parameter(torch.tensor([1, 2, 3]).float())
+        
+        self.linear2 = nn.Linear(3, 2)
+        self.linear2.weight.data = nn.Parameter(torch.tensor([1, 2, 3, -4, -5, -6]).view(2, 3).float())
+        self.linear2.bias.data = nn.Parameter(torch.tensor([2, 3]).float())
+        # print( self.linear1.weight.data.shape)
+        # print( self.linear1.bias.data.shape)
+        
+        self.linear3 = nn.Linear(2, 3)
+        self.linear3.weight.data = nn.Parameter(torch.tensor([[1, 2], [-3, -4], [-5, -6]]).float())
+        self.linear3.bias.data = nn.Parameter(torch.tensor([1, 2, 3]).float())
+        
+    def forward(self, x):
+        x = self.linear1(x)
+        x = x.relu()
+        x = self.linear2(x)
+        x = x.relu()
+        x = self.linear3(x)
+        
+        # x = torch.log(x)
+        # x = x.max(dim=1).values
+        return x
+    
+    
+def test_relu2():
+    
+    from abstractor.auto_LiRPA import PerturbationLpNorm, BoundedTensor, BoundedModule
+
+    net = ReLUNet()
+    x_U = torch.tensor([[1.0, 2.0]])
+    x_L = torch.tensor([[-1.0, -2.0]])
+    
+    if 0:
+        torch.onnx.export(
+            net, 
+            x_L, 
+            "example/onnx/relu2.onnx", 
+            verbose=False,
+        )
+    
+    print(x_L.shape)
+    device = 'cpu'
+    
+        
+    abstractor = BoundedModule(
+        model=net, 
+        global_input=torch.zeros_like(x_L, device=device),
+        bound_opts={
+            'relu': 'adaptive', 
+            'conv_mode': 'matrix', 
+        },
+        device=device,
+        verbose=False,
+    )
+    new_x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(device)
+    
+    
+    # print(lb, ub)
+    C = torch.tensor([1, -1]).view(1, 1, 2).float()
+    # print(x_L.shape, C.shape)
+    # print(abstractor(x_U))
+    if 0:
+        method = 'forward'
+        with torch.no_grad():
+            lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
+            print('[forward] lower', lb)
+            print('[forward] upper', ub)
+        print()
+    else:
+        method = 'backward'
+        with torch.no_grad():
+            lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
+            print('[backward] lower', lb)
+            print('[backward] upper', ub)
+    
+    
+class FNNReLU(nn.Module):
+    
+    def __init__(self):
+        super(FNNReLU, self).__init__()
+        
+        self.layer = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(784, 9),
+            nn.ReLU(),
+            nn.Linear(9, 7),
+            nn.ReLU(),
+            nn.Linear(7, 5),
+            nn.ReLU(),
+            nn.Linear(5, 10),
+        )
+
+    def forward(self, x):
+        return self.layer(x)
+    
+    
+def test_relu3():
+    net = FNNReLU()
+    x = torch.randn(1, 1, 28, 28)
+    print(net(x).shape)
+    
+    torch.onnx.export(
+        net,
+        x,
+        "example/onnx/mnist_relu.onnx",
+        verbose=False,
+    )
+    
+    
+class NetConv(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.l1 = nn.Linear(5, 512)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.ct1 = nn.ConvTranspose2d(128, 128, kernel_size=(4, 4), stride=(2, 2))
+        self.bn2 = nn.BatchNorm2d(128)
+        self.ct2 = nn.ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2))
+        self.ct3 = nn.ConvTranspose2d(64, 4, kernel_size=(4, 4), stride=(2, 2))
+        self.l2 = nn.Linear(3600, 1)
+
+    def forward(self, x):
+        x = self.l1(x)
+        # print(1, x.shape)
+        x = x.view(-1, 128, 2, 2)
+        # print(2, x.shape)
+        x = self.bn1(x)
+        # print(3, x.shape)
+        x = self.ct1(x)
+        # print(4, x.shape)
+        x = self.bn1(x)
+        # print(5, x.shape)
+        x = x.relu()
+        x = self.ct2(x)
+        # print(6, x.shape)
+        x = x.relu()
+        x = self.ct3(x)
+        x = x.relu()
+        x = x.flatten(1)
+        x = self.l2(x)
+        return x
+    
+    
+    
+class NetConv2(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.c1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, bias=False)
+        self.c2 = nn.Conv2d(16, 32, kernel_size=2, stride=1, bias=False)
+        self.l1 = nn.Linear(23328, 43, bias=False)
+
+    def forward(self, x):
+        x = self.c1(x)
+        x = x.sign()
+        x = torch.add(x, 0.1)
+        x = x.sign()
+        # x = torch.where(x > 0.0, 1.0, -1.0).float()
+        # x[x >= 0] = 1.0
+        # x[x < 0] = -1.0
+        x = self.c2(x)
+        x = x.permute(0, 2, 3, 1)
+        x = x.reshape(-1, 23328)
+        # x = torch.where(x > 0.0, 1.0, -1.0).float()
+        x = self.l1(x)
+        return x
+   
+ 
+def test():
+    net = NetSigmoid()
+    x = torch.randn(1, 1, 28, 28)
+    print(net(x).shape)
+   
+    net.eval()
+    output_name = "example/onnx/fnn_sigmoid.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+    )
+    
+    print('Export onnx to:', output_name)
+    
+    net_path = output_name
+    vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
+    device = 'cpu'
+    
+    print('Running test with', net_path, vnnlib_path)
+    START_TIME = time.time()
+    model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+    model.to(device)
+
+    from verifier.verifier import Verifier 
+    verifier = Verifier(
+        net=model, 
+        input_shape=input_shape, 
+        batch=1000,
+        device=device,
+    )
+    
+    status = verifier.verify(objectives)
+    print(f'{status},{verifier.iteration}')
+    return status, verifier.iteration
+    
+def trail1():
+    from helper.misc.logger import logger
+    import logging
+    logger.setLevel(logging.INFO)
+    
+    trial = 0
+    while True:
+        status, iteration = test()
+        if status == 'unsat' and iteration > 0:
+            break
+        print(f'Trail {trial} failed\n\n')
+        trial += 1
+        time.sleep(1.0)
+    
+
+def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
+    sess = ort.InferenceSession(onnx.load(path).SerializeToString())
+    names = [i.name for i in sess.get_inputs()]
+    return sess.run(None, dict(zip(names, inputs)))
+
+
+def simplify_network():
+    # load('/home/droars/Desktop/neuralsat/benchmark/cifar2020/nnet/cifar10_2_255_simplified.onnx')
+    root_dir = '/home/droars/Desktop/tool/neuralsat/benchmark/mnistfc'
+    with open(f'{root_dir}/instances.csv', 'w') as fp:
+        for line in open(f'{root_dir}/instances_old.csv').read().strip().split('\n'):
+            onnx_path, vnnlib_path, _ = line.split(',')
+            # extract_instance(os.path.exists(f'{root_dir}/{onnx_path}'))
+            model, input_shape, _ = extract_instance(f'{root_dir}/{onnx_path}', f'{root_dir}/{vnnlib_path}')
+            if len([_ for _ in list(model.modules())[1:] if isinstance(_, torch.nn.ReLU)]) == 1:
+                # print(model)
+                continue
+            
+            # input_shape = [1, 1, 28 , 28]
+            print(onnx_path, input_shape)
+            x = torch.randn(input_shape)
+            with torch.no_grad():
+                output_pytorch = model(x)
+            model.eval()
+            
+            output_name = f'{root_dir}/{onnx_path[:-5]}_simplified.onnx' #'example/cacmodel.onnx'
+            os.system(f'rm -rf {output_name}')
+            
+            torch.onnx.export(
+                model,
+                x,
+                output_name,
+                verbose=False,
+                opset_version=12,
+            )
+            
+            assert os.path.exists(output_name)
+            output_onnx = inference_onnx(output_name, x.view(input_shape).float().numpy())[0]
+            assert np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
+            
+            # break
+            print(f'{onnx_path[:-5]}_simplified.onnx,{vnnlib_path},1000', file=fp)
+            
+ 
+ 
+class CifarConvRes(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.conv1 = nn.Conv2d(3, 2, 3, 3)
+        self.conv2 = nn.Conv2d(2, 4, 3, 3)
+        self.conv3 = nn.Conv2d(2, 4, 3, 3)
+        self.linear = nn.Linear(4, 2)
+        
+    def forward(self, x):
+        # return self.layers(x)
+        x = self.conv1(x)
+        x = x.relu()
+        x = self.conv2(x).relu() + self.conv3(x)
+        x = x.flatten(1)
+        x = self.linear(x)
+        return x
+    
+    
+def test_cnn():
+    # torch.manual_seed(0)
+    net = nn.Sequential(
+        nn.Conv2d(3, 2, 5, 5), 
+        nn.ReLU(),
+        # nn.Conv2d(5, 7, 5, 3), 
+        # nn.ReLU(),
+        nn.Flatten(), 
+        nn.Linear(8, 2), 
+    )
+    
+    net = CifarConvRes()
+    
+    x = torch.randn(1, 3, 10, 10)
+    print(net(x).shape)
+   
+    net.eval()
+    output_name = "example/onnx/cifar_res.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+    )
+    
+    
+def test_vit():
+    # torch.manual_seed(0)
+    from src.train.models.vit.vit import ViTLite
+    
+    x = torch.randn(2, 3, 4, 4)
+    net = ViTLite(in_ch=x.shape[1], img_size=x.shape[-1])
+
+    net.eval()
+    
+    print(net(x).shape)
+   
+    output_name = "example/onnx/vit.onnx"
+    torch.onnx.export(
+        net,
+        x,
+        output_name,
+        verbose=False,
+        opset_version=12,
+        input_names=["input"],
+        output_names=["output"],
+        export_params=True,
+        do_constant_folding=True,
+        dynamic_axes={
+            'input': {0: 'batch'},
+            'output': {0: 'batch'},
+        }
+    )
+    
+    os.system(f'onnxsim {output_name} {output_name}')
+    
+if __name__ == '__main__':
+    test_vit()

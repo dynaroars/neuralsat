@@ -1,3 +1,5 @@
+*.json
+generated_benchmark/
 benchmark/
 benchmark
 ref/
@@ -6,7 +8,8 @@ old/
 *.nsys-rep
 kernel/
 *.hatchet
-
+*.pth
+*.tar
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*
 
@@ -36,7 +39,6 @@ __pycache__/
 *$py.class
 
 *.html
-*.txt
 *.keras
 # C extensions
 *.so
