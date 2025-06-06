@@ -35,6 +35,10 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
+    parser.add_argument('--input_shape', type=int, nargs='+', default=None,
+                        help="Input shape of network, e.g., --input_shape 1 3 32 32")
+    parser.add_argument('--output_shape', type=int, nargs='+', default=None,
+                        help="Output shape of network, e.g., --output_shape 1 10")
     parser.add_argument('--batch', type=int, default=1000,
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
@@ -81,9 +85,9 @@ if __name__ == '__main__':
     # network
     Timers.tic('Load network') if Settings.use_timer else None
     if args.net.endswith('.onnx'):
-        model, input_shape, output_shape = parse_onnx(args.net)
+        model, input_shape, output_shape = parse_onnx(args.net, args.input_shape, args.output_shape)
     elif args.net.endswith('.pth'):
-        model, input_shape, output_shape = parse_pth(args.net)
+        model, input_shape, output_shape = parse_pth(args.net, args.input_shape, args.output_shape)
     else:
         raise NotImplementedError('Unsupported network type')
     

@@ -88,8 +88,12 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     
     # get hidden bounds
     for layer in list(set(self.net.layers_requiring_bounds + self.net.split_nodes)):
-        lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
-        upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
+        # print(layer.lower.shape)
+        if layer.lower is not None:
+            lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
+            upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
+        else:
+            print('[!] Missing bounds for layer:', layer)
     
     # add output bounds
     lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)

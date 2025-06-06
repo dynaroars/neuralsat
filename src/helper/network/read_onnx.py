@@ -61,7 +61,7 @@ def add_batch(shape: tuple) -> tuple:
         
 
 @beartype
-def _parse_onnx(path: str | io.BytesIO) -> tuple:
+def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_shape: None | list = None) -> tuple:
     # load model
     onnx_model = _load_onnx(path)
     
@@ -72,14 +72,20 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     inputs = [node for node in onnx_model.graph.input if node.name in inputs]
     # print(f'{inputs = }')
     # print(f'{onnx_model.graph.input = }')
-    onnx_input_dims = inputs[0].type.tensor_type.shape.dim
-    onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
     
-    orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
-    orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims) if len(onnx_output_dims) else (1,)
-    
-    batched_input_shape = add_batch(orig_input_shape)
-    batched_output_shape = add_batch(orig_output_shape)
+    if input_shape is None:
+        onnx_input_dims = inputs[0].type.tensor_type.shape.dim
+        orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
+        batched_input_shape = add_batch(orig_input_shape)
+    else:
+        orig_input_shape = batched_input_shape = tuple(input_shape)
+        
+    if output_shape is None:
+        onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
+        orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims) if len(onnx_output_dims) else (1,)
+        batched_output_shape = add_batch(orig_output_shape)
+    else:
+        batched_output_shape = tuple(output_shape)
 
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
     # pytorch_model = onnx2torch.convert(path)
@@ -209,10 +215,10 @@ def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tup
     
 
 @beartype
-def parse_onnx(path: str | io.BytesIO) -> tuple:
+def parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_shape: None | list = None) -> tuple:
     while True:
         try:
-            return _parse_onnx(path)
+            return _parse_onnx(path=path, input_shape=input_shape, output_shape=output_shape)
         except OnnxMergeBatchNormError:
             custom_quirks['Conv']['merge_batch_norm'] = False
             continue

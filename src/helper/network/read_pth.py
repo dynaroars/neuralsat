@@ -57,8 +57,10 @@ def simplify_model(pytorch_model):
     return model
 
 
-def parse_pth(pth_path: str) -> tuple:
+def parse_pth(pth_path: str, input_shape: list, output_shape: None | list = None) -> tuple:
     custom_quirks['Softmax']['skip_last_layer'] = False
+    
+    input_shape = tuple(input_shape)
     
     for iter in range(10):
         pytorch_model_raw = torch.load(pth_path, weights_only=False)
@@ -66,8 +68,10 @@ def parse_pth(pth_path: str) -> tuple:
         pytorch_model.eval()
         pytorch_model.to(dtype=torch.get_default_dtype())
         
-        input_shape = (1, 3, 32, 32)
-        output_shape = tuple(pytorch_model(torch.zeros(input_shape)).shape)
+        if output_shape is None:
+            output_shape = tuple(pytorch_model(torch.zeros(input_shape)).shape)
+        else:
+            output_shape = tuple(output_shape)
 
         # check conversion
         onnx_path = pth_path.replace('.pth', '.onnx')
