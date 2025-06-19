@@ -31,6 +31,11 @@ class InteractiveVerifier:
             decision_topk=-1,
             decision_method='greedy'
         )
+        
+    def get_sample_observation(self, objective):
+        self._setup_restart(0, objective)
+        ret = self.abstractor.initialize(objective, reference_bounds=None)
+        return ret
 
 
     # @beartype
