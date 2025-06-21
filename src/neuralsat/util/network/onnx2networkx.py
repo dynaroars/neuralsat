@@ -2,14 +2,18 @@ import networkx as nx
 import numpy as np
 import torch
 
-def _prepare_linear(nx_graph, pre_nodes, layer, layer_id, input_shape, output_shape, offset_node_id, node_to_id):
+def _prepare_linear(nx_graph, pre_nodes, layer, layer_id, input_shape, output_shape, offset_node_id, node_to_id, cs=None):
     nodes_array = np.array(pre_nodes)
     assert nodes_array.shape == input_shape
     assert nodes_array.shape[0] == 1
 
-    this_layer_weight = layer.weight.detach().cpu().numpy()
-    this_layer_bias = layer.bias.detach().cpu().numpy()
-
+    this_layer_weight = layer.weight.detach().cpu()
+    this_layer_bias = layer.bias.detach().cpu()
+    if cs is not None:
+        this_layer_weight = cs.squeeze(1).mm(this_layer_weight)
+        this_layer_bias = cs.squeeze(1).mm(this_layer_bias.unsqueeze(-1)).view(-1)
+        output_shape = (1, len(this_layer_bias))
+        
     node_labels = []
     for node_id in range(len(this_layer_weight)):
         # bias = this_layer_bias[node_id].item()
@@ -118,7 +122,7 @@ def _prepare_input(nx_graph, input_shape, node_to_id):
     node_labels = node_labels.reshape(input_shape)
     return node_labels
 
-def prepare_graph(net, input_shape):
+def prepare_graph(net, input_shape, objective):
     G = nx.DiGraph()
     node_to_id = {}
 
@@ -126,11 +130,15 @@ def prepare_graph(net, input_shape):
     layer_node_labels = _prepare_input(G, input_shape, node_to_id=node_to_id)
 
     # process hidden layers
+    cs = None
     layer_id = 1
     pre = torch.randn(input_shape)
     for layer in list(net.modules())[1:]: # TODO: update
         post = layer(pre)
         if isinstance(layer, torch.nn.Linear):
+            if layer_id == len(list(net.modules())[1:]) - 2:
+                cs = objective.cs
+                
             layer_node_labels = _prepare_linear(
                 nx_graph=G,
                 pre_nodes=layer_node_labels,
@@ -140,6 +148,7 @@ def prepare_graph(net, input_shape):
                 output_shape=post.shape,
                 offset_node_id=len(node_to_id),
                 node_to_id=node_to_id,
+                cs=cs,
             )
         elif isinstance(layer, torch.nn.Conv2d):
             layer_node_labels = _prepare_conv2d(
@@ -162,7 +171,7 @@ def prepare_graph(net, input_shape):
 
         layer_id += 1
         pre = post
-        print(layer, f'{layer_node_labels.shape=}, {pre.shape=}, {post.shape=} {len(node_to_id)=}')
+        # print(layer, f'{layer_node_labels.shape=}, {pre.shape=}, {post.shape=} {len(node_to_id)=}')
 
     assert len(list(set(node_to_id.keys()))) == len(node_to_id) # no duplicate names
     assert len(list(set(node_to_id.values()))) == len(node_to_id) # no duplicate values

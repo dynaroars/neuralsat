@@ -34,8 +34,9 @@ class InteractiveVerifier:
             decision_method='greedy'
         )
         
-    def get_edge_data(self):
-        nx_graph = prepare_graph(self.net, self.input_shape)
+    def get_edge_data(self, objective):
+        assert len(objective.lower_bounds) == 1
+        nx_graph = prepare_graph(self.net, self.input_shape, objective)
         edge_weight = get_edge_weight(nx_graph)
         edge_index = get_edge_index(nx_graph)
         return edge_weight, edge_index
@@ -81,7 +82,7 @@ class InteractiveVerifier:
                 mask.flatten(1),
             ], dim=-1)[0]
             ret.append(x)
-            print(f'hidden: {name=} {x.shape=}')
+            # print(f'hidden: {name=} {x.shape=}')
         
         # 3. output features
         lb = sample.output_lbs.flatten(1).cpu()
@@ -90,7 +91,7 @@ class InteractiveVerifier:
         mask = torch.zeros_like(lb).cpu()
         x = torch.stack([lb, ub, bias, mask], dim=-1)[0]
         ret.append(x)
-        print(f'output: {name=} {x.shape=}')
+        # print(f'output: {name=} {x.shape=}')
         return ret
 
 
