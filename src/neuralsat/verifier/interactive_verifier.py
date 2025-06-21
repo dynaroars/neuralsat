@@ -5,10 +5,12 @@ import numpy as np
 import torch
 import copy
 
+from ..util.network.onnx2networkx import prepare_graph, get_edge_weight, get_edge_index
 from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..heuristic.domains_list import DomainsList
 from ..util.misc.result import AbstractResults
+from ..heuristic.util import compute_masks
 from ..abstractor.utils import new_slopes
 from ..setting import Settings
 
@@ -32,9 +34,63 @@ class InteractiveVerifier:
             decision_method='greedy'
         )
         
-    def get_sample_observation(self, objective):
+    def get_edge_data(self):
+        nx_graph = prepare_graph(self.net, self.input_shape)
+        edge_weight = get_edge_weight(nx_graph)
+        edge_index = get_edge_index(nx_graph)
+        return edge_weight, edge_index
+        
+    def get_node_data(self, objective):
+        assert len(objective.lower_bounds) == 1
         self._setup_restart(0, objective)
-        ret = self.abstractor.initialize(objective, reference_bounds=None)
+        sample = self.abstractor.initialize(objective, reference_bounds=None)
+        
+        ret = []
+        # 1. input features
+        lb = sample.input_lowers.flatten(1).cpu()
+        ub = sample.input_uppers.flatten(1).cpu()
+        bias = torch.zeros_like(lb).cpu()
+        mask = torch.zeros_like(lb).cpu()
+        x = torch.stack([lb, ub, bias, mask], dim=-1)[0]
+        ret.append(x)
+        
+        # 2. hidden features
+        ordered_names = [_.name for _ in self.abstractor.net.split_nodes]
+        # extract mask
+        masks = compute_masks(sample.lower_bounds, sample.upper_bounds, device='cpu')
+        # extract hidden
+        for name in ordered_names:
+            lb = sample.lower_bounds[name].cpu()
+            ub = sample.upper_bounds[name].cpu()
+            bias = self.abstractor.net[name].inputs[-1].param.detach().cpu()
+            if lb.ndim == 4: # conv layer
+                bs, c, h, w = lb.shape
+                bias = bias[None, : , None, None]
+                bias = bias.repeat(bs, 1, h, w)
+            elif lb.ndim == 2: # fc layer
+                bias = bias[None]
+            else:
+                raise NotImplementedError
+            mask = masks[name].view(lb.shape)
+            assert (lb[torch.where(mask == 1)] < 0).all()
+            assert (ub[torch.where(mask == 1)] > 0).all()
+            x = torch.stack([
+                lb.flatten(1),
+                ub.flatten(1),
+                bias.flatten(1),
+                mask.flatten(1),
+            ], dim=-1)[0]
+            ret.append(x)
+            print(f'hidden: {name=} {x.shape=}')
+        
+        # 3. output features
+        lb = sample.output_lbs.flatten(1).cpu()
+        ub = torch.zeros_like(lb).cpu()
+        bias = torch.zeros_like(lb).cpu()
+        mask = torch.zeros_like(lb).cpu()
+        x = torch.stack([lb, ub, bias, mask], dim=-1)[0]
+        ret.append(x)
+        print(f'output: {name=} {x.shape=}')
         return ret
 
 
@@ -76,7 +132,7 @@ class InteractiveVerifier:
         return (decisions, domain_params), None
 
 
-    def init(self: 'InteractiveVerifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
+    def init(self: 'InteractiveVerifier', objective, preconditions: dict = {}, reference_bounds: dict | None = None) -> DomainsList | list:
         self._setup_restart(0, objective)
         self.domains_list = self._initialize(
             objective=objective,
