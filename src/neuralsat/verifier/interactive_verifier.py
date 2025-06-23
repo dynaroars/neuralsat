@@ -2,6 +2,7 @@ from __future__ import annotations
 import warnings
 warnings.filterwarnings(action='ignore')
 from beartype import beartype
+import numpy as np
 import torch
 import copy
 
@@ -26,6 +27,21 @@ class InteractiveVerifier:
         # hyper parameters
         self.input_split = False
         self.batch = max(batch, 1)
+        
+        
+    @beartype
+    def _compute_neuron_index_mapping(self, domain_params: AbstractResults) -> dict[int, tuple[str, int, float]]:
+        self.neuron_index_mapping = {}
+        ordered_names = [_.name for _ in self.abstractor.net.split_nodes]
+        count = np.prod(self.input_shape)
+        for name in ordered_names:
+            assert domain_params.lower_bounds[name].shape[0] == 1
+            n_hiddens = domain_params.lower_bounds[name].numel()
+            self.neuron_index_mapping.update(
+                {int(count + i): (name, i, 0.0) for i in range(n_hiddens)}
+            )
+            count += n_hiddens
+        return self.neuron_index_mapping
 
     @beartype
     def get_edge_data(self, objective) -> tuple[torch.Tensor, torch.Tensor]:
@@ -36,10 +52,10 @@ class InteractiveVerifier:
         return edge_weight, edge_index
         
     @beartype
-    def gather_feature(self, domain_params: AbstractResults) -> list[torch.Tensor]:
-        assert len(domain_params.input_lowers) == len(domain_params.input_uppers) == 1
-        assert all([len(v) == 1 for v in domain_params.lower_bounds.values()])
-        assert all([len(v) == 1 for v in domain_params.upper_bounds.values()])
+    def get_node_data(self, domain_params: AbstractResults) -> list[torch.Tensor]:
+        assert len(domain_params.input_lowers) == len(domain_params.input_uppers)
+        # assert all([len(v) == 1 for v in domain_params.lower_bounds.values()])
+        # assert all([len(v) == 1 for v in domain_params.upper_bounds.values()])
         
         ret = []
         # 1. input features
@@ -47,7 +63,8 @@ class InteractiveVerifier:
         ub = domain_params.input_uppers.flatten(1).cpu()
         bias = torch.zeros_like(lb).cpu()
         mask = torch.zeros_like(lb).cpu()
-        x = torch.stack([lb, ub, bias, mask], dim=-1)[0]
+        x = torch.stack([lb, ub, bias, mask], dim=-1)
+        # print(f'input: {x.shape=}')
         ret.append(x)
         
         # 2. hidden features
@@ -60,11 +77,12 @@ class InteractiveVerifier:
             ub = domain_params.upper_bounds[name].cpu()
             bias = self.abstractor.net[name].inputs[-1].param.detach().cpu()
             if lb.ndim == 4: # conv layer
-                bs, c, h, w = lb.shape
+                bs, _, h, w = lb.shape
                 bias = bias[None, : , None, None]
                 bias = bias.repeat(bs, 1, h, w)
             elif lb.ndim == 2: # fc layer
-                bias = bias[None]
+                bs, _ = lb.shape
+                bias = bias[None].repeat(bs, 1)
             else:
                 raise NotImplementedError
             mask = masks[name].view(lb.shape)
@@ -75,7 +93,7 @@ class InteractiveVerifier:
                 ub.flatten(1),
                 bias.flatten(1),
                 mask.flatten(1),
-            ], dim=-1)[0]
+            ], dim=-1)
             ret.append(x)
             # print(f'hidden: {name=} {x.shape=}')
         
@@ -84,17 +102,17 @@ class InteractiveVerifier:
         ub = torch.zeros_like(lb).cpu()
         bias = torch.zeros_like(lb).cpu()
         mask = torch.zeros_like(lb).cpu()
-        x = torch.stack([lb, ub, bias, mask], dim=-1)[0]
+        x = torch.stack([lb, ub, bias, mask], dim=-1)
         # print(f'output: {name=} {x.shape=}')
         ret.append(x)
         return ret
     
     @beartype
-    def get_node_data(self, objective) -> list[torch.Tensor]:
+    def get_initial_node_data(self, objective) -> list[torch.Tensor]:
         assert len(objective.lower_bounds) == 1
         self._setup_restart(0, objective)
         sample = self.abstractor.initialize(objective, reference_bounds=None)
-        return self.gather_feature(sample)
+        return self.get_node_data(sample)
 
     @beartype
     def _initialize(self, objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
@@ -103,6 +121,9 @@ class InteractiveVerifier:
         assert len(ret.output_lbs) == len(objective.cs)
         if stop_criterion_batch_any(objective.rhs.to(self.device))(ret.output_lbs.to(self.device)).all():
             return []
+        
+        # compute neuron index mapping
+        self._compute_neuron_index_mapping(ret)
         
         # full slopes uses too much memory
         slopes = ret.slopes if self.input_split else new_slopes(ret.slopes, self.abstractor.net.final_name)
@@ -126,18 +147,30 @@ class InteractiveVerifier:
         )
 
     @beartype
-    def setup(self, objective) -> bool:
+    def setup(self, objective) -> None | AbstractResults:
         self._setup_restart(0, objective)
         self.domains_list = self._initialize(
             objective=objective,
             preconditions={},
             reference_bounds=None,
         )
-        return len(self.domains_list) == 0
+        if not len(self.domains_list):
+            return None
+        
+        subproblems = self.domains_list.pick_out(len(self.domains_list))
+        return subproblems
 
     @beartype
-    def step(self, action):
-        raise NotImplementedError
+    def step(self, domains_params: AbstractResults, action: list[int]):
+        batch = len(domains_params.input_lowers)
+        assert len(action) == batch, f'{len(action)=} {batch=}'
+        decisions = [self.neuron_index_mapping[_] for _ in action]
+        abstraction_ret = self.abstractor.forward(decisions, domains_params)
+        self.domains_list.add(abstraction_ret, decisions)
+        subproblems = self.domains_list.pick_out(len(self.domains_list))
+        rewards = subproblems.output_lbs
+        next_features = self.get_node_data(subproblems)
+        return subproblems, rewards, next_features
     
     
     from .utils import _preprocess, _setup_restart, _init_abstractor
