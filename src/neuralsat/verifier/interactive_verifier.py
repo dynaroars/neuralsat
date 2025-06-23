@@ -30,7 +30,7 @@ class InteractiveVerifier:
         
         
     @beartype
-    def _compute_neuron_index_mapping(self, domain_params: AbstractResults) -> dict[int, tuple[str, int, float]]:
+    def _compute_neuron_index_mapping(self, domain_params: AbstractResults) -> None:
         self.neuron_index_mapping = {}
         ordered_names = [_.name for _ in self.abstractor.net.split_nodes]
         count = np.prod(self.input_shape)
@@ -41,7 +41,8 @@ class InteractiveVerifier:
                 {int(count + i): (name, i, 0.0) for i in range(n_hiddens)}
             )
             count += n_hiddens
-        return self.neuron_index_mapping
+        
+        self.reverse_neuron_index_mapping = {v: k for k, v in self.neuron_index_mapping.items()}
 
     @beartype
     def get_edge_data(self, objective) -> tuple[torch.Tensor, torch.Tensor]:
@@ -170,7 +171,13 @@ class InteractiveVerifier:
         subproblems = self.domains_list.pick_out(len(self.domains_list))
         rewards = subproblems.output_lbs
         next_features = self.get_node_data(subproblems)
+        subproblems = subproblems._replace(last_decisions=decisions * 2)
         return subproblems, rewards, next_features
     
+    def get_last_actions(self, domains_params: AbstractResults) -> list[int]:
+        last_actions = [
+            self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in domains_params.last_decisions
+        ]
+        return last_actions
     
     from .utils import _preprocess, _setup_restart, _init_abstractor

@@ -11,9 +11,10 @@ AbstractResults = namedtuple(
         'input_lowers', 'input_uppers',
         'slopes', 'betas', 
         'cs', 'rhs',
-        'sat_solvers'
+        'sat_solvers',
+        'last_decisions',
     ), 
-    defaults=(None,) * 14
+    defaults=(None,) * 15
 )
 
 
