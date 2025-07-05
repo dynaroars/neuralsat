@@ -180,7 +180,7 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 
 ## PEOPLE
 
-- Hai Duong (GMU, main developer)
+- [Hai Duong](https://hocdot.github.io) (GMU, main developer)
 - Linhan Li (GMU)
 - Dong Xu (UVA)
 - [ThanhVu Nguyen](https://dynaroars.github.io/people/nguyenthanhvuh/) (GMU)
