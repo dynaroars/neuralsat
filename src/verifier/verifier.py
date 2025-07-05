@@ -70,6 +70,7 @@ class Verifier:
     @beartype
     def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: int | float = 3600.0, force_split: str | None = None) -> str:
         self.start_time = time.time()
+        self.total_time = timeout
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
             preconditions=preconditions,
@@ -307,7 +308,7 @@ class Verifier:
                 return ReturnStatus.RESTART
         
             # check unsolvable
-            if len(self.domains_list) > 100000:
+            if len(self.domains_list) > Settings.max_domains:
                 return ReturnStatus.UNKNOWN
             
             # gpu tightening early stop
@@ -334,11 +335,19 @@ class Verifier:
             if self.num_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
                 return False
         
+        # too late, don't restart
+        if time.time() - self.start_time > self.total_time * (1 - Settings.restart_max_runtime_percentage):
+            return False
+        
+        # restart time threshold
+        if time.time() - self.start_time > self.total_time * Settings.restart_max_runtime_percentage:
+            logger.debug(f'[Restart] Runtime exceeded {self.total_time * Settings.restart_max_runtime_percentage} seconds ({Settings.restart_max_runtime_percentage*100}%)')
+            return True
+        
         # restart runtime threshold
-        if self.iteration - start_iteration >= 20:
-            if time.time() - start_time > Settings.restart_max_runtime:
-                logger.debug(f'[Restart] Runtime exceeded {Settings.restart_max_runtime} seconds')
-                return True
+        if (self.iteration - start_iteration >= 20) and (time.time() - start_time > Settings.restart_max_runtime):
+            logger.debug(f'[Restart] Runtime exceeded {Settings.restart_max_runtime} seconds')
+            return True
         
         # restart domains threshold
         max_branches = Settings.restart_current_input_branches if self.input_split else Settings.restart_current_hidden_branches

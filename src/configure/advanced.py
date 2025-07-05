@@ -21,12 +21,17 @@ class BaseSettings:
 class RestartSettings(BaseSettings):
     
     def __init__(self, args=None):
-        self.restart_current_hidden_branches = 1000
+        # hidden splitting
+        self.restart_current_hidden_branches = 2000
         self.restart_visited_hidden_branches = 20000
+        
+        # input splitting
         self.restart_current_input_branches = 100000
         self.restart_visited_input_branches = 300000
+        
+        # restart time threshold
         self.restart_max_runtime = 50.0
-        self.restart_max_runtime_percentage = 0.3 # TODO: use percentage of total runtime
+        self.restart_max_runtime_percentage = 0.2
         
 
 class MIPSettings(BaseSettings):

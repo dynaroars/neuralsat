@@ -107,7 +107,7 @@ if __name__ == '__main__':
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(f'{status},{runtime:.06f}', file=fp)
+            print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
