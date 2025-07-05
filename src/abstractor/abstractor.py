@@ -82,7 +82,6 @@ class NetworkAbstractor:
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
-        logger.info(f'[select_params] Initialized abstractor: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=}')
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
@@ -94,19 +93,22 @@ class NetworkAbstractor:
             ]
         
         for mode, method in params:
-            logger.debug(f'[select_params] Try {mode=}, {method=}')
+            logger.debug(f'[select_params] Try {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
-                self.mode = self.net.conv_mode
+                self.mode = mode
                 self.method = method
+                logger.info(f'[select_params] Success: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
                 return True
-            
+            else:
+                mode = self.net.conv_mode
+                logger.info(f'[_check_module] Failed: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
         return False
             
     @beartype
     def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
         bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
-        logger.debug(f'[_init_module] {bound_opts=}')
+        logger.debug(f'[_init_module] Try {bound_opts=}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),

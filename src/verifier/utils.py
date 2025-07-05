@@ -138,14 +138,12 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     if Settings.skip_preprocess:
         return objectives, None
     
-    if Settings.test:
-        self.input_split = False
-    elif force_split is not None:
+    if force_split is not None:
         assert force_split in ['input', 'hidden']
         self.input_split = force_split == 'input'
     elif eps > Settings.safety_property_threshold: # safety properties
         self.input_split = True
-    elif np.prod(self.input_shape) <= 200 or perturbed <= 200: # small inputs
+    elif np.prod(self.input_shape) <= Settings.safety_num_input_perturbed or perturbed <= Settings.safety_num_input_perturbed: # small inputs
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
@@ -160,9 +158,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         return objectives, None
     
     try:
-        if os.environ.get('NEURALSAT_DEBUG'):
-            print('[_preprocess] _init_abstractor')
-            
+        logger.info(f'[_preprocess] _init_abstractor')
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
         if os.environ.get('NEURALSAT_DEBUG'):
@@ -182,7 +178,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         if os.environ.get("NEURALSAT_DEBUG"):
             import traceback
             traceback.print_exc()
-            raise NotImplementedError
+            raise NotImplementedError('Failed to preprocess objectives')
         return objectives, None
 
     # pruning
@@ -326,7 +322,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         elif Settings.subverifier_decision_method == 'greedy':
             params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': Settings.verify_extra_opts}
         else:
-            raise NotImplementedError
+            raise NotImplementedError('Unknown decision method')
 
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
 
@@ -338,7 +334,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_method=params['decision_method'],
     )
         
-    print('[_setup_restart_naive] _init_abstractor')
+    logger.info(f'[_setup_restart_naive] _init_abstractor')
     self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
         
 
@@ -379,7 +375,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # skip refine for general activation layers
             pass
         else:
-            print('[_setup_restart] refine')
+            logger.info(f'[_setup_restart] refine')
             self._init_abstractor('backward', objective)
             
             tmp_objective = copy.deepcopy(objective)
@@ -403,6 +399,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     
     # main abstractor
     if not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method:
+        logger.info(f'[_setup_restart] _init_abstractor')
         self._init_abstractor(abstract_method, objective)
         
     return refined_intermediate_bounds

@@ -85,13 +85,19 @@ def set_slope(self: 'abstractor.abstractor.NetworkAbstractor', slope: dict) -> N
 def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lbs: torch.Tensor, device: str = 'cpu') -> tuple[dict, dict]:
     lower_bounds, upper_bounds = {}, {}
     output_ubs = output_lbs + torch.inf
+    batch = output_lbs.shape[0]
     
     # get hidden bounds
     for layer in list(set(self.net.layers_requiring_bounds + self.net.split_nodes)):
         # print(layer.lower.shape)
         if layer.lower is not None:
-            lower_bounds[layer.name] = _to_device(layer.lower.detach(), device=device)
-            upper_bounds[layer.name] = _to_device(layer.upper.detach(), device=device)
+            lower = layer.lower.detach()
+            upper = layer.upper.detach()
+            if lower.shape[0] == 1 and batch > 1:
+                lower = lower.expand(batch, -1, -1)
+                upper = upper.expand(batch, -1, -1)
+            lower_bounds[layer.name] = _to_device(lower, device=device)
+            upper_bounds[layer.name] = _to_device(upper, device=device)
         else:
             print('[!] Missing bounds for layer:', layer)
     
@@ -100,7 +106,7 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
 
     assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in lower_bounds.values()]}'
-    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in upper_bounds.values()]}'
+    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, f'Hidden upper: {[_.shape[0] for _ in upper_bounds.values()]}'
     
     return lower_bounds, upper_bounds
 

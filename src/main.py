@@ -10,20 +10,10 @@ from helper.spec.objective import parse_vnnlib
 
 from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.misc.export import get_adv_string
-from helper.misc.timer import Timers
 
 from verifier.verifier import Verifier 
 
 from setting import Settings
-
-
-def print_w_b(model):
-    for layer in model.modules():
-        if hasattr(layer, 'weight'):
-            print(layer)
-            print('\t[+] w:', layer.weight.data.detach().flatten())
-            print('\t[+] b:', layer.bias.data.detach().flatten())
-            print()
 
  
 if __name__ == '__main__':
@@ -45,12 +35,14 @@ if __name__ == '__main__':
                         help="timeout in seconds")
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
                         help="choose device to use for verifying.")
-    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=2, 
+    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=1, 
                         help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
     parser.add_argument('--result_file', type=str, required=False,
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
                         help="enable exporting counter-example to result file.")
+    parser.add_argument('--disable_attack', action='store_false',
+                        help="disable attack.")
     parser.add_argument('--disable_restart', action='store_false',
                         help="disable RESTART heuristic.")
     parser.add_argument('--disable_stabilize', action='store_false',
@@ -63,27 +55,17 @@ if __name__ == '__main__':
                         help="test on small example with special settings.")
     
     args = parser.parse_args()   
-    
-    
-    # setup timers
-    if Settings.use_timer:
-        Timers.reset()
-        Timers.tic('Main')
+    Settings.setup(args)
+    print(Settings)
         
     # set device
     if not torch.cuda.is_available():
         args.device = 'cpu'
         
-    if args.test:
-        Settings.setup_test()
-    else:
-        Settings.setup(args)
-        
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
     # network
-    Timers.tic('Load network') if Settings.use_timer else None
     if args.net.endswith('.onnx'):
         model, input_shape, output_shape = parse_onnx(args.net, args.input_shape, args.output_shape)
     elif args.net.endswith('.pth'):
@@ -92,19 +74,14 @@ if __name__ == '__main__':
         raise NotImplementedError('Unsupported network type')
     
     model.to(args.device)
-    Timers.toc('Load network') if Settings.use_timer else None
     
     if args.verbosity:
         print(model)
-        if Settings.test:
-            print_w_b(model)
     
     # specification
-    Timers.tic('Load specification') if Settings.use_timer else None
     objectives = parse_vnnlib(args.spec, input_shape)
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
-    Timers.toc('Load specification') if Settings.use_timer else None
     
     # verifier
     verifier = Verifier(
@@ -114,14 +91,11 @@ if __name__ == '__main__':
         device=args.device,
     )
     
-    print(Settings)
     
     # verify
-    Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
     status = verifier.verify(objectives, timeout=timeout, force_split=args.force_split)
     runtime = time.time() - START_TIME
-    Timers.toc('Verify') if Settings.use_timer else None
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
@@ -143,10 +117,6 @@ if __name__ == '__main__':
         else:
             print(f'[!] Does not have any reasoning step')
 
-    if Settings.use_timer:
-        Timers.toc('Main')
-        Timers.print_stats()
-    
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')
     

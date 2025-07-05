@@ -116,7 +116,7 @@ class BoundedModule(nn.Module):
         self._convert(model, global_input)
         self._optimize_graph()
         self._mark_perturbed_nodes(inputs_unpacked)
-        self._check_patches_mode()
+        # self._check_patches_mode()
 
         self.next_split_hint = []  # Split hints, used in beta optimization.
         # Beta values for all intermediate bounds.

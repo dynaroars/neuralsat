@@ -19,14 +19,6 @@ from setting import Settings
 
 
 
-def print_w_b(model):
-    for layer in model.modules():
-        if hasattr(layer, 'weight'):
-            print(layer)
-            print('\t[+] w:', layer.weight.data.detach().flatten())
-            print('\t[+] b:', layer.bias.data.detach().flatten())
-            print()
-
 def main():
     START_TIME = time.time()
 
@@ -62,17 +54,10 @@ def main():
         
     print('\n****** Running with NeuralSAT verifier ******\n\n')
         
-    # setup timers
-    if Settings.use_timer:
-        Timers.reset()
-        Timers.tic('Main')
-        
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
     # network
-    Timers.tic('Load network') if Settings.use_timer else None
-    
     if args.net.endswith('.onnx'):
         pth_path = args.net[:-5] + '.pth'
         if os.path.exists(pth_path):
@@ -86,20 +71,15 @@ def main():
     
     model.eval()
     model.to(args.device)
-    Timers.toc('Load network') if Settings.use_timer else None
     
     if args.verbosity:
         print(model)
-        if Settings.test:
-            print_w_b(model)
     
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
     
     # specification
-    Timers.tic('Load specification') if Settings.use_timer else None
     dnf_objectives = parse_vnnlib(args.spec, input_shape)
-    Timers.toc('Load specification') if Settings.use_timer else None
 
     # attacker
     if Settings.use_attack:
@@ -131,7 +111,6 @@ def main():
         device=args.device,
     )    
     
-    Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
     status = ReturnStatus.UNKNOWN
     
@@ -171,7 +150,6 @@ def main():
         )
     
     runtime = time.time() - START_TIME
-    Timers.toc('Verify') if Settings.use_timer else None
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
@@ -184,10 +162,6 @@ def main():
         with open(args.result_file, 'w') as fp:
             print(f'{status},{runtime:.06f}', file=fp)
 
-    if Settings.use_timer:
-        Timers.toc('Main')
-        Timers.print_stats()
-        
     print(f'{status},{runtime:.04f}')
         
 if __name__ == '__main__':

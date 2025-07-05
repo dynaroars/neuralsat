@@ -85,20 +85,16 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
-        Timers.tic('Pre-attack') if Settings.use_timer else None
         is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
-        Timers.toc('Pre-attack') if Settings.use_timer else None
         if is_attacked:
             return ReturnStatus.SAT  
 
         # refine
-        Timers.tic('Preprocess') if Settings.use_timer else None
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
         
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[+] verify _preprocess:', get_used_gpu_memory(), 'MB')
             
-        Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -121,7 +117,7 @@ class Verifier:
                 if os.environ.get('NEURALSAT_DEBUG'):
                     raise
             except:
-                raise NotImplementedError
+                raise NotImplementedError('Unknown MIP solver error')
         
         status = self._verify_with_restart(
             dnf_objectives=copy.deepcopy(dnf_objectives),
@@ -147,9 +143,7 @@ class Verifier:
                              timeout: int | float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
         # verify
         while len(dnf_objectives):
-            Timers.tic('Get objective') if Settings.use_timer else None
             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
-            Timers.toc('Get objective') if Settings.use_timer else None
             
             # restart variables
             nth_restart = 0 
@@ -161,15 +155,13 @@ class Verifier:
             # verify objective (multiple times if RESTART is returned)
             while True:
                 # get strategy + refinement
-                Timers.tic('Setup restart') if Settings.use_timer else None
                 new_reference_bounds = self._setup_restart(nth_restart, objective)
-                Timers.toc('Setup restart') if Settings.use_timer else None
                 
                 # adaptive batch size
                 while True: 
-                    logger.info(f'Try batch size {self.batch}')
                     try:
                         # main function
+                        logger.info(f'Try batch size {self.batch}')
                         status = self._verify_one(
                             objective=objective, 
                             preconditions=learned_clauses, 
@@ -179,8 +171,9 @@ class Verifier:
                     except RuntimeError as exception:
                         if os.environ.get("NEURALSAT_DEBUG"):
                             traceback.print_exc()
-                            raise NotImplementedError
-                        elif is_cuda_out_of_memory(exception):
+                            raise NotImplementedError('Unsupported exception')
+                        
+                        if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
                                 logger.debug('[!] OOM with batch_size=1')
@@ -196,15 +189,13 @@ class Verifier:
                     except SystemExit:
                         exit()
                     except:
-                        raise NotImplementedError
+                        raise NotImplementedError('Unknown error')
                     else:
                         gc_cuda()
                         break
                     
                 # stats
-                Timers.tic('Save stats') if Settings.use_timer else None
                 self._save_stats()
-                Timers.toc('Save stats') if Settings.use_timer else None
                 
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN, ReturnStatus.EARLY_STOP]:
@@ -265,17 +256,15 @@ class Verifier:
     @beartype
     def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float) -> str:
         # initialization
-        Timers.tic('Initialization') if Settings.use_timer else None
         try:
             self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         except RuntimeError as exception:
             if is_cuda_out_of_memory(exception):
-                raise VerifierInitializeError
+                raise VerifierInitializeError('[_verify_one] OOM exception')
             else:
-                raise NotImplementedError
+                raise VerifierInitializeError('[_verify_one] Unknown exception')
         except:
-            raise NotImplementedError
-        Timers.toc('Initialization') if Settings.use_timer else None
+            raise VerifierInitializeError('[_verify_one] Unknown error')
         
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[+] verify _initialize:', get_used_gpu_memory(), 'MB')
@@ -298,9 +287,7 @@ class Verifier:
                 return ReturnStatus.EARLY_STOP
             
             # search
-            Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
-            Timers.toc('Main loop') if Settings.use_timer else None
                 
             # check adv founded
             if self.adv is not None:
@@ -396,36 +383,28 @@ class Verifier:
         old_domains_length = len(self.domains_list)
         unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_cpu_tightening(patience_limit=Settings.mip_tightening_patience):
-            Timers.tic('CPU Tightening') if Settings.use_timer else None
             self.milp_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.mip_tightening_topk, 
                 timeout=Settings.mip_tightening_timeout_per_neuron, 
                 largest=False, # stabilize near-stable neurons
             )
-            Timers.toc('CPU Tightening') if Settings.use_timer else None
             
         if self._check_invoke_gpu_tightening(patience_limit=Settings.gpu_tightening_patience):
-            Timers.tic('GPU Tightening') if Settings.use_timer else None
             self.gpu_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.gpu_tightening_topk, 
                 iteration=2,
             )
-            Timers.toc('GPU Tightening') if Settings.use_timer else None
             
         # step 3: selection
         tic = time.time()
-        Timers.tic('Get domains') if Settings.use_timer else None
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
-        Timers.toc('Get domains') if Settings.use_timer else None
         pick_time = time.time() - tic
         
         # step 4: PGD attack
         tic = time.time()
-        Timers.tic('Loop attack') if Settings.use_timer else None
         self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
-        Timers.toc('Loop attack') if Settings.use_timer else None
         attack_time = time.time() - tic
         if self.adv is not None:
             return
@@ -442,23 +421,17 @@ class Verifier:
             
         # step 6: branching
         tic = time.time()
-        Timers.tic('Decision') if Settings.use_timer else None
         decisions = self.decision(self.abstractor, pruned_ret)
-        Timers.toc('Decision') if Settings.use_timer else None
         decision_time = time.time() - tic
         
         # step 7: abstraction 
         tic = time.time()
-        Timers.tic('Abstraction') if Settings.use_timer else None
         abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
-        Timers.toc('Abstraction') if Settings.use_timer else None
         abstraction_time = time.time() - tic
 
         # step 8: pruning unverified branches
         tic = time.time()
-        Timers.tic('Add domains') if Settings.use_timer else None
         self.domains_list.add(abstraction_ret, decisions)
-        Timers.toc('Add domains') if Settings.use_timer else None
         add_time = time.time() - tic
 
         # statistics

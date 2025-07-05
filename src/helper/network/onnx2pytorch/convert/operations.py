@@ -183,7 +183,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             op = convert_lstm_layer(node, weights)
         elif node.op_type == "MatMul":
             if params:
-                weight = torch.from_numpy(onnx.numpy_helper.to_array(params[0]))
+                weight = torch.from_numpy(onnx.numpy_helper.to_array(params[0]).copy())
                 # print(weight.ndim)
                 # print(node.input)
                 # print(list(weights.keys()))
@@ -208,9 +208,9 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
                     if next_node.op_type == "Add" and len(node.output) == 1:
                         bias = None
                         if (next_node.input[0] == node.output[0] and next_node.input[1] in weights):
-                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[1]]))
+                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[1]]).copy())
                         elif (next_node.input[1] == node.output[0] and next_node.input[0] in weights):
-                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[0]]))
+                            bias = torch.from_numpy(onnx.numpy_helper.to_array(weights[next_node.input[0]]).copy())
                         if bias is not None:
                             op.bias = nn.Parameter(bias)
                             node.output.pop()

@@ -31,7 +31,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_1_0.05.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_sat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -46,6 +46,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.SAT)
+        print(f'[PASSED] status: {status}')
         
         
     def test_mnist_gdvb_unsat(self):
@@ -54,7 +55,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_gdvb_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -69,7 +70,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
         
     def test_mnist_unsat_wo_mip(self):
@@ -80,7 +81,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_unsat_wo_mip" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -95,7 +96,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
         
     def test_mnist_unsat(self):
@@ -104,7 +105,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -119,7 +120,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
         
     def test_mnist_unsat_w_restart(self):
@@ -127,13 +128,13 @@ class TestVerifier(unittest.TestCase):
         Settings.use_mip_verify = False
         Settings.use_mip_tightening = False
         Settings.use_restart = True
-        Settings.max_hidden_visited_branches = 100
+        Settings.restart_visited_hidden_branches = 100
         
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_unsat_w_restart" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -148,6 +149,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
+        print(f'[PASSED] status: {status}')
         
         
     def test_mnist_unsat_w_stablize(self):
@@ -161,7 +163,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_unsat_w_stablize" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -176,7 +178,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
     def test_mnist_unsat_w_stablize_and_restart(self):
         reset_settings()
@@ -184,13 +186,13 @@ class TestVerifier(unittest.TestCase):
         Settings.use_mip_tightening = True
         Settings.use_restart = True
         Settings.mip_tightening_timeout_per_neuron = 2.0
-        Settings.max_hidden_visited_branches = 100
+        Settings.restart_visited_hidden_branches = 100
         
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_mnist_unsat_w_stablize_and_restart" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -205,6 +207,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
+        print(f'[PASSED] status: {status}')
         
     def test_acas_unsat(self):
         reset_settings()
@@ -212,7 +215,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_6.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_acas_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -227,7 +230,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
     def test_acas_sat(self):
         reset_settings()
@@ -235,7 +238,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/prop_7.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_acas_sat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -250,6 +253,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.SAT)
+        print(f'[PASSED] status: {status}')
         
         
     def test_nn4sys_unsat_1(self):
@@ -258,7 +262,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/cardinality_0_100_128.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_nn4sys_unsat_1" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -273,6 +277,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
+        print(f'[PASSED] status: {status}')
         
         
         
@@ -282,7 +287,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/pensieve_parallel_55.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print('\n\nRunning "test_nn4sys_unsat_2" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -297,7 +302,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
     
     def test_cifar_unsat_1(self):
         reset_settings()
@@ -305,7 +310,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/cifar10_spec_idx_4_eps_0.00784_n1.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_cifar_unsat_1" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -320,7 +325,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-    
+
     
     
     def test_cifar_unsat_2(self):
@@ -329,7 +334,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/cifar10_spec_idx_95_eps_0.00784.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_cifar_unsat_2" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -344,7 +349,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
     def test_cgan_unsat(self):
         reset_settings()
@@ -352,7 +357,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/cGAN_imgSz32_nCh_1_prop_2_input_eps_0.020_output_eps_0.025.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_cgan_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -367,7 +372,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
         
     def test_dist_shift_unsat(self):
@@ -376,7 +381,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/index188_delta0.13.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_dist_shift_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -391,7 +396,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-
+        print(f'[PASSED] status: {status}')
         
         
     def test_tllverifybench_unsat(self):
@@ -400,7 +405,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/property_N=16_1.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_tllverifybench_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -415,7 +420,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
         
         
     def test_vit_unsat(self):
@@ -424,7 +429,7 @@ class TestVerifier(unittest.TestCase):
         vnnlib_path = 'example/vnnlib/pgd_2_3_16_4021.vnnlib'
         device = 'cuda'
 
-        print('\n\nRunning test with', net_path, vnnlib_path)
+        print(f'\n\nRunning "test_vit_unsat" with', net_path, vnnlib_path)
         
         model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
         model.to(device)
@@ -439,7 +444,7 @@ class TestVerifier(unittest.TestCase):
         status = verifier.verify(objectives)
         
         self.assertEqual(status, ReturnStatus.UNSAT)
-        
+        print(f'[PASSED] status: {status}')
     
         
 if __name__ == '__main__':

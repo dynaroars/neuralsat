@@ -144,16 +144,6 @@ def main():
     # reload
     new_model = torch.load(f"{net_dir}/{args.model_name}.pth", weights_only=False)
     
-    if args.test:
-        acc = test(
-            test_loader=dataloader, 
-            model=new_model, 
-            device='cuda',
-        )
-        new_model.to(args.device)
-
-        print('Accuracy:', acc)
-    
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     pbar = tqdm(dataloader, desc=f'Generating specs for "{args.model_name}"')
     total, skip = 0, 0
