@@ -9,6 +9,7 @@ import torch
 import tqdm
 import copy
 import math
+import time
 import os
 
 from .auto_LiRPA.utils import stop_criterion_batch_any
@@ -16,6 +17,7 @@ from .auto_LiRPA import BoundedModule
 
 from helper.misc.result import AbstractResults, CoefficientMatrix
 from helper.network.onnx2pytorch import ConvertModel
+from helper.misc.torch_cuda_memory import gc_cuda
 from helper.misc.logger import logger
 
 from .params import *
@@ -53,11 +55,13 @@ class NetworkAbstractor:
         if self.select_params(objective, extra_opts=extra_opts):
             return None
         
+        # special settings 
+        Settings.use_restart = False
+        Settings.use_attack = False
+        
         # FIXME: try special settings for large CNNs
         new_extra_opts = copy.deepcopy(extra_opts)
         new_extra_opts.update({'use_full_conv_alpha': False})
-        Settings.use_restart = False
-        Settings.use_attack = False
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
             
@@ -76,9 +80,8 @@ class NetworkAbstractor:
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 4
 
-        
         logger.info('[setup] Initialization failed')
-        raise
+        raise NotImplementedError('Initialization failed')
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
@@ -93,6 +96,7 @@ class NetworkAbstractor:
             ]
         
         for mode, method in params:
+            gc_cuda()
             logger.debug(f'[select_params] Try {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
@@ -101,7 +105,6 @@ class NetworkAbstractor:
                 logger.info(f'[select_params] Success: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
                 return True
             else:
-                mode = self.net.conv_mode
                 logger.info(f'[_check_module] Failed: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
         return False
             
@@ -138,8 +141,8 @@ class NetworkAbstractor:
     def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
         # at least can run with batch=1
         if objective:
-            x_L = objective.lower_bounds[0].view(self.input_shape)
-            x_U = objective.upper_bounds[0].view(self.input_shape)
+            x_L = objective.lower_bounds[0].view(self.input_shape).to(self.device)
+            x_U = objective.upper_bounds[0].view(self.input_shape).to(self.device)
         else:
             logger.debug(f'[_check_module] Use random dummy input for checking correctness')
             x_L = torch.randn(self.input_shape, device=self.device) 
@@ -158,9 +161,32 @@ class NetworkAbstractor:
         
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
-            self.net.init_alpha(x=(x,), bound_upper=False) if method == 'crown-optimized' else None
-            lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) # FIXME: it uses a lot of RAM
-            # print('[+] _check_module:', method, lb)
+            # stop_criterion_func = stop_criterion_batch_any(objective.rhs.to(self.device))
+            # self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
+            # initial bounds
+            if method == 'crown-optimized':
+                _, _, aux_reference_bounds = self.net.init_alpha(
+                    x=(x,), 
+                    share_alphas=Settings.share_alphas, 
+                    c=objective.cs.to(self.device), 
+                    bound_upper=False,
+                ) 
+                lb, _ = self.net.compute_bounds(
+                    x=(x,), 
+                    C=objective.cs.to(self.device), 
+                    method='crown-optimized',
+                    aux_reference_bounds=aux_reference_bounds, 
+                    bound_upper=False,
+                )
+            elif method == 'backward':
+                lb, _, _ = self.net.init_alpha(
+                    x=(x,), 
+                    share_alphas=Settings.share_alphas, 
+                    c=objective.cs.to(self.device), 
+                    bound_upper=False,
+                ) 
+            else:
+                lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) 
             assert not torch.isnan(lb).any()
         except RuntimeError:
             if os.environ.get('NEURALSAT_DEBUG'):
@@ -211,7 +237,7 @@ class NetworkAbstractor:
                     reference_bounds=reference_bounds,
                     bound_upper=False,
                 )
-            logger.info(f'Initial bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
+            logger.info(f'Initial bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
             
@@ -259,7 +285,7 @@ class NetworkAbstractor:
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=} {lb_init.flatten()=}',)
             
-        logger.info(f'Initial bounds (fisrt 10): {lb_init.detach().cpu().flatten()[:10]}')
+        logger.info(f'Initial bounds (first 10): {lb_init.detach().cpu().flatten()[:10]}')
         
         if stop_criterion_func(lb_init).all().item():
             return AbstractResults(**{'output_lbs': lb_init})
@@ -273,7 +299,7 @@ class NetworkAbstractor:
             reference_bounds=reference_bounds,
             bound_upper=False,
         )
-        logger.info(f'Initial optimized bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
+        logger.info(f'Initial optimized bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
         

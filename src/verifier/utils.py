@@ -163,6 +163,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     except:
         if os.environ.get('NEURALSAT_DEBUG'):
             print('[_preprocess] Failed to initialize abstractor')
+            raise
         return objectives, None
     
     # prune objectives

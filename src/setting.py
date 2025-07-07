@@ -74,6 +74,9 @@ class GlobalSettings(BaseSettings):
         # self.use_attack = False
         # self.mip_tightening_timeout_per_neuron = 2.0
         # self.restart_visited_hidden_branches = 100
+        # self.share_alphas = True
+        # self.skip_preprocess = False
+        
         
 
 Settings = GlobalSettings()

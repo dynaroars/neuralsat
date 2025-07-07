@@ -12,7 +12,11 @@ def get_check_abstractor_params() -> dict:
         'optimize_bound_args': {
             'iteration': 2,
             'stop_criterion_func': lambda x: False,
-            'enable_beta_crown': False
+            'enable_alpha_crown': True,
+            'enable_beta_crown': False,
+            'use_shared_alpha': Settings.share_alphas, 
+            'init_alpha': False,
+            'fix_interm_bounds': True,
         }
     }
 
