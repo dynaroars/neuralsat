@@ -117,7 +117,7 @@ class InteractiveVerifier:
     
     @beartype
     def get_initial_node_data(self, objective) -> list[torch.Tensor]:
-        assert len(objective.lower_bounds) == 1
+        assert len(objective.lower_bounds) == 1, f'{len(objective.lower_bounds)=}'
         self._setup_restart(0, objective)
         sample = self.abstractor.initialize(objective, reference_bounds=None)
         return self.get_node_data(sample)
