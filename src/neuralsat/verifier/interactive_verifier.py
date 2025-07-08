@@ -176,6 +176,8 @@ class InteractiveVerifier:
         print(f'decoded: {decisions=}')
         abstraction_ret = self.abstractor.forward(decisions, domains_params)
         remaining_index = self.domains_list.add(abstraction_ret, decisions)
+        if len(remaining_index) == 0:
+            return None, torch.tensor([0.0]), [], []
         subproblems = self.domains_list.pick_out(len(self.domains_list))
         rewards = subproblems.output_lbs
         next_features = self.get_node_data(subproblems)
