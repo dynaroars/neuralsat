@@ -182,7 +182,7 @@ class NetworkAbstractor:
                 lb, _, _ = self.net.init_alpha(
                     x=(x,), 
                     share_alphas=Settings.share_alphas, 
-                    c=objective.cs.to(self.device), 
+                    c=objective.cs.to(self.device) if objective is not None else None, 
                     bound_upper=False,
                 ) 
             else:
