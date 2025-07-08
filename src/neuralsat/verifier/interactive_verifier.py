@@ -7,6 +7,7 @@ import torch
 import copy
 
 from ..util.network.onnx2networkx import prepare_graph, get_edge_weight, get_edge_index
+from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..heuristic.domains_list import DomainsList
 from ..util.misc.result import AbstractResults
@@ -27,6 +28,12 @@ class InteractiveVerifier:
         # hyper parameters
         self.input_split = False
         self.batch = max(batch, 1)
+        
+        self.fsb_heuristic = DecisionHeuristic(
+            input_split=False, 
+            decision_method='smart',
+            decision_topk=10, 
+        )
         
         
     @beartype
@@ -179,5 +186,12 @@ class InteractiveVerifier:
             self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in domains_params.last_decisions
         ]
         return last_actions
+    
+    def get_fsb_action(self, domains_params: AbstractResults) -> list[int]:
+        decisions = self.fsb_heuristic(self.abstractor, domains_params)
+        actions = [
+            self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in decisions
+        ]
+        return actions
     
     from .utils import _preprocess, _setup_restart, _init_abstractor
