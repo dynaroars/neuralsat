@@ -392,6 +392,7 @@ class Verifier:
         # step 6: branching
         Timers.tic('Decision') if Settings.use_timer else None
         decisions = self.decision(self.abstractor, pruned_ret)
+        print(f'{decisions=}')
         Timers.toc('Decision') if Settings.use_timer else None
 
         # step 7: abstraction

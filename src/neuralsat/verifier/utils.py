@@ -281,6 +281,7 @@ def _setup_restart(self, nth_restart: int, objective: typing.Any) -> None | dict
 
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
+        print(f'{abstract_method=}')
         self._init_abstractor(abstract_method, objective)
 
     return refined_intermediate_bounds

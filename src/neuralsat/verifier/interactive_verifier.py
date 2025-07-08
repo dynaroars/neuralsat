@@ -173,12 +173,14 @@ class InteractiveVerifier:
         batch = len(domains_params.input_lowers)
         assert len(action) == batch, f'{len(action)=} {batch=}'
         decisions = [self.neuron_index_mapping[_] for _ in action]
+        print(f'decoded: {decisions=}')
         abstraction_ret = self.abstractor.forward(decisions, domains_params)
         remaining_index = self.domains_list.add(abstraction_ret, decisions)
         subproblems = self.domains_list.pick_out(len(self.domains_list))
         rewards = subproblems.output_lbs
         next_features = self.get_node_data(subproblems)
         subproblems = subproblems._replace(last_decisions=decisions * 2)
+        assert len(subproblems.input_lowers) == len(remaining_index), f'{len(subproblems.input_lowers)=} {len(remaining_index)=}'
         return subproblems, rewards, next_features, remaining_index
     
     def get_last_actions(self, domains_params: AbstractResults) -> list[int]:
@@ -189,6 +191,7 @@ class InteractiveVerifier:
     
     def get_fsb_action(self, domains_params: AbstractResults) -> list[int]:
         decisions = self.fsb_heuristic(self.abstractor, domains_params)
+        print(f'{decisions=}')
         actions = [
             self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in decisions
         ]
