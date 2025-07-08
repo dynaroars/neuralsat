@@ -237,14 +237,14 @@ class DomainsList:
 
 
     # @beartype
-    def add(self: 'DomainsList', domain_params: AbstractResults, decisions: list | torch.Tensor) -> None:
+    def add(self: 'DomainsList', domain_params: AbstractResults, decisions: list | torch.Tensor) -> torch.Tensor:
         # assert decisions is not None
         batch = len(domain_params.input_lowers)
         assert batch > 0
 
         # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
-
+        
         # hidden splitting
         if not self.input_split:
             # using restart
@@ -308,6 +308,8 @@ class DomainsList:
 
         # checking
         self._check_consistent()
+
+        return remaining_index
 
 
     # @beartype
