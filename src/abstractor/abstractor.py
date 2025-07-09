@@ -64,6 +64,8 @@ class NetworkAbstractor:
         new_extra_opts.update({'use_full_conv_alpha': False})
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
+        
+        # TODO: add yolo settings: share_alphas=Trur
             
         # FIXME: try special settings for ViT
         Settings.backward_batch_size = float('inf')
@@ -178,13 +180,13 @@ class NetworkAbstractor:
                     aux_reference_bounds=aux_reference_bounds, 
                     bound_upper=False,
                 )
-            elif method == 'backward':
-                lb, _, _ = self.net.init_alpha(
-                    x=(x,), 
-                    share_alphas=Settings.share_alphas, 
-                    c=objective.cs.to(self.device) if objective is not None else None, 
-                    bound_upper=False,
-                ) 
+            # elif method == 'backward':
+            #     lb, _, _ = self.net.init_alpha(
+            #         x=(x,), 
+            #         share_alphas=Settings.share_alphas, 
+            #         c=objective.cs.to(self.device) if objective is not None else None, 
+            #         bound_upper=False,
+            #     ) 
             else:
                 lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) 
             assert not torch.isnan(lb).any()
