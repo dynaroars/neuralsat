@@ -4,6 +4,7 @@ import time
 import math
 
 from abstractor.abstractor import NetworkAbstractor
+from helper.misc.check import check_solution
 from helper.misc.result import ReturnStatus
 
 class MIPSolver:
@@ -41,9 +42,9 @@ class MIPSolver:
 
             objective = dnf_objective.pop(1)
             status, adv = self.verify_one(objective=objective, timeout=timeout)
-            assert status in [ReturnStatus.UNSAT, ReturnStatus.UNKNOWN], f'{status=}'
+            assert status in [ReturnStatus.UNSAT, ReturnStatus.UNKNOWN, ReturnStatus.SAT], f'{status=}'
             if status in [ReturnStatus.UNKNOWN]:
-                break
+                return ReturnStatus.UNKNOWN, None
         
         return status, adv
             
@@ -72,39 +73,21 @@ class MIPSolver:
         
         print(mip_model)
         output_names = [v.VarName for v in self.abstractor.net.final_node().solver_vars]
-        assert len(output_names) == len(cs)
+        assert len(output_names) == cs.shape[1] == rhs.shape[1], f'{len(output_names)=} {len(cs)=} {output_names=} {cs.shape=} {rhs.shape=}'
         
-        # print(output_names, rhs)
-        # for var_name in output_names:
-        #     print(var_name)
-        feasible = False
-        adv = None
         for out_idx in range(len(output_names)):
-            assert len(rhs[out_idx]) == 1
             objective_var = mip_model.getVarByName(output_names[out_idx])
-            mip_model.setObjective(objective_var, grb.GRB.MINIMIZE)
-            mip_model.update()
-            mip_model.optimize()
-            if mip_model.status == grb.GRB.OPTIMAL:
-                output_lb = objective_var.X
-                print(f'Optimal! {output_lb=}')
-            elif mip_model.status == grb.GRB.USER_OBJ_LIMIT:
-                output_lb = mip_model.objbound
-                print(f'Early stop! {output_lb=}')
-            else:
-                print(f"Infeasible! Model status {mip_model.status=}")
-                # output_lb = float('inf')
-                return ReturnStatus.UNKNOWN, None
-                
-            if output_lb < rhs[out_idx][0]:
-                return ReturnStatus.UNKNOWN, None
-                # cannot verify
-                feasible = True
-                input_vars = [mip_model.getVarByName(f'inp_{dim}') for dim in range(math.prod(self.input_shape))]
-                adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
-                print(adv)
-                print(self.net(adv))
-                raise
-                return ReturnStatus.SAT, adv
+            mip_model.addConstr(objective_var <= rhs[0][out_idx].item())
             
-        return ReturnStatus.UNSAT, None
+        mip_model.update()
+        mip_model.optimize()
+            
+        if mip_model.status == grb.GRB.INFEASIBLE:
+            return ReturnStatus.UNSAT, None
+        
+        input_vars = [mip_model.getVarByName(f'inp_{dim}') for dim in range(math.prod(self.input_shape))]
+        adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
+        
+        if check_solution(self.net, adv, cs, rhs, input_lower, input_upper):
+            return ReturnStatus.SAT, adv
+        return ReturnStatus.UNKNOWN, None
