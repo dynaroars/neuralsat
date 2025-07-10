@@ -128,7 +128,7 @@ class Verifier:
             max_domain=self.batch
         )
         
-        if not status:
+        if not status and self.batch > 1:
             status = self._verify_with_restart(
                 dnf_objectives=copy.deepcopy(dnf_objectives),
                 preconditions=preconditions,

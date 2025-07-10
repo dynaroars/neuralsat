@@ -53,7 +53,7 @@ def _check_invoke_mip_presolving(self):
     count_relu = 0
     for layer in self.net.children():
         if not isinstance(layer, (torch.nn.Linear, torch.nn.ReLU, torch.nn.Flatten)):
-            print('[!] Found unsupported layer:', layer)
+            print('[!] Found unsupported layer:', type(layer))
             return False
         if isinstance(layer, torch.nn.ReLU):
             count_relu += 1
@@ -135,9 +135,6 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     perturbed = (diff > 0).int().sum() // diff.shape[0]
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
 
-    if Settings.skip_preprocess:
-        return objectives, None
-    
     if force_split is not None:
         assert force_split in ['input', 'hidden']
         self.input_split = force_split == 'input'
@@ -152,6 +149,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         self.input_split = True
         
     if self.input_split: 
+        return objectives, None
+    
+    if Settings.skip_preprocess:
         return objectives, None
     
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):

@@ -88,6 +88,11 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
         batched_output_shape = tuple(output_shape)
 
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    
+    if len(batched_output_shape) > 2:
+        pytorch_model = nn.Sequential(pytorch_model, nn.Flatten(start_dim=1))
+        batched_output_shape = (batched_output_shape[0], np.prod(batched_output_shape[1:]))
+    
     # pytorch_model = onnx2torch.convert(path)
     pytorch_model.eval()
     

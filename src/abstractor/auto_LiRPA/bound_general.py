@@ -851,7 +851,6 @@ class BoundedModule(nn.Module):
     def compute_intermediate_bounds(self, node: Bound, prior_checked=False):
         tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
         directly_optimize_layer_names = self.bound_opts['optimize_bound_args']['directly_optimize']
-        best_of_oc_and_no_oc = self.bound_opts['optimize_bound_args']['best_of_oc_and_no_oc']
         if node.is_lower_bound_current() and not (isinstance(node, BoundInput) and tighten_input_bounds or node.name in directly_optimize_layer_names):
             if node.name in self.layers_with_constraint:
                 node.clamp_interim_bounds()

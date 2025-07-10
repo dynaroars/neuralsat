@@ -74,14 +74,14 @@ if __name__ == '__main__':
         raise NotImplementedError('Unsupported network type')
     
     model.to(args.device)
-    
+
     if args.verbosity:
         print(model)
+    logger.info(f'[!] Input shape: {input_shape}')
+    logger.info(f'[!] Output shape: {output_shape}')
     
     # specification
     objectives = parse_vnnlib(args.spec, input_shape)
-    logger.info(f'[!] Input shape: {input_shape}')
-    logger.info(f'[!] Output shape: {output_shape}')
     
     # verifier
     verifier = Verifier(
