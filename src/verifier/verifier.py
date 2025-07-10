@@ -451,7 +451,7 @@ class Verifier:
         # adapt batch size
         current_batch = len(pick_ret.input_lowers)
         _, mem_used_percentage = get_used_gpu_memory(return_percentage=True)
-        if mem_used_percentage > 60.0:
+        if mem_used_percentage > 80.0:
             self.batch = current_batch
             logger.debug(f'Fixed {self.batch=}')
         elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)):
