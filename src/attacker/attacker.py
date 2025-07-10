@@ -94,54 +94,19 @@ class PGDAttacker:
         cs_f64 = self.objective.cs_f64.to(self.device)
         rhs_f64 = self.objective.rhs_f64.to(self.device)
         
-        try:
-            self.net.to(cs_f64.dtype)
-            print(f'Attacking PGD F64 {iterations=} {restarts=} {timeout=}')
-            is_attacked, attack_images = attack(
-                model=self.net,
-                x=x.to(cs_f64.dtype), 
-                data_min=data_min_f64,
-                data_max=data_max_f64,
-                cs=cs_f64,
-                rhs=rhs_f64,
-                attack_iters=iterations, 
-                num_restarts=restarts,
-                timeout=timeout,
-            )
-        except RuntimeError as exception:
-            if is_cuda_out_of_memory(exception):
-                self.net.to(cs.dtype)
-                print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=}')
-                is_attacked, attack_images = attack(
-                    model=self.net,
-                    x=x.to(cs.dtype), 
-                    data_min=data_min,
-                    data_max=data_max,
-                    cs=cs,
-                    rhs=rhs,
-                    attack_iters=iterations, 
-                    num_restarts=restarts,
-                    timeout=timeout,
-                )
-            else:
-                raise NotImplementedError()
-        except:
-            raise NotImplementedError()
-                
-        if not is_attacked:
-            print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=}')
-            is_attacked, attack_images = attack(
-                model=self.net.to(cs.dtype),
-                x=x.to(cs.dtype), 
-                data_min=data_min,
-                data_max=data_max,
-                cs=cs,
-                rhs=rhs,
-                attack_iters=iterations, 
-                num_restarts=restarts,
-                timeout=timeout,
-            )
-        
+        print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=}')
+        is_attacked, attack_images = attack(
+            model=self.net,
+            x=x.to(cs.dtype), 
+            data_min=data_min,
+            data_max=data_max,
+            cs=cs,
+            rhs=rhs,
+            attack_iters=iterations, 
+            num_restarts=restarts,
+            timeout=timeout,
+        )
+    
         if is_attacked:
             with torch.no_grad():
                 for i in range(attack_images.shape[1]): # restarts
