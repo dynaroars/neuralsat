@@ -51,9 +51,12 @@ class NetworkAbstractor:
         return self._split_points
         
     @beartype
-    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> None:
+    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}, preprocess: bool = False) -> None:
         if self.select_params(objective, extra_opts=extra_opts):
             return None
+        
+        if preprocess:
+            raise NotImplementedError('Preprocess initialization failed')
         
         # special settings 
         Settings.use_restart = False
@@ -64,9 +67,15 @@ class NetworkAbstractor:
         new_extra_opts.update({'use_full_conv_alpha': False})
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
-        
-        # TODO: add yolo settings: share_alphas=Trur
             
+        # FIXME: try special settings for Yolo
+        Settings.share_alphas = True
+        new_extra_opts = copy.deepcopy(extra_opts)
+        new_extra_opts.update({'use_full_conv_alpha': False, 'use_shared_alpha': True})
+        if self.select_params(objective, extra_opts=new_extra_opts):
+            Settings.share_alphas = False
+            return None
+        
         # FIXME: try special settings for ViT
         Settings.backward_batch_size = float('inf')
         new_extra_opts = copy.deepcopy(extra_opts)
@@ -81,6 +90,8 @@ class NetworkAbstractor:
             if self.select_params(objective, extra_opts=new_extra_opts):
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 4
+            
+        assert Settings.backward_batch_size > 0
 
         logger.info('[setup] Initialization failed')
         raise NotImplementedError('Initialization failed')

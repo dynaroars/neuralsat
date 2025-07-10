@@ -162,11 +162,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     try:
         logger.info(f'[_preprocess] _init_abstractor')
-        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
+        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives, preprocess=True)
     except:
-        if os.environ.get('NEURALSAT_DEBUG'):
-            print('[_preprocess] Failed to initialize abstractor')
-            raise
+        print('[_preprocess] Failed to initialize abstractor')
         return objectives, None
     
     # prune objectives
@@ -285,7 +283,7 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bo
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}, preprocess: bool = False) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -298,7 +296,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         device=self.device,
     )
 
-    self.abstractor.setup(objective, extra_opts=extra_opts)
+    self.abstractor.setup(objective, extra_opts=extra_opts, preprocess=preprocess)
     self.abstractor.net.get_split_nodes()
     
 
@@ -380,7 +378,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             pass
         else:
             logger.info(f'[_setup_restart] refine')
-            self._init_abstractor('backward', objective)
+            self._init_abstractor('backward', objective, preprocess=True)
             
             tmp_objective = copy.deepcopy(objective)
             tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
