@@ -1,6 +1,7 @@
 from beartype import beartype
 import random
 import torch
+import time
 import os
 
 from helper.network.onnx2pytorch import ConvertModel
@@ -32,12 +33,16 @@ class Attacker:
 
     @beartype
     def _attack(self: 'Attacker', timeout: float) -> tuple[bool, torch.Tensor | None]:
+        tic = time.time()
         for atk in self.attackers:
+            if time.time() - tic > timeout:
+                return False, None
+            remaining_timeout = timeout - (time.time() - tic)
             seed = random.randint(0, 1000)
             atk.manual_seed(seed)
             try:
                 # attacker using float64 might get OOM
-                is_attacked, adv = atk.run(timeout=timeout)
+                is_attacked, adv = atk.run(timeout=remaining_timeout)
             except RuntimeError as exception:
                 if is_cuda_out_of_memory(exception):
                     # restore to default data type
@@ -74,7 +79,7 @@ class PGDAttacker:
 
 
     @beartype
-    def run(self: 'PGDAttacker', iterations: int = 100, restarts: int = 20, timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
+    def run(self: 'PGDAttacker', iterations: int = 100000, restarts: int = 20, timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         
@@ -104,7 +109,7 @@ class PGDAttacker:
             rhs=rhs,
             attack_iters=iterations, 
             num_restarts=restarts,
-            timeout=timeout,
+            timeout=timeout / 2.0,
         )
     
         if is_attacked:

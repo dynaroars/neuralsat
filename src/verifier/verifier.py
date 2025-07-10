@@ -86,7 +86,7 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
-        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
+        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(20.0, timeout * 0.2))
         if is_attacked:
             return ReturnStatus.SAT  
 
