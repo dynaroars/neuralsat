@@ -131,12 +131,13 @@ class NetworkAbstractor:
             logger.debug(f'[_init_module] Use random dummy input for checking correctness')
             dummy = torch.randn(self.input_shape, device=self.device) 
             
-        # FIXME: remove
-        try:
+        if os.environ.get('NEURALSAT_DEBUG'):
+            self.net.to('cpu')
+            self.pytorch_model.to('cpu')
+            dummy = dummy.to('cpu')
             assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
-        except:
-            print('[!] Conversion error')
-            raise ValueError(f'torch allclose failed: {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
+            self.net.to(self.device)
+            self.pytorch_model.to(self.device)
         
         
     @beartype

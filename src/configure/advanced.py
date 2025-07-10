@@ -26,8 +26,8 @@ class RestartSettings(BaseSettings):
         self.restart_visited_hidden_branches = 20000
         
         # input splitting
-        self.restart_current_input_branches = 100000
-        self.restart_visited_input_branches = 300000
+        self.restart_current_input_branches = 10000
+        self.restart_visited_input_branches = 200000
         
         # restart time threshold
         self.restart_max_runtime = 50.0

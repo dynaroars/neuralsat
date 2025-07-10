@@ -132,7 +132,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
-    perturbed = (diff > 0).int().sum()
+    perturbed = (diff > 0).int().sum() // diff.shape[0]
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
 
     if Settings.skip_preprocess:
@@ -141,10 +141,13 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     if force_split is not None:
         assert force_split in ['input', 'hidden']
         self.input_split = force_split == 'input'
-    elif eps > Settings.safety_property_threshold: # safety properties
+    elif eps > Settings.input_splitting_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= Settings.safety_num_input_perturbed or perturbed <= Settings.safety_num_input_perturbed: # small inputs
-        self.input_split = True
+        if eps < Settings.hidden_splitting_threshold:
+            self.input_split = False
+        else:
+            self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
