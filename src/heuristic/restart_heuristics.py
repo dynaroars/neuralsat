@@ -6,6 +6,7 @@ INPUT_SPLIT_RESTART_STRATEGIES = [
     {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'naive', 'decision_topk': 1},
     {'input_split': True, 'abstract_method': 'backward',         'decision_method': 'smart', 'decision_topk': 1},
     {'input_split': True, 'abstract_method': 'crown-optimized',  'decision_method': 'naive', 'decision_topk': 1},
+    {'input_split': True, 'abstract_method': 'forward+backward', 'decision_method': 'naive', 'decision_topk': 1}, # for attack
 ]
 
 HIDDEN_SPLIT_RESTART_STRATEGIES = [

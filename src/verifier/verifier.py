@@ -449,14 +449,18 @@ class Verifier:
         self._update_tightening_patience(minimum_lowers, old_domains_length)
         
         # adapt batch size
+        current_batch = len(pick_ret.input_lowers)
         _, mem_used_percentage = get_used_gpu_memory(return_percentage=True)
         if mem_used_percentage > 60.0:
-            self.batch = len(pick_ret.input_lowers)
+            self.batch = current_batch
             logger.debug(f'Fixed {self.batch=}')
-        elif mem_used_percentage < 10.0:
-            self.batch = min(500000, self.batch*10)
-        elif mem_used_percentage < 50.0:
-            self.batch = min(500000, self.batch*2)
+        elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)):
+            if mem_used_percentage < 10.0:
+                self.batch = min(500000, self.batch*10)
+                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
+            elif mem_used_percentage < 50.0:
+                self.batch = min(500000, self.batch*2)
+                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
             
         # logging
         msg = (
@@ -481,6 +485,7 @@ class Verifier:
             
             msg += f'GPU Mem (%): {mem_used_percentage:<10.02f}'
             msg += f'Batch: {self.batch:<10}'
+            msg += f'Restart: {self.num_restart:<10}'
             
         logger.info(msg)
         
