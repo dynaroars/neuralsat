@@ -453,6 +453,10 @@ class Verifier:
         if mem_used_percentage > 60.0:
             self.batch = len(pick_ret.input_lowers)
             logger.debug(f'Fixed {self.batch=}')
+        elif mem_used_percentage < 10.0:
+            self.batch = min(500000, self.batch*10)
+        elif mem_used_percentage < 50.0:
+            self.batch = min(500000, self.batch*2)
             
         # logging
         msg = (
@@ -476,6 +480,7 @@ class Verifier:
                 msg += f'Unstable neurons: {unstable:<10}'
             
             msg += f'GPU Mem (%): {mem_used_percentage:<10.02f}'
+            msg += f'Batch: {self.batch:<10}'
             
         logger.info(msg)
         

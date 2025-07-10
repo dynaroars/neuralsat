@@ -4,12 +4,12 @@
 - [ ] cersyve
 - [ ] cgan_2023
 - [ ] cifar100_2024
-- [ ] collins_aerospace_benchmark
+- [ ] collins_aerospace_benchmark (AttributeError: 'BoundPrimConstant' object has no attribute 'value')
 - [ ] collins_rul_cnn_2022
 - [ ] cora_2024
 - [ ] dist_shift_2023
 - [ ] linearizenn_2024
-- [ ] lsnc_relu
+- [ ] lsnc_relu (timeout if preprocessing 25s)
 - [ ] malbeware
 - [ ] metaroom_2023
 - [ ] ml4acopf_2024

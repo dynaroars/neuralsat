@@ -42,7 +42,7 @@ class GlobalSettings(BaseSettings):
         # early stopping
         self.max_iterations = 1e9
         self.skip_initial_worst_bound = -1e6
-        self.max_domains = 1e6
+        self.max_domains = 1e9
         
         # decomposition
         self.use_decompose = False
