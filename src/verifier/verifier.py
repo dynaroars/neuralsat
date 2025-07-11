@@ -86,7 +86,7 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
-        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(20.0, timeout * 0.2))
+        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(20.0, timeout * 0.1))
         if is_attacked:
             return ReturnStatus.SAT  
 
@@ -139,6 +139,13 @@ class Verifier:
             
         return status
         
+    def _heuristic_configure(self: 'Verifier', timeout: int | float) -> None:
+        if timeout <= 30:
+            Settings.use_restart = False
+        
+        if timeout <= 60:
+            Settings.restart_max_runtime_percentage = 0.7
+            
     @beartype    
     def _verify_with_restart(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
                              timeout: int | float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
@@ -152,6 +159,8 @@ class Verifier:
             # TODO: shouldn't add to all objectives
             if len(preconditions): # add to all objective ids
                 [learned_clauses[k].extend(preconditions) for k in learned_clauses]
+            
+            self._heuristic_configure(timeout=timeout)
             
             # verify objective (multiple times if RESTART is returned)
             while True:
@@ -340,7 +349,7 @@ class Verifier:
             return False
         
         # restart time threshold
-        if time.time() - self.start_time > self.total_time * Settings.restart_max_runtime_percentage:
+        if time.time() - start_time > self.total_time * Settings.restart_max_runtime_percentage:
             logger.debug(f'[Restart] Runtime exceeded {self.total_time * Settings.restart_max_runtime_percentage} seconds ({Settings.restart_max_runtime_percentage*100}%)')
             return True
         

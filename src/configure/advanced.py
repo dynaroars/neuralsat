@@ -30,8 +30,8 @@ class RestartSettings(BaseSettings):
         self.restart_visited_input_branches = 200000
         
         # restart time threshold
-        self.restart_max_runtime = 50.0
-        self.restart_max_runtime_percentage = 0.2
+        self.restart_max_runtime = 60.0
+        self.restart_max_runtime_percentage = 0.3
         
 
 class MIPSettings(BaseSettings):
