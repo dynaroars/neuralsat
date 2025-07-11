@@ -83,9 +83,6 @@ class PGDAttacker:
         data_min = self.objective.lower_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         data_max = self.objective.upper_bounds.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
         
-        data_min_f64 = self.objective.lower_bounds_f64.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
-        data_max_f64 = self.objective.upper_bounds_f64.view(-1, *self.input_shape[1:]).unsqueeze(0).to(self.device)
-        
         # assert torch.all(data_min <= data_max)
         # x = (data_min[:, 0] + data_max[:, 0]) / 2
         x = (data_max[:, 0] - data_min[:, 0]) * torch.rand(data_min[:, 0].shape, device=self.device) + data_min[:, 0]
@@ -95,9 +92,6 @@ class PGDAttacker:
         
         cs = self.objective.cs.to(self.device)
         rhs = self.objective.rhs.to(self.device)
-        
-        cs_f64 = self.objective.cs_f64.to(self.device)
-        rhs_f64 = self.objective.rhs_f64.to(self.device)
         
         print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=}')
         is_attacked, attack_images = attack(
@@ -117,7 +111,7 @@ class PGDAttacker:
                 for i in range(attack_images.shape[1]): # restarts
                     for j in range(attack_images.shape[2]): # props
                         adv = attack_images[:, i, j]
-                        if check_solution(self.net, adv, cs=cs_f64[j], rhs=rhs_f64[j], data_min=data_min_f64[:, j], data_max=data_max_f64[:, j]):
+                        if check_solution(self.net, adv, cs=cs[j], rhs=rhs[j], data_min=data_min[:, j], data_max=data_max[:, j]):
                             return True, adv
             logger.debug("[!] Invalid counter-example")
         
