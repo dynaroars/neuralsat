@@ -93,14 +93,14 @@ class InteractiveVerifier:
                 bias = bias[None].repeat(bs, 1)
             else:
                 raise NotImplementedError
-            mask = 1 - masks[name].view(lb.shape) # convert to heursitic form: 0 - not selected, 1 - selected
+            mask = masks[name].view(lb.shape) 
             assert (lb[torch.where(mask == 1)] < 0).all()
             assert (ub[torch.where(mask == 1)] > 0).all()
             x = torch.stack([
                 lb.flatten(1),
                 ub.flatten(1),
                 bias.flatten(1),
-                mask.flatten(1),
+                1 - mask.flatten(1), # convert to heursitic form: 0 - not selected, 1 - selected
             ], dim=-1)
             ret.append(x)
             # print(f'hidden: {name=} {x.shape=}')
