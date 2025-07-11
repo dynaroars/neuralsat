@@ -495,6 +495,9 @@ def _check_invoke_cpu_tightening(self: verifier.verifier.Verifier, patience_limi
     if not hasattr(self, 'milp_tightener'):
         return False
     
+    if not Settings.use_mip_tightening:
+        return False
+    
     if self.input_split:
         return False
     

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .bound_general import BoundedModule
 
 MULTIPROCESS_MODEL = None
-N_REFINE_LAYER = 5
+N_REFINE_LAYER = 3
 EAGER_OPTIMIZE = False
 N_PROC = os.cpu_count() // 2
 

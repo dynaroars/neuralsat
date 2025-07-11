@@ -142,6 +142,7 @@ class Verifier:
     def _heuristic_configure(self: 'Verifier', timeout: int | float) -> None:
         if timeout <= 30:
             Settings.use_restart = False
+            Settings.use_mip_tightening = False
         
         if timeout <= 60:
             Settings.restart_max_runtime_percentage = 0.7
