@@ -30,7 +30,7 @@ class GlobalSettings(BaseSettings):
         
         # threshold for input/hidden splitting: 
         self.input_splitting_threshold = 0.5  # > 0.5: use input splitting
-        self.hidden_splitting_threshold = 0.08  # < 0.08: use hidden splitting
+        self.hidden_splitting_threshold = 0.01  # < 0.01: use hidden splitting
         self.safety_num_input_perturbed = 200 # < 200: use input splitting
         
         # preprocess

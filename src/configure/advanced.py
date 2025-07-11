@@ -31,7 +31,7 @@ class RestartSettings(BaseSettings):
         
         # restart time threshold
         self.restart_max_runtime = 60.0
-        self.restart_max_runtime_percentage = 0.3
+        self.restart_max_runtime_percentage = 0.4
         
 
 class MIPSettings(BaseSettings):

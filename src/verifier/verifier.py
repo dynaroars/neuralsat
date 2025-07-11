@@ -341,12 +341,18 @@ class Verifier:
         if self.input_split:
             if self.num_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
                 return False
+            
+            if self.num_restart == len(INPUT_SPLIT_RESTART_STRATEGIES) - 1 and self.abstractor.method == 'crown-optimized':
+                if self.total_time - (time.time() - self.start_time) < 20.0: # restart to attack phase
+                    return True
+                else:
+                    return False
         else:
             if self.num_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
                 return False
         
         # too late, don't restart
-        if time.time() - self.start_time > self.total_time * (1 - Settings.restart_max_runtime_percentage):
+        if time.time() - self.start_time > self.total_time * 0.9:
             return False
         
         # restart time threshold
@@ -464,7 +470,7 @@ class Verifier:
         if mem_used_percentage > 80.0:
             self.batch = current_batch
             logger.debug(f'Fixed {self.batch=}')
-        elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)):
+        elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)) and (self.abstractor.method != 'crown-optimized'):
             if mem_used_percentage < 10.0:
                 self.batch = min(500000, self.batch*10)
                 logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')

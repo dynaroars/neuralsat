@@ -141,10 +141,10 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     elif eps > Settings.input_splitting_threshold: # safety properties
         self.input_split = True
     elif np.prod(self.input_shape) <= Settings.safety_num_input_perturbed or perturbed <= Settings.safety_num_input_perturbed: # small inputs
-        if eps < Settings.hidden_splitting_threshold:
-            self.input_split = False
-        else:
-            self.input_split = True
+        # if eps < Settings.hidden_splitting_threshold:
+        #     self.input_split = False
+        # else:
+        self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
