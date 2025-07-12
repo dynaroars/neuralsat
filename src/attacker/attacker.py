@@ -93,7 +93,7 @@ class PGDAttacker:
         cs = self.objective.cs.to(self.device)
         rhs = self.objective.rhs.to(self.device)
         
-        print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=}')
+        print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=} {cs.shape=} {rhs.shape=}')
         is_attacked, attack_images = attack(
             model=self.net,
             x=x.to(cs.dtype), 

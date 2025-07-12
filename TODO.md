@@ -1,13 +1,13 @@
 # Regular VNN-COMP 2025 benchmarks
 
-- [ ] collins_aerospace_benchmark (AttributeError: 'BoundPrimConstant' object has no attribute 'value')
 - [ ] lsnc_relu (timeout if preprocessing 25s)
 - [ ] relusplitter
 - [ ] soundnessbench
-- [ ] cgan_2023
 - [ ] ml4acopf_2024
 - [ ] vggnet16_2022
 
+- [ ] collins_aerospace_benchmark -- attack
+- [ ] cgan_2023
 - [ ] acasxu_2023
 - [ ] cersyve
 - [ ] cifar100_2024
