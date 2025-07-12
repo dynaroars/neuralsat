@@ -11,7 +11,6 @@ from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.spec.objective import parse_vnnlib
 from helper.network.read_pth import parse_pth
 from helper.misc.result import ReturnStatus
-from helper.misc.timer import Timers
 
 from verifier.dec_verifier import DecompositionalVerifier
 from attacker.attacker import Attacker

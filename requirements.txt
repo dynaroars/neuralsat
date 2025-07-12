@@ -1,0 +1,10 @@
+beartype
+gurobipy==11.0.0
+numpy
+onnxruntime
+onnxsim
+packaging
+sortedcontainers
+torch
+torchvision
+tqdm

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from beartype.typing import Callable
 from beartype import beartype
 import typing
 import torch
@@ -33,7 +34,7 @@ def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_block
 def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor', 
                           lower_bounds: dict, upper_bounds: dict, 
                           lAs: dict, masks: dict, 
-                          reduce_op: typing.Callable, 
+                          reduce_op: Callable, 
                           batch: int, number_bounds: int) -> tuple[list, list]:
     score = []
     intercept_tb = []

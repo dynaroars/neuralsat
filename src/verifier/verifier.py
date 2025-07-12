@@ -26,7 +26,6 @@ from helper.network.onnx2pytorch import ConvertModel
 from helper.spec.objective import DnfObjectives
 from helper.misc.result import ReturnStatus
 from helper.misc.logger import logger
-from helper.misc.timer import Timers
 
 from setting import Settings
 

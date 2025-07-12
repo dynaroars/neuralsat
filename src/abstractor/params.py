@@ -1,5 +1,5 @@
+from beartype.typing import Callable
 from beartype import beartype
-import typing
 
 from setting import Settings
 
@@ -32,7 +32,7 @@ def get_branching_opt_params() -> dict:
     
     
 @beartype
-def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
+def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
     return {
         'crown_batch_size': Settings.backward_batch_size,
         'optimize_bound_args': {
@@ -50,7 +50,7 @@ def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
     
     
 @beartype
-def get_beta_opt_params(stop_criterion_func: typing.Callable) -> dict:
+def get_beta_opt_params(stop_criterion_func: Callable) -> dict:
     return {
         'crown_batch_size': Settings.backward_batch_size,
         'optimize_bound_args': {
@@ -68,7 +68,7 @@ def get_beta_opt_params(stop_criterion_func: typing.Callable) -> dict:
 
     
 @beartype
-def get_input_opt_params(stop_criterion_func: typing.Callable) -> dict:
+def get_input_opt_params(stop_criterion_func: Callable) -> dict:
     return {
         'crown_batch_size': Settings.backward_batch_size,
         'forward_max_dim': Settings.forward_max_dim,

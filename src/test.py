@@ -448,7 +448,7 @@ class TestVerifier(unittest.TestCase):
     
         
 if __name__ == '__main__':
-    logger.setLevel(logging.INFO)
-    # logger.setLevel(logging.NOTSET)
+    # logger.setLevel(logging.INFO)
+    logger.setLevel(logging.NOTSET)
     unittest.main()
     
