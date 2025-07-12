@@ -1,27 +1,22 @@
-if [[ -z "${DNNV_PYTHON}" ]]; then
-	DNNV_PYTHON=${HOME}/anaconda3/envs/dnnv/bin/python3
+#!/bin/bash
+
+TOOL_NAME=NeuralSAT
+VERSION_STRING=v1
+
+# check arguments
+if [ "$1" != ${VERSION_STRING} ]; then
+	echo "Expected first argument (version string) '$VERSION_STRING', got '$1'"
+	exit 1
 fi
 
-# echo $DNNV_PYTHON
-$DNNV_PYTHON -c "import dnnv; print('DNNV version', dnnv.__version__)"
-$DNNV_PYTHON -c "import onnxsim; print('ONNXSIM version', onnxsim.__version__)"
+CATEGORY=$2
+ONNX_FILE=$3
+VNNLIB_FILE=$4
 
-CATEGORY=$1
-ONNX_FILE=$2
+echo "Preparing $TOOL_NAME for benchmark instance in category '$CATEGORY' with onnx file '$ONNX_FILE' and vnnlib file '$VNNLIB_FILE'"
 
-echo "Simplifying for benchmark '$CATEGORY' with onnx file '$ONNX_FILE'"
+# kill any zombie processes
+killall -q python3
 
-TOOL_DIR=$(dirname $(dirname $(realpath $0)))
-OUTPUT_DIR=$TOOL_DIR/tmp_simplified_model_output
-
-echo TOOL_DIR = $TOOL_DIR
-echo OUTPUT_DIR = $OUTPUT_DIR
-
-if [ -d $OUTPUT_DIR ]; then
-	rm -r $OUTPUT_DIR
-fi
-
-if [ "${CATEGORY,,}" == "vggnet16" ] || [ "${CATEGORY,,}" == "cgan" ]; then
-    $DNNV_PYTHON $TOOL_DIR/src/util/network/simplify_onnx.py $ONNX_FILE $OUTPUT_DIR/model-simplified
-fi
+# to skip a benchmark category, return non-zero
 exit 0
