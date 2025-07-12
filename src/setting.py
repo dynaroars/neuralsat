@@ -5,6 +5,7 @@ try:
     grb.Model('test')
     USE_GUROBI = True
 except:
+    print("[!] Gurobi License not found!")
     USE_GUROBI = False
     
 from configure.advanced import BaseSettings, AdvancedSettings

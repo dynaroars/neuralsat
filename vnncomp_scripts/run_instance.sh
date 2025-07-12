@@ -22,6 +22,7 @@ NEURALSAT_MAIN=$DIR/src/main.py
 rm -rf $RESULTS_FILE
 
 export NEURALSAT_DEBUG=
+export GRB_LICENSE_FILE=~/gurobi.lic
 
 echo ""
 echo "Running '$TOOL_NAME' in category '$CATEGORY' with onnx file '$ONNX_FILE', vnnlib file '$VNNLIB_FILE', results file '$RESULTS_FILE', and timeout '$TIMEOUT'"
