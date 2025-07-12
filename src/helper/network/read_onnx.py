@@ -105,7 +105,7 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
 
     if len(batched_output_shape) > 2:
         pytorch_model = nn.Sequential(pytorch_model, nn.Flatten(start_dim=1))
-        batched_output_shape = (batched_output_shape[0], np.prod(batched_output_shape[1:]))
+        batched_output_shape = (batched_output_shape[0], int(np.prod(batched_output_shape[1:])))
     
     pytorch_model.eval()
     pytorch_model.to(torch.get_default_dtype())
