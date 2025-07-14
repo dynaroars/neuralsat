@@ -119,7 +119,7 @@ def _parse_onnx(path: str) -> tuple:
         n_, h_, w_, c_ = batched_input_shape
         batched_input_shape = (n_, c_, h_, w_)
 
-    print('Converted ONNX to Pytorch')
+    # print('Converted ONNX to Pytorch')
     return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
 
 
