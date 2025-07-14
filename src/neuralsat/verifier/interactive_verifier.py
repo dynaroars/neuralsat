@@ -116,10 +116,13 @@ class InteractiveVerifier:
         return ret
     
     @beartype
-    def get_initial_node_data(self, objective) -> list[torch.Tensor]:
+    def get_initial_node_data(self, objective) -> list[torch.Tensor] | None:
         assert len(objective.lower_bounds) == 1, f'{len(objective.lower_bounds)=}'
         self._setup_restart(0, objective)
         sample = self.abstractor.initialize(objective, reference_bounds=None)
+        # print(f'{sample=}')
+        if sample.input_lowers is None:
+            return None
         return self.get_node_data(sample)
 
     @beartype
