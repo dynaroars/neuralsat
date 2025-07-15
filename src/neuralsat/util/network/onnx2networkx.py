@@ -138,6 +138,7 @@ def prepare_graph(net, input_shape, objective):
         if isinstance(layer, torch.nn.Linear):
             if layer_id == len(list(net.modules())[1:]) - 2:
                 cs = objective.cs
+                print(f'{cs=} {cs.shape=}')
                 
             layer_node_labels = _prepare_linear(
                 nx_graph=G,
