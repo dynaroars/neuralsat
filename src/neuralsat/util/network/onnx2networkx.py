@@ -134,10 +134,10 @@ def prepare_graph(net, input_shape, objective):
     layer_id = 1
     pre = torch.randn(input_shape)
     for layer in list(net.modules())[1:]: # TODO: update
-        print(f'Processing {layer=} {layer_id=}')
+        print(f'Processing {layer=} {layer_id=} n_layers={len(list(net.modules())[1:])}')
         post = layer(pre)
         if isinstance(layer, torch.nn.Linear):
-            if layer_id == len(list(net.modules())[1:]) - 2:
+            if layer == list(net.modules())[-1]:
                 cs = objective.cs
                 print(f'{cs=} {cs.shape=}')
                 
