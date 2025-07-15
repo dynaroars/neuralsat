@@ -120,7 +120,7 @@ class InteractiveVerifier:
         assert len(objective.lower_bounds) == 1, f'{len(objective.lower_bounds)=}'
         self._setup_restart(0, objective)
         sample = self.abstractor.initialize(objective, reference_bounds=None)
-        # print(f'{sample=}')
+        print(f'{sample.output_lbs=}')
         if sample.input_lowers is None:
             return None
         return self.get_node_data(sample)
