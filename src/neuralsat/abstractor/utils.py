@@ -213,6 +213,7 @@ def set_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas: list, histo
 @torch.no_grad()
 def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_bounds: dict, upper_bounds: dict,
                      decisions: list[list]) -> dict:
+    print(f'{self.device=}')
     batch = len(decisions)
     splitting_indices_batch = {k: [] for k in lower_bounds}
     splitting_indices_neuron = {k: [] for k in lower_bounds}
@@ -232,6 +233,8 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     # 2 * batch
     double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()}
     double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()}
+    
+    print([(k, _.device) for k, _ in double_lower_bounds.items()])
 
     # construct new hidden bounds
     new_intermediate_layer_bounds = {}
