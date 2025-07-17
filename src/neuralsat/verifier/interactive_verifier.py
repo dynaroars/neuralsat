@@ -168,7 +168,7 @@ class InteractiveVerifier:
         if not len(self.domains_list):
             return None
         
-        subproblems = self.domains_list.pick_out(len(self.domains_list))
+        subproblems = self.domains_list.pick_out(len(self.domains_list), device=self.device)
         return subproblems
 
     @beartype
@@ -180,7 +180,7 @@ class InteractiveVerifier:
         remaining_index = self.domains_list.add(abstraction_ret, decisions)
         if len(remaining_index) == 0:
             return None, torch.tensor([0.0]), [], []
-        subproblems = self.domains_list.pick_out(len(self.domains_list))
+        subproblems = self.domains_list.pick_out(len(self.domains_list), device=self.device)
         rewards = subproblems.output_lbs
         next_features = self.get_node_data(subproblems)
         subproblems = subproblems._replace(last_decisions=decisions * 2)
