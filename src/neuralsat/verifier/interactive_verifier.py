@@ -7,11 +7,11 @@ import torch
 import copy
 
 from ..util.network.onnx2networkx import prepare_graph, get_edge_weight, get_edge_index
+from ..heuristic.util import compute_masks, _compute_babsr_scores
 from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..heuristic.domains_list import DomainsList
 from ..util.misc.result import AbstractResults
-from ..heuristic.util import compute_masks
 from ..abstractor.utils import new_slopes
 from ..setting import Settings
 
@@ -115,14 +115,43 @@ class InteractiveVerifier:
         ret.append(x)
         return ret
     
-    @beartype
-    def get_initial_node_data(self, objective) -> list[torch.Tensor] | None:
+    # @beartype
+    def get_initial_node_data(self, objective, return_fsb_score=False):
         assert len(objective.lower_bounds) == 1, f'{len(objective.lower_bounds)=}'
         self._setup_restart(0, objective)
         sample = self.abstractor.initialize(objective, reference_bounds=None)
         # print(f'{sample.output_lbs=}')
         if sample.input_lowers is None:
             return None
+        if return_fsb_score:
+            
+            masks = compute_masks(
+                lower_bounds=sample.lower_bounds,
+                upper_bounds=sample.upper_bounds,
+                device=self.device,
+                non_blocking=False,
+            )
+
+            # features
+            batch = len(sample.input_lowers)
+            scores_1, scores_2 = _compute_babsr_scores(
+                abstractor=self.abstractor,
+                lower_bounds=sample.lower_bounds,
+                upper_bounds=sample.upper_bounds,
+                lAs=sample.lAs,
+                batch=batch,
+                masks=masks,
+                reduce_op=self.fsb_heuristic.decision_reduceop,
+                number_bounds=sample.cs.shape[1]
+            )
+            # print([_.shape for _ in scores_1])
+            # print([_.shape for _ in scores_2])
+            dummy_input = torch.zeros_like(sample.input_lowers, device=self.device).flatten(1)
+            dummy_output = torch.zeros_like(sample.output_lbs, device=self.device).flatten(1)
+            score_1 = torch.cat([dummy_input] + scores_1 + [dummy_output], dim=-1)
+            score_2 = torch.cat([dummy_input] + scores_2 + [dummy_output], dim=-1)
+            score = torch.stack([score_1, score_2], dim=-1)
+            return self.get_node_data(sample), score
         return self.get_node_data(sample)
 
     @beartype
