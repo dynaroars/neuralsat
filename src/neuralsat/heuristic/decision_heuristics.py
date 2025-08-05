@@ -351,6 +351,59 @@ class DecisionHeuristic:
         # print(final_decision)
         return final_decision
 
+    def get_topk_actions_from_scores(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
+                                 domain_params: AbstractResults, scores: list[torch.Tensor], backup_scores: list[torch.Tensor], action_topk: int = 10) -> list[list]:
+        batch = len(domain_params.input_lowers)
+        topk = min(action_topk, int(sum([i.sum() for (_, i) in domain_params.masks.items()]).item()))
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+
+        # convert an index to its layer and offset
+        score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
+        # top-k candidates
+        topk_scores = torch.topk(torch.cat(scores, dim=1), topk)
+        topk_backup_scores = torch.topk(torch.cat(backup_scores, dim=1), topk, largest=False)
+
+        topk_output_lbs, topk_decisions = self.get_topk_scores(
+            abstractor=abstractor,
+            domain_params=domain_params,
+            topk_scores=topk_scores,
+            topk_backup_scores=topk_backup_scores,
+            score_length=score_length,
+            topk=topk,
+        )
+
+        best = topk_output_lbs.topk(1, 0)
+        best_output_lbs = best.values.cpu().numpy()[0]
+        best_output_lbs_indices = best.indices.cpu().numpy()[0]
+
+        # align decisions
+        all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
+        final_decision = [[] for b in range(batch)]
+
+        for b in range(batch):
+            mask_item = {k: domain_params.masks[k][b].clone() for k in split_node_names}
+            # valid scores
+            if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
+                n_name, n_id, n_point = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
+                if mask_item[n_name][n_id] != 0: # unstable relu
+                    final_decision[b].append([n_name, n_id, n_point])
+                    mask_item[n_name][n_id] = 0
+            # invalid scores
+            if len(final_decision[b]) == 0:
+                # use random decisions
+                selected = False
+                for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
+                    if (len(mask_item[layer].nonzero(as_tuple=False)) != 0):
+                        final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item(), 0.0])
+                        mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                        selected = True
+                        break
+                assert selected
+
+        final_decision = sum(final_decision, [])
+        # print(split_node_names)
+        # print(final_decision)
+        return final_decision
 
     # @beartype
     def naive_input_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',

@@ -226,11 +226,40 @@ class InteractiveVerifier:
         ]
         return last_actions
     
-    def get_fsb_action(self, domains_params: AbstractResults) -> list[int]:
+    def get_fsb_action(self, domains_params: AbstractResults) -> torch.Tensor:
         decisions = self.fsb_heuristic(self.abstractor, domains_params)
         actions = [
             self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in decisions
         ]
-        return actions
+        return torch.tensor(actions)
     
+    def get_fsb_action_with_score(self, domains_params: AbstractResults, all_scores: torch.Tensor, action_topk: int = 10) -> torch.Tensor:
+        split_node_names = [_.name for _ in self.abstractor.net.split_nodes]
+        hidden_layer_sizes = [domains_params.lower_bounds[n][0].numel() for n in split_node_names]
+        input_layer_size = domains_params.input_lowers[0].numel()
+        
+        # convert scores to list of each hidden layer
+        scores = []
+        backup_scores = []
+        start_idx = input_layer_size
+        for layer_size in hidden_layer_sizes:
+            end_idx = start_idx + layer_size
+            scores.append(all_scores[:, start_idx:end_idx, 0])
+            backup_scores.append(all_scores[:, start_idx:end_idx, 1])
+            start_idx = end_idx
+            
+        decisions = self.fsb_heuristic.get_topk_actions_from_scores(
+            abstractor=self.abstractor,
+            domain_params=domains_params,
+            scores=scores,
+            backup_scores=backup_scores,
+            action_topk=action_topk,
+        )
+        
+        # convert decisions to actions
+        actions = [
+            self.reverse_neuron_index_mapping[(_[0], _[1], _[2])] for _ in decisions
+        ]
+        return torch.tensor(actions)
+        
     from .utils import _preprocess, _setup_restart, _init_abstractor
