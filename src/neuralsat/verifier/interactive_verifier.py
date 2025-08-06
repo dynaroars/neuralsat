@@ -205,10 +205,10 @@ class InteractiveVerifier:
         return subproblems
 
     @beartype
-    def step(self, domains_params: AbstractResults, action: list[int]):
+    def step(self, domains_params: AbstractResults, action: torch.Tensor):
         batch = len(domains_params.input_lowers)
         assert len(action) == batch, f'{len(action)=} {batch=}'
-        decisions = [self.neuron_index_mapping[_] for _ in action]
+        decisions = [self.neuron_index_mapping[int(_)] for _ in action]
         abstraction_ret = self.abstractor.forward(decisions, domains_params)
         remaining_index = self.domains_list.add(abstraction_ret, decisions)
         if len(remaining_index) == 0:
