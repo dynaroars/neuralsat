@@ -37,6 +37,11 @@ from setting import Settings
 
 
 def get_used_gpu_memory(return_percentage: bool = False):
+    if not torch.cuda.is_available():
+        if return_percentage:
+            return 0, 0
+        return 0
+    
     device = torch.device('cuda:0')
     free, total = torch.cuda.mem_get_info(device)
     mem_used_MB = (total - free) / 1024 ** 2
