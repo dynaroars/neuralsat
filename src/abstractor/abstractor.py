@@ -97,7 +97,6 @@ class NetworkAbstractor:
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
         params = [
-            ['matrix', 'backward'],
             ['patches', self.method], # default
             ['matrix', self.method],
         ]
