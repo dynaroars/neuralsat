@@ -1,0 +1,22 @@
+; Specification for class 0
+
+; Definition of input variables
+(declare-const X_0 Real)
+
+; Definition of output variables
+(declare-const Y_0 Real)
+(declare-const Y_1 Real)
+(declare-const Y_2 Real)
+(declare-const Y_3 Real)
+
+; Definition of input constraints
+(assert (<= X_0 0.20000000))
+(assert (>= X_0 0.00000000))
+
+
+; Definition of output constraints
+(assert (or
+	(and (>= Y_1 Y_0))
+	(and (>= Y_2 Y_0))
+	(and (>= Y_3 Y_0))
+))
