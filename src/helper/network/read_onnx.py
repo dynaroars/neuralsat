@@ -4,11 +4,17 @@ import torch.nn as nn
 import numpy as np
 import traceback
 import warnings
-import onnxsim
 import torch
 import onnx
 import io
 
+try:
+    import onnxsim
+    use_onnxsim = True
+except:
+    print("onnxsim not found. Please install it with `pip install onnxsim`.")
+    use_onnxsim = False
+    
 from helper.misc.error import *
 from . import onnx2pytorch
 
