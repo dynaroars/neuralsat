@@ -230,6 +230,9 @@ class NetworkAbstractor:
        
         # stop function used when optimizing abstraction
         stop_criterion_func = stop_criterion_batch_any(objective.rhs)
+
+        # setup intialization parameters
+        self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
         
         # create input
         x = self.new_input(x_L=input_lowers, x_U=input_uppers)
@@ -282,9 +285,6 @@ class NetworkAbstractor:
                 'input_lowers': input_lowers,
                 'input_uppers': input_uppers,
             })
-            
-        # setup optimization parameters
-        self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
 
         # initial bounds
         lb_init, _, aux_reference_bounds = self.net.init_alpha(

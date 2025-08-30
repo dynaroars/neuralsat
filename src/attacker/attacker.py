@@ -48,7 +48,7 @@ class Attacker:
                     # restore to default data type
                     atk.net.to(torch.get_default_dtype())
                     logger.info(f"[Failed] {atk} got OOM")
-                    return False, None
+                    continue
                 else:
                     raise NotImplementedError
             except:

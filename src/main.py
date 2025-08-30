@@ -51,8 +51,12 @@ if __name__ == '__main__':
                         help="select SPLITTING strategy.")
     parser.add_argument('--reasoning_file', type=str, required=False,
                         help="file to save reasoning steps.")
+    parser.add_argument('--setting_file', type=str, required=False,
+                        help="file to load specific settings.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
+    parser.add_argument('--export_runtime', action='store_true', required=False,
+                        help="output runtime.")
     
     args = parser.parse_args()   
     Settings.setup(args)
@@ -107,7 +111,10 @@ if __name__ == '__main__':
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(status, file=fp)
+            if args.export_runtime:
+                print(f'{status},{runtime:.04f}', file=fp)
+            else:
+                print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 

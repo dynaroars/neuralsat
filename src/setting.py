@@ -1,4 +1,6 @@
 import torch
+import json
+import os
 
 try:
     import gurobipy as grb
@@ -79,6 +81,12 @@ class GlobalSettings(BaseSettings):
         # self.share_alphas = True
         # self.skip_preprocess = False
         
-        
+        # load specific settings from json
+        if args.setting_file is not None:
+            assert os.path.exists(args.setting_file), f"Setting file not found: {args.setting_file=}"
+            settings = json.load(open(args.setting_file))
+            for key, value in settings.items():
+                assert hasattr(self, key), f"Unknown setting: {key=}"
+                setattr(self, key, value)
 
 Settings = GlobalSettings()
