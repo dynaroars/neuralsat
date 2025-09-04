@@ -120,7 +120,7 @@ class Verifier:
                 raise NotImplementedError('Unknown MIP solver error')
         
         # FIXME: generalize this
-        max_domain = self.batch if len(dnf_objectives) > 10 else 1
+        max_domain = min(self.batch, len(dnf_objectives))
         status = self._verify_with_restart(
             dnf_objectives=copy.deepcopy(dnf_objectives),
             preconditions=preconditions,
@@ -129,13 +129,14 @@ class Verifier:
             max_domain=max_domain
         )
         
-        if not status and max_domain > 1:
+        while not status and max_domain > 1:
+            max_domain = max_domain // 10
             status = self._verify_with_restart(
                 dnf_objectives=copy.deepcopy(dnf_objectives),
                 preconditions=preconditions,
                 timeout=timeout,
                 reference_bounds=reference_bounds,
-                max_domain=1
+                max_domain=max_domain
             )
             
         return status
