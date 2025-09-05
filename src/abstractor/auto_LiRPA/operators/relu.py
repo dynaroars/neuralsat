@@ -231,11 +231,11 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         def _bound_oneside(last_A, d_pos, d_neg, b_pos, b_neg):
             if last_A is None:
                 return None, 0
-            # Check for shape compatibility before multiplication
-            if (d_pos is not None and hasattr(last_A, 'shape') and hasattr(d_pos, 'shape') and 
-                last_A.shape[-2:] != d_pos.shape[-2:]):
-                # Shape mismatch detected, need to regenerate without alpha_lookup_idx
-                return None, 0
+            # # Check for shape compatibility before multiplication
+            # if (d_pos is not None and hasattr(last_A, 'shape') and hasattr(d_pos, 'shape') and 
+            #     last_A.shape[-2:] != d_pos.shape[-2:]):
+            #     # Shape mismatch detected, need to regenerate without alpha_lookup_idx
+            #     return None, 0
             # Obtain the new linear relaxation coefficients based on the signs in last_A.
             same_slope = True if self.relu_options == "same-slope" else False
             _A, _bias = multiply_by_A_signs(last_A, d_pos, d_neg, b_pos, b_neg, reduce_bias=reduce_bias, same_slope=same_slope)
@@ -266,10 +266,10 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         upper_b = maybe_unfold_patches(upper_b, last_lA if last_lA is not None else last_uA)
         lower_b = maybe_unfold_patches(lower_b, last_lA if last_lA is not None else last_uA)  # for ReLU it is always None; keeping it here for completeness.
         # ub_lower_d and lb_lower_d might have sparse spec dimension, so they may need alpha_lookup_idx to convert to actual spec dim.
-        # Store originals for fallback
-        ub_lower_d_orig, ub_upper_d_orig = ub_lower_d, ub_upper_d
-        lb_lower_d_orig, lb_upper_d_orig = lb_lower_d, lb_upper_d
-        ub_upper_b_orig, lb_upper_b_orig = ub_upper_b, lb_upper_b
+        # # Store originals for fallback
+        # ub_lower_d_orig, ub_upper_d_orig = ub_lower_d, ub_upper_d
+        # lb_lower_d_orig, lb_upper_d_orig = lb_lower_d, lb_upper_d
+        # ub_upper_b_orig, lb_upper_b_orig = ub_upper_b, lb_upper_b
         
         ub_lower_d = maybe_unfold_patches(ub_lower_d, last_uA, alpha_lookup_idx=alpha_lookup_idx)
         ub_upper_d = maybe_unfold_patches(ub_upper_d, last_uA, alpha_lookup_idx=alpha_lookup_idx)
@@ -290,19 +290,19 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
             b_neg=lower_b,
         )
         
-        # Fallback if shape mismatch detected
-        if uA is None:
-            # Regenerate tensors without alpha_lookup_idx
-            ub_lower_d = maybe_unfold_patches(ub_lower_d_orig, last_uA, alpha_lookup_idx=None)
-            ub_upper_d = maybe_unfold_patches(ub_upper_d_orig, last_uA, alpha_lookup_idx=None)
-            ub_upper_b = maybe_unfold_patches(ub_upper_b_orig, last_lA, alpha_lookup_idx=None)
-            uA, ubias = _bound_oneside(
-                last_A=last_uA, 
-                d_pos=ub_upper_d if upper_d is None else upper_d, 
-                d_neg=ub_lower_d if lower_d is None else lower_d, 
-                b_pos=ub_upper_b if ub_upper_b is not None else upper_b, 
-                b_neg=lower_b,
-            )
+        # # Fallback if shape mismatch detected
+        # if uA is None:
+        #     # Regenerate tensors without alpha_lookup_idx
+        #     ub_lower_d = maybe_unfold_patches(ub_lower_d_orig, last_uA, alpha_lookup_idx=None)
+        #     ub_upper_d = maybe_unfold_patches(ub_upper_d_orig, last_uA, alpha_lookup_idx=None)
+        #     ub_upper_b = maybe_unfold_patches(ub_upper_b_orig, last_lA, alpha_lookup_idx=None)
+        #     uA, ubias = _bound_oneside(
+        #         last_A=last_uA, 
+        #         d_pos=ub_upper_d if upper_d is None else upper_d, 
+        #         d_neg=ub_lower_d if lower_d is None else lower_d, 
+        #         b_pos=ub_upper_b if ub_upper_b is not None else upper_b, 
+        #         b_neg=lower_b,
+        #     )
         
         lA, lbias = _bound_oneside(
             last_A=last_lA, 
@@ -313,18 +313,18 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         )
         
         # Fallback if shape mismatch detected for lA
-        if lA is None:
-            # Regenerate tensors without alpha_lookup_idx
-            lb_lower_d = maybe_unfold_patches(lb_lower_d_orig, last_lA, alpha_lookup_idx=None)
-            lb_upper_d = maybe_unfold_patches(lb_upper_d_orig, last_lA, alpha_lookup_idx=None)
-            lb_upper_b = maybe_unfold_patches(lb_upper_b_orig, last_lA, alpha_lookup_idx=None)
-            lA, lbias = _bound_oneside(
-                last_A=last_lA, 
-                d_pos=lb_lower_d if lower_d is None else lower_d, 
-                d_neg=lb_upper_d if upper_d is None else upper_d, 
-                b_pos=lower_b, 
-                b_neg=lb_upper_b if lb_upper_b is not None else upper_b,
-            )
+        # if lA is None:
+        #     # Regenerate tensors without alpha_lookup_idx
+        #     lb_lower_d = maybe_unfold_patches(lb_lower_d_orig, last_lA, alpha_lookup_idx=None)
+        #     lb_upper_d = maybe_unfold_patches(lb_upper_d_orig, last_lA, alpha_lookup_idx=None)
+        #     lb_upper_b = maybe_unfold_patches(lb_upper_b_orig, last_lA, alpha_lookup_idx=None)
+        #     lA, lbias = _bound_oneside(
+        #         last_A=last_lA, 
+        #         d_pos=lb_lower_d if lower_d is None else lower_d, 
+        #         d_neg=lb_upper_d if upper_d is None else upper_d, 
+        #         b_pos=lower_b, 
+        #         b_neg=lb_upper_b if lb_upper_b is not None else upper_b,
+        #     )
 
         self.masked_beta_lower = self.masked_beta_upper = None
 
