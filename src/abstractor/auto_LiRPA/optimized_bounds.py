@@ -408,7 +408,7 @@ def _get_optimized_bounds(
         if type(stop_criterion) == bool:
             loss = total_loss.sum() * (not stop_criterion)
         else:
-            assert total_loss.shape == stop_criterion.shape
+            assert total_loss.shape[1] == stop_criterion.shape[1], f'{total_loss.shape=} != {stop_criterion.shape=}'
             loss = (total_loss * stop_criterion.logical_not()).sum()
 
         stop_criterion_final = isinstance(
