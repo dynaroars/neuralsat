@@ -29,6 +29,7 @@ class RandomAttacker:
 
         # print(self.target)
         # print(self.direction)
+        self.iteration = 0
 
 
     @beartype
@@ -89,7 +90,6 @@ class RandomAttacker:
         input_uppers = self.objective.upper_bounds[0].clone().view(self.input_shape).to(self.device)
 
         start = time.time()
-        self.iteration = 0
         while True:
             self.iteration += 1
             adv = self._attack(input_lowers=input_lowers, input_uppers=input_uppers)
@@ -196,4 +196,4 @@ class RandomAttacker:
 
 
     def __repr__(self):
-        return f'RandomAttack(seed={self.seed}, device={self.device}, iteration={self.iteration})'
+        return f'RandomAttack(seed={self.seed}, device={self.device})'
