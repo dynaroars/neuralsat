@@ -37,6 +37,11 @@ from setting import Settings
 
 
 def get_used_gpu_memory(return_percentage: bool = False):
+    if not torch.cuda.is_available():
+        if return_percentage:
+            return 0, 0
+        return 0
+    
     device = torch.device('cuda:0')
     free, total = torch.cuda.mem_get_info(device)
     mem_used_MB = (total - free) / 1024 ** 2
@@ -53,7 +58,7 @@ def _check_invoke_mip_presolving(self):
     count_relu = 0
     for layer in self.net.children():
         if not isinstance(layer, (torch.nn.Linear, torch.nn.ReLU, torch.nn.Flatten)):
-            print('[!] Found unsupported layer:', layer)
+            print('[!] Found unsupported layer:', type(layer))
             return False
         if isinstance(layer, torch.nn.ReLU):
             count_relu += 1
@@ -132,25 +137,26 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     diff = objectives.upper_bounds - objectives.lower_bounds
     eps = diff.max().item()
-    perturbed = (diff > 0).int().sum()
+    perturbed = (diff > 0).int().sum() // diff.shape[0]
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
 
-    if Settings.skip_preprocess:
-        return objectives, None
-    
-    if Settings.test:
-        self.input_split = False
-    elif force_split is not None:
+    if force_split is not None:
         assert force_split in ['input', 'hidden']
         self.input_split = force_split == 'input'
-    elif eps > Settings.safety_property_threshold: # safety properties
+    elif eps > Settings.input_splitting_threshold: # safety properties
         self.input_split = True
-    elif np.prod(self.input_shape) <= 200 or perturbed <= 200: # small inputs
+    elif np.prod(self.input_shape) <= Settings.safety_num_input_perturbed or perturbed <= Settings.safety_num_input_perturbed: # small inputs
+        # if eps < Settings.hidden_splitting_threshold:
+        #     self.input_split = False
+        # else:
         self.input_split = True
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
     if self.input_split: 
+        return objectives, None
+    
+    if Settings.skip_preprocess:
         return objectives, None
     
     if (not isinstance(objectives.cs, torch.Tensor)) or (not isinstance(objectives.rhs, torch.Tensor)):
@@ -160,13 +166,10 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         return objectives, None
     
     try:
-        if os.environ.get('NEURALSAT_DEBUG'):
-            print('[_preprocess] _init_abstractor')
-            
-        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
+        logger.info(f'[_preprocess] _init_abstractor')
+        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives, preprocess=True)
     except:
-        if os.environ.get('NEURALSAT_DEBUG'):
-            print('[_preprocess] Failed to initialize abstractor')
+        print('[_preprocess] Failed to initialize abstractor')
         return objectives, None
     
     # prune objectives
@@ -182,7 +185,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         if os.environ.get("NEURALSAT_DEBUG"):
             import traceback
             traceback.print_exc()
-            raise NotImplementedError
+            raise NotImplementedError('Failed to preprocess objectives')
         return objectives, None
 
     # pruning
@@ -285,7 +288,7 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bo
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}, preprocess: bool = False) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -298,7 +301,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         device=self.device,
     )
 
-    self.abstractor.setup(objective, extra_opts=extra_opts)
+    self.abstractor.setup(objective, extra_opts=extra_opts, preprocess=preprocess)
     self.abstractor.net.get_split_nodes()
     
 
@@ -326,7 +329,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         elif Settings.subverifier_decision_method == 'greedy':
             params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': Settings.verify_extra_opts}
         else:
-            raise NotImplementedError
+            raise NotImplementedError('Unknown decision method')
 
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
 
@@ -338,7 +341,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_method=params['decision_method'],
     )
         
-    print('[_setup_restart_naive] _init_abstractor')
+    logger.info(f'[_setup_restart_naive] _init_abstractor')
     self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
         
 
@@ -379,8 +382,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # skip refine for general activation layers
             pass
         else:
-            print('[_setup_restart] refine')
-            self._init_abstractor('backward', objective)
+            logger.info(f'[_setup_restart] refine')
+            self._init_abstractor('backward', objective, preprocess=True)
             
             tmp_objective = copy.deepcopy(objective)
             tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -403,6 +406,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     
     # main abstractor
     if not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method:
+        logger.info(f'[_setup_restart] _init_abstractor')
         self._init_abstractor(abstract_method, objective)
         
     return refined_intermediate_bounds
@@ -410,7 +414,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 @beartype
 def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: DnfObjectives, 
-                timeout: int | float = 20.0) -> tuple[bool, torch.Tensor | None]:
+                timeout: int | float = 10.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
@@ -494,6 +498,9 @@ def _get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> dict:
 @beartype
 def _check_invoke_cpu_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
     if not hasattr(self, 'milp_tightener'):
+        return False
+    
+    if not Settings.use_mip_tightening:
         return False
     
     if self.input_split:

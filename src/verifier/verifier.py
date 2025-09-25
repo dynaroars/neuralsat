@@ -26,7 +26,6 @@ from helper.network.onnx2pytorch import ConvertModel
 from helper.spec.objective import DnfObjectives
 from helper.misc.result import ReturnStatus
 from helper.misc.logger import logger
-from helper.misc.timer import Timers
 
 from setting import Settings
 
@@ -70,6 +69,7 @@ class Verifier:
     @beartype
     def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: int | float = 3600.0, force_split: str | None = None) -> str:
         self.start_time = time.time()
+        self.total_time = timeout
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
             preconditions=preconditions,
@@ -85,20 +85,16 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
-        Timers.tic('Pre-attack') if Settings.use_timer else None
-        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
-        Timers.toc('Pre-attack') if Settings.use_timer else None
+        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(20.0, timeout * 0.1))
         if is_attacked:
             return ReturnStatus.SAT  
 
         # refine
-        Timers.tic('Preprocess') if Settings.use_timer else None
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
         
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[+] verify _preprocess:', get_used_gpu_memory(), 'MB')
             
-        Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -121,35 +117,44 @@ class Verifier:
                 if os.environ.get('NEURALSAT_DEBUG'):
                     raise
             except:
-                raise NotImplementedError
+                raise NotImplementedError('Unknown MIP solver error')
         
+        # FIXME: generalize this
+        max_domain = min(self.batch, len(dnf_objectives))
         status = self._verify_with_restart(
             dnf_objectives=copy.deepcopy(dnf_objectives),
             preconditions=preconditions,
             timeout=timeout,
             reference_bounds=reference_bounds,
-            max_domain=self.batch
+            max_domain=max_domain
         )
         
-        if not status:
+        while not status and max_domain > 1:
+            max_domain = max_domain // 10
             status = self._verify_with_restart(
                 dnf_objectives=copy.deepcopy(dnf_objectives),
                 preconditions=preconditions,
                 timeout=timeout,
                 reference_bounds=reference_bounds,
-                max_domain=1
+                max_domain=max_domain
             )
             
         return status
         
+    def _heuristic_configure(self: 'Verifier', timeout: int | float) -> None:
+        if timeout <= 30:
+            Settings.use_restart = False
+            Settings.use_mip_tightening = False
+        
+        if timeout <= 60:
+            Settings.restart_max_runtime_percentage = 0.7
+            
     @beartype    
     def _verify_with_restart(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
                              timeout: int | float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
         # verify
         while len(dnf_objectives):
-            Timers.tic('Get objective') if Settings.use_timer else None
             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
-            Timers.toc('Get objective') if Settings.use_timer else None
             
             # restart variables
             nth_restart = 0 
@@ -158,18 +163,18 @@ class Verifier:
             if len(preconditions): # add to all objective ids
                 [learned_clauses[k].extend(preconditions) for k in learned_clauses]
             
+            self._heuristic_configure(timeout=timeout)
+            
             # verify objective (multiple times if RESTART is returned)
             while True:
                 # get strategy + refinement
-                Timers.tic('Setup restart') if Settings.use_timer else None
                 new_reference_bounds = self._setup_restart(nth_restart, objective)
-                Timers.toc('Setup restart') if Settings.use_timer else None
                 
                 # adaptive batch size
                 while True: 
-                    logger.info(f'Try batch size {self.batch}')
                     try:
                         # main function
+                        logger.info(f'Try batch size {self.batch}')
                         status = self._verify_one(
                             objective=objective, 
                             preconditions=learned_clauses, 
@@ -179,8 +184,9 @@ class Verifier:
                     except RuntimeError as exception:
                         if os.environ.get("NEURALSAT_DEBUG"):
                             traceback.print_exc()
-                            raise NotImplementedError
-                        elif is_cuda_out_of_memory(exception):
+                            raise NotImplementedError('Unsupported exception')
+                        
+                        if is_cuda_out_of_memory(exception):
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
                                 logger.debug('[!] OOM with batch_size=1')
@@ -196,15 +202,13 @@ class Verifier:
                     except SystemExit:
                         exit()
                     except:
-                        raise NotImplementedError
+                        raise NotImplementedError('Unknown error')
                     else:
                         gc_cuda()
                         break
                     
                 # stats
-                Timers.tic('Save stats') if Settings.use_timer else None
                 self._save_stats()
-                Timers.toc('Save stats') if Settings.use_timer else None
                 
                 # handle returning status
                 if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN, ReturnStatus.EARLY_STOP]:
@@ -265,17 +269,15 @@ class Verifier:
     @beartype
     def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float) -> str:
         # initialization
-        Timers.tic('Initialization') if Settings.use_timer else None
         try:
             self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         except RuntimeError as exception:
             if is_cuda_out_of_memory(exception):
-                raise VerifierInitializeError
+                raise VerifierInitializeError('[_verify_one] OOM exception')
             else:
-                raise NotImplementedError
+                raise VerifierInitializeError('[_verify_one] Unknown exception')
         except:
-            raise NotImplementedError
-        Timers.toc('Initialization') if Settings.use_timer else None
+            raise VerifierInitializeError('[_verify_one] Unknown error')
         
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[+] verify _initialize:', get_used_gpu_memory(), 'MB')
@@ -298,9 +300,7 @@ class Verifier:
                 return ReturnStatus.EARLY_STOP
             
             # search
-            Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
-            Timers.toc('Main loop') if Settings.use_timer else None
                 
             # check adv founded
             if self.adv is not None:
@@ -320,7 +320,7 @@ class Verifier:
                 return ReturnStatus.RESTART
         
             # check unsolvable
-            if len(self.domains_list) > 100000:
+            if len(self.domains_list) > Settings.max_domains:
                 return ReturnStatus.UNKNOWN
             
             # gpu tightening early stop
@@ -343,15 +343,29 @@ class Verifier:
         if self.input_split:
             if self.num_restart >= len(INPUT_SPLIT_RESTART_STRATEGIES):
                 return False
+            
+            if self.num_restart == len(INPUT_SPLIT_RESTART_STRATEGIES) - 1 and self.abstractor.method == 'crown-optimized':
+                if self.total_time - (time.time() - self.start_time) < 20.0: # restart to attack phase
+                    return True
+                else:
+                    return False
         else:
             if self.num_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
                 return False
         
+        # too late, don't restart
+        if time.time() - self.start_time > self.total_time * 0.9:
+            return False
+        
+        # restart time threshold
+        if time.time() - start_time > self.total_time * Settings.restart_max_runtime_percentage:
+            logger.debug(f'[Restart] Runtime exceeded {self.total_time * Settings.restart_max_runtime_percentage} seconds ({Settings.restart_max_runtime_percentage*100}%)')
+            return True
+        
         # restart runtime threshold
-        if self.iteration - start_iteration >= 20:
-            if time.time() - start_time > Settings.restart_max_runtime:
-                logger.debug(f'[Restart] Runtime exceeded {Settings.restart_max_runtime} seconds')
-                return True
+        if (self.iteration - start_iteration >= 20) and (time.time() - start_time > Settings.restart_max_runtime):
+            logger.debug(f'[Restart] Runtime exceeded {Settings.restart_max_runtime} seconds')
+            return True
         
         # restart domains threshold
         max_branches = Settings.restart_current_input_branches if self.input_split else Settings.restart_current_hidden_branches
@@ -396,36 +410,28 @@ class Verifier:
         old_domains_length = len(self.domains_list)
         unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_cpu_tightening(patience_limit=Settings.mip_tightening_patience):
-            Timers.tic('CPU Tightening') if Settings.use_timer else None
             self.milp_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.mip_tightening_topk, 
                 timeout=Settings.mip_tightening_timeout_per_neuron, 
                 largest=False, # stabilize near-stable neurons
             )
-            Timers.toc('CPU Tightening') if Settings.use_timer else None
             
         if self._check_invoke_gpu_tightening(patience_limit=Settings.gpu_tightening_patience):
-            Timers.tic('GPU Tightening') if Settings.use_timer else None
             self.gpu_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.gpu_tightening_topk, 
                 iteration=2,
             )
-            Timers.toc('GPU Tightening') if Settings.use_timer else None
             
         # step 3: selection
         tic = time.time()
-        Timers.tic('Get domains') if Settings.use_timer else None
         pick_ret = self.domains_list.pick_out(self.batch, self.device)
-        Timers.toc('Get domains') if Settings.use_timer else None
         pick_time = time.time() - tic
         
         # step 4: PGD attack
         tic = time.time()
-        Timers.tic('Loop attack') if Settings.use_timer else None
         self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
-        Timers.toc('Loop attack') if Settings.use_timer else None
         attack_time = time.time() - tic
         if self.adv is not None:
             return
@@ -442,23 +448,17 @@ class Verifier:
             
         # step 6: branching
         tic = time.time()
-        Timers.tic('Decision') if Settings.use_timer else None
         decisions = self.decision(self.abstractor, pruned_ret)
-        Timers.toc('Decision') if Settings.use_timer else None
         decision_time = time.time() - tic
         
         # step 7: abstraction 
         tic = time.time()
-        Timers.tic('Abstraction') if Settings.use_timer else None
         abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
-        Timers.toc('Abstraction') if Settings.use_timer else None
         abstraction_time = time.time() - tic
 
         # step 8: pruning unverified branches
         tic = time.time()
-        Timers.tic('Add domains') if Settings.use_timer else None
         self.domains_list.add(abstraction_ret, decisions)
-        Timers.toc('Add domains') if Settings.use_timer else None
         add_time = time.time() - tic
 
         # statistics
@@ -467,10 +467,18 @@ class Verifier:
         self._update_tightening_patience(minimum_lowers, old_domains_length)
         
         # adapt batch size
+        current_batch = len(pick_ret.input_lowers)
         _, mem_used_percentage = get_used_gpu_memory(return_percentage=True)
-        if mem_used_percentage > 60.0:
-            self.batch = len(pick_ret.input_lowers)
+        if mem_used_percentage > 80.0:
+            self.batch = current_batch
             logger.debug(f'Fixed {self.batch=}')
+        elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)) and (self.abstractor.method != 'crown-optimized'):
+            if mem_used_percentage < 10.0:
+                self.batch = min(500000, self.batch*10)
+                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
+            elif mem_used_percentage < 50.0:
+                self.batch = min(500000, self.batch*2)
+                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
             
         # logging
         msg = (
@@ -494,6 +502,8 @@ class Verifier:
                 msg += f'Unstable neurons: {unstable:<10}'
             
             msg += f'GPU Mem (%): {mem_used_percentage:<10.02f}'
+            msg += f'Batch: {self.batch:<10}'
+            msg += f'Restart: {self.num_restart:<10}'
             
         logger.info(msg)
         

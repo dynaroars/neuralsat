@@ -258,13 +258,13 @@ class PerturbationLpNorm(Perturbation):
         index = torch.cumsum(perturbed, dim=-1)
         dim = max(perturbed.view(batch_size, -1).sum(dim=-1).max(), 1)
         self.x_L_sparse = torch.zeros(batch_size, dim + 1).to(x_L)
-        self.x_L_sparse.scatter_(dim=-1, index=index, src=(x_L - lb).view(batch_size, -1), reduce='add')
+        self.x_L_sparse.scatter_reduce_(dim=-1, index=index, src=(x_L - lb).view(batch_size, -1), reduce='sum')
         self.x_U_sparse = torch.zeros(batch_size, dim + 1).to(x_U)
-        self.x_U_sparse.scatter_(dim=-1, index=index, src=(x_U - ub).view(batch_size, -1), reduce='add')
+        self.x_U_sparse.scatter_reduce_(dim=-1, index=index, src=(x_U - ub).view(batch_size, -1), reduce='sum')
         self.x_L_sparse, self.x_U_sparse = self.x_L_sparse[:, 1:], self.x_U_sparse[:, 1:]
         lw = torch.zeros(batch_size, dim + 1, perturbed.shape[-1], device=x.device)
         perturbed = perturbed.to(torch.get_default_dtype())
-        lw.scatter_(dim=1, index=index.unsqueeze(1), src=perturbed.unsqueeze(1))
+        lw.scatter_reduce_(dim=1, index=index.unsqueeze(1), src=perturbed.unsqueeze(1), reduce='sum')
         lw = uw = lw[:, 1:, :].view(batch_size, dim, *x.shape[1:])
         if os.environ.get('AUTOLIRPA_DEBUG_OPT', False):
             print(f'Using Linf sparse perturbation. Perturbed dimensions: {dim}.')

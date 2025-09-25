@@ -116,7 +116,7 @@ class BoundedModule(nn.Module):
         self._convert(model, global_input)
         self._optimize_graph()
         self._mark_perturbed_nodes(inputs_unpacked)
-        self._check_patches_mode()
+        # self._check_patches_mode()
 
         self.next_split_hint = []  # Split hints, used in beta optimization.
         # Beta values for all intermediate bounds.
@@ -851,7 +851,6 @@ class BoundedModule(nn.Module):
     def compute_intermediate_bounds(self, node: Bound, prior_checked=False):
         tighten_input_bounds = self.bound_opts['optimize_bound_args']['tighten_input_bounds']
         directly_optimize_layer_names = self.bound_opts['optimize_bound_args']['directly_optimize']
-        best_of_oc_and_no_oc = self.bound_opts['optimize_bound_args']['best_of_oc_and_no_oc']
         if node.is_lower_bound_current() and not (isinstance(node, BoundInput) and tighten_input_bounds or node.name in directly_optimize_layer_names):
             if node.name in self.layers_with_constraint:
                 node.clamp_interim_bounds()

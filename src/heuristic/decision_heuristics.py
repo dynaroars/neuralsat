@@ -32,14 +32,6 @@ class DecisionHeuristic:
     @beartype
     @torch.no_grad()
     def __call__(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults) -> torch.Tensor | list[list]:
-        if Settings.test:
-            # hidden split
-            return self.naive_hidden_branching(
-                domain_params=domain_params, 
-                abstractor=abstractor, 
-                mode=random.choice(['scale', 'distance', 'polarity']),
-            )
-        
         if self.input_split:
             if (self.decision_method == 'smart') and (domain_params.lAs is not None):
                 return self.smart_input_branching(

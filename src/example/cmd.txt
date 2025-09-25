@@ -21,12 +21,13 @@ python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec examp
 python3 main.py --net example/onnx/tllBench_n=2_N=M=16_m=1_instance_1_1.onnx --spec example/vnnlib/property_N=16_1.vnnlib
 python3 main.py --net example/onnx/mnist_concat.onnx --spec example/vnnlib/index188_delta0.13.vnnlib 
 python3 main.py --net example/onnx/mscn_128d.onnx --spec example/vnnlib/cardinality_0_100_128.vnnlib
+python3 main.py --net example/onnx/pensieve_big_parallel.onnx --spec example/vnnlib/pensieve_parallel_55.vnnlib --timeout 60
 
 python3 main.py --net /home/droars/Desktop/cav24/benchmark/nn4sys/onnx/mscn_2048d.onnx --spec /home/droars/Desktop/cav24/benchmark/nn4sys/vnnlib/cardinality_0_500_2048.vnnlib 
 python3 main.py --net /home/droars/Desktop/cav24/benchmark/vggnet16/onnx/vgg16-7-simplified.onnx --spec /home/droars/Desktop/cav24/benchmark/vggnet16/vnnlib/spec5_minivan.vnnlib --batch 1
 
 python3 main.py --net example/onnx/mnist-net_256x2.onnx --spec example/vnnlib/prop_1_0.05.vnnlib
-python3 main.py --net example/onnx/ACASXU_run2a_1_9_batch_2000.onnx --spec example/vnnlib/prop_7.vnnlib
+python3 main.py --net example/onnx/ACASXU_run2a_1_9_batch_2000.onnx --spec example/vnnlib/prop_7.vnnlib --timeout 116
 
 python3 main.py --net example/onnx/fnn.onnx --spec example/vnnlib/fnn.vnnlib 
 

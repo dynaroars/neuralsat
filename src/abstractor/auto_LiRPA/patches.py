@@ -477,7 +477,7 @@ def inplace_unfold(image, kernel_size, stride=1, padding=0, inserted_zeros=0, ou
         output_padding = (output_padding[1], output_padding[1], output_padding[0], output_padding[0])
     if isinstance(stride, int):
         stride = (stride, stride)  # (height direction, width direction).
-    assert len(kernel_size) == 2 and len(padding) == 4 and len(stride) == 2
+    assert len(kernel_size) == 2 and len(padding) == 4 and len(stride) == 2, f'{kernel_size=}, {padding=}, {stride=}'
     # Make sure the image is large enough for the kernel.
     assert image.size(2) + padding[2] + padding[3] >= kernel_size[0] and image.size(3) + padding[0] + padding[1] >= kernel_size[1]
     if inserted_zeros > 0:

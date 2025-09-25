@@ -8,6 +8,13 @@ import torch
 import onnx
 import io
 
+try:
+    import onnxsim
+    use_onnxsim = True
+except:
+    print("onnxsim not found. Please install it with `pip install onnxsim`.")
+    use_onnxsim = False
+    
 from helper.misc.error import *
 from . import onnx2pytorch
 
@@ -59,11 +66,26 @@ def add_batch(shape: tuple) -> tuple:
     
     return shape
         
+def onnxsim_convert(path):
+    model = onnx.load(path)
+    model_simp, check = onnxsim.simplify(model)
+    if not check:
+        print(f"[!] ONNXSIM failed to simplify {path}.")
+        return None
+    return model_simp
+    
 
 @beartype
 def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_shape: None | list = None) -> tuple:
     # load model
     onnx_model = _load_onnx(path)
+    
+    try:
+        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    except IndexError:
+        print(f'[!] onnx2pytorch failed, try onnxsim')
+        onnx_model = onnxsim_convert(path)
+        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
     
     # extract shapes
     onnx_inputs = [node.name for node in onnx_model.graph.input]
@@ -87,10 +109,11 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
     else:
         batched_output_shape = tuple(output_shape)
 
-    pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
-    # pytorch_model = onnx2torch.convert(path)
-    pytorch_model.eval()
+    if len(batched_output_shape) > 2:
+        pytorch_model = nn.Sequential(pytorch_model, nn.Flatten(start_dim=1))
+        batched_output_shape = (batched_output_shape[0], int(np.prod(batched_output_shape[1:])))
     
+    pytorch_model.eval()
     pytorch_model.to(torch.get_default_dtype())
     
     if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):

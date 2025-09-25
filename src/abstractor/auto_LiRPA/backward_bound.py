@@ -26,7 +26,7 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size, b
     else:
         dense = False
     unstable_size = get_unstable_size(unstable_idx)
-    print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
+    # print(f'Batched CROWN: node {node}, unstable size {unstable_size}')
     crown_batch_size = self.bound_opts['crown_batch_size']
     auto_batch_size = AutoBatchSize(self.bound_opts['crown_batch_size'], self.device)
 
@@ -34,7 +34,7 @@ def batched_backward(self: 'BoundedModule', node, C, unstable_idx, batch_size, b
     ret_A = {} # if return_A, we will store A here
     i = 0
     torch.cuda.empty_cache()
-    with tqdm(total=unstable_size) as pbar:
+    with tqdm(total=unstable_size, disable=True) as pbar:
         while i < unstable_size:
             crown_batch_size = auto_batch_size.batch_size
             if isinstance(unstable_idx, tuple):

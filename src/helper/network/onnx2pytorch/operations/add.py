@@ -49,7 +49,7 @@ class Add(Operator):
         for inp in input[1:]:
             # if inp.numel() == 1:
             #     inp = inp.item()
-            out += inp
+            out = inp + out # broadcast
         return out
 
     def set_input_indices(self, input):

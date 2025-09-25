@@ -10,20 +10,10 @@ from helper.spec.objective import parse_vnnlib
 
 from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.misc.export import get_adv_string
-from helper.misc.timer import Timers
 
 from verifier.verifier import Verifier 
 
 from setting import Settings
-
-
-def print_w_b(model):
-    for layer in model.modules():
-        if hasattr(layer, 'weight'):
-            print(layer)
-            print('\t[+] w:', layer.weight.data.detach().flatten())
-            print('\t[+] b:', layer.bias.data.detach().flatten())
-            print()
 
  
 if __name__ == '__main__':
@@ -51,6 +41,8 @@ if __name__ == '__main__':
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
                         help="enable exporting counter-example to result file.")
+    parser.add_argument('--disable_attack', action='store_false',
+                        help="disable attack.")
     parser.add_argument('--disable_restart', action='store_false',
                         help="disable RESTART heuristic.")
     parser.add_argument('--disable_stabilize', action='store_false',
@@ -59,31 +51,25 @@ if __name__ == '__main__':
                         help="select SPLITTING strategy.")
     parser.add_argument('--reasoning_file', type=str, required=False,
                         help="file to save reasoning steps.")
+    parser.add_argument('--setting_file', type=str, required=False,
+                        help="file to load specific settings.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
+    parser.add_argument('--export_runtime', action='store_true', required=False,
+                        help="output runtime.")
     
     args = parser.parse_args()   
-    
-    
-    # setup timers
-    if Settings.use_timer:
-        Timers.reset()
-        Timers.tic('Main')
+    Settings.setup(args)
+    print(Settings)
         
     # set device
     if not torch.cuda.is_available():
         args.device = 'cpu'
         
-    if args.test:
-        Settings.setup_test()
-    else:
-        Settings.setup(args)
-        
     # set logger level
     logger.setLevel(LOGGER_LEVEL[args.verbosity])
     
     # network
-    Timers.tic('Load network') if Settings.use_timer else None
     if args.net.endswith('.onnx'):
         model, input_shape, output_shape = parse_onnx(args.net, args.input_shape, args.output_shape)
     elif args.net.endswith('.pth'):
@@ -92,19 +78,14 @@ if __name__ == '__main__':
         raise NotImplementedError('Unsupported network type')
     
     model.to(args.device)
-    Timers.toc('Load network') if Settings.use_timer else None
-    
+
     if args.verbosity:
         print(model)
-        if Settings.test:
-            print_w_b(model)
-    
-    # specification
-    Timers.tic('Load specification') if Settings.use_timer else None
-    objectives = parse_vnnlib(args.spec, input_shape)
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
-    Timers.toc('Load specification') if Settings.use_timer else None
+    
+    # specification
+    objectives = parse_vnnlib(args.spec, input_shape)
     
     # verifier
     verifier = Verifier(
@@ -114,14 +95,11 @@ if __name__ == '__main__':
         device=args.device,
     )
     
-    print(Settings)
     
     # verify
-    Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
     status = verifier.verify(objectives, timeout=timeout, force_split=args.force_split)
     runtime = time.time() - START_TIME
-    Timers.toc('Verify') if Settings.use_timer else None
     
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
@@ -133,7 +111,10 @@ if __name__ == '__main__':
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(f'{status},{runtime:.06f}', file=fp)
+            if args.export_runtime:
+                print(f'{status},{runtime:.04f}', file=fp)
+            else:
+                print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
@@ -143,10 +124,6 @@ if __name__ == '__main__':
         else:
             print(f'[!] Does not have any reasoning step')
 
-    if Settings.use_timer:
-        Timers.toc('Main')
-        Timers.print_stats()
-    
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')
     

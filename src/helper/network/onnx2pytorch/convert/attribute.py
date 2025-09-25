@@ -182,7 +182,8 @@ def extract_attributes(node):
         elif attr.name == "value_strings":
             kwargs["constant"] = extract_attr_values(attr)
         elif attr.name == "broadcast":
-            kwargs["constant"] = extract_attr_values(attr)
+            # kwargs["constant"] = extract_attr_values(attr)
+            pass
         elif node.op_type == "Resize":
             # These parameters are not used, warn in Resize operator
             kwargs[attr.name] = extract_attr_values(attr)

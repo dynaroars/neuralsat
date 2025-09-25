@@ -29,6 +29,7 @@ class RandomAttacker:
 
         # print(self.target)
         # print(self.direction)
+        self.iteration = 0
 
 
     @beartype
@@ -73,8 +74,8 @@ class RandomAttacker:
 
     @beartype
     def run(self: 'RandomAttacker', timeout: float = 1.0) -> tuple[bool, torch.Tensor | None]:
-        if timeout >= 3.0:
-            timeout = 3.0
+        if timeout >= 2.0:
+            timeout = 2.0
         if np.prod(self.input_shape) >= 200:
             return False, None
         
@@ -90,6 +91,7 @@ class RandomAttacker:
 
         start = time.time()
         while True:
+            self.iteration += 1
             adv = self._attack(input_lowers=input_lowers, input_uppers=input_uppers)
             if adv is not None:
                 return True, adv

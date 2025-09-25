@@ -9,6 +9,7 @@ import torch
 import tqdm
 import copy
 import math
+import time
 import os
 
 from .auto_LiRPA.utils import stop_criterion_batch_any
@@ -16,6 +17,7 @@ from .auto_LiRPA import BoundedModule
 
 from helper.misc.result import AbstractResults, CoefficientMatrix
 from helper.network.onnx2pytorch import ConvertModel
+from helper.misc.torch_cuda_memory import gc_cuda
 from helper.misc.logger import logger
 
 from .params import *
@@ -49,18 +51,23 @@ class NetworkAbstractor:
         return self._split_points
         
     @beartype
-    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> None:
+    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}, preprocess: bool = False) -> None:
         if self.select_params(objective, extra_opts=extra_opts):
             return None
+        
+        if preprocess:
+            raise NotImplementedError('Preprocess initialization failed')
+        
+        # special settings 
+        Settings.use_restart = False
+        Settings.use_attack = False
         
         # FIXME: try special settings for large CNNs
         new_extra_opts = copy.deepcopy(extra_opts)
         new_extra_opts.update({'use_full_conv_alpha': False})
-        Settings.use_restart = False
-        Settings.use_attack = False
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
-            
+        
         # FIXME: try special settings for ViT
         Settings.backward_batch_size = float('inf')
         new_extra_opts = copy.deepcopy(extra_opts)
@@ -70,19 +77,25 @@ class NetworkAbstractor:
         
         # FIXME: try smaller backward batch size
         new_extra_opts = copy.deepcopy(extra_opts)
-        Settings.backward_batch_size = 512
-        while Settings.backward_batch_size >= 1:
+        # new_extra_opts.update({'use_full_conv_alpha': False, 'use_shared_alpha': True})
+        for backward_batch_size in [512, 128, 32]:
+            Settings.backward_batch_size = backward_batch_size
             if self.select_params(objective, extra_opts=new_extra_opts):
                 return None 
-            Settings.backward_batch_size = Settings.backward_batch_size // 4
+            
+        # FIXME: try special settings for Yolo
+        Settings.backward_batch_size = 512
+        Settings.share_alphas = True
+        new_extra_opts = copy.deepcopy(extra_opts)
+        new_extra_opts.update({'use_full_conv_alpha': False, 'use_shared_alpha': True})
+        if self.select_params(objective, extra_opts=new_extra_opts):
+            return None
 
-        
         logger.info('[setup] Initialization failed')
-        raise
+        raise NotImplementedError('Initialization failed')
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
-        logger.info(f'[select_params] Initialized abstractor: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=}')
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
@@ -94,19 +107,22 @@ class NetworkAbstractor:
             ]
         
         for mode, method in params:
-            logger.debug(f'[select_params] Try {mode=}, {method=}')
+            gc_cuda()
+            logger.debug(f'[select_params] Try {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
-                self.mode = self.net.conv_mode
+                self.mode = mode
                 self.method = method
+                logger.info(f'[select_params] Success: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
                 return True
-            
+            else:
+                logger.info(f'[_check_module] Failed: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
         return False
             
     @beartype
     def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
         bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
-        logger.debug(f'[_init_module] {bound_opts=}')
+        logger.debug(f'[_init_module] Try {bound_opts=}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
@@ -124,20 +140,21 @@ class NetworkAbstractor:
             logger.debug(f'[_init_module] Use random dummy input for checking correctness')
             dummy = torch.randn(self.input_shape, device=self.device) 
             
-        # FIXME: remove
-        try:
+        if os.environ.get('NEURALSAT_DEBUG'):
+            self.net.to('cpu')
+            self.pytorch_model.to('cpu')
+            dummy = dummy.to('cpu')
             assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-4)
-        except:
-            print('[!] Conversion error')
-            raise ValueError(f'torch allclose failed: {torch.norm(self.pytorch_model(dummy) - self.net(dummy))}')
+            self.net.to(self.device)
+            self.pytorch_model.to(self.device)
         
         
     @beartype
     def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
         # at least can run with batch=1
         if objective:
-            x_L = objective.lower_bounds[0].view(self.input_shape)
-            x_U = objective.upper_bounds[0].view(self.input_shape)
+            x_L = objective.lower_bounds[0].view(self.input_shape).to(self.device)
+            x_U = objective.upper_bounds[0].view(self.input_shape).to(self.device)
         else:
             logger.debug(f'[_check_module] Use random dummy input for checking correctness')
             x_L = torch.randn(self.input_shape, device=self.device) 
@@ -156,9 +173,32 @@ class NetworkAbstractor:
         
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
-            self.net.init_alpha(x=(x,), bound_upper=False) if method == 'crown-optimized' else None
-            lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) # FIXME: it uses a lot of RAM
-            # print('[+] _check_module:', method, lb)
+            # stop_criterion_func = stop_criterion_batch_any(objective.rhs.to(self.device))
+            # self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
+            # initial bounds
+            if method == 'crown-optimized':
+                _, _, aux_reference_bounds = self.net.init_alpha(
+                    x=(x,), 
+                    share_alphas=Settings.share_alphas, 
+                    c=objective.cs.to(self.device), 
+                    bound_upper=False,
+                ) 
+                lb, _ = self.net.compute_bounds(
+                    x=(x,), 
+                    C=objective.cs.to(self.device), 
+                    method='crown-optimized',
+                    aux_reference_bounds=aux_reference_bounds, 
+                    bound_upper=False,
+                )
+            # elif method == 'backward':
+            #     lb, _, _ = self.net.init_alpha(
+            #         x=(x,), 
+            #         share_alphas=Settings.share_alphas, 
+            #         c=objective.cs.to(self.device) if objective is not None else None, 
+            #         bound_upper=False,
+            #     ) 
+            else:
+                lb, _ = self.net.compute_bounds(x=(x,), method=method, bound_upper=False) 
             assert not torch.isnan(lb).any()
         except RuntimeError:
             if os.environ.get('NEURALSAT_DEBUG'):
@@ -190,6 +230,9 @@ class NetworkAbstractor:
        
         # stop function used when optimizing abstraction
         stop_criterion_func = stop_criterion_batch_any(objective.rhs)
+
+        # setup intialization parameters
+        self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
         
         # create input
         x = self.new_input(x_L=input_lowers, x_U=input_uppers)
@@ -209,7 +252,7 @@ class NetworkAbstractor:
                     reference_bounds=reference_bounds,
                     bound_upper=False,
                 )
-            logger.info(f'Initial bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
+            logger.info(f'Initial bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
             
@@ -242,9 +285,6 @@ class NetworkAbstractor:
                 'input_lowers': input_lowers,
                 'input_uppers': input_uppers,
             })
-            
-        # setup optimization parameters
-        self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
 
         # initial bounds
         lb_init, _, aux_reference_bounds = self.net.init_alpha(
@@ -257,7 +297,7 @@ class NetworkAbstractor:
         if os.environ.get('NEURALSAT_DEBUG'):
             print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=} {lb_init.flatten()=}',)
             
-        logger.info(f'Initial bounds (fisrt 10): {lb_init.detach().cpu().flatten()[:10]}')
+        logger.info(f'Initial bounds (first 10): {lb_init.detach().cpu().flatten()[:10]}')
         
         if stop_criterion_func(lb_init).all().item():
             return AbstractResults(**{'output_lbs': lb_init})
@@ -271,7 +311,7 @@ class NetworkAbstractor:
             reference_bounds=reference_bounds,
             bound_upper=False,
         )
-        logger.info(f'Initial optimized bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
+        logger.info(f'Initial optimized bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
         

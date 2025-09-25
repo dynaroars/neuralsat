@@ -26,9 +26,9 @@ def extract_params(params):
 
 def load_params(layer, weight, bias):
     """Load weight and bias to a given layer from onnx format."""
-    layer.weight.data = torch.from_numpy(onnx.numpy_helper.to_array(weight))
+    layer.weight.data = torch.from_numpy(onnx.numpy_helper.to_array(weight).copy())
     if bias is not None:
-        layer.bias.data = torch.from_numpy(onnx.numpy_helper.to_array(bias))
+        layer.bias.data = torch.from_numpy(onnx.numpy_helper.to_array(bias).copy())
 
 
 def convert_layer(node, layer_type, params=None):
@@ -85,7 +85,7 @@ def convert_batch_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = BatchNormWrapper
-    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param).copy()) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)
@@ -96,7 +96,7 @@ def convert_instance_norm_layer(node, params):
     kwargs = extract_attributes(node)
     # Skip input dimension check, not possible before forward pass
     layer = InstanceNormWrapper
-    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param)) for param in params]
+    torch_params = [torch.from_numpy(onnx.numpy_helper.to_array(param).copy()) for param in params]
 
     # Initialize layer and load weights
     layer = layer(torch_params, **kwargs)
@@ -153,30 +153,30 @@ def extract_and_load_params_lstm(node, weights):
     for par_ix, par_name in enumerate(node.input):
         if par_ix == 0:
             if par_name in weights:
-                X = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                X = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 1:
             if par_name in weights:
-                W = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                W = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 2:
             if par_name in weights:
-                R = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                R = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 3:
             if par_name != "" and par_name in weights:
-                B = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                B = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 4:
             if par_name != "" and par_name in weights:
                 sequence_lens = torch.from_numpy(
-                    onnx.numpy_helper.to_array(weights[par_name])
+                    onnx.numpy_helper.to_array(weights[par_name]).copy()
                 )
         elif par_ix == 5:
             if par_name != "" and par_name in weights:
-                initial_h = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                initial_h = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 6:
             if par_name != "" and par_name in weights:
-                initial_c = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                initial_c = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
         elif par_ix == 7:
             if par_name != "" and par_name in weights:
-                P = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]))
+                P = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
     return (X, W, R, B, sequence_lens, initial_h, initial_c, P)
 
 

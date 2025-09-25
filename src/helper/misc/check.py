@@ -15,5 +15,5 @@ def check_solution(net: ConvertModel | torch.nn.Module, adv: torch.Tensor,
     output = net(new_adv).detach().flatten(1)
     cond = torch.matmul(cs, output.unsqueeze(-1)).squeeze(-1) - rhs
     net.to(old_dtype)
-    valid = (cond.amax(dim=-1, keepdim=True) < 0.0).any(dim=-1).any(dim=-1)
+    valid = (cond.amax(dim=-1, keepdim=True) <= 0.0).any(dim=-1).any(dim=-1)
     return valid
