@@ -49,7 +49,7 @@ if __name__ == '__main__':
                         help="disable STABILIZE heuristic.")
     parser.add_argument('--force_split', type=str, choices=['input', 'hidden'],
                         help="select SPLITTING strategy.")
-    parser.add_argument('--reasoning_file', type=str, required=False,
+    parser.add_argument('--reasoning_output', type=str, required=False,
                         help="file to save reasoning steps.")
     parser.add_argument('--setting_file', type=str, required=False,
                         help="file to load specific settings.")
@@ -118,9 +118,9 @@ if __name__ == '__main__':
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
-    if args.reasoning_file and Settings.use_save_reasoning_step:
+    if args.reasoning_output and Settings.use_save_reasoning_step:
         if hasattr(verifier, 'domains_list') and not isinstance(verifier.domains_list, list):
-            verifier.domains_list.reasoning_domains.export(args.reasoning_file)
+            verifier.domains_list.reasoning_domains.export_aptp(args.reasoning_output)
         else:
             print(f'[!] Does not have any reasoning step')
 

@@ -138,6 +138,7 @@ class DomainsList:
                 histories=all_histories,
                 input_split=input_split,
                 select_index=torch.tensor([i for i in range(len(input_lowers)) if i not in remain_idx]).int(),
+                var_mapping=self.var_mapping,
             )
         
         self._check_consistent()

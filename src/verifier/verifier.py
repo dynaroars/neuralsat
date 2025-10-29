@@ -525,7 +525,7 @@ class Verifier:
         _check_invoke_gpu_tightening,
         _save_stats, get_stats,
         _prune_objective,
-        get_unsat_core, get_proof_tree, export_proof,
+        get_proof_tree, export_proof,
         _check_invoke_mip_presolving,
     )
     

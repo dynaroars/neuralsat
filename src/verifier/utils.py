@@ -659,26 +659,25 @@ def _check_adv(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: t
     return False
 
 @beartype
-def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
-    if self.status != ReturnStatus.UNSAT:
+def get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> None | dict:
+    if self.all_conflict_clauses is None:
         return None
-    
-    unsat_cores = {k: [] for k in self.all_conflict_clauses}
+    learned_conflict_clauses = {k: [] for k in self.all_conflict_clauses}
     if hasattr(self, 'domains_list') and isinstance(self.domains_list, DomainsList):
         for k, v in self.all_conflict_clauses.items():
-            [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
-    return unsat_cores
+            [learned_conflict_clauses[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
+    return learned_conflict_clauses
         
         
         
 @beartype
 def get_proof_tree(self: verifier.verifier.Verifier) -> None | dict:
-    unsat_core = self.get_unsat_core()
-    if not unsat_core:
+    learned_conflict_clauses = get_learned_conflict_clauses(self)
+    if learned_conflict_clauses is None:
         return None
     
     proof_tree = {}
-    for obj_idx, conflict_clauses in unsat_core.items():
+    for obj_idx, conflict_clauses in learned_conflict_clauses.items():
         proof_tree[obj_idx] = [[-1 * lit for lit in clause] for clause in conflict_clauses]
     
     return proof_tree

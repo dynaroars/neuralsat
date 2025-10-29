@@ -1,6 +1,6 @@
 # proof
-python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec example/vnnlib/prop_1.vnnlib --reasoning_file example/test_reasoning.json
-python3 main.py --net example/onnx/mnist_small.onnx --spec example/vnnlib/spec_idx_9_net_mnist_small_eps_0.400000_seed_36_output_0.vnnlib --reasoning_file example/test_reasoning.json
+python3 main.py --net example/onnx/ACASXU_run2a_1_1_batch_2000.onnx --spec example/vnnlib/prop_1.vnnlib --reasoning_output example/test_reasoning.json
+python3 main.py --net example/onnx/mnist_small.onnx --spec example/vnnlib/spec_idx_9_net_mnist_small_eps_0.400000_seed_36_output_0.vnnlib --reasoning_output example/test_reasoning.json
 
 # test
 python3 main.py --net example/model_fnn_signmoid.onnx --spec example/prop_2_0.03.vnnlib
