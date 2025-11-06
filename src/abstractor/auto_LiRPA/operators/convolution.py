@@ -655,6 +655,11 @@ class BoundPad(Bound):
         # x[1] should be [0,0,pad_top,pad_left,0,0,pad_bottom,pad_right]
         assert pad[0] == pad[1] == pad[4] == pad[5] == 0
         pad = [int(pad[3]), int(pad[7]), int(pad[2]), int(pad[6])]
+        if isinstance(value, Tensor):
+            if value.numel() == 1:
+                value = value.item()
+            else:
+                value = None
         final = F.pad(x, pad, value=value)
         self.padding, self.value = pad, value
         return final
