@@ -284,6 +284,12 @@ class DomainsList:
         
         # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
+        if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+            probability = float(os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'))
+            kept_mask = torch.rand(len(remaining_index)) > probability
+            original_length = len(remaining_index)
+            remaining_index = remaining_index[kept_mask]
+            print(f'[!] Kept {len(remaining_index)}/{original_length} domains')
         
         # hidden splitting
         if not self.input_split:

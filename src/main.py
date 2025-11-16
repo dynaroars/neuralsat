@@ -1,4 +1,5 @@
 import argparse
+import warnings
 import torch
 import time
 import os
@@ -61,6 +62,9 @@ if __name__ == '__main__':
     args = parser.parse_args()   
     Settings.setup(args)
     print(Settings)
+    
+    if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+        assert Settings.use_save_reasoning_step, 'Reasoning step is required for synthetic bug'
         
     # set device
     if not torch.cuda.is_available():
@@ -128,3 +132,7 @@ if __name__ == '__main__':
     logger.info(f'[!] Runtime: {runtime:.04f}')
     
     print(f'{status},{runtime:.04f}')
+
+    if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+        print('[!] Synthetic bug is enabled for demonstatration purpose. Do not enable for benchmarking.')
+        
