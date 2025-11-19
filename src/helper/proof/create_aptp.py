@@ -65,14 +65,22 @@ def create_aptp(
         
     # output
     for (cs, rhs) in zip(cnf_cs, cnf_rhs):
-        l = [f'Y_{i}' for i, v in enumerate(cs) if v == 1]
-        r = [f'Y_{i}' for i, v in enumerate(cs) if v == -1]
-        if not len(l):
-            l = ['0.0']
-        if rhs != 0.0:
-            r.append(rhs)
-        assert len(l) == len(r) == 1
-        output_lines.append(_format_simple_assert(l[0], r[0], lt=True))
+        if (cs == 1).any():
+            cs_ = cs
+            rhs_ = rhs
+            lt = True
+        else:
+            cs_ = cs * -1
+            rhs_ = rhs * -1
+            lt = False
+            
+        l = [f'Y_{i}' for i, v in enumerate(cs_) if v == 1]
+        r = [f'Y_{i}' for i, v in enumerate(cs_) if v == -1]
+        assert len(l)
+        if rhs_ != 0.0:
+            r.append(rhs_)
+        assert len(l) == len(r) == 1, f'{cs=}, {rhs=}, {l=}, {r=}'
+        output_lines.append(_format_simple_assert(l[0], r[0], lt=lt))
     
     # hidden
     if input_split:
