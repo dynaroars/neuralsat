@@ -77,7 +77,7 @@ def create_aptp(
         l = [f'Y_{i}' for i, v in enumerate(cs_) if v == 1]
         r = [f'Y_{i}' for i, v in enumerate(cs_) if v == -1]
         assert len(l)
-        if rhs_ != 0.0:
+        if rhs_ != 0.0 or not len(r):
             r.append(rhs_)
         assert len(l) == len(r) == 1, f'{cs=}, {rhs=}, {l=}, {r=}'
         output_lines.append(_format_simple_assert(l[0], r[0], lt=lt))

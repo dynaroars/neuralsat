@@ -8,7 +8,6 @@ from heuristic.util import _history_to_conflict_clause
 from helper.misc.tensor_storage import TensorStorage
 from helper.proof.create_aptp import create_aptp
 from helper.misc.result import AbstractResults
-from setting import Settings
 
 class ReasoningStep:
     
@@ -52,7 +51,6 @@ class ReasoningDomains:
     @beartype
     def __init__(
         self, 
-        net_info: dict,
         objective_ids: torch.Tensor,
         input_lowers: torch.Tensor, 
         input_uppers: torch.Tensor, 
@@ -66,8 +64,6 @@ class ReasoningDomains:
         select_index: torch.Tensor,
         var_mapping: dict,
     ) -> None:
-        
-        assert Settings.use_save_reasoning_step
         
         # objective indices
         self.all_objective_ids = TensorStorage(objective_ids[select_index].cpu())
@@ -93,7 +89,6 @@ class ReasoningDomains:
             self.all_histories = [histories[_] for _ in select_index]
         
         self.input_split = input_split
-        self.net_info = net_info
         self.var_mapping = var_mapping
         
         self._check_consistent()
@@ -174,7 +169,6 @@ class ReasoningDomains:
         # proof
         list_objectives = new_objective_ids.unique().int()
         data = {
-            'net_info': self.net_info,
             'reasoning_steps': {
                 int(i): [] for i in list_objectives
             }

@@ -113,20 +113,19 @@ class DomainsList:
         # proof
         if Settings.use_save_reasoning_step:
             # net architecture
-            input_name = [_.name for _ in self.net.roots() if _.perturbed]
-            assert len(input_name) == 1
-            net_info = {
-                'input_name': input_name[0],
-                'output_name': self.final_name,
-                'graph': []
-            }
-            for n in self.net.nodes():
-                if n.perturbed:
-                    net_info['graph'].append({n.name: [_.name for _ in n.inputs if _.perturbed]})
+            # input_name = [_.name for _ in self.net.roots() if _.perturbed]
+            # assert len(input_name) == 1
+            # net_info = {
+            #     'input_name': input_name[0],
+            #     'output_name': self.final_name,
+            #     'graph': []
+            # }
+            # for n in self.net.nodes():
+            #     if n.perturbed:
+            #         net_info['graph'].append({n.name: [_.name for _ in n.inputs if _.perturbed]})
 
             # reasoning domains
             self.reasoning_domains = ReasoningDomains(
-                net_info=net_info,
                 objective_ids=objective_ids,
                 input_lowers=input_lowers,
                 input_uppers=input_uppers,
