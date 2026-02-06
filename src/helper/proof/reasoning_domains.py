@@ -4,9 +4,10 @@ import torch
 import json
 import os
 
+from heuristic.util import _history_to_conflict_clause
 from helper.misc.tensor_storage import TensorStorage
+from helper.proof.create_aptp import create_aptp
 from helper.misc.result import AbstractResults
-from setting import Settings
 
 class ReasoningStep:
     
@@ -48,21 +49,21 @@ class ReasoningStep:
 class ReasoningDomains:
     
     @beartype
-    def __init__(self, 
-                 net_info: dict,
-                 objective_ids: torch.Tensor,
-                 input_lowers: torch.Tensor, 
-                 input_uppers: torch.Tensor, 
-                 output_lbs: torch.Tensor,
-                 lower_bounds: dict, 
-                 upper_bounds: dict, 
-                 cs: torch.Tensor, 
-                 rhs: torch.Tensor, 
-                 histories: list | None, 
-                 input_split: bool, 
-                 select_index: torch.Tensor) -> None:
-        
-        assert Settings.use_save_reasoning_step
+    def __init__(
+        self, 
+        objective_ids: torch.Tensor,
+        input_lowers: torch.Tensor, 
+        input_uppers: torch.Tensor, 
+        output_lbs: torch.Tensor,
+        lower_bounds: dict, 
+        upper_bounds: dict, 
+        cs: torch.Tensor, 
+        rhs: torch.Tensor, 
+        histories: list | None, 
+        input_split: bool, 
+        select_index: torch.Tensor,
+        var_mapping: dict,
+    ) -> None:
         
         # objective indices
         self.all_objective_ids = TensorStorage(objective_ids[select_index].cpu())
@@ -88,7 +89,7 @@ class ReasoningDomains:
             self.all_histories = [histories[_] for _ in select_index]
         
         self.input_split = input_split
-        self.net_info = net_info
+        self.var_mapping = var_mapping
         
         self._check_consistent()
         
@@ -136,7 +137,7 @@ class ReasoningDomains:
     
 
     @beartype
-    def export(self, path: str):
+    def get_reasoning_steps(self) -> dict:
         device = 'cpu'
         
         batch = len(self)
@@ -168,7 +169,6 @@ class ReasoningDomains:
         # proof
         list_objectives = new_objective_ids.unique().int()
         data = {
-            'net_info': self.net_info,
             'reasoning_steps': {
                 int(i): [] for i in list_objectives
             }
@@ -186,17 +186,49 @@ class ReasoningDomains:
                 c=new_cs[i],
                 rhs=new_rhs[i],
             )
-            
             data['reasoning_steps'][oid].append(step.to_json())
+
+        print(f'[!] Got {batch} reasoning steps')
+        self._check_consistent()
+        return data
             
+    @beartype
+    def export_json(self, path: str):
         # write
+        data = self.get_reasoning_steps()
         os.remove(path) if os.path.exists(path) else None
         with open(path, 'w') as fp:
             json.dump(data, fp, indent=2)
         
-        self._check_consistent()
-        
-        print(f'[!] Exported {batch} reasoning steps to "{path}"')
+    @beartype
+    def export_aptp(self, output_dir: str):
+        data = self.get_reasoning_steps()
+        for oid, steps in data['reasoning_steps'].items():
+            proof_tree = []
+            cs, rhs, input_lower, input_upper = None, None, None, None
+            for step in steps:
+                if self.input_split:
+                    proof_step = (torch.tensor(step['input_lower']), torch.tensor(step['input_upper']))
+                else:
+                    proof_step = [(-1 * lit) for lit in _history_to_conflict_clause(step['history'], self.var_mapping)]
+                proof_tree.append(proof_step)
+                if cs is None:
+                    cs = step['c']
+                    rhs = step['rhs']
+                    input_lower = step['input_lower']
+                    input_upper = step['input_upper']
+            aptp_str = create_aptp(
+                proof=proof_tree, 
+                input_lower=torch.tensor(input_lower),
+                input_upper=torch.tensor(input_upper),
+                cnf_cs=torch.tensor(cs), 
+                cnf_rhs=torch.tensor(rhs),
+                input_split=self.input_split,
+            )
+            # print(aptp_str)
+            os.makedirs(output_dir, exist_ok=True)
+            with open(os.path.join(output_dir, f'proof_{oid}.aptp'), 'w') as fp:
+                print(aptp_str, file=fp)
             
     @beartype
     def __len__(self) -> int:

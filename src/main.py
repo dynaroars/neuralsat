@@ -1,15 +1,17 @@
 import argparse
+import warnings
 import torch
 import time
 import os
 
 from helper.network.read_onnx import parse_onnx
 from helper.network.read_pth import parse_pth
-
 from helper.spec.objective import parse_vnnlib
+
 
 from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.misc.export import get_adv_string
+from helper.misc.result import ReturnStatus
 
 from verifier.verifier import Verifier 
 
@@ -33,7 +35,7 @@ if __name__ == '__main__':
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],
+    parser.add_argument('--device', type=str, default='cuda',
                         help="choose device to use for verifying.")
     parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=2, 
                         help='the logger level (0: NOTSET, 1: INFO, 2: DEBUG).')
@@ -49,7 +51,7 @@ if __name__ == '__main__':
                         help="disable STABILIZE heuristic.")
     parser.add_argument('--force_split', type=str, choices=['input', 'hidden'],
                         help="select SPLITTING strategy.")
-    parser.add_argument('--reasoning_file', type=str, required=False,
+    parser.add_argument('--reasoning_output', type=str, required=False,
                         help="file to save reasoning steps.")
     parser.add_argument('--setting_file', type=str, required=False,
                         help="file to load specific settings.")
@@ -61,6 +63,9 @@ if __name__ == '__main__':
     args = parser.parse_args()   
     Settings.setup(args)
     print(Settings)
+    
+    if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+        assert Settings.use_save_reasoning_step, 'Reasoning step is required for synthetic bug'
         
     # set device
     if not torch.cuda.is_available():
@@ -76,6 +81,11 @@ if __name__ == '__main__':
         model, input_shape, output_shape = parse_pth(args.net, args.input_shape, args.output_shape)
     else:
         raise NotImplementedError('Unsupported network type')
+    
+    logger.debug(f'net path: {args.net}')
+    logger.debug(f'spec path: {args.spec}')
+    logger.debug(f'timeout: {args.timeout}')
+    logger.debug(f'device: {args.device}')
     
     model.to(args.device)
 
@@ -118,9 +128,9 @@ if __name__ == '__main__':
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
 
-    if args.reasoning_file and Settings.use_save_reasoning_step:
+    if args.reasoning_output and Settings.use_save_reasoning_step and status == ReturnStatus.UNSAT:
         if hasattr(verifier, 'domains_list') and not isinstance(verifier.domains_list, list):
-            verifier.domains_list.reasoning_domains.export(args.reasoning_file)
+            verifier.domains_list.reasoning_domains.export_aptp(args.reasoning_output)
         else:
             print(f'[!] Does not have any reasoning step')
 
@@ -128,3 +138,7 @@ if __name__ == '__main__':
     logger.info(f'[!] Runtime: {runtime:.04f}')
     
     print(f'{status},{runtime:.04f}')
+
+    if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+        print('[!] Synthetic bug is enabled for demonstatration purpose. Do not enable for benchmarking.')
+        

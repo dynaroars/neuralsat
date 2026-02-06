@@ -58,6 +58,7 @@ class MIPSettings(BaseSettings):
 class AbstractionSettings(BaseSettings):
     
     def __init__(self, args=None):
+        self.default_abstraction_method = 'backward'
         self.share_alphas = False 
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000

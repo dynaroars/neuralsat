@@ -113,20 +113,19 @@ class DomainsList:
         # proof
         if Settings.use_save_reasoning_step:
             # net architecture
-            input_name = [_.name for _ in self.net.roots() if _.perturbed]
-            assert len(input_name) == 1
-            net_info = {
-                'input_name': input_name[0],
-                'output_name': self.final_name,
-                'graph': []
-            }
-            for n in self.net.nodes():
-                if n.perturbed:
-                    net_info['graph'].append({n.name: [_.name for _ in n.inputs if _.perturbed]})
+            # input_name = [_.name for _ in self.net.roots() if _.perturbed]
+            # assert len(input_name) == 1
+            # net_info = {
+            #     'input_name': input_name[0],
+            #     'output_name': self.final_name,
+            #     'graph': []
+            # }
+            # for n in self.net.nodes():
+            #     if n.perturbed:
+            #         net_info['graph'].append({n.name: [_.name for _ in n.inputs if _.perturbed]})
 
             # reasoning domains
             self.reasoning_domains = ReasoningDomains(
-                net_info=net_info,
                 objective_ids=objective_ids,
                 input_lowers=input_lowers,
                 input_uppers=input_uppers,
@@ -138,6 +137,7 @@ class DomainsList:
                 histories=all_histories,
                 input_split=input_split,
                 select_index=torch.tensor([i for i in range(len(input_lowers)) if i not in remain_idx]).int(),
+                var_mapping=self.var_mapping,
             )
         
         self._check_consistent()
@@ -283,6 +283,12 @@ class DomainsList:
         
         # unverified indices
         remaining_index = torch.where((domain_params.output_lbs.detach().cpu() <= domain_params.rhs.detach().cpu()).all(1))[0]
+        if os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'):
+            probability = float(os.environ.get('NEURALSAT_SYNTHETIC_BUG_DROP_PROBABILITY'))
+            kept_mask = torch.rand(len(remaining_index)) > probability
+            original_length = len(remaining_index)
+            remaining_index = remaining_index[kept_mask]
+            print(f'[!] Kept {len(remaining_index)}/{original_length} domains')
         
         # hidden splitting
         if not self.input_split:

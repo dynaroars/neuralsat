@@ -89,4 +89,8 @@ class GlobalSettings(BaseSettings):
                 assert hasattr(self, key), f"Unknown setting: {key=}"
                 setattr(self, key, value)
 
+        if self.use_save_reasoning_step:
+            torch.set_default_dtype(torch.float64)
+            print(f'[!] Using float64 for proof generation')
+            
 Settings = GlobalSettings()
