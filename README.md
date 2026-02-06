@@ -5,12 +5,21 @@
 
 
 ## NEWS
-- NeuralSAT is ranked **2nd overall at VNN-COMP'24** (our 2nd participation)
-  - Initially VNN-COMP’s script incorrectly parsed NeuralSAT’s (and another tool’s) results, and ranked it last. After fixing the issue, NeuralSAT’s results were correctly parsed and NeuralSAT was officially placed 2nd, behind ABCrown and above PyRAT. The updated VNN-COMP’24 report, available [here](https://www.arxiv.org/pdf/2412.19985), mentions the issue, presents the corrected rankings (see Table B.1), and includes detailed results and graphs in Appendix B.</li>
-- [First paper](https://dynaroars.github.io/pubs/duong2024harnessing.pdf) on NeuralSAT will be at FSE'24!
-- NeuralSAT is given the "New Participation Award" at VNN-COMP'23
+- NeuralSAT is ranked **2nd overall** at [VNN-COMP'25](https://arxiv.org/pdf/2512.19007)
+- NeuralSAT is ranked **2nd overall** at [VNN-COMP'24](https://www.arxiv.org/pdf/2412.19985)
+  - Initially VNN-COMP’s script incorrectly parsed NeuralSAT’s (and another tool’s) results, and ranked it last. After fixing the issue, NeuralSAT’s results were correctly parsed and NeuralSAT was officially placed 2nd, behind ABCrown and above PyRAT. The [updated VNN-COMP’24 report](https://www.arxiv.org/pdf/2412.19985) mentions the issue, presents the corrected rankings (see Table B.1), and includes detailed results and graphs in Appendix B.</li>
+- NeuralSAT is given the `New Participation Award` at VNN-COMP'23
 - NeuralSAT is ranked **4th in VNN-COMP'23**.  This was our first participation and we look forward to next time.
   - **Note**: The current version of NeuralSAT adds significant improvements and fixed the implementation bugs we had during VNN-COMP'23 that produce unsound results (hence 4th place ranking).
+
+## PUBLICATIONS
+- [FSE’26](https://hocdot.github.io/assets/papers/duong2026verifying.pdf) paper on formalizing and verifying structural robustness properties of AI systems.
+- [NeurIPS’25](https://roars.dev/pubs/duong2025generating.pdf) paper on generating and checking DNN verification proofs.
+- [NeurIPS’25](https://roars.dev/pubs/duong2025compositional.pdf) paper on compositional DNN verification (Spotlight).
+- [SAIV'25](https://hocdot.github.io/assets/papers/duong2025neuralsat2.pdf) competition paper on NeuralSAT.
+- [CAV’25](https://roars.dev/pubs/duong2025neuralsat.pdf) paper on NeuralSAT verification tool.
+- [FSE'24](https://roars.dev/pubs/duong2024harnessing.pdf) paper on new optimizations developed for the NeuralSAT.
+- [Arxiv'24](https://arxiv.org/pdf/2307.10266.pdf) technical report on NeuralSAT design and methodology.
 
 ## INSTALLATION & USAGE
 - see [INSTALL.md](./doc/INSTALL.md)
@@ -66,7 +75,7 @@ If conflicts arise, *NeuralSAT* determines the assignment decisions causing the 
   <img src="./doc/figure/overview.png" width='50%'/>
 </p>
 
-## ALGORITHM
+<!-- ## ALGORITHM
 
 *NeuralSAT* constructs a propositional formula representing neuron activation status (`Boolean Abstraction`) and searches for satisfying truth assignments while employing a DNN-specific theory solver to check feasibility with respect to DNN constraints and properties. 
 The process integrates standard DPLL components, which include deciding (`Decide`) variable assignments, and performing Boolean constraint propagation (`BCP`), with DNN-specific theory solving (`Deduce`), which uses LP solving and the polytope abstraction to check the satisfiability of assignments with the property of interest. 
@@ -131,10 +140,9 @@ The intuition is that neurons with bounds close to zero are more likely to becom
 As with any stochastic algorithm, *NeuralSAT* would perform poorly if it gets into a subspace of the search that does not quickly lead to a solution, e.g., due to choosing a bad sequence of neurons to split.
 This problem, which has been recognized in early SAT solving, motivates the introduction of restarting
 the search to avoid being stuck in such a local optima.
-*NeuralSAT*  uses a simple restart heuristic that triggers a restart when either the number of processed assignments (nodes) exceeds a pre-defined number or the number of remaining assignments that need be checked exceeds a pre-defined threshold.
+*NeuralSAT*  uses a simple restart heuristic that triggers a restart when either the number of processed assignments (nodes) exceeds a pre-defined number or the number of remaining assignments that need be checked exceeds a pre-defined threshold. -->
 
-
-## PERFORMANCES
+<!--
 
 To gain insights into the performance improvements of NeuralSAT we require benchmarks that force the algorithm to search a non-trivial portion of the space of activation patterns. 
 It is well-known that SAT problems can be very easy to solve regardless of their size or whether they are satisfiable or unsatisfiable. 
@@ -168,12 +176,19 @@ The plot shows the trend in verification solve times for each optimization combi
 One can observe that adding more optimizations improves performance both by the fact that the plots are lower and extend further to the right. 
 For example, extending `P` to `P+S` shows lower solve times for the first `17` problems – the one's `P` could solve – and that `38` of the `51` benchmark problems are solved. 
 Extending `P+S` to the full set of optimizations exhibits what appears to be a degradation in performance for the first `23` problems solved and this is likely due to the fact that, as explained above, restart forces some re-exploration of the search. 
-However, the benefit of restart shows in the ability to significantly reduce verification time for `25` of the `48` problems solved by `P+S+R`.
+However, the benefit of restart shows in the ability to significantly reduce verification time for `25` of the `48` problems solved by `P+S+R`. -->
 
-### VNN-COMP's benchmarks
+<!-- ### VNN-COMP's benchmarks -->
 
+## PERFORMANCES
+VNN-COMP is an annual competition on neural network verification that has been held annually to facilitate the fair and objective comparison of SOTA neural network verification tools.
+The goal of VNN-COMP is to encourage the standardization of tool interfaces, and bring together the neural network verification community.
+To this end, VNN-COMP uses standardized formats for networks (ONNX) and specification (VNN-LIB), and evaluates tools 
+using a common set of benchmarks (collected from various sources including previous papers and contributions from the community) on a common platform (AWS instances).
+
+The cactus plot shows NeuralSAT and other tools performance on **Regular Track** benchmarks from [VNN-COMP'25](https://arxiv.org/pdf/2512.19007).
 <p align="center">
-  <img src="./doc/figure/vnncomp23.png" width="60%"/>
+  <img src="./doc/figure/all_scored_vnncomp_25.png" width="100%"/>
 </p>
 
 
@@ -181,13 +196,11 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 ## PEOPLE
 
 - [Hai Duong](https://hocdot.github.io) (GMU, main developer)
-- Linhan Li (GMU)
-- Dong Xu (UVA)
 - [ThanhVu Nguyen](https://dynaroars.github.io/people/nguyenthanhvuh/) (GMU)
 - [Matthew Dwyer](https://matthewbdwyer.github.io/) (UVA)
 
 
-## :page_with_curl: PUBLICATIONS
+<!-- ## :page_with_curl: PUBLICATIONS
 - Hai Duong, ThanhVu Nguyen, Matthew Dwyer. [**A DPLL(T) Framework for Verifying Deep Neural Networks**](https://arxiv.org/pdf/2307.10266.pdf), Arxiv, 2024.
 
 ```
@@ -211,8 +224,20 @@ However, the benefit of restart shows in the ability to significantly reduce ver
       archivePrefix={arXiv},
       primaryClass={cs.LG}
 }
-```
+``` -->
 
 ## ACKNOWLEDGEMENTS
-The *NeuralSAT* research is partially supported by grants from NSF ([1900676](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1900676), [2019239](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2019239), [2129824](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2129824), [2200621](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2200621), [2217071](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2217071), [2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133), [2319131](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2319131)) and an [Amazon Research Award](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced).
+The *NeuralSAT* research is partially supported by grants from NSF 
+  ([1900676](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1900676), 
+  [2019239](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2019239), 
+  [2129824](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2129824), 
+  [2217071](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2217071), 
+  [2501059](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2501059), 
+  [2422036](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2422036), 
+  [2319131](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2319131),
+  [2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133),
+  [2200621](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2200621)) 
+  and 
+  an [Amazon Research Award](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced) and 
+  an NVIDIA Academic Grant.
 
