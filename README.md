@@ -196,6 +196,11 @@ The cactus plot shows NeuralSAT and other tools performance on **Regular Track**
 ## PEOPLE
 
 - [Hai Duong](https://hocdot.github.io) (GMU, main developer)
+- [Jahnvi](https://github.com/jahnvi09) (GMU)
+- [Thanh Le](https://thanhle.xyz/) (NII)
+- [Lam Nguyen](https://github.com/lamnvs) (HUST)
+- [Linhan Li](https://lli-debu.top/) (GMU)
+- [Nguyen Ho](https://github.com/hodangkhoinguyen) (GMU)
 - [ThanhVu Nguyen](https://dynaroars.github.io/people/nguyenthanhvuh/) (GMU)
 - [Matthew Dwyer](https://matthewbdwyer.github.io/) (UVA)
 
