@@ -34,19 +34,27 @@ class MIPSolver:
         
     def verify(self, dnf_objective, timeout):
         if len(dnf_objective) > 10:
-            return ReturnStatus.UNKNOWN
+            return ReturnStatus.UNKNOWN, None
         start = time.time()
+
+        saw_unknown = False
         while len(dnf_objective):
             if time.time() - start > timeout:
                 return ReturnStatus.UNKNOWN, None
 
-            objective = dnf_objective.pop(1)
+            objective = dnf_objective.pop(batch=1)   #batch size = 1, not index
             status, adv = self.verify_one(objective=objective, timeout=timeout)
-            assert status in [ReturnStatus.UNSAT, ReturnStatus.UNKNOWN, ReturnStatus.SAT], f'{status=}'
-            if status in [ReturnStatus.UNKNOWN]:
-                return ReturnStatus.UNKNOWN, None
+
+            if status == ReturnStatus.SAT:
+                return ReturnStatus.SAT, adv
+            if status == ReturnStatus.UNKNOWN:
+                saw_unknown = True
+            #if UNSAT, keep checking other disjuncts
+
+        if saw_unknown:
+            return ReturnStatus.UNKNOWN, None
         
-        return status, adv
+        return ReturnStatus.UNSAT, None
             
         
     def verify_one(self, objective, timeout):
