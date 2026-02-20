@@ -34,7 +34,6 @@ dependencies = [
     "numpy>=1.24.2",
     "onnx>=1.20.1",
     "onnxruntime>=1.20.0",
-    "onnxsim>=0.4.36",
     "packaging>=23.2",
     "Pillow>=9.3.0",
     "protobuf>=4.25.1,<6.0",
