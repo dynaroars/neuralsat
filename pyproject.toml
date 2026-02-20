@@ -48,7 +48,7 @@ dependencies = [
     "joblib>=1.4.2",
     "torchaudio>=2.9.0",
     "scipy>=1.10.1",
-    "haioc @ file://third_party/haioc",
+    "haioc @ file:third_party/haioc",
 ]
 
 [project.urls]
