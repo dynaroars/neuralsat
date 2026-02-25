@@ -1,79 +1,30 @@
-import torch.utils.checkpoint as checkpoint
 from torch import Tensor
+import torch
 import torch.nn as nn
 import torch._C as _C
-import atexit
-import shutil
-import torch
 import copy
-import uuid
-import os
+import torch.utils.checkpoint as checkpoint
 
-USE_OFFLOAD = 1
-OFFLOAD_OPTS = {
-    'mode': 'cpu',  # Options: 'cpu' (RAM), 'disk' (NVMe/SSD)
-    'dir': 'temp_offload',
-    'compute_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-}
-
-if OFFLOAD_OPTS['mode'] == 'disk':
-    os.makedirs(OFFLOAD_OPTS['dir'], exist_ok=True)
-
-def cleanup_disk():
-    """Deletes the temp directory on exit."""
-    if os.path.exists(OFFLOAD_OPTS['dir']):
-        try:
-            shutil.rmtree(OFFLOAD_OPTS['dir'], ignore_errors=True)
-        except Exception:
-            pass
-
-atexit.register(cleanup_disk)
-
-def _offload_tensor(x):
-    """
-    Moves a tensor to the storage medium (CPU RAM or Disk).
-    """
-    if isinstance(x, Tensor):
-        # 1. Detach and move to CPU first
-        with _C.DisableTorchFunction():
-            cpu_tensor = x.detach().cpu()
-
-        if OFFLOAD_OPTS['mode'] == 'disk':
-            # 2. Save to Disk
-            fname = os.path.join(OFFLOAD_OPTS['dir'], f"{uuid.uuid4()}.pt")
-            torch.save(cpu_tensor, fname)
-            
-            # 3. Load back with mmap=True
-            # This creates a tensor backed by the file, using negligible RAM.
-            # (requires PyTorch >= 1.10)
-            try:
-                mmap_tensor = torch.load(fname, map_location='cpu', mmap=True)
-                return mmap_tensor.as_subclass(Tensor)
-            except TypeError:
-                # Fallback for older PyTorch versions or systems without mmap support
-                print("Warning: mmap not supported, falling back to CPU RAM.")
-                return cpu_tensor.as_subclass(Tensor)
-        else:
-            # CPU Mode
-            return cpu_tensor.as_subclass(Tensor)
-    return x
+# Global setting for offloading
+OFFLOAD_TO_CPU = 1 
+COMPUTE_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Force CUDA initialization
 if torch.cuda.is_available():
     torch.zeros(1).cuda()
-
 
 class BoundedTensor(Tensor):
     
     @staticmethod
     def __new__(cls, x, ptb=None, *args, **kwargs):
         if isinstance(x, Tensor):
-            if USE_OFFLOAD:
-                stored_x = _offload_tensor(x)
+            if OFFLOAD_TO_CPU:
+                x_cpu = x.detach().cpu()
             else:
-                stored_x = x
-            tensor = super().__new__(cls, stored_x, *args, **kwargs)
-            tensor.data = stored_x.data
+                x_cpu = x
+            
+            tensor = super().__new__(cls, x_cpu, *args, **kwargs)
+            tensor.data = x_cpu.data
             tensor.requires_grad = x.requires_grad
             return tensor
         else:
@@ -83,10 +34,9 @@ class BoundedTensor(Tensor):
         self.ptb = ptb
 
     def __repr__(self):
-        if hasattr(self, 'ptb') and self.ptb is not None:
-            return '<BoundedTensor: {}, {}>'.format(super().__repr__(), self.ptb.__repr__())
-        else:
-            return '<BoundedTensor: {}, no ptb>'.format(super().__repr__())
+        loc = "CPU" if self.device.type == 'cpu' else "GPU"
+        ptb_info = self.ptb.__repr__() if hasattr(self, 'ptb') and self.ptb is not None else 'no ptb'
+        return '<BoundedTensor [{}]: {}, {}>'.format(loc, super().__repr__(), ptb_info)
 
     def clone(self, *args, **kwargs):
         tensor = BoundedTensor(super().clone(*args, **kwargs), copy.deepcopy(self.ptb))
@@ -97,9 +47,7 @@ class BoundedTensor(Tensor):
         new_obj = BoundedTensor(temp, self.ptb)
         return new_obj
 
-    # Copy to other devices with perturbation
     def to(self, *args, **kwargs):
-        # FIXME add a general "to" function in perturbation class, not here.
         if hasattr(self.ptb, 'x_L') and isinstance(self.ptb.x_L, Tensor):
             self.ptb.x_L = self.ptb.x_L.to(*args, **kwargs)
         if hasattr(self.ptb, 'x_U') and isinstance(self.ptb.x_U, Tensor):
@@ -123,6 +71,7 @@ class BoundedTensor(Tensor):
                 return type(ret)(*converted)
             except Exception:
                 return tuple(converted)
+
         return ret
 
     @classmethod
@@ -130,6 +79,8 @@ class BoundedTensor(Tensor):
         if kwargs is None: kwargs = {}
         if not all(issubclass(cls, t) for t in types): return NotImplemented
 
+        # --- SYNC / OFFLOAD LOGIC ---
+        
         def to_gpu(x):
             if isinstance(x, (list, tuple)):
                 return type(x)(to_gpu(item) for item in x)
@@ -139,17 +90,20 @@ class BoundedTensor(Tensor):
                     raw = x.data
                 else:
                     raw = x
-                # Explicitly load from disk/memory to GPU
-                return raw.detach().to(OFFLOAD_OPTS['compute_device']).requires_grad_(x.requires_grad)
+                return raw.detach().to(COMPUTE_DEVICE).requires_grad_(x.requires_grad)
             return x
 
-        def to_storage(x):
-            """Moves result back to CPU or Disk"""
+        def to_cpu(x):
             if isinstance(x, (list, tuple)):
-                return type(x)(to_storage(item) for item in x)
+                return type(x)(to_cpu(item) for item in x)
             
             if isinstance(x, Tensor):
-                return _offload_tensor(x)
+                with _C.DisableTorchFunction():
+                    if x.shape != x.data.shape:
+                        out = x.data.cpu()
+                    else:
+                        out = x.cpu()
+                    return out.as_subclass(Tensor)
             return x
 
         def check_requires_grad(x):
@@ -159,31 +113,29 @@ class BoundedTensor(Tensor):
                 return x.requires_grad
             return False
 
-        # Check if we should offload (GPU available + Config enabled)
-        should_offload = torch.cuda.is_available() and USE_OFFLOAD
+        should_offload = OFFLOAD_TO_CPU and torch.cuda.is_available()
 
         if should_offload:
-            # 1. Ensure inputs are in storage (CPU/Disk) - usually already true
-            # We map args just in case mixed inputs are passed
-            storage_args = [to_storage(a) for a in args]
-            storage_kwargs = {k: to_storage(v) for k, v in kwargs.items()}
+            cpu_args = [to_cpu(a) for a in args]
+            cpu_kwargs = {k: to_cpu(v) for k, v in kwargs.items()}
             
-            needs_grad = any(check_requires_grad(a) for a in storage_args)
+            needs_grad = any(check_requires_grad(a) for a in cpu_args)
 
             def closure(*c_args):
-                # 2. Move to GPU (Load from Disk/RAM)
+                # 1. Move Args to GPU
                 g_args = [to_gpu(a) for a in c_args]
-                g_kwargs = {k: to_gpu(v) for k, v in storage_kwargs.items()}
+                # 2. Move Kwargs to GPU (Fix for Batch Norm / Other ops)
+                g_kwargs = {k: to_gpu(v) for k, v in cpu_kwargs.items()}
                 
                 with _C.DisableTorchFunction():
                     g_res = func(*g_args, **g_kwargs)
                 
-                # 3. Move Result to Storage (Save to Disk/RAM)
-                def recursive_to_storage(res):
+                # 3. Move Result to CPU
+                def recursive_to_cpu(res):
                     if isinstance(res, Tensor):
-                        return _offload_tensor(res)
+                        return res.cpu()
                     elif isinstance(res, (list, tuple)):
-                        converted_items = [recursive_to_storage(r) for r in res]
+                        converted_items = [recursive_to_cpu(r) for r in res]
                         try:
                             return type(res)(tuple(converted_items))
                         except TypeError:
@@ -192,7 +144,7 @@ class BoundedTensor(Tensor):
                             return type(res)(converted_items)
                     return res
                 
-                return recursive_to_storage(g_res)
+                return recursive_to_cpu(g_res)
 
             if needs_grad:
                 tensor_inputs = []
@@ -202,19 +154,18 @@ class BoundedTensor(Tensor):
                     elif isinstance(x, Tensor):
                         tensor_inputs.append(x)
                 
-                for a in storage_args: extract_tensors(a)
+                for a in cpu_args: extract_tensors(a)
                 
-                has_nested = any(isinstance(a, (list, tuple)) for a in storage_args)
+                has_nested = any(isinstance(a, (list, tuple)) for a in cpu_args)
                 
                 if has_nested:
-                    # Checkpointing complex nested args is hard, skip checkpoint
-                    ret = closure(*storage_args)
+                    ret = closure(*cpu_args)
                 else:
-                    tensor_inputs = [a for a in storage_args if isinstance(a, Tensor)]
+                    tensor_inputs = [a for a in cpu_args if isinstance(a, Tensor)]
                     def checkpoint_wrapper(*t_inputs):
                         iter_t = iter(t_inputs)
                         reconstructed_args = []
-                        for a in storage_args:
+                        for a in cpu_args:
                             if isinstance(a, Tensor):
                                 reconstructed_args.append(next(iter_t))
                             else:
@@ -223,7 +174,7 @@ class BoundedTensor(Tensor):
                     
                     ret = checkpoint.checkpoint(checkpoint_wrapper, *tensor_inputs, use_reentrant=False)
             else:
-                ret = closure(*storage_args)
+                ret = closure(*cpu_args)
 
         else:
             with _C.DisableTorchFunction():
@@ -251,6 +202,6 @@ class BoundedParameter(nn.Parameter):
     def __repr__(self):
         return 'BoundedParameter containing:\n{}\n{}'.format(
             self.data.__repr__(), self.ptb.__repr__())
-
+    
     def __reduce_ex__(self, proto):
         raise NotImplementedError
