@@ -51,7 +51,7 @@ dependencies = [
     "joblib>=1.4.2",
     "torchaudio>=2.9.0",
     "scipy>=1.10.1",
-    "haioc @ file:third_party/haioc",
+    "haioc",
 ]
 
 [project.urls]
@@ -65,5 +65,5 @@ include = ["src*"]
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
 
-[tool.uv]
-python = "3.10"
+[tool.uv.sources]
+haioc = { path = "third_party/haioc", editable = true }
