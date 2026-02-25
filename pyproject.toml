@@ -64,3 +64,6 @@ include = ["src*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
+
+[tool.uv]
+python = "3.10"
