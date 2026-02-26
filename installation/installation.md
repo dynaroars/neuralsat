@@ -128,6 +128,18 @@ pip install -r requirements.txt
 **Note:** Check your CUDA version with `nvidia-smi`. For CUDA 12.x use `pytorch-cuda=12.1`, for CUDA 11.x use `pytorch-cuda=11.8`.
 
 
+#### Option 3: UV installation
+
+If you need to manage specific Python versions (e.g., Python 3.10 for onnxsim compatibility), use [uv](https://docs.astral.sh/uv/):
+
+- Run the setup script
+
+```bash
+./setup.sh
+# Or alternatively:
+bash setup.sh
+```
+
 ### Linux (Ubuntu/Debian)
 
 **System dependencies** (for PyTorch/ONNX builds):
@@ -141,6 +153,12 @@ sudo apt-get install libbz2-dev lzma liblzma-dev
 
 Run NeuralSAT from the repository root directory:
 
+**If you installed with uv:**
+```bash
+uv run src/main.py [-h] --net NET --spec SPEC
+```
+
+**If you installed with pip or conda:**
 ```bash
 python3 src/main.py [-h] --net NET --spec SPEC 
         [--batch BATCH] [--timeout TIMEOUT] [--device {cpu,cuda}] [--verbosity {0,1,2}] 
@@ -164,6 +182,8 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 
 
 ### Examples
+
+**Note:** If you installed with uv, replace `python3` with `uv run` in all examples below.
 
 - Examples showing **NeuralSAT** verifies properties (i.e., returning `unsat``):
 
