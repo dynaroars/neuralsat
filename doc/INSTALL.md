@@ -73,15 +73,16 @@ pip install gurobipy
 pip install "third_party/haioc"
 ```
 
-- (Optional) Install `DNNV` for ONNX simplification
+- **Recommended:** Install `DNNV` for ONNX simplification
 
 ```bash
-
 python3 -m venv dnnv_env
 source dnnv_env/bin/activate 
 pip install --no-deps git+https://github.com/dlshriver/DNNV.git@d4f59a01810cf4dac99f8f5e5b9d7a350cbfa8d7#egg=dnnv
 deactivate
 ```
+
+**Note:** Without onnxsim (provided by DNNV), some models with Transpose layers may crash during restart phase. Install onnxsim to avoid this issue.
 
 #### Option 2: conda with conda-forge
 
@@ -190,6 +191,7 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 ```bash
 python3 main.py --net "example/onnx/mnistfc-medium-net-554.onnx" --spec "example/vnnlib/test.vnnlib"
 # unsat,24.9284
+# Note: This example requires onnxsim to be installed to avoid crashes during restart phase
 ```
 
 ```bash
