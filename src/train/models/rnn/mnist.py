@@ -24,8 +24,8 @@ class MNISTLSTM(nn.Module):
     
 
 # @register_model
-def mnist_lstm_128x2(*args, **kwargs):
-    return MNISTLSTM(n_layers=2, hidden_size=128)
+def mnist_lstm_128x1(*args, **kwargs):
+    return MNISTLSTM(n_layers=1, hidden_size=128)
 
 
 def mnist_lstm_64x2(*args, **kwargs):
@@ -36,7 +36,7 @@ def mnist_lstm_64x1(*args, **kwargs):
     return MNISTLSTM(n_layers=1, hidden_size=64)
 
 if __name__ == "__main__":
-    model = mnist_lstm_128x2()
+    model = mnist_lstm_128x1()
     x = torch.randn(7, 1, 28, 28)
     y = model(x)
     print(model)

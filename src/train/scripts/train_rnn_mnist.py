@@ -20,7 +20,7 @@ def get_model_params(model):
     total_params = sum(p.numel() for p in model.parameters())
     return total_params
 
-def train(epoch, train_loader, model, criterion, optimizer, scheduler, amp_autocast=suppress(), device='cpu', adv_train=False):
+def train(epoch, train_loader, model, criterion, optimizer, scheduler, amp_autocast=suppress(), device='cpu'):
     """train function"""
     model.train()
 
@@ -96,7 +96,6 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=36)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--infer', action='store_true')
-    parser.add_argument('--adv_train', action='store_true')
     parser.add_argument('--saver', action='store_true')
 
     args = parser.parse_args()
