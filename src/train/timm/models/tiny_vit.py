@@ -16,8 +16,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import LayerNorm2d, NormMlpClassifierHead, DropPath,\
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import LayerNorm2d, NormMlpClassifierHead, DropPath,\
     trunc_normal_, resize_rel_pos_bias_table_levit, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module

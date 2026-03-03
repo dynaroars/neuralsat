@@ -7,7 +7,7 @@ import math
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from .resnet import ResNet

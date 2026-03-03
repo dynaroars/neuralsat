@@ -20,8 +20,8 @@ from typing import Dict, List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import StdConv2dSame, StdConv2d, ConvNormAct, to_2tuple, to_ntuple, HybridEmbed
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import StdConv2dSame, StdConv2d, ConvNormAct, to_2tuple, to_ntuple, HybridEmbed
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations

@@ -12,8 +12,8 @@ import math
 
 from torch import nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectiveKernel, ConvNormAct, create_attn
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import SelectiveKernel, ConvNormAct, create_attn
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from .resnet import ResNet

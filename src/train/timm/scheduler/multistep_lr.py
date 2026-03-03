@@ -4,7 +4,7 @@ Basic multi step LR schedule with warmup, noise.
 """
 import torch
 import bisect
-from timm.scheduler.scheduler import Scheduler
+from ..scheduler.scheduler import Scheduler
 from typing import List
 
 class MultiStepLRScheduler(Scheduler):

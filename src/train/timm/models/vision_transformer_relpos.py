@@ -19,8 +19,8 @@ import torch.nn as nn
 from torch.jit import Final
 from torch.utils.checkpoint import checkpoint
 
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias, use_fused_attn, LayerType
+from ..data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from ..layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias, use_fused_attn, LayerType
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply

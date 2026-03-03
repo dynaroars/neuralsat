@@ -10,8 +10,8 @@ from typing import List, Optional, Tuple, Union, Callable
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import DropPath, NormMlpClassifierHead, ClassifierHead, EffectiveSEModule, \
     make_divisible, get_act_layer, get_norm_layer
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices

@@ -8,7 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import os
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from timm.utils.misc import natural_key
+from ...utils.misc import natural_key
 
 from .class_map import load_class_map
 from .img_extensions import get_img_extensions

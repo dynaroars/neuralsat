@@ -36,8 +36,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterResponseNormTlu2d, ClassifierHead, \
+from ..data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from ..layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterResponseNormTlu2d, ClassifierHead, \
     DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv

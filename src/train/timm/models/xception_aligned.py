@@ -11,9 +11,9 @@ from typing import List, Dict, Type, Optional
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import ClassifierHead, ConvNormAct, DropPath, PadType, create_conv2d, get_norm_act_layer
-from timm.layers.helpers import to_3tuple
+from ..data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from ..layers import ClassifierHead, ConvNormAct, DropPath, PadType, create_conv2d, get_norm_act_layer
+from ..layers.helpers import to_3tuple
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs

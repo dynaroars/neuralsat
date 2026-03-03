@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
+from ..layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 

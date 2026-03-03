@@ -5,7 +5,7 @@ import torch
 from .resnet_utils import _weights_init, BasicBlock, BasicBlockBN
 
 try:
-    from timm.models.registry import register_model
+    from ..models.registry import register_model
 except ModuleNotFoundError:
     def register_model(func):
         """

@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SelectAdaptivePool2d, DropPath, create_conv2d
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import SelectAdaptivePool2d, DropPath, create_conv2d
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from ._manipulate import checkpoint_seq

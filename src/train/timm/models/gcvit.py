@@ -27,8 +27,8 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
     get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function

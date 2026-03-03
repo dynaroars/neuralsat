@@ -9,36 +9,12 @@ import torch
 import sys
 import os
 
-from ..utils import NativeScaler, AverageMeter, random_seed, CheckpointSaver
-from ..scheduler import create_scheduler_v2
+from ..timm.utils import AverageMeter, random_seed, CheckpointSaver
+from ..timm.scheduler import create_scheduler_v2
 
-from models.fc.mnistfc import *
+from ..models.rnn.mnist import *
 
-loss_fn_p = torch.nn.CrossEntropyLoss()
-
-def fgsm_attack(model, loss_fn, images, labels, epsilon):
-    # Set requires_grad attribute of the images tensor
-    images.requires_grad = True
-    
-    # Forward pass
-    outputs = model(images)
-    loss = loss_fn(outputs, labels)
-    
-    # Zero all existing gradients
-    model.zero_grad()
-    
-    # Backward pass to calculate gradients
-    loss.backward()
-    
-    # Collect the sign of the gradients
-    sign_data_grad = images.grad.data.sign()
-    
-    # Create the perturbed image by adjusting each pixel of the input image
-    perturbed_image = images + epsilon * sign_data_grad
-    
-    # Return the perturbed image
-    return perturbed_image
-
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def get_model_params(model):
     total_params = sum(p.numel() for p in model.parameters())
@@ -60,8 +36,8 @@ def train(epoch, train_loader, model, criterion, optimizer, scheduler, amp_autoc
         y = y.to(device)
         
         with amp_autocast:
-            Y_rec = model(X)
-            loss = criterion(Y_rec, y)
+            Y_pred = model(X)
+            loss = criterion(Y_pred, y)
 
         losses_m.update(loss.item(), X.size(0))
 
@@ -111,9 +87,9 @@ def parse_args():
     parser.add_argument('--output_name', required=True)
     parser.add_argument('--output_folder', required=True)
     parser.add_argument('--dataset', default='mnist')
-    parser.add_argument('--data_root', default='data')
-    parser.add_argument('--save_dir', default='weights')
-    parser.add_argument('--model', type=str, default='fc', choices=['fc'])
+    parser.add_argument('--data_dir', default=os.path.join(ROOT_DIR, 'data'))
+    parser.add_argument('--save_dir', default=os.path.join(ROOT_DIR, 'weights'))
+    parser.add_argument('--model', type=str, default='rnn', choices=['gru', 'lstm'])
     parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_epoch', type=int, default=10)
@@ -149,13 +125,13 @@ def main():
         raise ValueError(args.dataset)
     
     train_set = dataset_class(
-        root=args.data_root,
+        root=args.data_dir,
         train=True,
         transform=transform,
         download=True)
     
     test_set = dataset_class(
-        root=args.data_root,
+        root=args.data_dir,
         train=False,
         transform=transform,
         download=True)

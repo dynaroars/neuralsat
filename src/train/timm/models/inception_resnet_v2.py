@@ -7,8 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import create_classifier, ConvNormAct
+from ..data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from ..layers import create_classifier, ConvNormAct
 from ._builder import build_model_with_cfg
 from ._manipulate import flatten_modules
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations

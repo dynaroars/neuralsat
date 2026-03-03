@@ -10,8 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import trunc_normal_, create_classifier, Linear, ConvNormAct
+from ..data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from ..layers import trunc_normal_, create_classifier, Linear, ConvNormAct
 from ._builder import build_model_with_cfg
 from ._builder import resolve_pretrained_cfg
 from ._manipulate import flatten_modules

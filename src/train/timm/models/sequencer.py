@@ -14,8 +14,8 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
-from timm.layers import lecun_normal_, DropPath, Mlp, PatchEmbed, ClassifierHead
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
+from ..layers import lecun_normal_, DropPath, Mlp, PatchEmbed, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply
 from ._registry import register_model, generate_default_cfgs

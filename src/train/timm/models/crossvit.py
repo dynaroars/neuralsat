@@ -31,8 +31,8 @@ import torch
 import torch.hub
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, _assert
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import DropPath, to_2tuple, trunc_normal_, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._registry import register_model, generate_default_cfgs

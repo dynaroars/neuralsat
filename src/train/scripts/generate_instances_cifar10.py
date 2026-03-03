@@ -14,7 +14,7 @@ from util.spec.write_vnnlib import write_vnnlib_classify
 from train.models.resnet.resnet import *
 from train.models.vit.vit import *
 
-# from train.timm.models import load_checkpoint
+# from train...models import load_checkpoint
 
 
 def get_model_params(model):

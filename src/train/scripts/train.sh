@@ -27,3 +27,5 @@ python3 -m example.scripts.extract_filtered_instances --model_name mnist_256x3 -
 python3 -m example.scripts.extract_filtered_instances --model_name mnist_256x4 --eps 0.12
 python3 -m example.scripts.extract_filtered_instances --model_name mnist_256x5 --eps 0.08
 python3 -m example.scripts.extract_filtered_instances --model_name mnist_256x6 --eps 0.08
+
+python3 -m train.scripts.train_rnn_mnist --dataset torch/mnist --batch_size 128 --max_epoch 20 --model lstm --output_folder lstm --saver --output_name  mnist_lstm_128x2

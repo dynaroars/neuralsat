@@ -11,8 +11,8 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
 from ._builder import build_model_with_cfg
 from ._manipulate import MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations

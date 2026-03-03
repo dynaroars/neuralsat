@@ -32,8 +32,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, use_fused_attn, _assert, get_norm_layer, to_2tuple
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import DropPath, Mlp, use_fused_attn, _assert, get_norm_layer, to_2tuple
 
 
 from ._registry import generate_default_cfgs, register_model
@@ -918,7 +918,7 @@ def checkpoint_filter_fn(state_dict, model=None):
     for k, v in state_dict.items():
         # if k == 'pos_embed' and  v.shape[1] != model.pos_embed.shape[1]:
         #     # To resize pos embedding when using model at different size from pretrained weights
-        #     from timm.layers import resample_abs_pos_embed
+        #     from ..layers import resample_abs_pos_embed
         #     v = resample_abs_pos_embed(
         #         v,
         #         new_size=(64, 64),

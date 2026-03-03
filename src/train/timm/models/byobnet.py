@@ -36,8 +36,8 @@ from typing import Tuple, List, Dict, Optional, Union, Any, Callable, Sequence
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import (
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
+from ..layers import (
     ClassifierHead, NormMlpClassifierHead, ConvNormAct, BatchNormAct2d, EvoNorm2dS0a,
     AttentionPool2d, RotAttentionPool2d, DropPath, AvgPool2dSame,
     create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple,

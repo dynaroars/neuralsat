@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 
 from .vit_utils import Tokenizer, TransformerClassifier
-from timm.models.registry import register_model
+from ..models.registry import register_model
 
 class CCT(nn.Module):
     def __init__(self,

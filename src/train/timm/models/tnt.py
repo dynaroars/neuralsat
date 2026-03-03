@@ -13,8 +13,8 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple
 from ._builder import build_model_with_cfg
 from ._registry import register_model
 from .vision_transformer import resize_pos_embed

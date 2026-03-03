@@ -17,11 +17,11 @@ except ImportError:
     has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
-from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
-from timm.layers import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
-from timm.layers.non_local_attn import BilinearAttnTransform
-from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
-from timm.layers.norm_act import (
+from ..layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
+from ..layers import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
+from ..layers.non_local_attn import BilinearAttnTransform
+from ..layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
+from ..layers.norm_act import (
     BatchNormAct2d,
     SyncBatchNormAct,
     FrozenBatchNormAct2d,
@@ -36,8 +36,8 @@ __all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules'
            'create_feature_extractor', 'get_graph_node_names', 'FeatureGraphNet', 'GraphExtractNet']
 
 
-# NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
-# BUT modules from timm.models should use the registration mechanism below
+# NOTE: By default, any modules from ..models.layers that we want to treat as leaf modules go here
+# BUT modules from ..models should use the registration mechanism below
 _leaf_modules = {
     BilinearAttnTransform,  # reason: flow control t <= 1
     # Reason: get_same_padding has a max which raises a control flow error
@@ -53,7 +53,7 @@ _leaf_modules = {
 }
 
 try:
-    from timm.layers import InplaceAbn
+    from ..layers import InplaceAbn
     _leaf_modules.add(InplaceAbn)
 except ImportError:
     pass
@@ -61,7 +61,7 @@ except ImportError:
 
 def register_notrace_module(module: Type[nn.Module]):
     """
-    Any module not under timm.models.layers should get this decorator if we don't want to trace through it.
+    Any module not under ..models.layers should get this decorator if we don't want to trace through it.
     """
     _leaf_modules.add(module)
     return module

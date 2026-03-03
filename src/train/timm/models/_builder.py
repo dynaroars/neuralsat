@@ -7,15 +7,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
 
-from timm.models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
-from timm.models._features_fx import FeatureGraphNet
-from timm.models._helpers import load_state_dict
-from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf,\
+from ..models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
+from ..models._features_fx import FeatureGraphNet
+from ..models._helpers import load_state_dict
+from ..models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf,\
     load_custom_from_hf
-from timm.models._manipulate import adapt_input_conv
-from timm.models._pretrained import PretrainedCfg
-from timm.models._prune import adapt_model_from_file
-from timm.models._registry import get_pretrained_cfg
+from ..models._manipulate import adapt_input_conv
+from ..models._pretrained import PretrainedCfg
+from ..models._prune import adapt_model_from_file
+from ..models._registry import get_pretrained_cfg
 
 _logger = logging.getLogger(__name__)
 

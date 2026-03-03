@@ -9,11 +9,11 @@ from typing import Optional, Tuple, Union
 import torch
 from torchvision import transforms
 
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
-from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
-from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, \
+from ..data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
+from ..data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
+from ..data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, \
     ResizeKeepRatio, CenterCropOrPad, RandomCropOrPad, TrimBorder, ToNumpy, MaybeToTensor, MaybePILToTensor
-from timm.data.random_erasing import RandomErasing
+from ..data.random_erasing import RandomErasing
 
 
 def transforms_noaug_train(
@@ -402,7 +402,7 @@ def create_transform(
 
     if tf_preprocessing and use_prefetcher:
         assert not separate, "Separate transforms not supported for TF preprocessing"
-        from timm.data.tf_preprocessing import TfPreprocessTransform
+        from ..data.tf_preprocessing import TfPreprocessTransform
         transform = TfPreprocessTransform(
             is_training=is_training,
             size=img_size,

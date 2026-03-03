@@ -24,9 +24,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_, _assert
-from timm.layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_, _assert
+from ..layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply

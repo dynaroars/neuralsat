@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict, Optional, Union
 from urllib.parse import urlsplit
 
-from timm.layers import set_layer_config
+from ..layers import set_layer_config
 from ._helpers import load_checkpoint
 from ._hub import load_model_config_from_hf
 from ._pretrained import PretrainedCfg
@@ -51,7 +51,7 @@ def create_model(
     Lookup model's entrypoint function and pass relevant args to create a new model.
 
     <Tip>
-        **kwargs will be passed through entrypoint fn to ``timm.models.build_model_with_cfg()``
+        **kwargs will be passed through entrypoint fn to ``..models.build_model_with_cfg()``
         and then the model class __init__(). kwargs values set to None are pruned before passing.
     </Tip>
 

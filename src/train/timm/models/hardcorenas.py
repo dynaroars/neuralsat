@@ -2,7 +2,7 @@ from functools import partial
 
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._builder import build_model_with_cfg
 from ._builder import pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite

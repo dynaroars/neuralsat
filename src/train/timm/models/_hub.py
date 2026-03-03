@@ -26,8 +26,8 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
-from timm import __version__
-from timm.models._pretrained import filter_pretrained_cfg
+from .. import __version__
+from ..models._pretrained import filter_pretrained_cfg
 
 try:
     from huggingface_hub import (

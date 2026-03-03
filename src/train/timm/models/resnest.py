@@ -8,8 +8,8 @@ Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
 from torch import nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import SplitAttn
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import SplitAttn
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from .resnet import ResNet

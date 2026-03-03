@@ -40,7 +40,7 @@ class AttentionExtract(torch.nn.Module):
         assert method in ('fx', 'hook')
         if method == 'fx':
             # names are activation node names
-            from timm.models._features_fx import get_graph_node_names, GraphExtractNet
+            from ..models._features_fx import get_graph_node_names, GraphExtractNet
 
             node_names = get_graph_node_names(model)[0 if mode == 'train' else 1]
             names = names or self.default_node_names
@@ -57,7 +57,7 @@ class AttentionExtract(torch.nn.Module):
         else:
             # names are module names
             assert hook_type in ('forward', 'forward_pre')
-            from timm.models._features import FeatureHooks
+            from ..models._features import FeatureHooks
 
             module_names = [n for n, m in model.named_modules()]
             names = names or self.default_module_names

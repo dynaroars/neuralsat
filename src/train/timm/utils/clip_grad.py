@@ -1,6 +1,6 @@
 import torch
 
-from timm.utils.agc import adaptive_clip_grad
+from ..utils.agc import adaptive_clip_grad
 
 
 def dispatch_clip_grad(parameters, value: float, mode: str = 'norm', norm_type: float = 2.0):

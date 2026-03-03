@@ -9,11 +9,11 @@ import torch
 import sys
 import os
 
-from timm.utils import NativeScaler, AverageMeter, random_seed, CheckpointSaver
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.data import create_dataset, create_loader, FastCollateMixup
-from timm.models import model_parameters, create_model
-from timm.scheduler import create_scheduler_v2
+from ..utils import NativeScaler, AverageMeter, random_seed, CheckpointSaver
+from ..loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from ..data import create_dataset, create_loader, FastCollateMixup
+from ..models import model_parameters, create_model
+from ..scheduler import create_scheduler_v2
 
 from models.resnet.resnet import *
 from models.fc.mnistfc import *

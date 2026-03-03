@@ -36,8 +36,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.jit import Final
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
+from ..data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ..layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
     use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
@@ -158,7 +158,7 @@ class StarReLU(nn.Module):
 class Attention(nn.Module):
     """
     Vanilla self-attention from Transformer: https://arxiv.org/abs/1706.03762.
-    Modified from timm.
+    Modified from ..
     """
     fused_attn: Final[bool]
 

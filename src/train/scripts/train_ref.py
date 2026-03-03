@@ -11,13 +11,13 @@ import torch
 import torch.nn as nn
 import torchvision.utils
 
-from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
-from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, convert_splitbn_model, model_parameters, convert_syncbn_model
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
-from timm.optim import create_optimizer_v2, optimizer_kwargs
-from timm.scheduler import create_scheduler
-from timm.utils import ApexScaler, NativeScaler
-from timm.utils import *
+from ..data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from ..models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, convert_splitbn_model, model_parameters, convert_syncbn_model
+from ..loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
+from ..optim import create_optimizer_v2, optimizer_kwargs
+from ..scheduler import create_scheduler
+from ..utils import ApexScaler, NativeScaler
+from ..utils import *
 
 has_apex = has_wandb = False
 _logger = ApexDDP = NativeDDP = amp = None

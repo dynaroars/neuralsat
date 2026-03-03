@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-from timm.layers import Format, _assert
+from ..layers import Format, _assert
 
 
 __all__ = [

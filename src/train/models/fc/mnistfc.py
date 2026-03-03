@@ -3,7 +3,7 @@ import torch.nn as nn
 # import torch
 
 # try:
-#     from timm.models.registry import register_model
+#     from ..models.registry import register_model
 # except ModuleNotFoundError:
 #     def register_model(func):
 #         """
