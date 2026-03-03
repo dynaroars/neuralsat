@@ -5,9 +5,46 @@ import onnx
 from ..operations import (
     BatchNormWrapper,
     InstanceNormWrapper,
-    LSTMWrapper,
 )
 from .attribute import extract_attributes, extract_attr_values
+
+
+class LSTMUnrolledImpl(nn.Module):
+    """Unrolled single-layer LSTM (batch_first=False). Returns ONNX-compatible (Y, Y_h, Y_c)."""
+
+    def __init__(self, input_size, hidden_size, bidirectional=False):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
+        self.cell = nn.LSTMCell(input_size=input_size, hidden_size=hidden_size)
+        if bidirectional:
+            self.cell_reverse = nn.LSTMCell(input_size=input_size, hidden_size=hidden_size)
+
+    def forward(self, x, h_0=None, c_0=None):
+        seq_len, batch, input_size = x.shape
+        h_fwd, c_fwd = h_0[0], c_0[0]
+        fwd_outputs = []
+        for i in range(seq_len):
+            h_fwd, c_fwd = self.cell(x[i], (h_fwd, c_fwd))
+            fwd_outputs.append(h_fwd)
+        fwd_out = torch.stack(fwd_outputs, dim=1).transpose(0, 1)  # [seq_len, batch, hidden]
+
+        if self.bidirectional:
+            h_bwd, c_bwd = h_0[1], c_0[1]
+            bwd_outputs = []
+            for i in reversed(range(seq_len)):
+                h_bwd, c_bwd = self.cell_reverse(x[i], (h_bwd, c_bwd))
+                bwd_outputs.append(h_bwd)
+            bwd_out = torch.stack(list(reversed(bwd_outputs)), dim=1).transpose(0, 1)
+            Y = torch.stack([fwd_out, bwd_out], dim=1)   # [seq_len, 2, batch, hidden]
+            Y_h = torch.stack([h_fwd, h_bwd], dim=0)     # [2, batch, hidden]
+            Y_c = torch.stack([c_fwd, c_bwd], dim=0)     # [2, batch, hidden]
+        else:
+            Y = fwd_out.unsqueeze(1)   # [seq_len, 1, batch, hidden]
+            Y_h = h_fwd.unsqueeze(0)   # [1, batch, hidden]
+            Y_c = c_fwd.unsqueeze(0)   # [1, batch, hidden]
+
+        return Y, Y_h, Y_c
 
 
 def extract_params(params):
@@ -180,6 +217,137 @@ def extract_and_load_params_lstm(node, weights):
     return (X, W, R, B, sequence_lens, initial_h, initial_c, P)
 
 
+class GRUUnrolledImpl(nn.Module):
+    """Unrolled single-layer GRU (batch_first=False). Returns ONNX-compatible (Y, Y_h)."""
+
+    def __init__(self, input_size, hidden_size, bidirectional=False, linear_before_reset=False):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
+        self.linear_before_reset = linear_before_reset
+        self.cell = nn.GRUCell(input_size=input_size, hidden_size=hidden_size)
+        if bidirectional:
+            self.cell_reverse = nn.GRUCell(input_size=input_size, hidden_size=hidden_size)
+
+    def forward(self, x, h_0=None):
+        seq_len, batch, input_size = x.shape
+
+        h_fwd = h_0[0]
+        fwd_outputs = []
+        for i in range(seq_len):
+            h_fwd = self.cell(x[i], h_fwd)
+            fwd_outputs.append(h_fwd)
+        fwd_out = torch.stack(fwd_outputs, dim=1).transpose(0, 1)  # [seq_len, batch, hidden]
+
+        if self.bidirectional:
+            h_bwd = h_0[1]
+            bwd_outputs = []
+            for i in reversed(range(seq_len)):
+                h_bwd = self.cell_reverse(x[i], h_bwd)
+                bwd_outputs.append(h_bwd)
+            bwd_out = torch.stack(list(reversed(bwd_outputs)), dim=1).transpose(0, 1)
+            Y = torch.stack([fwd_out, bwd_out], dim=1)  # [seq_len, 2, batch, hidden]
+            Y_h = torch.stack([h_fwd, h_bwd], dim=0)    # [2, batch, hidden]
+        else:
+            Y = fwd_out.unsqueeze(1)   # [seq_len, 1, batch, hidden]
+            Y_h = h_fwd.unsqueeze(0)   # [1, batch, hidden]
+
+        return Y, Y_h
+
+
+def extract_and_load_params_gru(node, weights):
+    X = W = R = B = sequence_lens = initial_h = None
+    for par_ix, par_name in enumerate(node.input):
+        if par_name == "":
+            continue
+        if par_name not in weights:
+            continue
+        val = torch.from_numpy(onnx.numpy_helper.to_array(weights[par_name]).copy())
+        if par_ix == 0:
+            X = val
+        elif par_ix == 1:
+            W = val
+        elif par_ix == 2:
+            R = val
+        elif par_ix == 3:
+            B = val
+        elif par_ix == 4:
+            sequence_lens = val
+        elif par_ix == 5:
+            initial_h = val
+    return X, W, R, B, sequence_lens, initial_h
+
+
+def convert_gru_layer(node, weights):
+    """Convert GRU layer from onnx node and params."""
+    X, W, R, B, sequence_lens, initial_h = extract_and_load_params_gru(node, weights)
+    if initial_h is not None:
+        raise NotImplementedError("GRU initial_h not yet implemented.")
+
+    dc = dict(
+        activation_alpha=None,
+        activation_beta=None,
+        activations=None,
+        clip=None,
+        direction="forward",
+        hidden_size=None,
+        linear_before_reset=0,
+        layout=0,
+    )
+    dc.update(extract_attributes(node))
+    if dc["activation_alpha"] is not None:
+        raise NotImplementedError("GRU activation_alpha {}.".format(dc["activation_alpha"]))
+    if dc["activation_beta"] is not None:
+        raise NotImplementedError("GRU activation_beta {}.".format(dc["activation_beta"]))
+    if dc["activations"] is not None:
+        raise NotImplementedError("GRU activations {}.".format(dc["activations"]))
+    if dc["clip"] is not None:
+        raise NotImplementedError("GRU clip {}.".format(dc["clip"]))
+    if dc["direction"] not in ("forward", "bidirectional"):
+        raise ValueError("GRU direction {}.".format(dc["direction"]))
+    if dc["hidden_size"] is None:
+        raise ValueError("GRU hidden_size is None.")
+    if dc["layout"] != 0:
+        raise NotImplementedError("GRU not implemented for layout={}.".format(dc["layout"]))
+
+    input_size = W.shape[2]
+    hidden_size = dc["hidden_size"]
+    bidirectional = dc["direction"] == "bidirectional"
+    num_directions = 2 if bidirectional else 1
+
+    layer = GRUUnrolledImpl(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        bidirectional=bidirectional,
+    )
+
+    def _reorder_zrh_to_rzn_2d(mat, h):
+        """Reorder ONNX (z, r, h) gate order to PyTorch (r, z, n) for 2D weight matrices."""
+        return torch.cat((mat[h:2*h, :], mat[0:h, :], mat[2*h:3*h, :]), dim=0)
+
+    def _reorder_zrh_to_rzn_1d(vec, h):
+        """Reorder ONNX (z, r, h) gate order to PyTorch (r, z, n) for 1D bias vectors."""
+        return torch.cat((vec[h:2*h], vec[0:h], vec[2*h:3*h]), dim=0)
+
+    if bidirectional:
+        W_zrh = W.transpose(0, 1).view(3 * hidden_size, num_directions, input_size)
+        R_zrh = R.transpose(0, 1).view(3 * hidden_size, num_directions, hidden_size)
+        for dir_dim, cell in [(0, layer.cell), (1, layer.cell_reverse)]:
+            cell.weight_ih.data = _reorder_zrh_to_rzn_2d(W_zrh[:, dir_dim, :], hidden_size)
+            cell.weight_hh.data = _reorder_zrh_to_rzn_2d(R_zrh[:, dir_dim, :], hidden_size)
+            cell.bias_ih.data = _reorder_zrh_to_rzn_1d(B[dir_dim, :3 * hidden_size], hidden_size)
+            cell.bias_hh.data = _reorder_zrh_to_rzn_1d(B[dir_dim, 3 * hidden_size:], hidden_size)
+    else:
+        W_zrh = W.transpose(0, 1).view(3 * hidden_size, input_size)
+        R_zrh = R.transpose(0, 1).view(3 * hidden_size, hidden_size)
+        layer.cell.weight_ih.data = _reorder_zrh_to_rzn_2d(W_zrh, hidden_size)
+        layer.cell.weight_hh.data = _reorder_zrh_to_rzn_2d(R_zrh, hidden_size)
+        layer.cell.bias_ih.data = _reorder_zrh_to_rzn_1d(B[0, :3 * hidden_size], hidden_size)
+        layer.cell.bias_hh.data = _reorder_zrh_to_rzn_1d(B[0, 3 * hidden_size:], hidden_size)
+
+    return layer
+
+
 def convert_lstm_layer(node, weights):
     """Convert LSTM layer from onnx node and params."""
     params_tuple = extract_and_load_params_lstm(node, weights)
@@ -226,121 +394,35 @@ def convert_lstm_layer(node, weights):
             "LSTM not implemented for layout={}".format(dc["layout"])
         )
 
-    kwargs = {
-        "input_size": W.shape[2],
-        "hidden_size": dc["hidden_size"],
-        "num_layers": 1,
-        "bias": True,
-        "batch_first": False,
-        "dropout": 0,
-        "bidirectional": dc["direction"] == "bidirectional",
-    }
-    lstm_layer = nn.LSTM(**kwargs)
+    input_size = W.shape[2]
+    hidden_size = dc["hidden_size"]
+    bidirectional = dc["direction"] == "bidirectional"
+    num_directions = 2 if bidirectional else 1
 
-    input_size = kwargs["input_size"]
-    hidden_size = kwargs["hidden_size"]
-    num_directions = kwargs["bidirectional"] + 1
-    num_layers = 1
-    if kwargs["bidirectional"]:
-        # Set input-hidden weights
+    layer = LSTMUnrolledImpl(input_size=input_size, hidden_size=hidden_size, bidirectional=bidirectional)
+
+    def _reorder_iofc_to_ifco_2d(mat, h):
+        """Reorder ONNX iofc gate order to PyTorch ifco order for 2D weight matrices."""
+        return torch.cat((mat[0:h, :], mat[2*h:4*h, :], mat[h:2*h, :]), dim=0)
+
+    def _reorder_iofc_to_ifco_1d(vec, h):
+        """Reorder ONNX iofc gate order to PyTorch ifco order for 1D bias vectors."""
+        return torch.cat((vec[0:h], vec[2*h:4*h], vec[h:2*h]), dim=0)
+
+    if bidirectional:
         W_iofc = W.transpose(0, 1).view(4 * hidden_size, num_directions, input_size)
-        for dir_dim, dir_str in [(0, ""), (1, "_reverse")]:
-            W_ifco = torch.cat(
-                tensors=(
-                    W_iofc[0:hidden_size, dir_dim, :],
-                    W_iofc[2 * hidden_size : 4 * hidden_size, dir_dim, :],
-                    W_iofc[hidden_size : 2 * hidden_size, dir_dim, :],
-                ),
-                dim=0,
-            )
-            getattr(lstm_layer, "weight_ih_l0{}".format(dir_str)).data = W_ifco
-
-        # Set hidden-hidden weights
         R_iofc = R.transpose(0, 1).view(4 * hidden_size, num_directions, hidden_size)
-        for dir_dim, dir_str in [(0, ""), (1, "_reverse")]:
-            R_ifco = torch.cat(
-                tensors=(
-                    R_iofc[0:hidden_size, dir_dim, :],
-                    R_iofc[2 * hidden_size : 4 * hidden_size, dir_dim, :],
-                    R_iofc[hidden_size : 2 * hidden_size, dir_dim, :],
-                ),
-                dim=0,
-            )
-            getattr(lstm_layer, "weight_hh_l0{}".format(dir_str)).data = R_ifco
-
-        # Set input-hidden biases
-        for dir_dim, dir_str in [(0, ""), (1, "_reverse")]:
-            Wb_iofc = B[dir_dim, 0 : 4 * hidden_size]
-            Wb_ifco = torch.cat(
-                tensors=(
-                    Wb_iofc[0:hidden_size],
-                    Wb_iofc[2 * hidden_size : 4 * hidden_size],
-                    Wb_iofc[hidden_size : 2 * hidden_size],
-                ),
-                dim=0,
-            )
-            getattr(lstm_layer, "bias_ih_l0{}".format(dir_str)).data = Wb_ifco
-
-        # Set hidden-hidden biases
-        for dir_dim, dir_str in [(0, ""), (1, "_reverse")]:
-            Rb_iofc = B[dir_dim, 4 * hidden_size :]
-            Rb_ifco = torch.cat(
-                tensors=(
-                    Rb_iofc[0:hidden_size],
-                    Rb_iofc[2 * hidden_size : 4 * hidden_size],
-                    Rb_iofc[hidden_size : 2 * hidden_size],
-                ),
-                dim=0,
-            )
-            getattr(lstm_layer, "bias_hh_l0{}".format(dir_str)).data = Rb_ifco
+        for dir_dim, cell in [(0, layer.cell), (1, layer.cell_reverse)]:
+            cell.weight_ih.data = _reorder_iofc_to_ifco_2d(W_iofc[:, dir_dim, :], hidden_size)
+            cell.weight_hh.data = _reorder_iofc_to_ifco_2d(R_iofc[:, dir_dim, :], hidden_size)
+            cell.bias_ih.data = _reorder_iofc_to_ifco_1d(B[dir_dim, :4 * hidden_size], hidden_size)
+            cell.bias_hh.data = _reorder_iofc_to_ifco_1d(B[dir_dim, 4 * hidden_size:], hidden_size)
     else:
-        # Set input-hidden weights
         W_iofc = W.transpose(0, 1).view(4 * hidden_size, input_size)
-        W_ifco = torch.cat(
-            tensors=(
-                W_iofc[0:hidden_size, :],
-                W_iofc[2 * hidden_size : 4 * hidden_size, :],
-                W_iofc[hidden_size : 2 * hidden_size, :],
-            ),
-            dim=0,
-        )
-        getattr(lstm_layer, "weight_ih_l0").data = W_ifco
-
-        # Set hidden-hidden weights
         R_iofc = R.transpose(0, 1).view(4 * hidden_size, hidden_size)
-        R_ifco = torch.cat(
-            tensors=(
-                R_iofc[0:hidden_size, :],
-                R_iofc[2 * hidden_size : 4 * hidden_size, :],
-                R_iofc[hidden_size : 2 * hidden_size, :],
-            ),
-            dim=0,
-        )
-        getattr(lstm_layer, "weight_hh_l0").data = R_ifco
+        layer.cell.weight_ih.data = _reorder_iofc_to_ifco_2d(W_iofc, hidden_size)
+        layer.cell.weight_hh.data = _reorder_iofc_to_ifco_2d(R_iofc, hidden_size)
+        layer.cell.bias_ih.data = _reorder_iofc_to_ifco_1d(B[0, :4 * hidden_size], hidden_size)
+        layer.cell.bias_hh.data = _reorder_iofc_to_ifco_1d(B[0, 4 * hidden_size:], hidden_size)
 
-        # Set input-hidden biases
-        Wb_iofc = B[0, 0 : 4 * hidden_size]
-        Wb_ifco = torch.cat(
-            tensors=(
-                Wb_iofc[0:hidden_size],
-                Wb_iofc[2 * hidden_size : 4 * hidden_size],
-                Wb_iofc[hidden_size : 2 * hidden_size],
-            ),
-            dim=0,
-        )
-        getattr(lstm_layer, "bias_ih_l0").data = Wb_ifco
-
-        # Set hidden-hidden biases
-        Rb_iofc = B[0, 4 * hidden_size :]
-        Rb_ifco = torch.cat(
-            tensors=(
-                Rb_iofc[0:hidden_size],
-                Rb_iofc[2 * hidden_size : 4 * hidden_size],
-                Rb_iofc[hidden_size : 2 * hidden_size],
-            ),
-            dim=0,
-        )
-        getattr(lstm_layer, "bias_hh_l0").data = Rb_ifco
-
-    layer = LSTMWrapper(lstm_layer)
     return layer

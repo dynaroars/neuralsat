@@ -5,18 +5,19 @@ from .operations import (
     BatchNormWrapper,
     InstanceNormWrapper,
     Loop,
-    LSTMWrapper,
     Split,
     TopK,
 )
+from .convert.layer import LSTMUnrolledImpl, GRUUnrolledImpl
 
 
 COMPOSITE_LAYERS = (nn.Sequential,)
-MULTIOUTPUT_LAYERS = (Loop, LSTMWrapper, Split, TopK)
+MULTIOUTPUT_LAYERS = (Loop, LSTMUnrolledImpl, GRUUnrolledImpl, Split, TopK)
 STANDARD_LAYERS = (
     _ConvNd,
     BatchNormWrapper,
     InstanceNormWrapper,
-    LSTMWrapper,
+    LSTMUnrolledImpl,
+    GRUUnrolledImpl,
     nn.Linear,
 )

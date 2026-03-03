@@ -12,6 +12,7 @@ from .layer import (
     convert_batch_norm_layer,
     convert_instance_norm_layer,
     convert_lstm_layer,
+    convert_gru_layer,
 )
 
 from ..operations.base import OperatorWrapper
@@ -181,6 +182,8 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             )
         elif node.op_type == "LSTM":
             op = convert_lstm_layer(node, weights)
+        elif node.op_type == "GRU":
+            op = convert_gru_layer(node, weights)
         elif node.op_type == "MatMul":
             if params:
                 weight = torch.from_numpy(onnx.numpy_helper.to_array(params[0]).copy())
