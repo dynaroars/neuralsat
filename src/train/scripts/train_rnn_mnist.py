@@ -86,7 +86,6 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_name', required=True)
     parser.add_argument('--output_folder', required=True)
-    parser.add_argument('--dataset', default='mnist')
     parser.add_argument('--data_dir', default=os.path.join(ROOT_DIR, 'data'))
     parser.add_argument('--save_dir', default=os.path.join(ROOT_DIR, 'weights'))
     parser.add_argument('--model', type=str, default='rnn', choices=['gru', 'lstm'])
@@ -111,17 +110,11 @@ def main():
     output_dir = f'{args.save_dir}/{args.output_folder}/{args.output_name}'
     os.makedirs(output_dir, exist_ok=True)
     
-    if args.dataset.endswith('mnist'):
-        dataset_class = torchvision.datasets.MNIST
-        # transform = transforms.Compose([
-        #     transforms.ToTensor(),
-        # ])
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])
-    else:
-        raise ValueError(args.dataset)
+    dataset_class = torchvision.datasets.MNIST
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
     
     train_set = dataset_class(
         root=args.data_dir,
