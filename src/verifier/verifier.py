@@ -44,6 +44,7 @@ class Verifier:
         self.input_split = False
         self.batch = max(batch, 1)
         self.orig_batch = max(batch, 1)
+        self.last_failed_batch = None
 
         # counter-example
         self.adv = None
@@ -187,10 +188,12 @@ class Verifier:
                             raise NotImplementedError('Unsupported exception')
                         
                         if is_cuda_out_of_memory(exception):
+                            logger.debug(f'OOM with {self.batch=}')
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
                                 logger.debug('[!] OOM with batch_size=1')
                                 return ReturnStatus.UNKNOWN
+                            self.last_failed_batch = self.batch
                             self.batch = self.batch // 2
                             dnf_objectives.add(objective)
                             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
@@ -469,16 +472,18 @@ class Verifier:
         # adapt batch size
         current_batch = len(pick_ret.input_lowers)
         _, mem_used_percentage = get_used_gpu_memory(return_percentage=True)
-        if mem_used_percentage > 80.0:
+        if mem_used_percentage > 80.0 and self.batch > current_batch:
             self.batch = current_batch
             logger.debug(f'Fixed {self.batch=}')
         elif self.input_split and (current_batch < old_domains_length) and (self.num_restart < len(INPUT_SPLIT_RESTART_STRATEGIES)) and (self.abstractor.method != 'crown-optimized'):
-            if mem_used_percentage < 10.0:
-                self.batch = min(500000, self.batch*10)
-                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
-            elif mem_used_percentage < 50.0:
-                self.batch = min(500000, self.batch*2)
-                logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
+            # if mem_used_percentage < 10.0:
+                # self.batch = min(500000, self.batch*10)
+                # logger.debug(f'Increase {current_batch=} {old_domains_length=} {self.batch=}')
+            if mem_used_percentage < 50.0:
+                new_batch = min(500000, self.batch*2)
+                if self.last_failed_batch is None or new_batch < self.last_failed_batch:
+                    self.batch = new_batch
+                    logger.debug(f'Increase {current_batch=} {new_batch=}')
             
         # logging
         msg = (
