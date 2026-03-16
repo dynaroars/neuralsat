@@ -55,9 +55,13 @@ class Attacker:
                 raise NotImplementedError
             else:
                 gc_cuda()
-            logger.info(f"{'[Success]' if is_attacked else '[Failed]'} {atk}")
+            
             if is_attacked:
+                logger.info(f"[Success] {atk} attacked")
                 return is_attacked, adv
+            else:
+                logger.info(f"[Failed] {atk} timeout")
+                
         return False, None
 
 
