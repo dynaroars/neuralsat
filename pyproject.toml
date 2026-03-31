@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neuralsat"
-version = "0.2.15"
+version = "0.2.16"
 authors = [
     {name="Thanh Le", email="thanhbok26b@gmail.com"},
 ]
@@ -51,7 +51,6 @@ dependencies = [
     "joblib>=1.4.2",
     "torchaudio>=2.9.0",
     "scipy>=1.10.1",
-    "haioc",
 ]
 
 [project.urls]
