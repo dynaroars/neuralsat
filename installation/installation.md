@@ -41,7 +41,7 @@ pip install neuralsat
 
 
 
-#### Option 2: pip installation (recommended)
+#### Option 2: pip installation 
 
 - (Optional) Remove any pre-existing virtual environment
 
