@@ -20,6 +20,7 @@
 
 ### Setup
 
+
 #### Step 1: Clone the repository
 
 ```bash
@@ -27,11 +28,20 @@ git clone https://github.com/dynaroars/neuralsat.git
 cd neuralsat
 ```
 
-#### Step 2: Choose your installaticon method
+#### Step 2: Choose your installation method
 
-You can install NeuralSAT using either **pip** (recommended) or **conda** with conda-forge.
+You can install NeuralSAT using either **pip** (recommended), **conda** with conda-forge or **uv**.
 
-#### Option 1: pip installation (recommended)
+#### Option 1: PyPI installation
+
+You can directory install all required packages by running:
+```bash
+pip install neuralsat
+```
+
+
+
+#### Option 2: pip installation (recommended)
 
 - (Optional) Remove any pre-existing virtual environment
 
@@ -73,18 +83,17 @@ pip install gurobipy
 pip install "third_party/haioc"
 ```
 
-- **Recommended:** Install `DNNV` for ONNX simplification
+- (Optional) Install `DNNV` for ONNX simplification
 
 ```bash
+
 python3 -m venv dnnv_env
 source dnnv_env/bin/activate 
 pip install --no-deps git+https://github.com/dlshriver/DNNV.git@d4f59a01810cf4dac99f8f5e5b9d7a350cbfa8d7#egg=dnnv
 deactivate
 ```
 
-**Note:** Without onnxsim (provided by DNNV), some models with Transpose layers may crash during restart phase. Install onnxsim to avoid this issue.
-
-#### Option 2: conda with conda-forge
+#### Option 3: conda with conda-forge
 
 If you prefer conda, use conda-forge channels (free, no licensing restrictions):
 
@@ -129,7 +138,7 @@ pip install -r requirements.txt
 **Note:** Check your CUDA version with `nvidia-smi`. For CUDA 12.x use `pytorch-cuda=12.1`, for CUDA 11.x use `pytorch-cuda=11.8`.
 
 
-#### Option 3: UV installation
+#### Option 4: UV installation
 
 If you need to manage specific Python versions (e.g., Python 3.10 for onnxsim compatibility), use [uv](https://docs.astral.sh/uv/):
 
@@ -191,7 +200,6 @@ Use ```-h``` or ```--help``` to see options that can be passed into **NeuralSAT*
 ```bash
 python3 main.py --net "example/onnx/mnistfc-medium-net-554.onnx" --spec "example/vnnlib/test.vnnlib"
 # unsat,24.9284
-# Note: This example requires onnxsim to be installed to avoid crashes during restart phase
 ```
 
 ```bash
