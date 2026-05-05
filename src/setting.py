@@ -59,6 +59,8 @@ class GlobalSettings(BaseSettings):
     
     def setup(self, args=None):
         if args is not None:
+            if hasattr(args, 'disable_verify'):
+                self.use_verify = args.disable_verify
             if hasattr(args, 'disable_attack'):
                 self.use_attack = args.disable_attack
             if hasattr(args, 'disable_restart'):

@@ -89,6 +89,9 @@ class Verifier:
         is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(10.0, timeout * 0.1))
         if is_attacked:
             return ReturnStatus.SAT  
+        
+        if not Settings.use_verify:
+            return ReturnStatus.UNKNOWN
 
         # refine
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)

@@ -29,6 +29,7 @@ python3 main.py --net example/onnx/pensieve_big_parallel.onnx --spec example/vnn
 python3 main.py --net /home/droars/Desktop/cav24/benchmark/nn4sys/onnx/mscn_2048d.onnx --spec /home/droars/Desktop/cav24/benchmark/nn4sys/vnnlib/cardinality_0_500_2048.vnnlib 
 python3 main.py --net /home/droars/Desktop/cav24/benchmark/vggnet16/onnx/vgg16-7-simplified.onnx --spec /home/droars/Desktop/cav24/benchmark/vggnet16/vnnlib/spec5_minivan.vnnlib --batch 1
 
+# attack
 python3 main.py --net example/onnx/mnist-net_256x2.onnx --spec example/vnnlib/prop_1_0.05.vnnlib
 python3 main.py --net example/onnx/ACASXU_run2a_1_9_batch_2000.onnx --spec example/vnnlib/prop_7.vnnlib --timeout 116
 

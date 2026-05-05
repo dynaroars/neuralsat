@@ -43,6 +43,8 @@ if __name__ == '__main__':
                         help="file to save execution results.")
     parser.add_argument('--export_cex', action='store_true',
                         help="enable exporting counter-example to result file.")
+    parser.add_argument('--disable_verify', action='store_false',
+                        help="disable verification.")
     parser.add_argument('--disable_attack', action='store_false',
                         help="disable attack.")
     parser.add_argument('--disable_restart', action='store_false',
