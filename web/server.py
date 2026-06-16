@@ -1,0 +1,524 @@
+import os
+import sys
+import uuid
+import json
+import time
+import shutil
+import subprocess
+import threading
+import tempfile
+import re
+import signal
+from pathlib import Path
+
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+
+NEURALSAT_ROOT = Path(os.environ.get("NEURALSAT_ROOT", Path(__file__).resolve().parent.parent))
+NEURALSAT_MAIN = NEURALSAT_ROOT / "src" / "main.py"
+EXAMPLE_ONNX_DIR = NEURALSAT_ROOT / "src" / "example" / "onnx"
+EXAMPLE_VNNLIB_DIR = NEURALSAT_ROOT / "src" / "example" / "vnnlib"
+
+UPLOAD_DIR = Path(tempfile.gettempdir()) / "neuralsat_uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+DEFAULT_TIMEOUT = 300
+MAX_TIMEOUT = 3600
+
+app = Flask(__name__)
+CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+jobs: dict[str, dict] = {}
+job_lock = threading.Lock()
+run_lock = threading.Lock()
+
+def _cleanup_old_jobs(max_age_s: int = 3600):
+
+    now = time.time()
+    with job_lock:
+        expired = [jid for jid, j in jobs.items() if now - j["created"] > max_age_s]
+        for jid in expired:
+            job = jobs.pop(jid)
+            job_dir = Path(job.get("job_dir", ""))
+            if job_dir.exists():
+                shutil.rmtree(job_dir, ignore_errors=True)
+
+def _get_onnx_info(net_path):
+
+    try:
+        import onnx
+        model = onnx.load(str(net_path))
+        info = {
+            "layers": [],
+            "inputs": [],
+            "outputs": []
+        }
+
+        for inp in model.graph.input:
+            shape = []
+            for dim in inp.type.tensor_type.shape.dim:
+
+                shape.append(dim.dim_value if dim.dim_value > 0 else "dynamic")
+            info["inputs"].append({"name": inp.name, "shape": shape})
+
+        for out in model.graph.output:
+            shape = []
+            for dim in out.type.tensor_type.shape.dim:
+                shape.append(dim.dim_value if dim.dim_value > 0 else "dynamic")
+            info["outputs"].append({"name": out.name, "shape": shape})
+
+        for node in model.graph.node:
+            info["layers"].append({
+                "op": node.op_type,
+                "name": node.name,
+                "inputs": list(node.input),
+                "outputs": list(node.output)
+            })
+
+        return info
+    except Exception as e:
+        return {
+            "error": f"Failed to parse ONNX: {str(e)}", 
+            "layers": [], 
+            "inputs": [], 
+            "outputs": []
+        }
+
+def _get_vnnlib_info(spec_path):
+
+    try:
+        content = Path(spec_path).read_text()
+
+        vars_decl = re.findall(r'\(declare-const\s+([\w\d_]+)\s+Real\)', content)
+        if not vars_decl:
+            vars_decl = re.findall(r'\(declare-const\s+([\w\d_]+)\s+', content)
+
+        bounds = {v: {"lower": None, "upper": None} for v in vars_decl}
+
+        for line in content.splitlines():
+            line = line.strip()
+            if not line.startswith("(assert"):
+                continue
+
+            m1 = re.search(r'\(<=\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+([\w\d_]+)\)', line)
+            if m1:
+                val = float(m1.group(1))
+                var = m1.group(2)
+                if var in bounds:
+                    bounds[var]["lower"] = val
+
+            m2 = re.search(r'\(<=\s+([\w\d_]+)\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\)', line)
+            if m2:
+                var = m2.group(1)
+                val = float(m2.group(2))
+                if var in bounds:
+                    bounds[var]["upper"] = val
+
+            m3 = re.search(r'\(>=\s+([\w\d_]+)\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\)', line)
+            if m3:
+                var = m3.group(1)
+                val = float(m3.group(2))
+                if var in bounds:
+                    bounds[var]["lower"] = val
+
+            m4 = re.search(r'\(>=\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+([\w\d_]+)\)', line)
+            if m4:
+                val = float(m4.group(1))
+                var = m4.group(2)
+                if var in bounds:
+                    bounds[var]["upper"] = val
+
+        return {"variables": vars_decl, "bounds": bounds}
+    except Exception as e:
+        return {"error": f"Failed to parse VNNLib: {str(e)}", "variables": [], "bounds": {}}
+
+def _run_verification(job_id: str):
+
+    with job_lock:
+        job = jobs[job_id]
+        job["status"] = "running"
+        job["started"] = time.time()
+
+    net_path = job["net_path"]
+    spec_path = job["spec_path"]
+    result_file = Path(job["job_dir"]) / "result.txt"
+    log_file_path = Path(job["job_dir"]) / "output.log"
+    timeout = job["timeout"]
+    device = job["device"]
+    batch = job["batch"]
+
+    cmd = [
+        sys.executable, str(NEURALSAT_MAIN),
+        "--net", str(net_path),
+        "--spec", str(spec_path),
+        "--timeout", str(timeout),
+        "--device", device,
+        "--batch", str(batch),
+        "--verbosity", "0",
+        "--result_file", str(result_file),
+        "--export_cex",
+        "--export_runtime",
+    ]
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(NEURALSAT_ROOT / "src") + ":" + env.get("PYTHONPATH", "")
+
+    try:
+
+        with open(log_file_path, "w") as log_file:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(NEURALSAT_ROOT / "src"),
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                env=env,
+                preexec_fn=os.setsid if hasattr(os, "setsid") else None
+            )
+
+            with job_lock:
+                job["process"] = proc
+
+            start_time = time.time()
+            grace_timeout = timeout + 60
+            is_timeout = False
+
+            while proc.poll() is None:
+                time.sleep(0.5)
+
+                with job_lock:
+                    if job["status"] == "cancelled":
+                        break
+
+                if time.time() - start_time > grace_timeout:
+                    is_timeout = True
+                    break
+
+            if proc.poll() is None:
+                if hasattr(os, "killpg") and hasattr(os, "setsid"):
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    proc.kill()
+
+                if is_timeout:
+                    raise subprocess.TimeoutExpired(cmd, timeout)
+                else:
+
+                    with job_lock:
+                        job["finished"] = time.time()
+                    return
+
+        stdout = ""
+        if log_file_path.exists():
+            stdout = log_file_path.read_text().strip()
+
+        result = "unknown"
+        runtime = None
+        counterexample = None
+
+        if result_file.exists():
+            lines = result_file.read_text().strip().splitlines()
+            if lines:
+                parts = lines[0].split(",")
+                result = parts[0].strip()
+                if len(parts) > 1:
+                    try:
+                        runtime = float(parts[1].strip())
+                    except ValueError:
+                        pass
+                if len(lines) > 1:
+                    counterexample = "\n".join(lines[1:])
+        else:
+
+            if stdout:
+                last_lines = stdout.strip().splitlines()
+                if last_lines:
+                    last_line = last_lines[-1]
+                    parts = last_line.split(",")
+                    result = parts[0].strip()
+                    if len(parts) > 1:
+                        try:
+                            runtime = float(parts[1].strip())
+                        except ValueError:
+                            pass
+
+        with job_lock:
+            job["status"] = "completed"
+            job["result"] = result
+            job["runtime"] = runtime
+            job["counterexample"] = counterexample
+            job["stdout"] = stdout[-2000:] if stdout else ""
+            job["finished"] = time.time()
+
+    except subprocess.TimeoutExpired:
+        with job_lock:
+            job["status"] = "completed"
+            job["result"] = "timeout"
+            job["runtime"] = timeout
+            job["finished"] = time.time()
+
+    except Exception as e:
+        with job_lock:
+            job["status"] = "error"
+            job["error"] = str(e)
+            job["finished"] = time.time()
+
+def _worker(job_id: str):
+
+    with job_lock:
+        if jobs[job_id]["status"] == "cancelled":
+            return
+
+    with run_lock:
+
+        with job_lock:
+            if jobs[job_id]["status"] == "cancelled":
+                return
+        _run_verification(job_id)
+
+@app.route("/api/health", methods=["GET"])
+def health():
+
+    return jsonify({
+        "status": "ok",
+        "neuralsat_root": str(NEURALSAT_ROOT),
+        "neuralsat_main_exists": NEURALSAT_MAIN.exists(),
+        "active_jobs": sum(1 for j in jobs.values() if j["status"] == "running"),
+        "queued_jobs": sum(1 for j in jobs.values() if j["status"] == "queued"),
+    })
+
+@app.route("/api/verify", methods=["POST"])
+def verify():
+\
+\
+\
+\
+\
+\
+\
+\
+
+    _cleanup_old_jobs()
+
+    if "net" not in request.files:
+        return jsonify({"error": "Missing 'net' (ONNX) file"}), 400
+    if "spec" not in request.files:
+        return jsonify({"error": "Missing 'spec' (VNNLib) file"}), 400
+
+    net_file = request.files["net"]
+    spec_file = request.files["spec"]
+
+    if not net_file.filename:
+        return jsonify({"error": "Empty ONNX filename"}), 400
+    if not spec_file.filename:
+        return jsonify({"error": "Empty VNNLib filename"}), 400
+
+    net_name = net_file.filename.lower()
+    spec_name = spec_file.filename.lower()
+    if not net_name.endswith(".onnx"):
+        return jsonify({"error": "Network file must be .onnx format"}), 400
+    if not spec_name.endswith(".vnnlib"):
+        return jsonify({"error": "Specification file must be .vnnlib format"}), 400
+
+    timeout = min(int(request.form.get("timeout", DEFAULT_TIMEOUT)), MAX_TIMEOUT)
+    device = request.form.get("device", "cuda")
+    if device not in ("cpu", "cuda"):
+        device = "cuda"
+    batch = int(request.form.get("batch", 1000))
+
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    net_path = job_dir / net_file.filename
+    spec_path = job_dir / spec_file.filename
+    net_file.save(str(net_path))
+    spec_file.save(str(spec_path))
+
+    onnx_info = _get_onnx_info(net_path)
+    vnnlib_info = _get_vnnlib_info(spec_path)
+
+    job = {
+        "id": job_id,
+        "status": "queued",
+        "created": time.time(),
+        "net_name": net_file.filename,
+        "spec_name": spec_file.filename,
+        "net_path": str(net_path),
+        "spec_path": str(spec_path),
+        "job_dir": str(job_dir),
+        "timeout": timeout,
+        "device": device,
+        "batch": batch,
+        "result": None,
+        "runtime": None,
+        "counterexample": None,
+        "error": None,
+        "onnx_info": onnx_info,
+        "vnnlib_info": vnnlib_info,
+    }
+
+    with job_lock:
+        jobs[job_id] = job
+
+    thread = threading.Thread(target=_worker, args=(job_id,), daemon=True)
+    thread.start()
+
+    return jsonify({
+        "job_id": job_id,
+        "status": "queued",
+        "message": f"Verification queued. Use GET /api/status/{job_id} to check progress.",
+        "onnx_info": onnx_info,
+        "vnnlib_info": vnnlib_info,
+    }), 202
+
+@app.route("/api/status/<job_id>", methods=["GET"])
+def status(job_id: str):
+
+    with job_lock:
+        job = jobs.get(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    response = {
+        "job_id": job["id"],
+        "status": job["status"],
+        "net_name": job["net_name"],
+        "spec_name": job["spec_name"],
+        "timeout": job["timeout"],
+        "device": job["device"],
+        "onnx_info": job.get("onnx_info"),
+        "vnnlib_info": job.get("vnnlib_info"),
+    }
+
+    if job["status"] == "running":
+        response["elapsed"] = round(time.time() - job.get("started", job["created"]), 1)
+    elif job["status"] == "completed":
+        response["result"] = job["result"]
+        response["runtime"] = job["runtime"]
+        response["counterexample"] = job["counterexample"]
+    elif job["status"] == "error":
+        response["error"] = job["error"]
+
+    return jsonify(response)
+
+@app.route("/api/logs/<job_id>", methods=["GET"])
+def get_logs(job_id: str):
+
+    with job_lock:
+        job = jobs.get(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    log_file_path = Path(job["job_dir"]) / "output.log"
+    if not log_file_path.exists():
+        return jsonify({"logs": "", "status": job["status"]})
+
+    try:
+        logs = log_file_path.read_text()
+        return jsonify({
+            "logs": logs,
+            "status": job["status"]
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to read logs: {str(e)}"}), 500
+
+@app.route("/api/cancel/<job_id>", methods=["POST"])
+def cancel(job_id: str):
+
+    with job_lock:
+        job = jobs.get(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    with job_lock:
+        if job["status"] in ("completed", "error", "cancelled"):
+            return jsonify({"status": job["status"], "message": "Job already finished."})
+
+        if job["status"] == "running" and "process" in job:
+            proc = job["process"]
+            if proc.poll() is None:
+                if hasattr(os, "killpg") and hasattr(os, "setsid"):
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    proc.kill()
+
+        job["status"] = "cancelled"
+        job["finished"] = time.time()
+
+    return jsonify({"status": "cancelled", "message": "Job cancelled successfully."})
+
+@app.route("/api/examples", methods=["GET"])
+def list_examples():
+
+    onnx_files = []
+    vnnlib_files = []
+
+    if EXAMPLE_ONNX_DIR.exists():
+        onnx_files = sorted([
+            {"name": f.name, "size": f.stat().st_size}
+            for f in EXAMPLE_ONNX_DIR.iterdir()
+            if f.suffix == ".onnx" and f.stat().st_size < MAX_UPLOAD_BYTES
+        ], key=lambda x: x["size"])
+
+    if EXAMPLE_VNNLIB_DIR.exists():
+        vnnlib_files = sorted([
+            {"name": f.name, "size": f.stat().st_size}
+            for f in EXAMPLE_VNNLIB_DIR.iterdir()
+            if f.suffix == ".vnnlib"
+        ], key=lambda x: x["size"])
+
+    quick_examples = [
+        {
+            "name": "FNN (tiny, ~1s)",
+            "net": "fnn.onnx",
+            "spec": "fnn.vnnlib",
+            "description": "A small fully-connected network with 2 inputs/outputs.",
+        },
+        {
+            "name": "ACAS Xu 1_1 (prop 6, ~3s)",
+            "net": "ACASXU_run2a_1_1_batch_2000.onnx",
+            "spec": "prop_6.vnnlib",
+            "description": "Aircraft collision avoidance network, property 6 (unsat).",
+        },
+        {
+            "name": "ACAS Xu 1_9 (prop 7, ~6s)",
+            "net": "ACASXU_run2a_1_9_batch_2000.onnx",
+            "spec": "prop_7.vnnlib",
+            "description": "Aircraft collision avoidance network, property 7 (sat).",
+        },
+    ]
+
+    return jsonify({
+        "onnx_files": onnx_files,
+        "vnnlib_files": vnnlib_files,
+        "quick_examples": quick_examples,
+    })
+
+@app.route("/api/example/<path:filename>", methods=["GET"])
+def download_example(filename: str):
+
+    filename = Path(filename).name
+
+    onnx_path = EXAMPLE_ONNX_DIR / filename
+    if onnx_path.exists() and onnx_path.suffix == ".onnx":
+        return send_file(str(onnx_path), as_attachment=True)
+
+    vnnlib_path = EXAMPLE_VNNLIB_DIR / filename
+    if vnnlib_path.exists() and vnnlib_path.suffix == ".vnnlib":
+        return send_file(str(vnnlib_path), as_attachment=True)
+
+    return jsonify({"error": "File not found"}), 404
+
+if __name__ == "__main__":
+    print(f"NeuralSAT root: {NEURALSAT_ROOT}")
+    print(f"main.py exists: {NEURALSAT_MAIN.exists()}")
+    print(f"Upload dir:     {UPLOAD_DIR}")
+    app.run(host="0.0.0.0", port=5000, debug=True)
