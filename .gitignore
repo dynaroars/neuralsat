@@ -168,3 +168,8 @@ dmypy.json
 
 # JetBrains
 .idea/
+
+# Visualizer exclusions
+!/docs/**/*.html
+!/web/frontend/package.json
+!/web/frontend/package-lock.json
