@@ -46,20 +46,21 @@ def _cleanup_old_jobs(max_age_s: int = 3600):
                 shutil.rmtree(job_dir, ignore_errors=True)
 
 def _get_onnx_info(net_path):
-
     try:
         import onnx
         model = onnx.load(str(net_path))
         info = {
             "layers": [],
             "inputs": [],
-            "outputs": []
+            "outputs": [],
+            "num_parameters": 0,
+            "num_layers": 0,
+            "num_neurons": 0
         }
 
         for inp in model.graph.input:
             shape = []
             for dim in inp.type.tensor_type.shape.dim:
-
                 shape.append(dim.dim_value if dim.dim_value > 0 else "dynamic")
             info["inputs"].append({"name": inp.name, "shape": shape})
 
@@ -77,17 +78,72 @@ def _get_onnx_info(net_path):
                 "outputs": list(node.output)
             })
 
+        # Count parameters
+        num_parameters = 0
+        for init in model.graph.initializer:
+            p = 1
+            for d in init.dims:
+                p *= d
+            num_parameters += p
+        info["num_parameters"] = num_parameters
+
+        # Count layers
+        info["num_layers"] = len(model.graph.node)
+
+        # Count neurons / nodes
+        num_neurons = 0
+        try:
+            from onnx import shape_inference
+            inferred = shape_inference.infer_shapes(model)
+            value_info = {vi.name: vi for vi in inferred.graph.value_info}
+            for out in inferred.graph.output:
+                value_info[out.name] = out
+            for node in inferred.graph.node:
+                if not node.output:
+                    continue
+                out_name = node.output[0]
+                if out_name in value_info:
+                    vi = value_info[out_name]
+                    shape = []
+                    for dim in vi.type.tensor_type.shape.dim:
+                        if dim.HasField("dim_value"):
+                            shape.append(dim.dim_value)
+                        else:
+                            shape.append(None)
+                    if len(shape) > 0:
+                        prod = 1
+                        has_dims = False
+                        for d in shape[1:]:
+                            if d is not None and d > 0:
+                                prod *= d
+                                has_dims = True
+                        if has_dims:
+                            num_neurons += prod
+                        elif shape[0] is not None and shape[0] > 0:
+                            num_neurons += shape[0]
+        except Exception:
+            pass
+
+        # Fallback to sum of bias/1D initializers if no neurons counted
+        if num_neurons == 0:
+            for init in model.graph.initializer:
+                if len(init.dims) == 1:
+                    num_neurons += init.dims[0]
+        
+        info["num_neurons"] = num_neurons
         return info
     except Exception as e:
         return {
             "error": f"Failed to parse ONNX: {str(e)}", 
             "layers": [], 
             "inputs": [], 
-            "outputs": []
+            "outputs": [],
+            "num_parameters": 0,
+            "num_layers": 0,
+            "num_neurons": 0
         }
 
 def _get_vnnlib_info(spec_path):
-
     try:
         content = Path(spec_path).read_text()
 
@@ -130,9 +186,51 @@ def _get_vnnlib_info(spec_path):
                 if var in bounds:
                     bounds[var]["upper"] = val
 
-        return {"variables": vars_decl, "bounds": bounds}
+        # Extract balanced assertions to find output properties
+        assertions = []
+        pos = 0
+        while True:
+            idx = content.find("(assert", pos)
+            if idx == -1:
+                break
+            # trace matching parentheses
+            paren_count = 0
+            end_idx = idx
+            for i in range(idx, len(content)):
+                if content[i] == '(':
+                    paren_count += 1
+                elif content[i] == ')':
+                    paren_count -= 1
+                    if paren_count == 0:
+                        end_idx = i + 1
+                        break
+            if paren_count == 0:
+                assertions.append(content[idx:end_idx].strip())
+                pos = end_idx
+            else:
+                pos = idx + 7 # skip past '(assert'
+
+        # Filter output constraints
+        output_vars = [v for v in vars_decl if v.lower().startswith('y')]
+        output_constraints = []
+        for assert_str in assertions:
+            if any(v in assert_str for v in output_vars):
+                output_constraints.append(assert_str)
+
+        return {
+            "variables": vars_decl,
+            "bounds": bounds,
+            "output_constraints": output_constraints,
+            "raw_content": content
+        }
     except Exception as e:
-        return {"error": f"Failed to parse VNNLib: {str(e)}", "variables": [], "bounds": {}}
+        return {
+            "error": f"Failed to parse VNNLib: {str(e)}",
+            "variables": [],
+            "bounds": {},
+            "output_constraints": [],
+            "raw_content": ""
+        }
 
 def _run_verification(job_id: str):
 

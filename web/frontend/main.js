@@ -1,6 +1,5 @@
 import './style.css';
 
-// Override fetch to automatically append ngrok skip warning headers
 const originalFetch = window.fetch;
 window.fetch = function (input, init) {
   let url = '';
@@ -9,7 +8,7 @@ window.fetch = function (input, init) {
   } else if (input && typeof input === 'object' && input.url) {
     url = input.url;
   }
-  
+
   if (url.includes('ngrok-free.dev')) {
     init = init || {};
     init.headers = init.headers || {};
@@ -79,6 +78,15 @@ const terminalScrollAuto = $('terminal-scroll-auto');
 const visualizerPanel = $('visualizer-panel');
 const topologyContainer = $('topology-container');
 const boundsContainer = $('bounds-container');
+const outputsContainer = $('outputs-container');
+const modelStatsRow = $('model-stats-row');
+const statParams = $('model-stat-params');
+const statLayers = $('model-stat-layers');
+const statNeurons = $('model-stat-neurons');
+const viewVnnlibBtn = $('view-vnnlib-btn');
+const rawSpecContainer = $('raw-spec-container');
+const rawSpecClose = $('raw-spec-close');
+const rawSpecContent = $('raw-spec-content');
 
 const examplesGrid = $('examples-grid');
 
@@ -86,6 +94,11 @@ function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatNumber(num) {
+  if (num === null || num === undefined) return '—';
+  return num.toLocaleString();
 }
 
 function formatTime(seconds) {
@@ -253,7 +266,7 @@ async function startVerification() {
     runningMsg.textContent = 'Verifying…';
     startElapsedTimer(timeout);
 
-    // Render ONNX topology and VNNLib bounds
+    // ONNX topology and VNNLib bounds
     renderModelAnalysis(data);
 
     startPolling();
@@ -275,7 +288,7 @@ cancelBtn.addEventListener('click', async () => {
       method: 'POST',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
+
     showToast('Verification cancelled successfully.', 'success');
     stopTimers();
     currentJobId = null;
@@ -445,7 +458,7 @@ function renderModelAnalysis(data) {
   transitionDOM(() => {
     visualizerPanel.hidden = false;
     renderOnnxTopology(onnxInfo);
-    renderVnnlibBounds(vnnlibInfo);
+    renderVnnlibSpec(vnnlibInfo);
   });
 }
 
@@ -545,7 +558,7 @@ function drawBezierConnection(ctx, x1, y1, x2, y2, pulseT, destColor, borderSubt
   ctx.lineWidth = 0.8;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
-  
+
   const cp1x = x1 + (x2 - x1) * 0.45;
   const cp2x = x1 + (x2 - x1) * 0.55;
   ctx.bezierCurveTo(cp1x, y1, cp2x, y2, x2, y2);
@@ -554,7 +567,7 @@ function drawBezierConnection(ctx, x1, y1, x2, y2, pulseT, destColor, borderSubt
   if (currentJobId !== null) {
     const offset = (x1 * 0.05 + y1 * 0.05) % 1;
     const t = (pulseT + offset) % 1;
-    
+
     const mt = 1 - t;
     const bx = mt * mt * mt * x1 + 3 * mt * mt * t * cp1x + 3 * mt * t * t * cp2x + t * t * t * x2;
     const by = mt * mt * mt * y1 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y2;
@@ -639,7 +652,7 @@ function drawTooltip(ctx, hoveredColIdx, columns, mouseX, mouseY, width, height,
 
   const boxW = 160;
   const boxH = 54;
-  
+
   let tx = mouseX + 15;
   let ty = mouseY + 15;
   if (tx + boxW > width) tx = mouseX - boxW - 15;
@@ -660,7 +673,7 @@ function drawTooltip(ctx, hoveredColIdx, columns, mouseX, mouseY, width, height,
 
   const cleanName = getTruncatedName(col.name);
   ctx.fillText(`Layer: ${cleanName}`, tx + 10, ty + 10);
-  
+
   ctx.font = '500 8.5px "IBM Plex Mono", monospace';
   ctx.fillStyle = textSecondary;
   ctx.fillText(`Type:  ${col.type}`, tx + 10, ty + 24);
@@ -724,12 +737,23 @@ function renderOnnxTopology(onnxInfo) {
 
   if (!onnxInfo) {
     topologyContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No model loaded.</p>';
+    modelStatsRow.style.display = 'none';
     return;
   }
 
   if (onnxInfo.error) {
     topologyContainer.innerHTML = `<p style="color: var(--color-error); font-size: 0.85rem; padding: var(--space-md);">${escapeHtml(onnxInfo.error)}</p>`;
+    modelStatsRow.style.display = 'none';
     return;
+  }
+
+  if (onnxInfo.num_parameters !== undefined) {
+    statParams.textContent = formatNumber(onnxInfo.num_parameters);
+    statLayers.textContent = formatNumber(onnxInfo.num_layers);
+    statNeurons.textContent = formatNumber(onnxInfo.num_neurons);
+    modelStatsRow.style.display = 'grid';
+  } else {
+    modelStatsRow.style.display = 'none';
   }
 
   const styles = getComputedStyle(document.documentElement);
@@ -806,7 +830,7 @@ function renderOnnxTopology(onnxInfo) {
       const nodeCount = col.nodeCount;
       const spacingY = nodeCount > 1 ? 140 / (nodeCount - 1) : 0;
       const startY = nodeCount > 1 ? 55 : 125;
-      
+
       col.nodePoints = [];
       for (let j = 0; j < nodeCount; j++) {
         col.nodePoints.push({ x: colX, y: startY + j * spacingY });
@@ -830,7 +854,8 @@ function renderOnnxTopology(onnxInfo) {
 
 function buildBoundsRowsHTML(vnnlibInfo) {
   let boundsHTML = '';
-  vnnlibInfo.variables.forEach((varName, idx) => {
+  const inputVars = (vnnlibInfo.variables || []).filter(v => v.toLowerCase().startsWith('x'));
+  inputVars.forEach((varName, idx) => {
     const b = vnnlibInfo.bounds[varName] || { lower: null, upper: null };
     const lowerStr = b.lower !== null ? b.lower.toFixed(4) : '-∞';
     const upperStr = b.upper !== null ? b.upper.toFixed(4) : '∞';
@@ -850,27 +875,52 @@ function buildBoundsRowsHTML(vnnlibInfo) {
   return boundsHTML;
 }
 
-function hasNoVariables(vnnlibInfo) {
-  return !vnnlibInfo.variables || vnnlibInfo.variables.length === 0;
+function hasNoInputVariables(vnnlibInfo) {
+  return !vnnlibInfo.variables || vnnlibInfo.variables.filter(v => v.toLowerCase().startsWith('x')).length === 0;
 }
 
-function renderVnnlibBounds(vnnlibInfo) {
+function renderVnnlibSpec(vnnlibInfo) {
   if (!vnnlibInfo) {
     boundsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No specifications loaded.</p>';
+    outputsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No specifications loaded.</p>';
+    viewVnnlibBtn.style.display = 'none';
+    rawSpecContainer.style.display = 'none';
     return;
   }
 
   if (vnnlibInfo.error) {
     boundsContainer.innerHTML = `<p style="color: var(--color-error); font-size: 0.85rem; padding: var(--space-md);">${escapeHtml(vnnlibInfo.error)}</p>`;
+    outputsContainer.innerHTML = `<p style="color: var(--color-error); font-size: 0.85rem; padding: var(--space-md);">${escapeHtml(vnnlibInfo.error)}</p>`;
+    viewVnnlibBtn.style.display = 'none';
+    rawSpecContainer.style.display = 'none';
     return;
   }
 
-  if (hasNoVariables(vnnlibInfo)) {
-    boundsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: var(--space-md);">No boundary variables found.</p>';
-    return;
+  // Input bounds
+  if (hasNoInputVariables(vnnlibInfo)) {
+    boundsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: var(--space-md);">No input boundary variables found.</p>';
+  } else {
+    boundsContainer.innerHTML = buildBoundsRowsHTML(vnnlibInfo);
   }
 
-  boundsContainer.innerHTML = buildBoundsRowsHTML(vnnlibInfo);
+  // Output properties
+  if (!vnnlibInfo.output_constraints || vnnlibInfo.output_constraints.length === 0) {
+    outputsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: var(--space-md);">No output safety conditions found.</p>';
+  } else {
+    outputsContainer.innerHTML = vnnlibInfo.output_constraints.map((constraint, idx) => `
+      <div class="output-row" style="--i: ${idx}">
+        ${escapeHtml(constraint)}
+      </div>
+    `).join('');
+  }
+
+  if (vnnlibInfo.raw_content) {
+    rawSpecContent.textContent = vnnlibInfo.raw_content;
+    viewVnnlibBtn.style.display = 'block';
+  } else {
+    viewVnnlibBtn.style.display = 'none';
+  }
+  rawSpecContainer.style.display = 'none';
 }
 
 
@@ -1163,6 +1213,19 @@ function handleCancelShortcut(e) {
   e.preventDefault();
   cancelBtn.click();
 }
+
+viewVnnlibBtn.addEventListener('click', () => {
+  if (rawSpecContainer.style.display === 'none') {
+    rawSpecContainer.style.display = 'flex';
+    rawSpecContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    rawSpecContainer.style.display = 'none';
+  }
+});
+
+rawSpecClose.addEventListener('click', () => {
+  rawSpecContainer.style.display = 'none';
+});
 
 // Init
 loadExamples();

@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
-  <script type="module" crossorigin src="/neuralsat/assets/index-Ch0N1VJK.js"></script>
-  <link rel="stylesheet" crossorigin href="/neuralsat/assets/index-CBxw5njE.css">
+  <script type="module" crossorigin src="/neuralsat/assets/index-DXdJ6QtA.js"></script>
+  <link rel="stylesheet" crossorigin href="/neuralsat/assets/index-BuJZQDvw.css">
 </head>
 <body>
   <!-- Animated background -->
@@ -42,12 +42,27 @@
     <section class="hero" id="hero">
       <h2 class="hero__heading">
         <br />
-        <span class="hero__accent">NeuralSAT Visualiser</span>
+        <span class="hero__accent">NeuralSAT Visualizer</span>
       </h2>
       <p class="hero__desc">
         NeuralSAT is a DPLL(T) framework for proving or disproving safety properties of deep neural networks. Upload an ONNX model and VNNLib specification to begin.
       </p>
       
+    </section>
+
+    <!-- Examples Section -->
+    <section class="panel examples-panel" id="examples-panel">
+      <h3 class="panel__title">
+        <span class="panel__icon">
+          <svg class="panel__icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </span>
+        Quick Examples
+        <span class="badge badge--recommended" style="margin-left: 10px; font-size: 0.72rem; padding: 2px 8px; border-radius: 99px; background: color-mix(in oklch, var(--accent-1), transparent 85%); color: var(--accent-1); border: 1px solid color-mix(in oklch, var(--accent-1), transparent 70%); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; vertical-align: middle;">Recommended</span>
+      </h3>
+      <p class="examples-desc">Try NeuralSAT instantly with these pre-loaded benchmarks.</p>
+      <div class="examples-grid" id="examples-grid">
+        <!-- Populated by JS -->
+      </div>
     </section>
 
     <!-- Main Content -->
@@ -173,6 +188,82 @@
       </section>
     </main>
 
+    <!-- Model & Spec Visualizer -->
+    <section class="panel visualizer-panel" id="visualizer-panel" hidden>
+      <h3 class="panel__title">
+        <span class="panel__icon">
+          <svg class="panel__icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        Model & Property Analysis
+      </h3>
+      <div class="visualizer-layout">
+        <!-- Network Topology Column -->
+        <div class="visualizer-col">
+          <h4 class="visualizer-col-title">Network Architecture</h4>
+          <p class="visualizer-desc">
+            Parsed layers and dimensions from the uploaded ONNX file.
+            <span class="visualizer-tip" style="display: block; margin-top: var(--space-xs); font-size: 0.75rem; color: var(--text-muted); font-style: italic;">
+              Note: Layers with more than 10 nodes are capped visually to maintain readability.
+            </span>
+          </p>
+
+          <!-- Model stats -->
+          <div class="model-stats-row" id="model-stats-row">
+            <div class="model-stat-card">
+              <span class="model-stat-value" id="model-stat-params">-</span>
+              <span class="model-stat-label">Parameters</span>
+            </div>
+            <div class="model-stat-card">
+              <span class="model-stat-value" id="model-stat-layers">-</span>
+              <span class="model-stat-label">Layers</span>
+            </div>
+            <div class="model-stat-card">
+              <span class="model-stat-value" id="model-stat-neurons">-</span>
+              <span class="model-stat-label">Neurons</span>
+            </div>
+          </div>
+
+          <div class="topology-container" id="topology-container">
+            <p style="color: var(--text-muted);">Upload an ONNX model to view architecture.</p>
+          </div>
+        </div>
+        
+        <!-- VNNLib Column -->
+        <div class="visualizer-col">
+          <div class="spec-header-row">
+            <h4 class="visualizer-col-title" style="margin-bottom: 0;">Specification Details</h4>
+            <button class="btn-text-link" id="view-vnnlib-btn">📄 View Raw Spec</button>
+          </div>
+          <p class="visualizer-desc">Safety specification details parsed from the VNNLib file.</p>
+
+          <!-- Raw Spec Viewer -->
+          <div class="raw-spec-container" id="raw-spec-container" style="display: none;">
+            <div class="raw-spec-header">
+              <span>VNNLib File Content</span>
+              <button class="raw-spec-close" id="raw-spec-close">✕ Close</button>
+            </div>
+            <pre class="raw-spec-content" id="raw-spec-content"></pre>
+          </div>
+
+          <!-- Input constraints section -->
+          <div class="spec-section">
+            <div class="spec-section-title">Input Properties (Constrained Bounds)</div>
+            <div class="bounds-container" id="bounds-container">
+              <p style="color: var(--text-muted);">Upload a VNNLib spec to view bounds.</p>
+            </div>
+          </div>
+
+          <!-- Output properties section -->
+          <div class="spec-section" style="margin-top: 24px;">
+            <div class="spec-section-title">Output Properties (Safety Conditions)</div>
+            <div class="outputs-container" id="outputs-container">
+              <p style="color: var(--text-muted);">Upload a VNNLib spec to view safety conditions.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Terminal Logs Section -->
     <section class="panel terminal-panel" id="terminal-container" hidden>
       <div class="terminal-box">
@@ -196,53 +287,7 @@
       </div>
     </section>
 
-    <!-- Model & Spec Visualizer -->
-    <section class="panel visualizer-panel" id="visualizer-panel" hidden>
-      <h3 class="panel__title">
-        <span class="panel__icon">
-          <svg class="panel__icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </span>
-        Model & Property Analysis
-      </h3>
-      <div class="visualizer-layout">
-        <!-- Network Topology Column -->
-        <div class="visualizer-col">
-          <h4 class="visualizer-col-title">Network Architecture</h4>
-          <p class="visualizer-desc">
-            Parsed layers and dimensions from the uploaded ONNX file.
-            <span class="visualizer-tip" style="display: block; margin-top: var(--space-xs); font-size: 0.75rem; color: var(--text-muted); font-style: italic;">
-              Note: Layers with more than 10 nodes are capped visually to maintain readability.
-            </span>
-          </p>
-          <div class="topology-container" id="topology-container">
-            <p style="color: var(--text-muted);">Upload an ONNX model to view architecture.</p>
-          </div>
-        </div>
-        
-        <!-- VNNLib Bounds Column -->
-        <div class="visualizer-col">
-          <h4 class="visualizer-col-title">Input Properties</h4>
-          <p class="visualizer-desc">Constrained input ranges parsed from the VNNLib specification.</p>
-          <div class="bounds-container" id="bounds-container">
-            <p style="color: var(--text-muted);">Upload a VNNLib spec to view bounds.</p>
-          </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- Examples Section -->
-    <section class="panel examples-panel" id="examples-panel">
-      <h3 class="panel__title">
-        <span class="panel__icon">
-          <svg class="panel__icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        </span>
-        Quick Examples
-      </h3>
-      <p class="examples-desc">Try NeuralSAT instantly with these pre-loaded benchmarks.</p>
-      <div class="examples-grid" id="examples-grid">
-        <!-- Populated by JS -->
-      </div>
-    </section>
 
     <!-- Info Section -->
     <section class="info-section" id="info-section">
