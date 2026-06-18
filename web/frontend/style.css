@@ -179,7 +179,7 @@ body {
 
 .hero {
   text-align: center;
-  padding: var(--space-2xl) var(--space-xl) var(--space-3xl);
+  padding: var(--space-3xl) var(--space-xl) var(--space-2xl);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-primary);
 }
@@ -190,7 +190,7 @@ body {
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   color: var(--text-primary);
 }
 
@@ -206,7 +206,7 @@ body {
   color: var(--text-secondary);
   font-size: 1.1rem;
   max-width: 65ch;
-  margin: 0 auto var(--space-xl);
+  margin: 0 auto var(--space-lg);
   line-height: 1.7;
 }
 
@@ -946,6 +946,11 @@ select.option-input {
   margin-bottom: 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-primary);
+  padding: var(--space-lg) var(--space-xl) 0;
+}
+
+.visualizer-panel .panel__title {
+  margin-bottom: var(--space-md);
 }
 
 .visualizer-layout {
@@ -958,7 +963,7 @@ select.option-input {
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: var(--space-2xl) var(--space-xl);
+  padding: 0 var(--space-xl) var(--space-lg);
   display: flex;
   flex-direction: column;
   text-align: left;
