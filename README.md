@@ -244,6 +244,6 @@ The *NeuralSAT* research is partially supported by grants from NSF
   [2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133),
   [2200621](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2200621)) 
   and 
-  an [Amazon Research Award](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced) and 
+  two [Amazon Research Awards](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced) and 
   an NVIDIA Academic Grant.
 
