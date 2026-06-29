@@ -1,6 +1,6 @@
 # NeuralSAT: Verifying Deep Neural Networks
 
-## **Try out DIG live here**:  [https://roars.dev/neuralsat/](https://roars.dev/neuralsat/)
+## **Try out NeuralSAT live here**:  [https://roars.dev/neuralsat/](https://roars.dev/neuralsat/)
 
 
 
