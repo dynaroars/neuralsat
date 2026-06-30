@@ -29,20 +29,3 @@ nvidia-smi
 sudo apt update && sudo apt install -y python3 python3-pip && sudo apt install -y psmisc
 
 pip3 install -r "$DIR/requirements.txt"
-
-# Setup Gurobi
-grbprobe_output=$(${DIR}/grbprobe)
-echo $grbprobe_output
-
-HOSTNAME=$(echo $grbprobe_output | grep -Po "(?<=HOSTNAME=)(.*?)(?= )")
-HOSTID=$(echo $grbprobe_output | grep -Po "(?<=HOSTID=)(.*?)(?= )")
-USERNAME=$(echo $grbprobe_output | grep -Po "(?<=USERNAME=)(.*?)(?= )")
-CORES=$(echo $grbprobe_output | grep -Po "(?<=CORES=)(.*?)(?= )")
-
-# Should generate a key from the gurobi website each time a new AWS instance is created
-echo "Please obtain a gurobi KEY from https://portal.gurobi.com/iam/licenses/request/?type=academic"
-KEY=to-be-filled
-
-# The url can only be accessed with terminals which are connected to the university network
-probe_url="https://portal.gurobi.com/keyserver?id=${KEY}&hostname=${HOSTNAME}&hostid=${HOSTID}&username=${USERNAME}&os=linux&localdate=2024-05-17&version=10&cores=${CORES}"
-echo $probe_url
