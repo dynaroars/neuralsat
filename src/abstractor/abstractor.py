@@ -91,6 +91,16 @@ class NetworkAbstractor:
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
 
+        # Last resort: fall back to plain CROWN (no alpha optimization), like crown uses for large models
+        saved_method = self.method
+        self.method = 'backward'
+        Settings.backward_batch_size = float('inf')
+        Settings.share_alphas = False
+        if self.select_params(objective, extra_opts={}):
+            logger.info('[setup] Fell back to plain CROWN (no alpha optimization)')
+            return None
+        self.method = saved_method
+
         logger.info('[setup] Initialization failed')
         raise NotImplementedError('Initialization failed')
             

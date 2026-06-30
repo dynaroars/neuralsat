@@ -35,10 +35,13 @@ class Verifier:
     "Branch-and-Bound verifier"
     
     @beartype
-    def __init__(self: 'Verifier', net: ConvertModel | torch.nn.Module , input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
+    def __init__(self: 'Verifier', net: ConvertModel | torch.nn.Module , input_shape: tuple, batch: int = 1000, device: str = 'cpu',
+                 net_path: str | None = None, vnnlib_path: str | None = None) -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device
+        self.net_path = net_path
+        self.vnnlib_path = vnnlib_path
         
         # hyper parameters
         self.input_split = False
@@ -140,7 +143,7 @@ class Verifier:
                 max_domain=max_domain
             )
             
-        return status
+        return status or ReturnStatus.UNKNOWN
         
     def _heuristic_configure(self: 'Verifier', timeout: int | float) -> None:
         if timeout <= 30:
@@ -187,12 +190,23 @@ class Verifier:
                             traceback.print_exc()
                             raise NotImplementedError('Unsupported exception')
                         
-                        if is_cuda_out_of_memory(exception):
+                        oom = is_cuda_out_of_memory(exception) or (
+                            isinstance(exception, VerifierInitializeError) and 'OOM' in str(exception)
+                        )
+                        if oom:
                             logger.debug(f'OOM with {self.batch=}')
                             if self.batch == 1:
-                                # cannot find a suitable batch size to fit this device
-                                logger.debug('[!] OOM with batch_size=1')
-                                return ReturnStatus.UNKNOWN
+                                # Last resort: fall back to plain CROWN (no alpha optimization)
+                                if self.abstractor.method != 'backward':
+                                    logger.debug('[!] OOM with batch_size=1, falling back to plain CROWN')
+                                    self.abstractor.method = 'backward'
+                                    Settings.backward_batch_size = 128
+                                    gc_cuda()
+                                    dnf_objectives.add(objective)
+                                    objective = self.get_objective(dnf_objectives, max_domain=max_domain)
+                                    continue
+                                logger.debug('[!] OOM even with plain CROWN')
+                                return None
                             self.last_failed_batch = self.batch
                             self.batch = self.batch // 2
                             dnf_objectives.add(objective)
@@ -201,7 +215,7 @@ class Verifier:
                         else:
                             logger.debug('[!] RuntimeError exception')
                             traceback.print_exc()
-                            return None
+                            return ReturnStatus.UNKNOWN
                     except SystemExit:
                         exit()
                     except:
@@ -309,9 +323,7 @@ class Verifier:
             if self.adv is not None:
                 if self._check_adv(self.adv, objective):
                     return ReturnStatus.SAT
-                logger.debug("[!] Invalid counter-example")
-                # FIXME
-                return ReturnStatus.INVALID_CEX
+                logger.debug("[!] Invalid counter-example, continuing search")
                 self.adv = None
             
             # check timeout
@@ -524,7 +536,7 @@ class Verifier:
         _init_abstractor,
         _check_timeout,
         _setup_restart, _setup_restart_naive,
-        _pre_attack, _attack, _mip_attack, _check_adv,
+        _pre_attack, _attack, _mip_attack, _check_adv, _validate_vnncomp,
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_cpu_tightening, _update_tightening_patience,
         _check_invoke_gpu_tightening,

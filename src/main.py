@@ -10,7 +10,7 @@ from helper.spec.objective import parse_vnnlib
 
 
 from helper.misc.logger import logger, LOGGER_LEVEL
-from helper.misc.export import get_adv_string
+from helper.misc.export import get_adv_string, validate_cex
 from helper.misc.result import ReturnStatus
 
 from verifier.verifier import Verifier 
@@ -103,6 +103,8 @@ if __name__ == '__main__':
         input_shape=input_shape, 
         batch=args.batch,
         device=args.device,
+        net_path=args.net if args.net.endswith('.onnx') else None,
+        vnnlib_path=args.spec,
     )
     
     
@@ -111,6 +113,12 @@ if __name__ == '__main__':
     status = verifier.verify(objectives, timeout=timeout, force_split=args.force_split)
     runtime = time.time() - START_TIME
     
+    # validate counterexample when claiming SAT
+    if status == ReturnStatus.SAT and verifier.adv is not None:
+        if not validate_cex(inputs=verifier.adv, net_path=args.net, vnnlib_path=args.spec):
+            logger.warning('[!] Counterexample failed vnncomp validation — downgrading to invalid_counterexample')
+            status = ReturnStatus.INVALID_CEX
+
     # output
     logger.info(f'[!] Iterations: {verifier.iteration}')
     if verifier.adv is not None:

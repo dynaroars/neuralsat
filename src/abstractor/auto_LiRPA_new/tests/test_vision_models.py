@@ -1,0 +1,141 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from auto_LiRPA import BoundedModule, BoundedTensor
+from auto_LiRPA.perturbations import *
+from testcase import _to, TestCase, DEFAULT_DEVICE, DEFAULT_DTYPE
+
+class cnn_4layer_test(nn.Module):
+    def __init__(self):
+        super(cnn_4layer_test, self).__init__()
+        self.conv1 = nn.Conv2d(3, 3, 4, stride=2, padding=1)
+        self.bn = nn.BatchNorm2d(3)
+        self.shortcut = nn.Conv2d(3, 3, 4, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(3, 3, 4, stride=2, padding=1)
+        self.fc1 = nn.Linear(192, 10)
+
+    def forward(self, x):
+        x_ = x
+        x = F.relu(self.conv1(self.bn(x)))
+        x += self.shortcut(x_)
+        x = F.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+
+        return x
+
+class TestVisionModels(TestCase):
+    def __init__(self, methodName='runTest', ref_name='vision_test_data', model=cnn_4layer_test(), generate=False, device=DEFAULT_DEVICE, dtype=DEFAULT_DTYPE):
+        super().__init__(methodName, seed=1234, ref_name=ref_name,
+                         generate=generate, device=device, dtype=dtype)
+        self.result = {}
+        self.model = model.to(device=self.default_device,
+                              dtype=self.default_dtype)
+
+    def setUp(self):
+        super().setUp()
+        if self.reference:
+            self.reference = _to(self.reference, self.default_device)
+            self.reference = _to(self.reference, self.default_device)
+        if self.generate:
+            # state_dict from an existing reference is needed 
+            self.reference = torch.load(self.ref_path)
+
+    def verify_bounds(self, model, x, IBP, method, forward_ret, lb_name, ub_name):
+        lb, ub = model(method_opt="compute_bounds", x=(x,), IBP=IBP, method=method)
+        self.result[lb_name] = lb
+        self.result[ub_name] = ub
+
+        if method != 'CROWN-Optimized':
+        # test gradient backward propagation
+        # only when method is not "CROWN-Optimized" (in that case, lb and ub don't have gradient)
+            loss = (ub - lb).abs().sum()
+            loss.backward()
+            grad = x.grad
+            self.result[lb_name[:-2] + 'grad'] = grad.clone()
+
+        if not self.generate:
+            if method != 'CROWN-Optimized':
+                assert torch.allclose(lb, self.reference[lb_name], 1e-4, atol=2e-7), (lb - self.reference[lb_name]).abs().max()
+                assert torch.allclose(ub, self.reference[ub_name], 1e-4, atol=2e-7), (ub - self.reference[ub_name]).abs().max()
+                assert ((lb - self.reference[lb_name]).pow(2).sum() < 1.3e-9), (lb - self.reference[lb_name]).pow(2).sum()
+                assert ((ub - self.reference[ub_name]).pow(2).sum() < 1.3e-9), (ub - self.reference[ub_name]).pow(2).sum()
+                if "same-slope" not in lb_name:
+                    assert torch.allclose(grad, self.reference[lb_name[:-2] + 'grad'], 1e-4, 1e-6),  (grad - self.reference[lb_name[:-2] + 'grad']).abs().max()
+                    assert (grad - self.reference[lb_name[:-2] + 'grad']).pow(2).sum() < 1.e-6, (grad - self.reference[lb_name[:-2] + 'grad']).pow(2).sum()
+            else:
+                assert torch.allclose(lb, self.reference[lb_name], 1e-4, atol=5e-6), (lb - self.reference[lb_name]).abs().max()
+                assert torch.allclose(ub, self.reference[ub_name], 1e-4, atol=5e-6), (ub - self.reference[ub_name]).abs().max()
+                assert ((lb - self.reference[lb_name]).pow(2).sum() < 1.3e-9), (lb - self.reference[lb_name]).pow(2).sum()
+                assert ((ub - self.reference[ub_name]).pow(2).sum() < 1.3e-9), (ub - self.reference[ub_name]).pow(2).sum()
+
+
+    def test_bounds(self, bound_opts=None, optimize = True):
+        if bound_opts is None:
+            bound_opts = {'activation_bound_option': 'same-slope'}
+        np.random.seed(123)  # FIXME inconsistent seeds
+        model_ori = self.model.eval()
+        model_ori.load_state_dict(self.reference['model'])
+        dummy_input = self.reference['data'].to(dtype=self.default_dtype, device=self.default_device)
+        inputs = (dummy_input,)
+
+        model = BoundedModule(model_ori, inputs, device=self.default_device)
+        model.set_bound_opts({'optimize_bound_args': {'lr_alpha': 0.1}})
+        forward_ret = model(dummy_input)
+        model_ori.eval()
+
+        assert torch.allclose(model_ori(dummy_input), model(dummy_input), 1e-4, 1e-6)
+
+        model_same_slope = BoundedModule(model_ori, inputs, device=self.default_device, bound_opts=bound_opts)
+        model_same_slope.set_bound_opts({'optimize_bound_args': {'lr_alpha': 0.1}})
+
+        # Linf
+        ptb = PerturbationLpNorm(norm=np.inf, eps=0.01)
+        x = BoundedTensor(dummy_input, ptb)
+        x.requires_grad_()
+
+        self.verify_bounds(model, x, IBP=True, method=None, forward_ret=forward_ret, lb_name='l_inf_IBP_lb',
+                    ub_name='l_inf_IBP_ub')  # IBP
+        self.verify_bounds(model, x, IBP=True, method='backward', forward_ret=forward_ret, lb_name='l_inf_CROWN-IBP_lb',
+                    ub_name='l_inf_CROWN-IBP_ub')  # CROWN-IBP
+        self.verify_bounds(model, x, IBP=False, method='backward', forward_ret=forward_ret, lb_name='l_inf_CROWN_lb',
+                    ub_name='l_inf_CROWN_ub')  # CROWN
+        self.verify_bounds(model_same_slope, x, IBP=False, method='backward', forward_ret=forward_ret, lb_name='l_inf_CROWN-same-slope_lb',
+                    ub_name='l_inf_CROWN-same-slope_ub') # CROWN-same-slope
+        if optimize:
+            self.verify_bounds(model, x, IBP=False, method='CROWN-Optimized', forward_ret=forward_ret, lb_name='l_inf_CROWN-Optimized_lb',
+                        ub_name='l_inf_CROWN-Optimized_ub') # CROWN-Optimized
+            self.verify_bounds(model_same_slope, x, IBP=False, method='CROWN-Optimized', forward_ret=forward_ret, lb_name='l_inf_CROWN-Optimized-same-slope_lb',
+                        ub_name='l_inf_CROWN-Optimized-same-slope_ub')  # Crown-Optimized-same-slope
+
+
+        # L2
+        ptb = PerturbationLpNorm(norm=2, eps=0.01)
+        x = BoundedTensor(dummy_input, ptb)
+        x.requires_grad_()
+
+        self.verify_bounds(model, x, IBP=True, method=None, forward_ret=forward_ret, lb_name='l_2_IBP_lb',
+                    ub_name='l_2_IBP_ub')  # IBP
+        self.verify_bounds(model, x, IBP=True, method='backward', forward_ret=forward_ret, lb_name='l_2_CROWN-IBP_lb',
+                    ub_name='l_2_CROWN-IBP_ub')  # CROWN-IBP
+        self.verify_bounds(model, x, IBP=False, method='backward', forward_ret=forward_ret, lb_name='l_2_CROWN_lb',
+                    ub_name='l_2_CROWN_ub')  # CROWN
+        self.verify_bounds(model_same_slope, x, IBP=False, method='backward', forward_ret=forward_ret, lb_name='l_2_CROWN-same-slope_lb',
+                    ub_name='l_2_CROWN-same-slope_ub') # CROWN-same-slope
+        if optimize:
+            self.verify_bounds(model, x, IBP=False, method='CROWN-Optimized', forward_ret=forward_ret, lb_name='l_2_CROWN-Optimized_lb',
+                        ub_name='l_2_CROWN-Optimized_ub') # CROWN-Optimized
+            self.verify_bounds(model_same_slope, x, IBP=False, method='CROWN-Optimized', forward_ret=forward_ret, lb_name='l_2_CROWN-Optimized-same-slope_lb',
+                        ub_name='l_2_CROWN-Optimized-same-slope_ub')  # Crown-Optimized-same-slope
+
+        if self.generate:
+            self.result['data'] = self.reference['data']
+            self.result['model'] = self.reference['model']
+            self.save()
+
+
+if __name__ =="__main__":
+    t = TestVisionModels(generate=False)
+    # t = TestVisionModels()
+    t.setUp()
+    t.test_bounds()

@@ -27,6 +27,7 @@ from attacker.attacker import Attacker
 from abstractor.abstractor import NetworkAbstractor
 
 from helper.misc.result import AbstractResults, ReturnStatus
+from helper.misc.export import validate_cex
 from helper.proof.create_aptp import create_aptp
 from helper.spec.objective import DnfObjectives
 from helper.misc.check import check_solution
@@ -34,6 +35,97 @@ from helper.misc.logger import logger
 
 
 from setting import Settings
+
+
+def _preprocess_bound_view(objectives: typing.Any) -> tuple[typing.Any | None, tuple | None]:
+    """Collapse shared-input batch to one LiRPA input with stacked OR specs."""
+    batch = objectives.lower_bounds.shape[0]
+    if batch <= 1:
+        return None, None
+    if not (isinstance(objectives.cs, torch.Tensor) and isinstance(objectives.rhs, torch.Tensor)):
+        return None, None
+    if not torch.allclose(objectives.lower_bounds, objectives.lower_bounds[0:1], rtol=1e-5, atol=1e-5):
+        return None, None
+    if not torch.allclose(objectives.upper_bounds, objectives.upper_bounds[0:1], rtol=1e-5, atol=1e-5):
+        return None, None
+
+    tmp = copy.deepcopy(objectives)
+    tmp.lower_bounds = tmp.lower_bounds[0:1]
+    tmp.upper_bounds = tmp.upper_bounds[0:1]
+    cs, rhs = objectives.cs, objectives.rhs
+
+    if cs.ndim == 2:
+        # cs: [batch, output] — one spec per OR branch
+        tmp.cs = cs.unsqueeze(0)
+        tmp.rhs = rhs.unsqueeze(0) if rhs.ndim > 1 else rhs.unsqueeze(0)
+        return tmp, (batch, 1)
+    if cs.ndim == 3:
+        # cs: [batch, num_spec, output] — stack all specs on one shared input
+        num_spec = cs.shape[1]
+        tmp.cs = cs.reshape(1, batch * num_spec, cs.shape[2])
+        if rhs.ndim == 2:
+            tmp.rhs = rhs.reshape(1, batch * num_spec)
+        else:
+            tmp.rhs = rhs.reshape(1, batch * num_spec, *rhs.shape[2:])
+        return tmp, (batch, num_spec)
+    return None, None
+
+
+def _expand_preprocessed_lbs(lb: torch.Tensor, expand_shape: tuple) -> torch.Tensor:
+    batch, num_spec = expand_shape
+    flat = lb.reshape(-1)
+    return flat.reshape(batch, num_spec, *lb.shape[2:]) if lb.ndim > 1 else flat.reshape(batch, num_spec)
+
+
+def _try_shared_input_initial_crown(
+    self: verifier.verifier.Verifier,
+    objectives: typing.Any,
+) -> typing.Any:
+    bound_view, expand_shape = _preprocess_bound_view(objectives)
+    if bound_view is None or expand_shape is None:
+        return objectives
+
+    try:
+        self._init_abstractor('backward', objectives, preprocess=True)
+    except Exception:
+        logger.debug('[_preprocess] failed to init abstractor for initial CROWN')
+        return objectives
+
+    try:
+        from abstractor.auto_LiRPA.utils import stop_criterion_all
+        from abstractor.params import get_initialize_opt_params
+
+        bound_view.cs = bound_view.cs.to(self.device)
+        bound_view.rhs = bound_view.rhs.to(self.device)
+        stop_fn = stop_criterion_all(bound_view.rhs)
+        self.abstractor.net.set_bound_opts(get_initialize_opt_params(stop_fn))
+        input_lowers = bound_view.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        input_uppers = bound_view.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        x = self.abstractor.new_input(x_L=input_lowers, x_U=input_uppers)
+
+        with torch.no_grad():
+            lb, _ = self.abstractor.net.compute_bounds(
+                x=(x,),
+                C=bound_view.cs,
+                method='backward',
+                bound_upper=False,
+            )
+
+        logger.info(f'[_preprocess] initial CROWN (first 10): {lb.flatten()[:10].tolist()}')
+        if stop_fn(lb).all().item():
+            logger.info('[_preprocess] verified with initial CROWN')
+            objectives.num_used = len(objectives.lower_bounds)
+    except Exception:
+        logger.debug('[_preprocess] initial CROWN check failed')
+        if os.environ.get('NEURALSAT_DEBUG'):
+            import traceback
+            traceback.print_exc()
+            raise
+    finally:
+        if hasattr(self, 'abstractor'):
+            del self.abstractor
+
+    return objectives
 
 
 def get_used_gpu_memory(return_percentage: bool = False):
@@ -127,7 +219,12 @@ def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None)
     if not Settings.use_mip_attack:
         return False, None
     
-    return self.mip_attacker.run(reference_bounds)
+    is_attacked, adv = self.mip_attacker.run(reference_bounds)
+    if is_attacked and adv is not None:
+        if not _validate_vnncomp(self, adv):
+            logger.debug("[!] MIP attack CEX failed vnncomp validation")
+            return False, None
+    return is_attacked, adv
     
     
 @beartype
@@ -139,6 +236,11 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     eps = diff.max().item()
     perturbed = (diff > 0).int().sum() // diff.shape[0]
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
+
+    if (isinstance(objectives.cs, torch.Tensor)) and (isinstance(objectives.rhs, torch.Tensor)):
+        objectives = _try_shared_input_initial_crown(self, objectives)
+        if not len(objectives):
+            return objectives, None
 
     if force_split is not None:
         assert force_split in ['input', 'hidden']
@@ -165,21 +267,36 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     if not torch.allclose(objectives.lower_bounds.mean(dim=0), objectives.lower_bounds[0], 1e-5, 1e-5):
         return objectives, None
     
+    split_points = None
     try:
         logger.info(f'[_preprocess] _init_abstractor')
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives, preprocess=True)
-    except:
-        print('[_preprocess] Failed to initialize abstractor')
-        return objectives, None
-    
-    # prune objectives
-    tmp_objective = copy.deepcopy(objectives)
-    tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1] # raise errors if using beta, use full objectives instead
-    tmp_objective.upper_bounds = tmp_objective.upper_bounds[0:1] # raise errors if using beta, use full objectives instead
-    
-    # forward
-    try:
-        ret = self.abstractor.initialize(tmp_objective, short_cut=True)
+
+        # prune objectives — use one shared input + stacked C, never initialize(batch=1) with full cs
+        bound_view, expand_shape = _preprocess_bound_view(objectives)
+        if bound_view is None or expand_shape is None:
+            return objectives, None
+
+        from abstractor.auto_LiRPA.utils import stop_criterion_all
+        from abstractor.params import get_initialize_opt_params
+
+        bound_view.cs = bound_view.cs.to(self.device)
+        bound_view.rhs = bound_view.rhs.to(self.device)
+        stop_fn = stop_criterion_all(bound_view.rhs)
+        self.abstractor.net.set_bound_opts(get_initialize_opt_params(stop_fn))
+        input_lowers = bound_view.lower_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        input_uppers = bound_view.upper_bounds.view(-1, *self.input_shape[1:]).to(self.device)
+        x = self.abstractor.new_input(x_L=input_lowers, x_U=input_uppers)
+        with torch.no_grad():
+            lb, _ = self.abstractor.net.compute_bounds(
+                x=(x,),
+                C=bound_view.cs,
+                method=self.abstractor.method,
+                bound_upper=False,
+            )
+        output_lbs = _expand_preprocessed_lbs(lb, expand_shape)
+        rhs = objectives.rhs
+        split_points = self.abstractor.split_points
     except:
         print('[!] Failed to preprocess objectives')
         if os.environ.get("NEURALSAT_DEBUG"):
@@ -187,9 +304,12 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             traceback.print_exc()
             raise NotImplementedError('Failed to preprocess objectives')
         return objectives, None
+    finally:
+        if hasattr(self, 'abstractor'):
+            del self.abstractor
 
     # pruning
-    remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
+    remaining_index = torch.where((output_lbs.detach().cpu() <= rhs.detach().cpu()).all(1))[0]
     objectives.lower_bounds = objectives.lower_bounds[remaining_index]
     objectives.upper_bounds = objectives.upper_bounds[remaining_index]
     objectives.cs = objectives.cs[remaining_index]
@@ -200,15 +320,30 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
     objectives.ids = objectives.ids[remaining_index]
     
-    if None in self.abstractor.split_points:
+    if split_points is not None and None in split_points:
         # FIXME: disable restart + stabilize for now
         Settings.use_restart = False
         Settings.use_mip_tightening = False
         logger.info(f'Remain {len(objectives)} objectives')
         return objectives, None
     
-    # refine
+    # refine / mip setup — use a fresh abstractor (probe abstractor was deleted above)
     refined_intermediate_bounds = None
+    need_mip = (
+        len(objectives) and (not self.input_split)
+        and (Settings.use_mip_tightening or Settings.use_mip_attack or Settings.use_gpu_tightening)
+    )
+    if need_mip or (len(objectives) and Settings.use_mip_tightening):
+        try:
+            self._init_abstractor(
+                'backward' if np.prod(self.input_shape) < 100000 else 'forward',
+                objectives,
+                preprocess=True,
+            )
+        except Exception:
+            logger.debug('[_preprocess] failed to init abstractor for MIP setup')
+            return objectives, None
+
     if len(objectives) and (Settings.use_mip_tightening) and self.abstractor.method == 'backward':
         use_refined = not Settings.use_restart
         if any([isinstance(_, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d, 
@@ -416,7 +551,12 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: DnfObjectives, 
                 timeout: int | float = 10.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
-        return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
+        is_attacked, adv = Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
+        if is_attacked and adv is not None:
+            if not _validate_vnncomp(self, adv):
+                logger.debug("[!] Pre-attack CEX failed vnncomp validation")
+                return False, None
+        return is_attacked, adv
     return False, None
     
 @beartype
@@ -482,7 +622,9 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
             for j in range(attack_images.shape[2]): # props
                 adv = attack_images[:, i, j]
                 if check_solution(self.net, adv, domain_params.cs[indices][j], domain_params.rhs[indices][j], input_lowers[:, j], input_uppers[:, j]):
-                    return adv
+                    if _validate_vnncomp(self, adv):
+                        return adv
+                    logger.debug("[!] CEX passed internal check but failed vnncomp validation, continuing attack")
         logger.debug("[!] Invalid counter-example")
         
     return None
@@ -657,6 +799,14 @@ def _check_adv(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: t
         if check_solution(self.net, adv, cs[i], rhs[i], lower_bounds[i:i+1], upper_bounds[i:i+1]):
             return True
     return False
+
+
+def _validate_vnncomp(self: 'verifier.verifier.Verifier', adv: torch.Tensor) -> bool:
+    """Validate a candidate CEX against the full vnncomp spec (ONNX + vnnlib).
+    Returns True if valid, False if invalid or paths not available."""
+    if self.net_path is None or self.vnnlib_path is None:
+        return True  # can't validate, assume ok (will be caught later in main.py)
+    return validate_cex(inputs=adv, net_path=self.net_path, vnnlib_path=self.vnnlib_path)
 
 @beartype
 def get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> None | dict:

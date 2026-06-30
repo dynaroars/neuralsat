@@ -1,0 +1,38 @@
+#########################################################################
+##   This file is part of the auto_LiRPA library, a core part of the   ##
+##   α,β-CROWN (alpha-beta-CROWN) neural network verifier developed    ##
+##   by the α,β-CROWN Team                                             ##
+##                                                                     ##
+##   Copyright (C) 2020-2026 The α,β-CROWN Team                        ##
+##   Team leaders:                                                     ##
+##          Faculty:   Huan Zhang <huan@huan-zhang.com> (UIUC)         ##
+##          Student:   Xiangru Zhong <xiangru4@illinois.edu> (UIUC)    ##
+##                                                                     ##
+##   See CONTRIBUTORS for all current and past developers in the team. ##
+##                                                                     ##
+##     This program is licensed under the BSD 3-Clause License,        ##
+##        contained in the LICENCE file in this directory.             ##
+##                                                                     ##
+#########################################################################
+import torch
+import torch.nn as nn
+
+class CrossEntropyWrapper(nn.Module):
+    def __init__(self, model):
+        super(CrossEntropyWrapper, self).__init__()
+        self.model = model
+
+    def forward(self, x, labels):
+        y = self.model(x)
+        logits = y - torch.gather(y, dim=-1, index=labels.unsqueeze(-1))
+        return torch.exp(logits).sum(dim=-1, keepdim=True)
+
+class CrossEntropyWrapperMultiInput(nn.Module):
+    def __init__(self, model):
+        super(CrossEntropyWrapperMultiInput, self).__init__()
+        self.model = model
+
+    def forward(self, labels, *x):
+        y = self.model(*x)
+        logits = y - torch.gather(y, dim=-1, index=labels.unsqueeze(-1))
+        return torch.exp(logits).sum(dim=-1, keepdim=True)

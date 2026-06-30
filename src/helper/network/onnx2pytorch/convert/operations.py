@@ -97,17 +97,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
         elif node.op_type == "Concat":
             op = partial(torch.cat, **extract_attributes(node))
         elif node.op_type == "Constant":
-            constant = extract_attributes(node)['constant']
-            next_node = onnx_graph.node[i + 1]
-            if constant.ndim == 1 and len(constant) == 2 and (-1 in constant) and next_node.op_type == 'Reshape' \
-                    and len(node.input) == 0 and len(node.output) == 1:
-                op = nn.Flatten(1)
-                node.input.extend([n_i for n_i in next_node.input if n_i != node.output[0]])
-                node.output.pop()
-                node.output.extend(next_node.output)
-                onnx_graph.node.pop(i + 1)  # remove next node
-            else:
-                op = Constant(**extract_attributes(node))
+            op = Constant(**extract_attributes(node))
         elif node.op_type == "ConstantOfShape":
             op = ConstantOfShape(**extract_attributes(node))
         elif node.op_type == "Conv":
@@ -273,13 +263,7 @@ def convert_operations(onnx_graph, opset_version, batch_dim=0, enable_pruning=Tr
             )
             shape = np.copy(onnx.numpy_helper.to_array(shape[0])) if shape else None
             # print(shape)
-            if (shape is not None) and len(shape) == 2 and ((-1 in shape) or (1 in shape)):
-                op = nn.Flatten(1)
-                for n_idx, n_name in enumerate(node.input):
-                    if n_name in onnx_initializers:
-                        node.input.pop(n_idx)
-            else:
-                op = Reshape(enable_pruning, shape, quirks=quirks.get("Reshape"))
+            op = Reshape(enable_pruning, shape, quirks=quirks.get("Reshape"))
             # exit()
         elif node.op_type == "Resize":
             op = Resize(**extract_attributes(node))

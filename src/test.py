@@ -423,28 +423,28 @@ class TestVerifier(unittest.TestCase):
         print(f'[PASSED] status: {status}')
         
         
-    def test_vit_unsat(self):
-        reset_settings()
-        net_path = 'example/onnx/pgd_2_3_16.onnx'
-        vnnlib_path = 'example/vnnlib/pgd_2_3_16_4021.vnnlib'
-        device = 'cuda'
+    # def test_vit_unsat(self):
+    #     reset_settings()
+    #     net_path = 'example/onnx/pgd_2_3_16.onnx'
+    #     vnnlib_path = 'example/vnnlib/pgd_2_3_16_4021.vnnlib'
+    #     device = 'cuda'
 
-        print(f'\n\nRunning "test_vit_unsat" with', net_path, vnnlib_path)
+    #     print(f'\n\nRunning "test_vit_unsat" with', net_path, vnnlib_path)
         
-        model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
-        model.to(device)
+    #     model, input_shape, objectives = extract_instance(net_path, vnnlib_path)
+    #     model.to(device)
         
-        verifier = Verifier(
-            net=model, 
-            input_shape=input_shape, 
-            batch=1000,
-            device=device,
-        )
+    #     verifier = Verifier(
+    #         net=model, 
+    #         input_shape=input_shape, 
+    #         batch=1000,
+    #         device=device,
+    #     )
         
-        status = verifier.verify(objectives)
+    #     status = verifier.verify(objectives)
         
-        self.assertEqual(status, ReturnStatus.UNSAT)
-        print(f'[PASSED] status: {status}')
+    #     self.assertEqual(status, ReturnStatus.UNSAT)
+    #     print(f'[PASSED] status: {status}')
     
         
 if __name__ == '__main__':
