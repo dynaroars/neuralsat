@@ -42,6 +42,18 @@ class NetworkAbstractor:
         
         # debug
         self.iteration = 0
+
+    @beartype
+    def _conv_modes(self: 'NetworkAbstractor') -> list[str]:
+        """Patches mode can segfault on non-CNN graphs; crown uses matrix for those."""
+        has_conv = any(
+            isinstance(m, (
+                torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d,
+                torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d,
+            ))
+            for m in self.pytorch_model.modules()
+        )
+        return ['patches', 'matrix'] if has_conv else ['matrix', 'patches']
         
     @beartype
     @property
@@ -106,15 +118,9 @@ class NetworkAbstractor:
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
-        params = [
-            ['patches', self.method], # default
-            ['matrix', self.method],
-        ]
+        params = [[mode, self.method] for mode in self._conv_modes()]
         if self.input_split and (self.method != 'backward'):
-            params += [        
-                ['patches', 'backward'],
-                ['matrix', 'backward'],
-            ]
+            params += [[mode, 'backward'] for mode in self._conv_modes()]
         
         for mode, method in params:
             gc_cuda()
