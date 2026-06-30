@@ -88,7 +88,7 @@ def _try_shared_input_initial_crown(
     try:
         self._init_abstractor('backward', objectives, preprocess=True)
     except Exception:
-        logger.debug('[_preprocess] failed to init abstractor for initial CROWN')
+        logger.debug('[_preprocess] failed to init abstractor for initialization')
         return objectives
 
     try:
@@ -111,12 +111,12 @@ def _try_shared_input_initial_crown(
                 bound_upper=False,
             )
 
-        logger.info(f'[_preprocess] initial CROWN (first 10): {lb.flatten()[:10].tolist()}')
+        logger.info(f'[_preprocess] initial (first 10): {lb.flatten()[:10].tolist()}')
         if stop_fn(lb).all().item():
-            logger.info('[_preprocess] verified with initial CROWN')
+            logger.info('[_preprocess] verified with initial')
             objectives.num_used = len(objectives.lower_bounds)
     except Exception:
-        logger.debug('[_preprocess] initial CROWN check failed')
+        logger.debug('[_preprocess] initial check failed')
         if os.environ.get('NEURALSAT_DEBUG'):
             import traceback
             traceback.print_exc()
@@ -806,7 +806,9 @@ def _validate_vnncomp(self: 'verifier.verifier.Verifier', adv: torch.Tensor) -> 
     Returns True if valid, False if invalid or paths not available."""
     if self.net_path is None or self.vnnlib_path is None:
         return True  # can't validate, assume ok (will be caught later in main.py)
-    return validate_cex(inputs=adv, net_path=self.net_path, vnnlib_path=self.vnnlib_path)
+    gtrsb_nhwc = getattr(self.net, '_gtrsb_nhwc', None)
+    return validate_cex(inputs=adv, net_path=self.net_path, vnnlib_path=self.vnnlib_path,
+                        gtrsb_nhwc=gtrsb_nhwc)
 
 @beartype
 def get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> None | dict:

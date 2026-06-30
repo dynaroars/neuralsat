@@ -89,7 +89,10 @@ class Verifier:
             return ReturnStatus.UNSAT
         
         # attack
-        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=min(10.0, timeout * 0.1))
+        attack_timeout = min(10.0, timeout * 0.1)
+        if getattr(self.net, '_gtrsb_nhwc', None):
+            attack_timeout = min(60.0, timeout * 0.5)
+        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives), timeout=attack_timeout)
         if is_attacked:
             return ReturnStatus.SAT  
 
@@ -196,16 +199,15 @@ class Verifier:
                         if oom:
                             logger.debug(f'OOM with {self.batch=}')
                             if self.batch == 1:
-                                # Last resort: fall back to plain CROWN (no alpha optimization)
                                 if self.abstractor.method != 'backward':
-                                    logger.debug('[!] OOM with batch_size=1, falling back to plain CROWN')
+                                    logger.debug('[!] OOM with batch_size=1')
                                     self.abstractor.method = 'backward'
                                     Settings.backward_batch_size = 128
                                     gc_cuda()
                                     dnf_objectives.add(objective)
                                     objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                                     continue
-                                logger.debug('[!] OOM even with plain CROWN')
+                                logger.debug('[!] OOM')
                                 return None
                             self.last_failed_batch = self.batch
                             self.batch = self.batch // 2

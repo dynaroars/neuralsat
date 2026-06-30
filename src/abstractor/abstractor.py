@@ -14,6 +14,7 @@ import os
 
 from .auto_LiRPA.utils import stop_criterion_batch_any
 from .auto_LiRPA import BoundedModule
+from .graph_optimizer import merge_relu_lookup_table, merge_sign
 
 from helper.misc.result import AbstractResults, CoefficientMatrix
 from helper.network.onnx2pytorch import ConvertModel
@@ -23,8 +24,6 @@ from helper.misc.logger import logger
 from .params import *
 
 class NetworkAbstractor:
-    
-    "Over-approximation method alpha-beta-CROWN"
 
     @beartype
     def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel | torch.nn.Module, 
@@ -45,7 +44,6 @@ class NetworkAbstractor:
 
     @beartype
     def _conv_modes(self: 'NetworkAbstractor') -> list[str]:
-        """Patches mode can segfault on non-CNN graphs; crown uses matrix for those."""
         has_conv = any(
             isinstance(m, (
                 torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d,
@@ -103,13 +101,13 @@ class NetworkAbstractor:
         if self.select_params(objective, extra_opts=new_extra_opts):
             return None
 
-        # Last resort: fall back to plain CROWN (no alpha optimization), like crown uses for large models
+        # Last resort: fall back to plain backward (no alpha optimization)
         saved_method = self.method
         self.method = 'backward'
         Settings.backward_batch_size = float('inf')
         Settings.share_alphas = False
         if self.select_params(objective, extra_opts={}):
-            logger.info('[setup] Fell back to plain CROWN (no alpha optimization)')
+            logger.info('[setup] Fell back to plain backward (no alpha optimization)')
             return None
         self.method = saved_method
 
@@ -146,6 +144,8 @@ class NetworkAbstractor:
             device=self.device,
             verbose=False,
         )
+        merged = merge_relu_lookup_table(self.net)
+        merge_sign(self.net)
         self.net.eval()
         self.net.get_split_nodes()
         
@@ -156,7 +156,10 @@ class NetworkAbstractor:
             logger.debug(f'[_init_module] Use random dummy input for checking correctness')
             dummy = torch.randn(self.input_shape, device=self.device) 
             
-        if os.environ.get('NEURALSAT_DEBUG'):
+        if (os.environ.get('NEURALSAT_DEBUG')
+                and merged == 0
+                and not getattr(self.pytorch_model, '_lookup_onnx_load', False)
+                and not getattr(self.pytorch_model, '_gtrsb_nhwc', None)):
             self.net.to('cpu')
             self.pytorch_model.to('cpu')
             dummy = dummy.to('cpu')

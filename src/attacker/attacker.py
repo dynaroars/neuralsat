@@ -98,18 +98,62 @@ class PGDAttacker:
         rhs = self.objective.rhs.to(self.device)
         
         print(f'Attacking PGD F32 {iterations=} {restarts=} {timeout=} {cs.shape=} {rhs.shape=}')
-        is_attacked, attack_images = attack(
-            model=self.net,
-            x=x.to(cs.dtype), 
-            data_min=data_min,
-            data_max=data_max,
-            cs=cs,
-            rhs=rhs,
-            attack_iters=iterations, 
-            num_restarts=restarts,
-            timeout=timeout / 2.0,
-        )
-    
+        if getattr(self.net, '_gtrsb_nhwc', None):
+            from attacker.gtrsb_attack import gtrsb_attack
+            per_timeout = timeout / max(len(cs), 1)
+            is_attacked, adv = False, None
+            for j in range(len(cs)):
+                spec_min = data_min[:, j:j + 1] if data_min.shape[1] > 1 else data_min
+                spec_max = data_max[:, j:j + 1] if data_max.shape[1] > 1 else data_max
+                hit, candidate = gtrsb_attack(
+                    model=self.net,
+                    x=x.to(cs.dtype),
+                    data_min=spec_min,
+                    data_max=spec_max,
+                    cs=cs[j:j + 1],
+                    rhs=rhs[j:j + 1],
+                    input_shape=self.input_shape,
+                    device=self.device,
+                    timeout=per_timeout,
+                    num_restarts=50,
+                    attack_iters=iterations,
+                )
+                if hit:
+                    is_attacked, adv = True, candidate
+                    break
+        else:
+            is_attacked, attack_images = attack(
+                model=self.net,
+                x=x.to(cs.dtype), 
+                data_min=data_min,
+                data_max=data_max,
+                cs=cs,
+                rhs=rhs,
+                attack_iters=iterations, 
+                num_restarts=restarts,
+                timeout=timeout / 2.0,
+            )
+            adv = None
+            if is_attacked:
+                for i in range(attack_images.shape[1]):
+                    for j in range(attack_images.shape[2]):
+                        candidate = attack_images[:, i, j]
+                        if check_solution(self.net, candidate, cs=cs[j], rhs=rhs[j], data_min=data_min[:, j], data_max=data_max[:, j]):
+                            adv = candidate
+                            break
+                    if adv is not None:
+                        break
+                is_attacked = adv is not None
+        if getattr(self.net, '_gtrsb_nhwc', None):
+            if is_attacked and adv is not None:
+                with torch.no_grad():
+                    for j in range(len(cs)):
+                        if check_solution(self.net, adv, cs=cs[j], rhs=rhs[j], data_min=data_min[:, j], data_max=data_max[:, j]):
+                            return True, adv
+                logger.debug("[!] Invalid counter-example")
+            self.net.to(cs.dtype)
+            return False, None
+
         if is_attacked:
             with torch.no_grad():
                 for i in range(attack_images.shape[1]): # restarts

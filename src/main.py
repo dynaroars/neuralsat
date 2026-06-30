@@ -96,6 +96,10 @@ if __name__ == '__main__':
     
     # specification
     objectives = parse_vnnlib(args.spec, input_shape)
+    if getattr(model, '_gtrsb_nhwc', None):
+        from helper.spec.objective import transpose_gtrsb_objectives
+        h, w, c = model._gtrsb_nhwc
+        objectives = transpose_gtrsb_objectives(objectives, h, w, c)
     
     # verifier
     verifier = Verifier(
@@ -114,8 +118,10 @@ if __name__ == '__main__':
     runtime = time.time() - START_TIME
     
     # validate counterexample when claiming SAT
+    gtrsb_nhwc = getattr(model, '_gtrsb_nhwc', None)
     if status == ReturnStatus.SAT and verifier.adv is not None:
-        if not validate_cex(inputs=verifier.adv, net_path=args.net, vnnlib_path=args.spec):
+        if not validate_cex(inputs=verifier.adv, net_path=args.net, vnnlib_path=args.spec,
+                            gtrsb_nhwc=gtrsb_nhwc):
             logger.warning('[!] Counterexample failed vnncomp validation — downgrading to invalid_counterexample')
             status = ReturnStatus.INVALID_CEX
 
@@ -134,7 +140,7 @@ if __name__ == '__main__':
             else:
                 print(status, file=fp)
             if (verifier.adv is not None) and args.export_cex:
-                print(get_adv_string(inputs=verifier.adv, net_path=args.net), file=fp)
+                print(get_adv_string(inputs=verifier.adv, net_path=args.net, gtrsb_nhwc=gtrsb_nhwc), file=fp)
 
     if args.reasoning_output and Settings.use_save_reasoning_step and status == ReturnStatus.UNSAT:
         if hasattr(verifier, 'domains_list') and not isinstance(verifier.domains_list, list):

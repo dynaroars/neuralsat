@@ -6,8 +6,13 @@ import torch
 from helper.network.read_onnx import inference_onnx
 
 @beartype
-def get_adv_string(inputs: torch.Tensor, net_path: str) -> str:
-    x = inputs.detach().cpu().float().numpy()
+def get_adv_string(inputs: torch.Tensor, net_path: str, gtrsb_nhwc: tuple[int, int, int] | None = None) -> str:
+    x = inputs.detach().cpu().float()
+    if gtrsb_nhwc is not None:
+        from helper.spec.objective import gtrsb_nchw_to_nhwc
+        h, w, c = gtrsb_nhwc
+        x = gtrsb_nchw_to_nhwc(x, h, w, c)
+    x = x.numpy()
     y = inference_onnx(net_path, x)[0]
     # flatten
     x = x.flatten()
@@ -19,14 +24,20 @@ def get_adv_string(inputs: torch.Tensor, net_path: str) -> str:
     return f"({string})"
 
 
-def validate_cex(inputs: torch.Tensor, net_path: str, vnnlib_path: str, tol: float = 1e-5) -> bool:
+def validate_cex(inputs: torch.Tensor, net_path: str, vnnlib_path: str, tol: float = 1e-5,
+                 gtrsb_nhwc: tuple[int, int, int] | None = None) -> bool:
     """Check that the counterexample satisfies vnnlib input bounds and output property.
 
     Returns True if the CEX is valid (correctly witnesses SAT), False otherwise.
     """
     from helper.spec.read_vnnlib import read_vnnlib
 
-    x = inputs.detach().cpu().float().numpy().flatten()
+    x_t = inputs.detach().cpu().float()
+    if gtrsb_nhwc is not None:
+        from helper.spec.objective import gtrsb_nchw_to_nhwc
+        h, w, c = gtrsb_nhwc
+        x_t = gtrsb_nchw_to_nhwc(x_t, h, w, c)
+    x = x_t.numpy().flatten()
 
     # Parse vnnlib for input bounds and output spec
     specs = read_vnnlib(vnnlib_path)
@@ -40,7 +51,7 @@ def validate_cex(inputs: torch.Tensor, net_path: str, vnnlib_path: str, tol: flo
         # 2. Run model and check output property (disjunction of conjuncts)
         sess = ort.InferenceSession(net_path)
         inp_info = sess.get_inputs()[0]
-        x_np = inputs.detach().cpu().float().numpy()
+        x_np = x_t.numpy()
         # Reshape to match the ONNX model's expected rank (some models expect rank-1, others rank-2)
         expected_ndim = len(inp_info.shape)
         if x_np.ndim != expected_ndim:

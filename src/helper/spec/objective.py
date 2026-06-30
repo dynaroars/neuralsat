@@ -183,6 +183,33 @@ class DnfObjectives:
         
 
 
+def gtrsb_nchw_to_nhwc(inputs: torch.Tensor, h: int, w: int, c: int) -> torch.Tensor:
+    """Convert NCHW model input back to NHWC layout expected by raw GTRSB ONNX/vnnlib."""
+    x = inputs.detach()
+    if x.ndim == 1:
+        x = x.view(1, c, h, w)
+    elif x.ndim == 4 and x.shape[1] == c:
+        pass
+    else:
+        x = x.view(1, c, h, w)
+    return x.permute(0, 2, 3, 1).contiguous()
+
+
+def transpose_gtrsb_objectives(objectives: 'DnfObjectives', h: int, w: int, c: int) -> 'DnfObjectives':
+    """Reorder flat NHWC input bounds to NCHW to match optimized GTRSB models."""
+    def _permute_bounds(lb, ub):
+        stacked = torch.stack([lb, ub], dim=-1).view(h, w, c, 2).permute(2, 0, 1, 3).reshape(-1, 2)
+        return stacked[:, 0], stacked[:, 1]
+
+    for obj in objectives.objectives:
+        obj.lower_bound, obj.upper_bound = _permute_bounds(obj.lower_bound, obj.upper_bound)
+        obj.lower_bound_f64, obj.upper_bound_f64 = _permute_bounds(
+            obj.lower_bound_f64, obj.upper_bound_f64)
+
+    objectives._extract()
+    return objectives
+
+
 def parse_vnnlib(vnnlib_path, input_shape):
     vnnlibs = read_vnnlib(vnnlib_path)
     objectives = []

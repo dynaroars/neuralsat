@@ -7,6 +7,7 @@ import warnings
 import torch
 import onnx
 import io
+import os
 
 try:
     import onnxsim
@@ -17,6 +18,8 @@ except:
     
 from helper.misc.error import *
 from . import onnx2pytorch
+from . import onnx2pytorch_lookup
+from .onnx_opt import optimize_remove_matmul_inplace, optimize_fix_gtrsb
 
 custom_quirks = {
     'Reshape': {
@@ -73,19 +76,75 @@ def onnxsim_convert(path):
         print(f"[!] ONNXSIM failed to simplify {path}.")
         return None
     return model_simp
-    
+
+
+def _needs_lookup_onnx_load(onnx_model: onnx.ModelProto) -> bool:
+    """Sin/Cos lookup-table models need optimized ONNX + lookup-table conversion."""
+    return any(node.op_type in ('Sin', 'Cos') for node in onnx_model.graph.node)
+
+
+def _needs_gtrsb_load(onnx_model: onnx.ModelProto) -> bool:
+    """GTRSB/traffic-sign models use NHWC + Sign STE; need fix_gtrsb optimization."""
+    if not any(node.op_type == 'Sign' for node in onnx_model.graph.node):
+        return False
+    dims = onnx_model.graph.input[0].type.tensor_type.shape.dim
+    if len(dims) != 4:
+        return False
+    h, w, c = dims[1].dim_value, dims[2].dim_value, dims[3].dim_value
+    return c in (1, 3) and h > 1 and w > 1
+
+
+def _optimize_onnx_lookup(onnx_model: onnx.ModelProto, path: str) -> onnx.ModelProto:
+    npath = path + '.optimized'
+    if os.path.exists(npath):
+        return onnx.load(npath)
+    return optimize_remove_matmul_inplace(onnx_model, save_path=npath)
+
+
+def _optimize_onnx_gtrsb(onnx_model: onnx.ModelProto, path: str) -> onnx.ModelProto:
+    npath = path + '.gtrsb_optimized'
+    if os.path.exists(npath):
+        return onnx.load(npath)
+    return optimize_fix_gtrsb(onnx_model, save_path=npath)
+
 
 @beartype
 def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_shape: None | list = None) -> tuple:
     # load model
     onnx_model = _load_onnx(path)
-    
-    try:
-        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
-    except IndexError:
-        print(f'[!] onnx2pytorch failed, try onnxsim')
-        onnx_model = onnxsim_convert(path)
-        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    use_lookup_load = _needs_lookup_onnx_load(onnx_model)
+    use_gtrsb_load = _needs_gtrsb_load(onnx_model)
+    validate_path = path
+    validate_nhwc = False
+    orig_nhwc_shape = None
+
+    if use_lookup_load and isinstance(path, str):
+        print(f'[!] Using lookup-table ONNX load for Sin/Cos model: {path}')
+        onnx_model = _optimize_onnx_lookup(onnx_model, path)
+        validate_path = path + '.optimized'
+        pytorch_model = onnx2pytorch_lookup.ConvertModel(onnx_model, experimental=True)
+        pytorch_model._lookup_onnx_load = True
+    elif use_gtrsb_load and isinstance(path, str):
+        raw = _load_onnx(path)
+        dims = raw.graph.input[0].type.tensor_type.shape.dim
+        h = dims[1].dim_value if dims[1].dim_value > 0 else 1
+        w = dims[2].dim_value if dims[2].dim_value > 0 else 1
+        c = dims[3].dim_value if dims[3].dim_value > 0 else 1
+        orig_nhwc_shape = add_batch((h, w, c))
+        print(f'[!] Using GTRSB ONNX load (NHWC->NCHW): {path}')
+        onnx_model = _optimize_onnx_gtrsb(onnx_model, path)
+        validate_path = path + '.gtrsb_optimized'
+        validate_nhwc = True
+        # Global custom_quirks break Sign/MatMul GTRSB graphs; use default conversion.
+        pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True)
+        pytorch_model._gtrsb_nhwc = (h, w, c)
+    else:
+        try:
+            pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+        except IndexError:
+            print(f'[!] onnx2pytorch failed, try onnxsim')
+            onnx_model = onnxsim_convert(path)
+            pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
     
     # extract shapes
     onnx_inputs = [node.name for node in onnx_model.graph.input]
@@ -130,11 +189,18 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
     try:
         batch = 2
         dummy = torch.randn(batch, *batched_input_shape[1:], dtype=torch.get_default_dtype())
-        # print(dummy.shape)
-        output_onnx = torch.cat([torch.from_numpy(inference_onnx(path, dummy[i].view(orig_input_shape).float().numpy())[0]).view(batched_output_shape) for i in range(batch)])
-        # print('output_onnx:', output_onnx)
-        output_pytorch = pytorch_model(dummy).detach().numpy()
-        # print('output_pytorch:', output_pytorch)
+        if validate_nhwc and isinstance(path, str):
+            dummy_ort = torch.randn(batch, *orig_nhwc_shape[1:], dtype=torch.get_default_dtype())
+            dummy_pt = dummy_ort.permute(0, 3, 1, 2).contiguous()
+            batched_out = batched_output_shape
+            output_onnx = torch.cat([
+                torch.from_numpy(inference_onnx(path, dummy_ort[i].view(orig_nhwc_shape).float().numpy())[0]).view(batched_out)
+                for i in range(batch)
+            ]).numpy()
+            output_pytorch = pytorch_model(dummy_pt).detach().numpy()
+        else:
+            output_onnx = torch.cat([torch.from_numpy(inference_onnx(validate_path, dummy[i].view(orig_input_shape).float().numpy())[0]).view(batched_output_shape) for i in range(batch)]).numpy()
+            output_pytorch = pytorch_model(dummy).detach().numpy()
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
         # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
     except:
@@ -257,8 +323,10 @@ def parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_s
                 traceback.print_exc()
                 exit()
         except SystemExit:
-            exit()
+            import sys
+            sys.exit(1)
         except:
             warnings.warn(f'Unable to convert onnx to pytorch model')
             traceback.print_exc()
-            exit()
+            import sys
+            sys.exit(1)
