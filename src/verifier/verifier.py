@@ -149,7 +149,7 @@ class Verifier:
         return status or ReturnStatus.UNKNOWN
         
     def _heuristic_configure(self: 'Verifier', timeout: int | float) -> None:
-        if timeout <= 30:
+        if timeout <= 20:
             Settings.use_restart = False
             Settings.use_mip_tightening = False
         
