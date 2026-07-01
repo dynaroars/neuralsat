@@ -96,6 +96,16 @@ def configure_from_output_shape(settings, output_shape: tuple, batch: int) -> in
     return min(batch, 128)
 
 
+def configure_from_input_shape(settings, input_shape: tuple) -> None:
+    """Tune bound propagation for very large input tensors (e.g. VGG-scale images)."""
+    import numpy as np
+    if np.prod(input_shape) < 100000:
+        return
+    settings.forward_dynamic = True
+    settings.forward_max_dim = 100
+    settings.backward_batch_size = 16
+
+
 class DecompositionSettings(BaseSettings):
     
     def __init__(self, args=None):

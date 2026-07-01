@@ -33,7 +33,7 @@ def get_branching_opt_params() -> dict:
     
 @beartype
 def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
-    return {
+    opts = {
         'crown_batch_size': Settings.backward_batch_size,
         'optimize_bound_args': {
             'enable_alpha_crown': True,
@@ -47,6 +47,10 @@ def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
             'lr_decay': 0.98, 
         }
     }
+    if Settings.forward_dynamic:
+        opts['forward_max_dim'] = Settings.forward_max_dim
+        opts['dynamic_forward'] = Settings.forward_dynamic
+    return opts
     
     
 @beartype

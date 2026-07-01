@@ -500,6 +500,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
         
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
+    if Settings.forward_dynamic and abstract_method.startswith('forward'):
+        abstract_method = abstract_method.replace('forward', 'dynamic-forward', 1)
 
     # decision heuristic
     assert params['input_split'] == self.input_split
