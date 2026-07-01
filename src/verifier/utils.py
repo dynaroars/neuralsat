@@ -33,6 +33,7 @@ from helper.spec.objective import DnfObjectives
 from helper.misc.check import check_solution
 from helper.misc.logger import logger
 
+from configure.advanced import configure_for_input_split
 
 from setting import Settings
 from configure.advanced import is_wide_output
@@ -258,6 +259,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         self.input_split = True
         
     if self.input_split: 
+        configure_for_input_split(Settings)
         return objectives, None
 
     if is_wide_output(cs=objectives.cs if isinstance(objectives.cs, torch.Tensor) else None):

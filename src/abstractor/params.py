@@ -33,6 +33,8 @@ def get_branching_opt_params() -> dict:
     
 @beartype
 def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
+    from abstractor.auto_LiRPA.utils import reduction_min, reduction_sum
+    loss_reduction = reduction_min if Settings.loss_reduction_min else reduction_sum
     opts = {
         'crown_batch_size': Settings.backward_batch_size,
         'optimize_bound_args': {
@@ -44,7 +46,8 @@ def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
             'stop_criterion_func': stop_criterion_func,
             'iteration': Settings.init_alpha_iteration, 
             'lr_alpha': Settings.init_alpha_lr, 
-            'lr_decay': 0.98, 
+            'lr_decay': 0.98,
+            'loss_reduction_func': loss_reduction,
         }
     }
     if Settings.forward_dynamic:

@@ -65,6 +65,10 @@ class AbstractionSettings(BaseSettings):
         self.forward_dynamic = False
         self.init_alpha_iteration = 100
         self.init_alpha_lr = 0.1
+        self.clip_input_domain = False
+        self.clip_input_domain_complete = False
+        self.clip_input_domain_iters = 1
+        self.loss_reduction_min = False
         
         
 WIDE_OUTPUT_THRESHOLD = 10000
@@ -104,6 +108,36 @@ def configure_from_input_shape(settings, input_shape: tuple) -> None:
     settings.forward_dynamic = True
     settings.forward_max_dim = 100
     settings.backward_batch_size = 16
+
+
+def configure_from_model(settings, model) -> None:
+    """Tune bound propagation for models with explicit Softmax layers (e.g. ViT)."""
+    if not any(type(m).__name__ in ('Softmax', 'LogSoftmax') for m in model.modules()):
+        return
+    settings.init_abstraction_method = 'crown-optimized'
+    settings.init_alpha_iteration = 50
+    settings.init_alpha_lr = 0.5
+    settings.loss_reduction_min = True
+    settings.use_attack = False
+    settings.use_restart = False
+    opts = dict(getattr(settings, 'verify_extra_opts', None) or {})
+    opts.update({
+        'conv_mode': 'matrix',
+        'softmax': 'complex',
+        'disable_optimization': ['Exp'],
+        'forward_before_compute_bounds': True,
+        'fixed_reducemax_index': True,
+        'sparse_intermediate_bounds': False,
+        'sparse_conv_intermediate_bounds': False,
+    })
+    settings.verify_extra_opts = opts
+
+
+def configure_for_input_split(settings) -> None:
+    settings.clip_input_domain = True
+    settings.init_abstraction_method = 'backward'
+    settings.use_mip_tightening = False
+    settings.input_split_decision_method = 'smart'
 
 
 class DecompositionSettings(BaseSettings):

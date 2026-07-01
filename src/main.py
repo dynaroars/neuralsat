@@ -4,10 +4,11 @@ import torch
 import time
 import os
 
+from configure.advanced import configure_from_output_shape, configure_from_input_shape, configure_from_model
+
 from helper.network.read_onnx import parse_onnx
 from helper.network.read_pth import parse_pth
 from helper.spec.objective import parse_vnnlib
-
 
 from helper.misc.logger import logger, LOGGER_LEVEL
 from helper.misc.export import get_adv_string, validate_cex
@@ -93,8 +94,9 @@ if __name__ == '__main__':
         print(model)
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
-    from configure.advanced import configure_from_output_shape, configure_from_input_shape
+
     configure_from_input_shape(Settings, input_shape)
+    configure_from_model(Settings, model)
     args.batch = configure_from_output_shape(Settings, output_shape, args.batch)
     
     # specification

@@ -24,6 +24,8 @@ def get_restart_strategy(nth_restart: int, input_split: bool = False) -> dict:
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[-1]
         else:
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[nth_restart]
+        if Settings.clip_input_domain:
+            strategy = {**strategy, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'smart'}
     else:
         if nth_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):
             strategy = HIDDEN_SPLIT_RESTART_STRATEGIES[-1]

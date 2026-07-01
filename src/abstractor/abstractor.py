@@ -23,6 +23,8 @@ from helper.misc.logger import logger
 
 from .params import *
 from configure.advanced import is_wide_output
+from abstractor.input_split_clip import clip_domains
+from abstractor.auto_LiRPA.concretize_func import construct_constraints
 
 class NetworkAbstractor:
 
@@ -122,6 +124,37 @@ class NetworkAbstractor:
 
         logger.info('[setup] Initialization failed')
         raise NotImplementedError('Initialization failed')
+
+    @beartype
+    def _get_clip_lA_lbias(self: 'NetworkAbstractor') -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        input_name = self.net.input_name[0]
+        node = self.net[input_name]
+        lA = getattr(node, 'lA', None)
+        if lA is None:
+            return None, None
+        lA = lA.transpose(0, 1).flatten(2)
+        lbias = torch.zeros(lA.shape[0], lA.shape[1], device=lA.device, dtype=lA.dtype)
+        return lA, lbias
+
+    @beartype
+    def _clip_input_domain(self: 'NetworkAbstractor', input_lowers: torch.Tensor, input_uppers: torch.Tensor,
+                           rhs: torch.Tensor, output_lbs: torch.Tensor
+                           ) -> tuple[torch.Tensor, torch.Tensor, tuple | None]:
+        if not Settings.clip_input_domain:
+            return input_lowers, input_uppers, None
+        lA, lbias = self._get_clip_lA_lbias()
+        if lA is None:
+            return input_lowers, input_uppers, None
+        new_lowers, new_uppers = clip_domains(
+            input_lowers, input_uppers, rhs, lA, lbias,
+            dm_lb=output_lbs, num_iters=Settings.clip_input_domain_iters,
+        )
+        constraints = None
+        if Settings.clip_input_domain_complete:
+            batch_size = len(new_lowers)
+            x_dim = new_lowers.flatten(1).shape[1]
+            constraints = construct_constraints(lA, lbias, rhs, batch_size, x_dim)
+        return new_lowers, new_uppers, constraints
             
     @beartype
     def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
@@ -286,7 +319,10 @@ class NetworkAbstractor:
             logger.info(f'Initial bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
             if stop_criterion_func(lb).all().item():
                 return AbstractResults(**{'output_lbs': lb})
-            
+
+            input_lowers, input_uppers, _ = self._clip_input_domain(
+                input_lowers, input_uppers, objective.rhs, lb)
+
             if short_cut:
                 return AbstractResults(**{
                     'objective_ids': getattr(objective, 'ids', None),
@@ -346,6 +382,9 @@ class NetworkAbstractor:
         logger.info(f'Initial optimized bounds (first 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})
+
+        input_lowers, input_uppers, _ = self._clip_input_domain(
+            input_lowers, input_uppers, objective.rhs, lb)
         
         # reorganize tensors
         with torch.no_grad():
@@ -492,7 +531,14 @@ class NetworkAbstractor:
         )
         
         # create new inputs
-        new_x = self.new_input(x_L=new_input_lowers, x_U=new_input_uppers)
+        constraints = getattr(domain_params, 'constraints', None)
+        no_return_inf = Settings.clip_input_domain and Settings.clip_input_domain_complete and constraints is not None
+        if no_return_inf:
+            self.net.init_infeasible_bounds_constraints(len(new_input_lowers), self.device)
+        new_x = self.new_input(
+            x_L=new_input_lowers, x_U=new_input_uppers,
+            constraints=constraints, no_return_inf=no_return_inf,
+        )
         
         # 2 * batch
         double_objective_ids = torch.cat([domain_params.objective_ids, domain_params.objective_ids], dim=0)
@@ -514,6 +560,12 @@ class NetworkAbstractor:
             reference_bounds=self.init_reference_bounds,
             bound_upper=False,
         )
+        if self.net.infeasible_bounds_constraints is not None:
+            infeasible = self.net.infeasible_bounds_constraints
+            double_output_lbs[infeasible] = torch.inf
+
+        new_input_lowers, new_input_uppers, constraints = self._clip_input_domain(
+            new_input_lowers, new_input_uppers, double_rhs, double_output_lbs)
 
         with torch.no_grad():
             # slopes
@@ -536,6 +588,7 @@ class NetworkAbstractor:
             'lAs': double_lAs, 
             'cs': double_cs, 
             'rhs': double_rhs, 
+            'constraints': constraints,
         })
         
     @beartype

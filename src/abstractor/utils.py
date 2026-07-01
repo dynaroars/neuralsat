@@ -23,10 +23,15 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
     pass
     
 @beartype
-def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
+def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor,
+              constraints=None, no_return_inf: bool = False) -> BoundedTensor:
     if os.environ.get('NEURALSAT_ASSERT'):
         assert torch.all(x_L <= x_U + 1e-6) #, f'{x_L=}\n\n{x_U=}'
-    new_x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+    ptb_kwargs = {'x_L': x_L, 'x_U': x_U}
+    if constraints is not None:
+        ptb_kwargs['constraints'] = constraints
+        ptb_kwargs['no_return_inf'] = no_return_inf
+    new_x = BoundedTensor(x_L, PerturbationLpNorm(**ptb_kwargs)).to(self.device)
     if hasattr(self, 'extras'):
         new_x.ptb.extras = self.extras
     return new_x

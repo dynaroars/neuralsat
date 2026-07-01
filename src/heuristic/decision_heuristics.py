@@ -369,8 +369,11 @@ class DecisionHeuristic:
         }
         
         masked_scores = {
-            k: torch.where(masks[k].bool(), scores[k].flatten(1), 0.0) 
-                for k in split_node_points
+            k: torch.nan_to_num(
+                torch.where(masks[k].bool(), scores[k].flatten(1), 0.0),
+                nan=0.0, posinf=0.0, neginf=0.0,
+            )
+            for k in split_node_points
         }
         
         # TODO: not always required to compute
