@@ -14,7 +14,7 @@ import os
 
 from .auto_LiRPA.utils import stop_criterion_batch_any
 from .auto_LiRPA import BoundedModule
-from .graph_optimizer import merge_relu_lookup_table, merge_sign
+from .graph_optimizer import merge_relu_lookup_table, merge_sign, maxpool_to_relu
 
 from helper.misc.result import AbstractResults, CoefficientMatrix
 from helper.network.onnx2pytorch import ConvertModel
@@ -166,7 +166,7 @@ class NetworkAbstractor:
             gc_cuda()
             logger.debug(f'[select_params] Try {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
             try:
-                self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
+                self._init_module(mode=mode, objective=objective, extra_opts=extra_opts, method=method)
                 success = self._check_module(method=method, objective=objective)
             except Exception as e:
                 logger.info(f'[select_params] {mode=} {method=} raised {e!r}, trying next combination')
@@ -181,7 +181,7 @@ class NetworkAbstractor:
         return False
             
     @beartype
-    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+    def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}, method: str | None = None) -> None:
         bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
         logger.debug(f'[_init_module] Try {bound_opts=}')
         self.net = BoundedModule(
@@ -193,6 +193,12 @@ class NetworkAbstractor:
         )
         merged = merge_relu_lookup_table(self.net)
         merge_sign(self.net)
+        if getattr(Settings, 'use_maxpool_to_relu', False):
+            bound_method = method if method is not None else self.method
+            use_residual = bound_method in ('crown', 'crown-optimized')
+            n = maxpool_to_relu(self.net, residual=use_residual)
+            if n:
+                logger.info(f'[graph_optimizer] maxpool_to_relu replaced {n} MaxPool nodes')
         self.net.eval()
         self.net.get_split_nodes()
         

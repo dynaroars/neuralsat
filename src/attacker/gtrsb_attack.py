@@ -18,6 +18,18 @@ def _set_signmerge_mode(net: BoundedModule, loose: bool) -> None:
         node.signmergefunction = node.loose_function if loose else node.tight_function
 
 
+def _pick_single_adv(inputs: torch.Tensor, output: torch.Tensor,
+                     serialized_conditions: tuple, data_max: torch.Tensor, data_min: torch.Tensor,
+                     input_shape: tuple) -> torch.Tensor:
+    """Extract one (batch, *spatial) input from a multi-restart PGD batch."""
+    for r in range(inputs.shape[1]):
+        inp_r = inputs[:, r:r + 1]
+        out_r = output[:, r:r + 1]
+        if check_adv_multi(inp_r, out_r, serialized_conditions, data_max, data_min):
+            return inputs[0, r].reshape(*input_shape)
+    return inputs[0, 0].reshape(*input_shape)
+
+
 def _gtrsb_signmerge_loss(net: BoundedModule, num_restarts: int, num_specs: int) -> torch.Tensor:
     layers = _signmerge_layers(net)[1:] 
     if not layers:
@@ -72,7 +84,7 @@ def gtrsb_attack(
             deadline=deadline,
         )
         if hit:
-            return True, adv.squeeze(0).squeeze(0) if adv.ndim > len(input_shape) else adv
+            return True, adv
         loose = not loose
 
     return False, None
@@ -102,7 +114,8 @@ def _gtrsb_pgd_loop(net, X, data_min, data_max, serialized_conditions, input_sha
         output = net(flat)
         output = output.view(X.shape[0], *extra_dim, output.shape[-1])
         if check_adv_multi(inputs, output, serialized_conditions, data_max, data_min):
-            return True, inputs
+            return True, _pick_single_adv(
+                inputs, output, serialized_conditions, data_max, data_min, input_shape)
         loss = get_loss(None, output, serialized_conditions)
         sm_loss = _gtrsb_signmerge_loss(net, num_restarts, num_specs)
         (loss.sum() + sm_loss.sum()).backward()

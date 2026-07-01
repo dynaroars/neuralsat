@@ -103,7 +103,7 @@ TODO_PASSED = [
         'vggnet16_2022/1.0/onnx/vgg16-7.onnx',
         'vggnet16_2022/1.0/vnnlib/spec5_scale.vnnlib',
         120,
-        ReturnStatus.EARLY_STOP,
+        ReturnStatus.UNSAT,
     ),
     (
         'vggnet16_spec12_borzoi',

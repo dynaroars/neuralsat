@@ -69,6 +69,7 @@ class AbstractionSettings(BaseSettings):
         self.clip_input_domain_complete = False
         self.clip_input_domain_iters = 1
         self.loss_reduction_min = False
+        self.use_maxpool_to_relu = False
         
         
 WIDE_OUTPUT_THRESHOLD = 10000
@@ -100,6 +101,11 @@ def configure_from_output_shape(settings, output_shape: tuple, batch: int) -> in
     return min(batch, 128)
 
 
+def model_has_maxpool(model) -> bool:
+    import torch.nn as nn
+    return any(isinstance(m, (nn.MaxPool1d, nn.MaxPool2d, nn.MaxPool3d)) for m in model.modules())
+
+
 def configure_from_input_shape(settings, input_shape: tuple) -> None:
     """Tune bound propagation for very large input tensors (e.g. VGG-scale images)."""
     import numpy as np
@@ -111,7 +117,13 @@ def configure_from_input_shape(settings, input_shape: tuple) -> None:
 
 
 def configure_from_model(settings, model) -> None:
-    """Tune bound propagation for models with explicit Softmax layers (e.g. ViT)."""
+    """Tune bound propagation for model architecture (MaxPool, Softmax, etc.)."""
+    if not any(type(m).__name__ in ('Softmax', 'LogSoftmax') for m in model.modules()):
+        if not model_has_maxpool(model):
+            return
+    if model_has_maxpool(model):
+        settings.forward_max_dim = 100
+        settings.backward_batch_size = 64
     if not any(type(m).__name__ in ('Softmax', 'LogSoftmax') for m in model.modules()):
         return
     settings.init_abstraction_method = 'crown-optimized'
@@ -137,6 +149,23 @@ def configure_for_input_split(settings) -> None:
     settings.use_mip_tightening = False
     settings.input_split_decision_method = 'smart'
     settings.verify_extra_opts = {}
+
+
+def configure_for_vggnet(settings, perturbed: int) -> None:
+    settings.use_maxpool_to_relu = True
+    settings.loss_reduction_min = True
+    settings.forward_dynamic = True
+    settings.forward_max_dim = 100
+    settings.backward_batch_size = 64
+    settings.use_mip_tightening = False
+    settings.skip_initial_worst_bound = float('-inf')
+    settings.verify_extra_opts = {}
+    if perturbed > 100:
+        settings.default_abstraction_method = 'crown-optimized'
+        settings.init_abstraction_method = 'crown-optimized'
+    else:
+        settings.default_abstraction_method = 'backward'
+        settings.init_abstraction_method = 'backward'
 
 
 class DecompositionSettings(BaseSettings):

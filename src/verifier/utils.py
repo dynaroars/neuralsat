@@ -33,7 +33,7 @@ from helper.spec.objective import DnfObjectives
 from helper.misc.check import check_solution
 from helper.misc.logger import logger
 
-from configure.advanced import configure_for_input_split
+from configure.advanced import configure_for_input_split, configure_for_vggnet, model_has_maxpool
 
 from setting import Settings
 from configure.advanced import is_wide_output
@@ -88,7 +88,8 @@ def _try_shared_input_initial_crown(
         return objectives
 
     try:
-        self._init_abstractor('backward', objectives, preprocess=True)
+        extra_opts = getattr(Settings, 'verify_extra_opts', {}) or {}
+        self._init_abstractor('backward', objectives, preprocess=True, extra_opts=extra_opts)
     except Exception:
         logger.debug('[_preprocess] failed to init abstractor for initialization')
         return objectives
@@ -245,7 +246,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         if not len(objectives):
             return objectives, None
 
-    if force_split is not None:
+    if getattr(self.net, '_gtrsb_nhwc', None):
+        self.input_split = False
+    elif force_split is not None:
         assert force_split in ['input', 'hidden']
         self.input_split = force_split == 'input'
     elif eps > Settings.input_splitting_threshold: # safety properties
@@ -259,7 +262,10 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         self.input_split = True
         
     if self.input_split: 
-        configure_for_input_split(Settings)
+        if model_has_maxpool(self.net):
+            configure_for_vggnet(Settings, int(perturbed))
+        else:
+            configure_for_input_split(Settings)
         return objectives, None
 
     if is_wide_output(cs=objectives.cs if isinstance(objectives.cs, torch.Tensor) else None):
@@ -495,10 +501,14 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     if params is None:
         raise NotImplementedError()
     
-    if np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
-        Settings.forward_dynamic = True
+    if np.prod(self.input_shape) >= 100000:  # large inputs, e.g., VGG16
         Settings.forward_max_dim = 100
-        Settings.backward_batch_size = 16
+        if Settings.backward_batch_size == np.inf:
+            Settings.backward_batch_size = 16
+        if Settings.use_maxpool_to_relu:
+            Settings.forward_dynamic = True
+        elif not model_has_maxpool(self.net):
+            Settings.forward_dynamic = True
         
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
