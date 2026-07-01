@@ -24,7 +24,10 @@ def get_restart_strategy(nth_restart: int, input_split: bool = False) -> dict:
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[-1]
         else:
             strategy = INPUT_SPLIT_RESTART_STRATEGIES[nth_restart]
-        if Settings.clip_input_domain:
+        if Settings.clip_input_domain and nth_restart > 0:
+            # Only steer later restarts towards the tuned method; leave restart 0
+            # (attack/naive detection) untouched so unrelated benchmarks that merely
+            # fall back to input-splitting are not affected.
             strategy = {**strategy, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'smart'}
     else:
         if nth_restart >= len(HIDDEN_SPLIT_RESTART_STRATEGIES):

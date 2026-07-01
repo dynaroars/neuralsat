@@ -262,37 +262,55 @@ class BoundSqueeze(Bound):
         else:
             self.axes = None
 
+    def _squeeze_all_axes(self, data_shape):
+        # ONNX Squeeze with neither an `axes` attribute nor a second input
+        # means "squeeze every dim of size 1" (the batch dim, index 0, is
+        # never squeezed here since batch size is always assumed to be > 0).
+        return [i for i, d in enumerate(data_shape) if i > 0 and d == 1]
+
     def forward(self, *x):
         data = x[0]
         if self.axes is not None:
             axes = self.axes
-        else:
+        elif len(x) > 1:
             axes = x[1].item()
+        else:
+            for axes in self._squeeze_all_axes(data.shape)[::-1]:
+                data = data.squeeze(axes)
+            return data
         return data.squeeze(axes)
 
     def bound_backward(self, last_lA, last_uA, *x, **kwargs):
         if self.axes is not None:
-            axes = self.axes
+            axes_list = [self.axes]
+        elif len(x) > 1:
+            axes_list = [self.make_axis_non_negative(x[1].value.item(), 'input')]
         else:
-            axes = self.make_axis_non_negative(x[1].value.item(), 'input')
-        if axes == 0:
+            axes_list = self._squeeze_all_axes(x[0].output_shape)
+        if 0 in axes_list:
             raise ValueError("Squeezing with axes == 0 is not allowed")
-        return [(last_lA.unsqueeze(axes + 1) if last_lA is not None else None,
-                 last_uA.unsqueeze(axes + 1) if last_uA is not None else None),
+        def _unsqueeze_all(A):
+            if A is None:
+                return None
+            for axes in axes_list:
+                A = A.unsqueeze(axes + 1)
+            return A
+        return [(_unsqueeze_all(last_lA), _unsqueeze_all(last_uA)),
                 (None, None)], 0, 0
 
     def bound_forward(self, dim_in, *x):
         if self.axes is not None:
-            axes = self.axes
+            axes_list = [self.axes]
+        elif len(x) > 1:
+            axes_list = [self.make_axis_non_negative(x[1].lb.item(), 'input')]
         else:
-            axes = self.make_axis_non_negative(x[1].lb.item(), 'input')
-        x = x[0]
-        return LinearBound(
-            x.lw.squeeze(axes + 1),
-            x.lb.squeeze(axes),
-            x.uw.squeeze(axes + 1),
-            x.ub.squeeze(axes)
-        )
+            axes_list = self._squeeze_all_axes(x[0].lb.shape)
+        xb = x[0]
+        lw, lb, uw, ub = xb.lw, xb.lb, xb.uw, xb.ub
+        for axes in sorted(axes_list, reverse=True):
+            lw, uw = lw.squeeze(axes + 1), uw.squeeze(axes + 1)
+            lb, ub = lb.squeeze(axes), ub.squeeze(axes)
+        return LinearBound(lw, lb, uw, ub)
 
     def build_solver(self, *v, model, C=None, model_type="mip", solver_pkg="gurobi"):
         self.solver_vars = self.forward(v[0])

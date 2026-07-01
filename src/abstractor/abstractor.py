@@ -165,8 +165,13 @@ class NetworkAbstractor:
         for mode, method in params:
             gc_cuda()
             logger.debug(f'[select_params] Try {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')
-            self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
-            if self._check_module(method=method, objective=objective):
+            try:
+                self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
+                success = self._check_module(method=method, objective=objective)
+            except Exception as e:
+                logger.info(f'[select_params] {mode=} {method=} raised {e!r}, trying next combination')
+                success = False
+            if success:
                 self.mode = mode
                 self.method = method
                 logger.info(f'[select_params] Success: {self.input_split=} {Settings.backward_batch_size=} {extra_opts=} {mode=} {method=}')

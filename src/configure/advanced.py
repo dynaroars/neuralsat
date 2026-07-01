@@ -118,8 +118,6 @@ def configure_from_model(settings, model) -> None:
     settings.init_alpha_iteration = 50
     settings.init_alpha_lr = 0.5
     settings.loss_reduction_min = True
-    settings.use_attack = False
-    settings.use_restart = False
     opts = dict(getattr(settings, 'verify_extra_opts', None) or {})
     opts.update({
         'conv_mode': 'matrix',
@@ -138,6 +136,7 @@ def configure_for_input_split(settings) -> None:
     settings.init_abstraction_method = 'backward'
     settings.use_mip_tightening = False
     settings.input_split_decision_method = 'smart'
+    settings.verify_extra_opts = {}
 
 
 class DecompositionSettings(BaseSettings):

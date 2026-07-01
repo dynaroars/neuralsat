@@ -549,7 +549,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # del self.abstractor
     
     # main abstractor
-    if not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method:
+    if (not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method
+            or self.input_split != self.abstractor.input_split or not hasattr(self.abstractor, 'net')):
         logger.info(f'[_setup_restart] _init_abstractor')
         extra_opts = getattr(Settings, 'verify_extra_opts', {}) or {}
         self._init_abstractor(abstract_method, objective, extra_opts=extra_opts)
