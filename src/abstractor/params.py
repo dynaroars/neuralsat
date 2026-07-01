@@ -42,8 +42,8 @@ def get_initialize_opt_params(stop_criterion_func: Callable) -> dict:
             'init_alpha': False,
             'fix_interm_bounds': True,
             'stop_criterion_func': stop_criterion_func,
-            'iteration': 100, 
-            'lr_alpha': 0.1, 
+            'iteration': Settings.init_alpha_iteration, 
+            'lr_alpha': Settings.init_alpha_lr, 
             'lr_decay': 0.98, 
         }
     }

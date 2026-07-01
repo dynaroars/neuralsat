@@ -22,6 +22,7 @@ from helper.misc.torch_cuda_memory import gc_cuda
 from helper.misc.logger import logger
 
 from .params import *
+from configure.advanced import is_wide_output
 
 class NetworkAbstractor:
 
@@ -62,6 +63,14 @@ class NetworkAbstractor:
         
     @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}, preprocess: bool = False) -> None:
+        if objective is not None and is_wide_output(cs=getattr(objective, 'cs', None)):
+            wide_opts = copy.deepcopy(extra_opts)
+            wide_opts.update(getattr(Settings, 'verify_extra_opts', {}) or {})
+            Settings.use_restart = False
+            Settings.use_attack = False
+            if self.select_params(objective, extra_opts=wide_opts):
+                return None
+
         if self.select_params(objective, extra_opts=extra_opts):
             return None
         
@@ -93,8 +102,8 @@ class NetworkAbstractor:
             if self.select_params(objective, extra_opts=new_extra_opts):
                 return None 
             
-        # FIXME: try special settings for Yolo
-        Settings.backward_batch_size = 512
+        # FIXME: try special settings for large-output networks
+        Settings.backward_batch_size = 128
         Settings.share_alphas = True
         new_extra_opts = copy.deepcopy(extra_opts)
         new_extra_opts.update({'use_full_conv_alpha': False, 'use_shared_alpha': True})
@@ -170,6 +179,9 @@ class NetworkAbstractor:
         
     @beartype
     def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
+        if objective is not None and is_wide_output(cs=getattr(objective, 'cs', None)):
+            return True
+
         # at least can run with batch=1
         if objective:
             x_L = objective.lower_bounds[0].view(self.input_shape).to(self.device)
@@ -290,6 +302,7 @@ class NetworkAbstractor:
             # reorganize tensors
             with torch.no_grad():
                 lower_bounds, upper_bounds = self.get_hidden_bounds(lb)
+            self.net.get_split_nodes()
                 
             return AbstractResults(**{
                 'objective_ids': getattr(objective, 'ids', None),
@@ -337,6 +350,7 @@ class NetworkAbstractor:
         # reorganize tensors
         with torch.no_grad():
             lower_bounds, upper_bounds = self.get_hidden_bounds(lb)
+        self.net.get_split_nodes()
 
         return AbstractResults(**{
             'objective_ids': objective.ids,

@@ -31,6 +31,8 @@ def invprop_init_infeasible_bounds(self: 'BoundedModule', bound_node, C):
     # Infeasible bounds can result from unsatisfiable output constraints.
     # We track them to set the corresponding lower bounds to inf and upper bounds to
     # -inf.
+    if isinstance(C, BatchedCrownC):
+        return
     if self.infeasible_bounds is None:
         device = bound_node.attr['device']
         if isinstance(C, Patches):

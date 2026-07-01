@@ -35,6 +35,7 @@ from helper.misc.logger import logger
 
 
 from setting import Settings
+from configure.advanced import is_wide_output
 
 
 def _preprocess_bound_view(objectives: typing.Any) -> tuple[typing.Any | None, tuple | None]:
@@ -237,7 +238,8 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     perturbed = (diff > 0).int().sum() // diff.shape[0]
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
 
-    if (isinstance(objectives.cs, torch.Tensor)) and (isinstance(objectives.rhs, torch.Tensor)):
+    if (isinstance(objectives.cs, torch.Tensor) and isinstance(objectives.rhs, torch.Tensor)
+            and not is_wide_output(cs=objectives.cs)):
         objectives = _try_shared_input_initial_crown(self, objectives)
         if not len(objectives):
             return objectives, None
@@ -256,6 +258,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         self.input_split = True
         
     if self.input_split: 
+        return objectives, None
+
+    if is_wide_output(cs=objectives.cs if isinstance(objectives.cs, torch.Tensor) else None):
         return objectives, None
     
     if Settings.skip_preprocess:
@@ -542,7 +547,8 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     # main abstractor
     if not hasattr(self, 'abstractor') or abstract_method != self.abstractor.method:
         logger.info(f'[_setup_restart] _init_abstractor')
-        self._init_abstractor(abstract_method, objective)
+        extra_opts = getattr(Settings, 'verify_extra_opts', {}) or {}
+        self._init_abstractor(abstract_method, objective, extra_opts=extra_opts)
         
     return refined_intermediate_bounds
 

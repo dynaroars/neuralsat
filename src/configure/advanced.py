@@ -63,8 +63,39 @@ class AbstractionSettings(BaseSettings):
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000
         self.forward_dynamic = False
+        self.init_alpha_iteration = 100
+        self.init_alpha_lr = 0.1
         
         
+WIDE_OUTPUT_THRESHOLD = 10000
+
+
+def is_wide_output(output_shape: tuple | None = None, cs=None) -> bool:
+    if cs is not None and hasattr(cs, 'shape') and len(cs.shape) > 0:
+        return cs.shape[-1] >= WIDE_OUTPUT_THRESHOLD
+    if output_shape is not None and len(output_shape) >= 2:
+        return output_shape[-1] >= WIDE_OUTPUT_THRESHOLD
+    return False
+
+
+def configure_from_output_shape(settings, output_shape: tuple, batch: int) -> int:
+    """Tune solver for wide output heads (many output constraints)."""
+    if not is_wide_output(output_shape=output_shape):
+        return batch
+    settings.share_alphas = True
+    settings.backward_batch_size = 128
+    settings.use_attack = False
+    settings.use_mip_tightening = False
+    settings.use_restart = False
+    settings.init_alpha_iteration = 50
+    settings.init_alpha_lr = 0.3
+    settings.verify_extra_opts = {
+        'use_full_conv_alpha': False,
+        'use_shared_alpha': True,
+    }
+    return min(batch, 128)
+
+
 class DecompositionSettings(BaseSettings):
     
     def __init__(self, args=None):

@@ -82,6 +82,7 @@ class BoundedModule(nn.Module):
             'minimum_sparsity': 0.9,
             'enable_opt_interm_bounds': False,
             'crown_batch_size': np.inf,
+            'batched_crown_max_vram_ratio': 0.9,
             'forward_refinement': False,
             'forward_max_dim': int(1e9),
             # Do not share alpha for conv layers.

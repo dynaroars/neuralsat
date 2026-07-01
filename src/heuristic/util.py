@@ -59,8 +59,10 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
         reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1)) 
 
-        # bias
-        b_temp = _get_bias_term(pre_act_layer.inputs[0], ratio)
+        b_temp = _get_preact_params(pre_act_layer)
+        if not isinstance(b_temp, int):
+            b_temp = b_temp.view(-1, *([1] * (ratio.ndim - 3)))
+        b_temp = b_temp * ratio
         
         # branching scores, higher score is better
         ratio_temp_0 = ratio_temp_0.unsqueeze(1)
@@ -98,43 +100,48 @@ def _compute_ratio(lower_bound: torch.Tensor, upper_bound: torch.Tensor) -> tupl
     intercept = -1 * lower_temp * slope_ratio
     return slope_ratio, intercept
 
-    
 @beartype
-def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
-    if type(input_node) in [BoundRelu]:
-        # FIXME: relu should not be here
-        bias = 0
-    elif type(input_node) in [BoundConv, BoundConvTranspose]:
-        if len(input_node.inputs) > 2:
-            bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
-        else:
+def _get_preact_params(act, zero_default: bool = True):
+    assert len(act.inputs) == 1
+    return _get_babsr_biases(act, zero_default)[0]
+
+
+@beartype
+def _get_babsr_biases(act, zero_default: bool = False) -> list:
+    biases = []
+    for input_node in act.inputs:
+        if type(input_node) in (BoundConv, BoundConvTranspose):
+            if len(input_node.inputs) > 2:
+                bias = input_node.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
+            else:
+                bias = 0
+        elif type(input_node) == BoundLinear:
+            bias = input_node.inputs[2].param.detach()
+        elif type(input_node) == BoundAdd:
             bias = 0
-    elif type(input_node) == BoundLinear:
-        # TODO: consider if no bias
-        bias = input_node.inputs[-1].param.detach()
-    elif type(input_node) == BoundAdd:
-        bias = 0
-        for l in input_node.inputs:
-            if type(l) == BoundConv:
-                if len(l.inputs) > 2:
-                    bias += l.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
-            if type(l) == BoundBatchNormalization:
-                bias += 0
-            if type(l) == BoundAdd:
-                for ll in l.inputs:
-                    if type(ll) == BoundConv:
-                        bias += ll.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
-    elif type(input_node) == BoundBatchNormalization:
-        bias = input_node.inputs[-3].param.detach().view(-1, *([1] * (ratio.ndim - 3)))
-    elif type(input_node) == BoundInput:
-        bias = 0
-    else: 
-        print(type(input_node))
-        print(input_node.inputs[-1].param.shape)
-        raise NotImplementedError()
-    
-    return bias * ratio
-    
+            for l in input_node.inputs:
+                if type(l) in (BoundConv, BoundConvTranspose):
+                    if len(l.inputs) > 2:
+                        bias += l.inputs[-1].param.detach()
+                if type(l) == BoundBatchNormalization:
+                    bias += 0
+                if type(l) == BoundAdd:
+                    for ll in l.inputs:
+                        if type(ll) in (BoundConv, BoundConvTranspose) and len(ll.inputs) > 2:
+                            bias += ll.inputs[-1].param.detach()
+        elif type(input_node) == BoundBatchNormalization:
+            bias = input_node.inputs[-3].param.detach()
+        elif type(input_node) in (BoundRelu, BoundInput):
+            bias = 0
+        else:
+            if zero_default:
+                bias = 0
+                logger.debug(f'Warning: no bias found for {input_node}')
+            else:
+                raise NotImplementedError(type(input_node))
+        biases.append(bias)
+    return biases
+
     
 @beartype
 def update_hidden_bounds_histories(self: 'heuristic.domains_list.DomainsList', lower_bounds: dict, upper_bounds: dict, 

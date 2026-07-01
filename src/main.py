@@ -93,6 +93,8 @@ if __name__ == '__main__':
         print(model)
     logger.info(f'[!] Input shape: {input_shape}')
     logger.info(f'[!] Output shape: {output_shape}')
+    from configure.advanced import configure_from_output_shape
+    args.batch = configure_from_output_shape(Settings, output_shape, args.batch)
     
     # specification
     objectives = parse_vnnlib(args.spec, input_shape)
