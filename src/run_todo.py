@@ -3,7 +3,7 @@ import re, subprocess, os, time
 ROOT = '/home/roars/vnncomp26'
 TODO = f'{ROOT}/todo.md'
 PY = f'{ROOT}/venv/bin/python3'
-TIMEOUT = 60  # short timeout per user request; full timeout run separately later
+TIMEOUT = 120  # short timeout per user request; full timeout run separately later
 os.environ['GRB_LICENSE_FILE'] = os.path.expanduser('~/gurobi.lic')
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 

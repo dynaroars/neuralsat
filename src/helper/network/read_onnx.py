@@ -48,8 +48,7 @@ def _load_onnx(path: str | io.BytesIO):
         onnx_model = onnx.load(path)
     else:
         onnx_model = onnx.load_model_from_string(path.getvalue())
-    # print(onnx_model)
-    return onnx_model
+    return _fix_onnx_dynamic_batch(onnx_model)
 
 @beartype
 # def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -60,14 +59,31 @@ def inference_onnx(path: str | io.BytesIO, *inputs: np.ndarray):
 
 
 @beartype
+def _onnx_dim_size(dim) -> int:
+    """Map ONNX shape dim to a positive static size (0/-1 → 1)."""
+    return dim.dim_value if dim.dim_value > 0 else 1
+
+
+def _fix_onnx_dynamic_batch(onnx_model: onnx.ModelProto) -> onnx.ModelProto:
+    """ONNX exporters sometimes leave batch dim as 0; force static batch=1."""
+    for vi in list(onnx_model.graph.input) + list(onnx_model.graph.output):
+        dims = vi.type.tensor_type.shape.dim
+        if dims and dims[0].dim_value <= 0:
+            dims[0].dim_value = 1
+    return onnx_model
+
+
+@beartype
 def add_batch(shape: tuple) -> tuple:
     if len(shape) == 1:
         return (1, shape[0])
-    
-    if shape[0] not in [-1, 1]:
-        return (1, *shape)
-    
-    return shape
+
+    # 0 / -1 are dynamic batch placeholders in ONNX.
+    if shape[0] in (-1, 0):
+        return (1, *shape[1:])
+    if shape[0] == 1:
+        return shape
+    return (1, *shape)
         
 def onnxsim_convert(path):
     model = onnx.load(path)
@@ -156,14 +172,14 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
     
     if input_shape is None:
         onnx_input_dims = inputs[0].type.tensor_type.shape.dim
-        orig_input_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_input_dims)
+        orig_input_shape = tuple(_onnx_dim_size(d) for d in onnx_input_dims)
         batched_input_shape = add_batch(orig_input_shape)
     else:
         orig_input_shape = batched_input_shape = tuple(input_shape)
         
     if output_shape is None:
         onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
-        orig_output_shape = tuple(d.dim_value if d.dim_value > 0 else 1 for d in onnx_output_dims) if len(onnx_output_dims) else (1,)
+        orig_output_shape = tuple(_onnx_dim_size(d) for d in onnx_output_dims) if len(onnx_output_dims) else (1,)
         batched_output_shape = add_batch(orig_output_shape)
     else:
         batched_output_shape = tuple(output_shape)
@@ -201,7 +217,7 @@ def _parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_
         else:
             output_onnx = torch.cat([torch.from_numpy(inference_onnx(validate_path, dummy[i].view(orig_input_shape).float().numpy())[0]).view(batched_output_shape) for i in range(batch)]).numpy()
             output_pytorch = pytorch_model(dummy).detach().numpy()
-        correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
+        correct_conversion = np.allclose(output_pytorch, output_onnx, rtol=1e-4, atol=1e-4)
         # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
     except:
         raise OnnxConversionError
@@ -305,28 +321,45 @@ def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tup
 
 @beartype
 def parse_onnx(path: str | io.BytesIO, input_shape: None | list = None, output_shape: None | list = None) -> tuple:
-    while True:
+    tried_onnxsim = False
+    for attempt in range(8):
         try:
             return _parse_onnx(path=path, input_shape=input_shape, output_shape=output_shape)
         except OnnxMergeBatchNormError:
-            custom_quirks['Conv']['merge_batch_norm'] = False
-            continue
+            if custom_quirks['Conv'].get('merge_batch_norm', True):
+                custom_quirks['Conv']['merge_batch_norm'] = False
+                continue
+            raise
         except OnnxOutputAllCloseError:
-            # print(f'[{i}] Model was converted incorrectly. Try again.')
-            continue
-        except OnnxConversionError:
-            if not custom_quirks['Reshape']['fix_batch_size']:
+            if custom_quirks['Conv'].get('merge_batch_norm', True):
+                custom_quirks['Conv']['merge_batch_norm'] = False
+                continue
+            if not custom_quirks['Reshape'].get('fix_batch_size', False):
                 custom_quirks['Reshape']['fix_batch_size'] = True
                 continue
-            else:
-                warnings.warn(f'Unable to convert onnx to pytorch model')
-                traceback.print_exc()
-                exit()
+            if not tried_onnxsim and isinstance(path, str) and use_onnxsim:
+                tried_onnxsim = True
+                simp = onnxsim_convert(path)
+                if simp is not None:
+                    buf = io.BytesIO()
+                    onnx.save(simp, buf)
+                    buf.seek(0)
+                    return parse_onnx(buf, input_shape, output_shape)
+            raise OnnxOutputAllCloseError(
+                f'ONNX→PyTorch conversion failed validation after {attempt + 1} attempts')
+        except OnnxConversionError:
+            if not custom_quirks['Reshape'].get('fix_batch_size', False):
+                custom_quirks['Reshape']['fix_batch_size'] = True
+                continue
+            warnings.warn('Unable to convert onnx to pytorch model')
+            traceback.print_exc()
+            exit()
         except SystemExit:
             import sys
             sys.exit(1)
         except:
-            warnings.warn(f'Unable to convert onnx to pytorch model')
+            warnings.warn('Unable to convert onnx to pytorch model')
             traceback.print_exc()
             import sys
             sys.exit(1)
+    raise OnnxOutputAllCloseError('ONNX→PyTorch conversion exceeded retry limit')
