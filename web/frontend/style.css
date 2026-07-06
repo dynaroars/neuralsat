@@ -1495,16 +1495,12 @@ select.option-input {
 }
 
 .options-container {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
   margin-bottom: var(--space-xl);
   transition: all var(--transition-base);
-}
-
-.options-container:hover {
-  border-color: var(--accent-1-hover, var(--color-sat));
 }
 
 .options-header {
@@ -1518,18 +1514,18 @@ select.option-input {
 }
 
 .options-header:hover {
-  color: var(--accent-1, var(--color-sat));
+  color: var(--accent-1);
 }
 
 .options-section {
-  border-top: 1px dashed var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
   padding-top: var(--space-md);
   margin-top: var(--space-md);
 }
 
 .options-section-title {
   font-size: 0.72rem;
-  color: var(--accent-1, var(--color-sat));
+  color: var(--accent-1);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1538,13 +1534,13 @@ select.option-input {
 
 .options-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: var(--space-md);
 }
 
 .checkbox-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
@@ -1560,9 +1556,8 @@ select.option-input {
 }
 
 .checkbox-label input {
-  accent-color: var(--accent-1, var(--color-sat));
+  accent-color: var(--accent-1);
   cursor: pointer;
-  width: 14px;
-  height: 14px;
 }
+
 
