@@ -260,6 +260,36 @@ def _run_verification(job_id: str):
         "--export_runtime",
     ]
 
+    if job.get("disable_attack"):
+        cmd.append("--disable_attack")
+    if job.get("disable_restart"):
+        cmd.append("--disable_restart")
+    if job.get("disable_stabilize"):
+        cmd.append("--disable_stabilize")
+
+    force_split = job.get("force_split")
+    if force_split in ("input", "hidden"):
+        cmd.extend(["--force_split", force_split])
+
+    input_shape = job.get("input_shape")
+    if input_shape:
+        shapes = [s.strip() for s in input_shape.split() if s.strip()]
+        if shapes:
+            cmd.append("--input_shape")
+            cmd.extend(shapes)
+
+    output_shape = job.get("output_shape")
+    if output_shape:
+        shapes = [s.strip() for s in output_shape.split() if s.strip()]
+        if shapes:
+            cmd.append("--output_shape")
+            cmd.extend(shapes)
+
+    setting_file = job.get("setting_file")
+    if setting_file:
+        cmd.extend(["--setting_file", str(setting_file)])
+
+
     env = os.environ.copy()
     env["PYTHONPATH"] = str(NEURALSAT_ROOT / "src") + ":" + env.get("PYTHONPATH", "")
 
@@ -426,7 +456,18 @@ def verify():
     device = request.form.get("device", "cuda")
     if device not in ("cpu", "cuda"):
         device = "cuda"
-    batch = int(request.form.get("batch", 1000))
+    try:
+        batch = int(request.form.get("batch", 1000))
+    except (ValueError, TypeError):
+        batch = 1000
+
+    disable_attack = request.form.get("disable_attack") == "true"
+    disable_restart = request.form.get("disable_restart") == "true"
+    disable_stabilize = request.form.get("disable_stabilize") == "true"
+    force_split = request.form.get("force_split")
+    input_shape = request.form.get("input_shape")
+    output_shape = request.form.get("output_shape")
+    setting_file = request.form.get("setting_file")
 
     job_id = str(uuid.uuid4())[:8]
     job_dir = UPLOAD_DIR / job_id
@@ -452,6 +493,13 @@ def verify():
         "timeout": timeout,
         "device": device,
         "batch": batch,
+        "disable_attack": disable_attack,
+        "disable_restart": disable_restart,
+        "disable_stabilize": disable_stabilize,
+        "force_split": force_split,
+        "input_shape": input_shape,
+        "output_shape": output_shape,
+        "setting_file": setting_file,
         "result": None,
         "runtime": None,
         "counterexample": None,

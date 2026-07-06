@@ -1493,3 +1493,76 @@ select.option-input {
     scroll-behavior: auto !important;
   }
 }
+
+.options-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin-bottom: var(--space-xl);
+  transition: all var(--transition-base);
+}
+
+.options-container:hover {
+  border-color: var(--accent-1-hover, var(--color-sat));
+}
+
+.options-header {
+  user-select: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.options-header:hover {
+  color: var(--accent-1, var(--color-sat));
+}
+
+.options-section {
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.options-section-title {
+  font-size: 0.72rem;
+  color: var(--accent-1, var(--color-sat));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-md);
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-md);
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.checkbox-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+
+.checkbox-label input {
+  accent-color: var(--accent-1, var(--color-sat));
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+

@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
-  <script type="module" crossorigin src="/neuralsat/assets/index-BP8upQvN.js"></script>
-  <link rel="stylesheet" crossorigin href="/neuralsat/assets/index-NcVT43Ki.css">
+  <script type="module" crossorigin src="/neuralsat/assets/index-gZ68WVnn.js"></script>
+  <link rel="stylesheet" crossorigin href="/neuralsat/assets/index-B6NXQ13O.css">
 </head>
 <body>
   <!-- Animated background -->
@@ -108,23 +108,80 @@
           <input type="file" id="vnnlib-input" accept=".vnnlib" hidden />
         </div>
 
-        <!-- Options -->
-        <div class="options-row">
-          <div class="option-group">
-            <label for="timeout-input" class="option-label">Timeout</label>
-            <div class="option-input-wrap">
-              <input type="number" id="timeout-input" value="300" min="10" max="3600" step="10" class="option-input" />
-              <span class="option-unit">sec</span>
+        <!-- Options Accordion / Controls -->
+        <div class="options-container">
+          <div class="options-header" id="options-toggle" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <span class="option-label" style="font-size: 0.85rem; margin-bottom: 0;">Configuration Options</span>
+            <span id="options-toggle-icon" style="transition: transform var(--transition-fast);">▼</span>
+          </div>
+
+          <div id="options-content" style="display: none; margin-top: var(--space-md);">
+            <!-- Basic Options Group -->
+            <div class="options-section">
+              <h4 class="options-section-title">Basic Parameters</h4>
+              <div class="options-grid">
+                <div class="option-group">
+                  <label for="timeout-input" class="option-label">Timeout</label>
+                  <div class="option-input-wrap">
+                    <input type="number" id="timeout-input" value="300" min="10" max="3600" step="10" class="option-input" />
+                    <span class="option-unit">sec</span>
+                  </div>
+                </div>
+                <div class="option-group">
+                  <label for="device-select" class="option-label">Device</label>
+                  <select id="device-select" class="option-input">
+                    <option value="cuda" selected>GPU (CUDA)</option>
+                    <option value="cpu">CPU</option>
+                  </select>
+                </div>
+                <div class="option-group">
+                  <label for="batch-input" class="option-label">Batch Size (--batch)</label>
+                  <input type="number" id="batch-input" value="1000" min="1" max="10000" step="100" class="option-input" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Split Strategy & Heuristics -->
+            <div class="options-section">
+              <h4 class="options-section-title">Heuristics & Splitting</h4>
+              <div class="options-grid">
+                <div class="option-group">
+                  <label for="force-split-select" class="option-label">Splitting Strategy (--force_split)</label>
+                  <select id="force-split-select" class="option-input">
+                    <option value="" selected>Default (heuristic)</option>
+                    <option value="input">Input Split</option>
+                    <option value="hidden">Hidden Split</option>
+                  </select>
+                </div>
+              </div>
+              <div class="checkbox-grid" style="margin-top: 14px;">
+                <label class="checkbox-label"><input type="checkbox" id="chk-disable-attack" /> Disable Attack (--disable_attack)</label>
+                <label class="checkbox-label"><input type="checkbox" id="chk-disable-restart" /> Disable RESTART heuristic (--disable_restart)</label>
+                <label class="checkbox-label"><input type="checkbox" id="chk-disable-stabilize" /> Disable STABILIZE heuristic (--disable_stabilize)</label>
+              </div>
+            </div>
+
+            <!-- Shape & Setup Options -->
+            <div class="options-section">
+              <h4 class="options-section-title">Shape & Setup Options</h4>
+              <div class="options-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="option-group">
+                  <label for="input-shape-input" class="option-label">Input Shape (--input_shape)</label>
+                  <input type="text" id="input-shape-input" placeholder="e.g., 1 3 32 32" class="option-input" />
+                </div>
+                <div class="option-group">
+                  <label for="output-shape-input" class="option-label">Output Shape (--output_shape)</label>
+                  <input type="text" id="output-shape-input" placeholder="e.g., 1 10" class="option-input" />
+                </div>
+                <div class="option-group" style="grid-column: span 2;">
+                  <label for="setting-file-input" class="option-label">Settings File Path (--setting_file)</label>
+                  <input type="text" id="setting-file-input" placeholder="Path to settings file on server (optional)" class="option-input" />
+                </div>
+              </div>
             </div>
           </div>
-          <div class="option-group">
-            <label for="device-select" class="option-label">Device</label>
-            <select id="device-select" class="option-input">
-              <option value="cuda" selected>GPU (CUDA)</option>
-              <option value="cpu">CPU</option>
-            </select>
-          </div>
         </div>
+
 
         <!-- Submit -->
         <button class="btn btn--primary" id="verify-btn" disabled>

@@ -248,8 +248,34 @@ function getVerificationFormData() {
   formData.append('spec', vnnlibFile);
   formData.append('timeout', timeout);
   formData.append('device', deviceSelect.value);
+
+  const batchInput = $('batch-input');
+  if (batchInput) formData.append('batch', batchInput.value);
+
+  const forceSplitSelect = $('force-split-select');
+  if (forceSplitSelect) formData.append('force_split', forceSplitSelect.value);
+
+  const chkDisableAttack = $('chk-disable-attack');
+  if (chkDisableAttack) formData.append('disable_attack', chkDisableAttack.checked ? 'true' : 'false');
+
+  const chkDisableRestart = $('chk-disable-restart');
+  if (chkDisableRestart) formData.append('disable_restart', chkDisableRestart.checked ? 'true' : 'false');
+
+  const chkDisableStabilize = $('chk-disable-stabilize');
+  if (chkDisableStabilize) formData.append('disable_stabilize', chkDisableStabilize.checked ? 'true' : 'false');
+
+  const inputShapeInput = $('input-shape-input');
+  if (inputShapeInput) formData.append('input_shape', inputShapeInput.value.trim());
+
+  const outputShapeInput = $('output-shape-input');
+  if (outputShapeInput) formData.append('output_shape', outputShapeInput.value.trim());
+
+  const settingFileInput = $('setting-file-input');
+  if (settingFileInput) formData.append('setting_file', settingFileInput.value.trim());
+
   return { formData, timeout };
 }
+
 
 async function startVerification() {
   if (!onnxFile) return;
@@ -1226,6 +1252,25 @@ viewVnnlibBtn.addEventListener('click', () => {
 rawSpecClose.addEventListener('click', () => {
   rawSpecContainer.style.display = 'none';
 });
+
+const optionsToggle = $('options-toggle');
+const optionsContent = $('options-content');
+const optionsToggleIcon = $('options-toggle-icon');
+
+if (optionsToggle && optionsContent && optionsToggleIcon) {
+  optionsContent.style.display = 'none';
+  optionsToggleIcon.style.transform = 'rotate(-90deg)';
+  
+  optionsToggle.addEventListener('click', () => {
+    if (optionsContent.style.display === 'none') {
+      optionsContent.style.display = 'block';
+      optionsToggleIcon.style.transform = 'rotate(0deg)';
+    } else {
+      optionsContent.style.display = 'none';
+      optionsToggleIcon.style.transform = 'rotate(-90deg)';
+    }
+  });
+}
 
 // Init
 loadExamples();
