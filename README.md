@@ -1,4 +1,7 @@
-# NeuralSAT: A DPLL(T) Framework for Verifying Deep Neural Networks
+# NeuralSAT: Verifying Deep Neural Networks
+
+## **Try out NeuralSAT live here**:  [https://roars.dev/neuralsat/](https://roars.dev/neuralsat/)
+
 
 
 *NeuralSAT* is a high-performance verification tool for deep neural networks (DNNs).  It integrates the DPLL(T) approach commonly used in SMT solving with a theory solver specialized for DNN reasoning. NeuralSAT exploits multicores and GPU for efficiency and can scale to networks with millions of parameters.  It supports a wide range of neural networks and activation functions.  
@@ -13,10 +16,10 @@
   - **Note**: The current version of NeuralSAT adds significant improvements and fixed the implementation bugs we had during VNN-COMP'23 that produce unsound results (hence 4th place ranking).
 
 ## PUBLICATIONS
-- [CVPR'26](https://hocdot.github.io/assets/papers/duong2026verifying2.pdf) research paper on verifying AI-based computer vision systems.
+- [CVPR'26](https://hocdot.github.io/assets/papers/duong2026verifying2.pdf) research paper on verifying AI-based computer vision systems (**Highlight Award**).
 - [FSE’26](https://hocdot.github.io/assets/papers/duong2026verifying.pdf) paper on formalizing and verifying structural robustness properties of AI systems.
 - [NeurIPS’25](https://roars.dev/pubs/duong2025generating.pdf) paper on generating and checking DNN verification proofs.
-- [NeurIPS’25](https://roars.dev/pubs/duong2025compositional.pdf) paper on compositional DNN verification (Spotlight).
+- [NeurIPS’25](https://roars.dev/pubs/duong2025compositional.pdf) paper on compositional DNN verification (**Spotlight**).
 - [SAIV'25](https://hocdot.github.io/assets/papers/duong2025neuralsat2.pdf) competition paper on NeuralSAT.
 - [CAV’25](https://roars.dev/pubs/duong2025neuralsat.pdf) paper on NeuralSAT verification tool.
 - [FSE'24](https://roars.dev/pubs/duong2024harnessing.pdf) paper on new optimizations developed for the NeuralSAT.
@@ -244,6 +247,6 @@ The *NeuralSAT* research is partially supported by grants from NSF
   [2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133),
   [2200621](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2200621)) 
   and 
-  an [Amazon Research Award](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced) and 
+  two [Amazon Research Awards](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced) and 
   an NVIDIA Academic Grant.
 

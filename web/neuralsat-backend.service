@@ -1,0 +1,14 @@
+[Unit]
+Description=NeuralSAT Web Backend Service
+After=network.target
+
+[Service]
+User=azan
+WorkingDirectory=/home/azan/neuralsat/web
+ExecStart=/home/azan/neuralsat/web/run_server.sh 5050
+Restart=always
+RestartSec=5
+Environment=PATH=/home/azan/neuralsat/web/venv/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
