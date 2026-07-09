@@ -171,7 +171,7 @@ def _copy_history(history: dict) -> dict:
 
 
 @beartype
-def _append_tensor(tensor: torch.Tensor | list, value: int | float | np.int64, dtype: torch.dtype = torch.float32) -> torch.Tensor:
+def _append_tensor(tensor: torch.Tensor | list, value: int | float | np.int64 | np.int32, dtype: torch.dtype = torch.float32) -> torch.Tensor:
     if not isinstance(tensor, torch.Tensor):
         tensor = torch.tensor(tensor, dtype=dtype)
     size = len(tensor)
