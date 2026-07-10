@@ -18,18 +18,22 @@ NeuralSAT 실행 결과:
   unknown/timeout -> 이 방법으로는 증명하지 못함 (강건하지 않다는 뜻은 아님)
 
 데이터셋(mMIMO_AS_training_data_*.pickle)은 매우 크므로(수 GB), pickle 전체를
-메모리에 올리지 않고 필요한 앞부분 행만 memmap으로 읽어온다.
+메모리에 올리지 않고 필요한 행만 memmap으로 읽어온다.
+
+입력 데이터는 data_split.py 기준으로 train/test 로 분할된 것 중 **test 구간**만
+사용한다 (--indices는 test 구간 내 상대 인덱스, 0 = test 구간 첫 샘플). 학습에
+쓰인 train 구간은 절대 사용하지 않는다.
 """
 
 from __future__ import annotations
 
 import argparse
 import pathlib
-import pickletools
-from dataclasses import dataclass
 
 import numpy as np
 import onnxruntime as ort
+from data_split import test_row_range
+from pickle_memmap import load_row_range
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 DEFAULT_NET = (
@@ -37,100 +41,9 @@ DEFAULT_NET = (
     / "onnx"
     / "Baseline mMIMO FC H hard short 80 HTHNN_LAY2_491 RELU 20241018 PRUNED 0.93_NO_SIGMOID.onnx"
 )
-# crown/ 저장소(neuralsat과 형제 디렉토리)에 있는 원본 학습 데이터. --data로 재지정 가능.
-DEFAULT_DATA = (
-    SCRIPT_DIR.parents[3]  # .../neuralsat/src/example/mmimo_topk -> parents[3] = AI_Verification/
-    / "crown"
-    / "mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
+DEFAULT_DATA = pathlib.Path(
+    r"C:\AI_Verification\wireless\Pickle\mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
 )
-
-
-@dataclass
-class NdarrayPickleInfo:
-    shape: tuple
-    dtype: np.dtype
-    fortran_order: bool
-    data_offset: int
-    data_length: int
-
-
-class _LargeBlobEncountered(Exception):
-    def __init__(self, pos: int, n: int):
-        self.pos = pos
-        self.n = n
-
-
-class _SkipLargeReads:
-    def __init__(self, f, threshold: int):
-        self.f = f
-        self.threshold = threshold
-
-    def read(self, n: int = -1):
-        if isinstance(n, int) and n > self.threshold:
-            pos = self.f.tell()
-            self.f.seek(n, 1)
-            raise _LargeBlobEncountered(pos, n)
-        return self.f.read(n)
-
-    def readline(self):
-        return self.f.readline()
-
-    def tell(self):
-        return self.f.tell()
-
-
-def peek_ndarray_info(filepath: str, threshold: int = 200_000) -> NdarrayPickleInfo:
-    """pickle 파일 최상위 ndarray의 shape/dtype과 raw 데이터 (offset, length)를 raw 바이트를 읽지 않고 알아낸다."""
-    shape = None
-    dtype = None
-    fortran_order = None
-    data_offset = None
-    data_length = None
-
-    pending_ints: list[int] = []
-    last_bool = None
-    expect_dtype_str = False
-
-    with open(filepath, "rb") as f:
-        wrapper = _SkipLargeReads(f, threshold)
-        try:
-            for opcode, arg, pos in pickletools.genops(wrapper):
-                name = opcode.name
-                if name in ("BININT", "BININT1", "BININT2"):
-                    pending_ints.append(arg)
-                elif name in ("TUPLE", "TUPLE1", "TUPLE2", "TUPLE3"):
-                    take = {"TUPLE1": 1, "TUPLE2": 2, "TUPLE3": 3}.get(name, len(pending_ints))
-                    if shape is None and take >= 2 and len(pending_ints) >= take:
-                        shape = tuple(pending_ints[-take:])
-                    pending_ints.clear()
-                elif name == "STACK_GLOBAL":
-                    expect_dtype_str = True
-                elif name == "SHORT_BINUNICODE":
-                    if expect_dtype_str and dtype is None and arg not in ("dtype",):
-                        try:
-                            dtype = np.dtype(arg)
-                        except TypeError:
-                            pass
-                    expect_dtype_str = False
-                elif name in ("NEWTRUE", "NEWFALSE"):
-                    last_bool = name == "NEWTRUE"
-        except _LargeBlobEncountered as e:
-            data_offset = e.pos
-            data_length = e.n
-            fortran_order = bool(last_bool)
-
-    if shape is None or dtype is None or data_offset is None:
-        raise ValueError(f"{filepath}: 최상위 ndarray 구조를 찾지 못했습니다.")
-
-    return NdarrayPickleInfo(shape, dtype, fortran_order, data_offset, data_length)
-
-
-def load_rows(filepath: str, n_rows: int) -> np.ndarray:
-    info = peek_ndarray_info(filepath)
-    if info.fortran_order or len(info.shape) != 2:
-        raise NotImplementedError("2차원 C-order 배열만 지원합니다.")
-    mm = np.memmap(filepath, dtype=info.dtype, mode="r", offset=info.data_offset, shape=info.shape)
-    return np.array(mm[:n_rows])
 
 
 def clean_topk(sess: ort.InferenceSession, x0: np.ndarray, k: int) -> tuple[np.ndarray, set[int]]:
@@ -180,7 +93,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--net", default=str(DEFAULT_NET), help="Path to the mMIMO ONNX model")
     parser.add_argument("--data", default=str(DEFAULT_DATA), help="Path to mMIMO_AS_training_data_*.pickle")
-    parser.add_argument("--indices", default="0", help="Comma-separated dataset row indices (e.g. 0,1,2)")
+    parser.add_argument(
+        "--indices",
+        default="0",
+        help="Comma-separated row indices relative to the test split (0 = first test-split sample)",
+    )
     parser.add_argument(
         "--eps",
         default="1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1",
@@ -188,6 +105,8 @@ def main() -> None:
     )
     parser.add_argument("--k", type=int, default=8, help="top-k")
     parser.add_argument("--out-dir", default=str(SCRIPT_DIR / "vnnlib"))
+    parser.add_argument("--no-data-in-file", type=int, default=20000, help="Samples per original source file")
+    parser.add_argument("--no-test-files", type=int, default=2, help="Number of trailing files reserved for test")
     args = parser.parse_args()
 
     indices = [int(s) for s in args.indices.split(",")]
@@ -196,7 +115,13 @@ def main() -> None:
     sess = ort.InferenceSession(args.net, providers=["CPUExecutionProvider"])
     n_out = sess.get_outputs()[0].shape[1]
 
-    X = load_rows(args.data, max(indices) + 1)
+    test_start, test_end = test_row_range(args.data, args.no_data_in_file, args.no_test_files)
+    n_test = test_end - test_start
+    if max(indices) >= n_test or min(indices) < 0:
+        raise ValueError(f"--indices must be within the test split range [0, {n_test}), got {indices}")
+
+    # test 구간의 앞쪽부터 max(indices)+1 개 행만 읽는다 (test 구간 전체를 memmap으로 읽지 않음).
+    X = load_row_range(args.data, test_start, test_start + max(indices) + 1)
 
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -204,7 +129,7 @@ def main() -> None:
     for idx in indices:
         x0 = X[idx]
         y0, topk = clean_topk(sess, x0, args.k)
-        print(f"idx={idx} clean_top{args.k}={sorted(topk)}")
+        print(f"idx={idx} (abs row {test_start + idx}) clean_top{args.k}={sorted(topk)}")
         for eps in eps_list:
             out_path = out_dir / f"mmimo_top{args.k}_idx{idx}_eps{eps:g}.vnnlib"
             write_vnnlib(out_path, x0, eps, topk, n_out=n_out)
