@@ -24,10 +24,14 @@ NeuralSAT 실행 결과:
 사용한다 (--indices는 test 구간 내 상대 인덱스, 0 = test 구간 첫 샘플). 학습에
 쓰인 train 구간은 절대 사용하지 않는다.
 
-최종적으로는 test 구간 전체(4만개)를 대상으로 하지만, 지금은 --num-samples로
-원하는 개수만큼만 점진적으로 생성한다. 이미 생성된 .vnnlib은 다시 만들지 않고,
-실행 시마다 out-dir에 있는 모든 .vnnlib을 훑어 manifest.csv(run_batch.py /
-summarize_results.py가 읽는 인스턴스 목록)를 다시 만든다.
+이 스크립트는 실제 .vnnlib 텍스트 파일을 디스크에 쓰지 않는다 (인스턴스당
+~26KB, 최종 목표인 28만 인스턴스 기준 수GB + 파일 수십만 개로 쌓여 공간/파일수
+낭비가 심하기 때문). 대신 인스턴스별로 (idx, eps, net, data, k, abs_row)만
+manifest.csv에 기록해 두고, 실제 VNNLIB 텍스트는 run_batch.py가 NeuralSAT을
+호출하기 직전에 임시 파일로 즉석 생성했다가 실행 후 바로 삭제한다.
+
+manifest.csv는 idx별 정확한 clean_topk 계산을 실행 시점(run_batch.py)에 다시
+하므로, 이 스크립트에서의 clean_topk 계산은 유효성 확인/미리보기 용도다.
 """
 
 from __future__ import annotations
@@ -35,7 +39,6 @@ from __future__ import annotations
 import argparse
 import csv
 import pathlib
-import re
 
 import numpy as np
 import onnxruntime as ort
@@ -51,35 +54,10 @@ DEFAULT_NET = (
 DEFAULT_DATA = pathlib.Path(
     r"C:\AI_Verification\wireless\Pickle\mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
 )
+DEFAULT_OUT_DIR = SCRIPT_DIR / "vnnlib"
 DEFAULT_RESULTS_DIR = SCRIPT_DIR / "results"
 
-VNNLIB_NAME_RE = re.compile(r"^mmimo_top(?P<k>\d+)_idx(?P<idx>\d+)_eps(?P<eps>.+)\.vnnlib$")
-
-
-def rebuild_manifest(out_dir: pathlib.Path, results_dir: pathlib.Path, net: str, k: int) -> pathlib.Path:
-    """out_dir에 있는 (net에 해당하는 k의) 모든 .vnnlib을 훑어 manifest.csv를 다시 만든다.
-
-    run_batch.py / summarize_results.py는 이 manifest.csv 하나만 보고 동작하므로,
-    --num-samples로 점진적으로 늘려가며 여러 번 generate_vnnlib.py를 돌려도 항상
-    디스크에 있는 파일들과 일치하는 최신 인스턴스 목록을 유지한다.
-    """
-    rows = []
-    for path in out_dir.glob("*.vnnlib"):
-        m = VNNLIB_NAME_RE.match(path.name)
-        if m is None or int(m.group("k")) != k:
-            continue
-        idx = int(m.group("idx"))
-        eps = m.group("eps")
-        result_path = results_dir / f"{path.stem}.result"
-        rows.append((idx, float(eps), net, str(path), str(result_path)))
-    rows.sort(key=lambda r: (r[0], r[1]))
-
-    manifest_path = out_dir / "manifest.csv"
-    with open(manifest_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["idx", "eps", "net", "vnnlib", "result"])
-        writer.writerows(rows)
-    return manifest_path
+MANIFEST_FIELDS = ["idx", "eps", "net", "data", "k", "abs_row", "result"]
 
 
 def clean_topk(sess: ort.InferenceSession, x0: np.ndarray, k: int) -> tuple[np.ndarray, set[int]]:
@@ -89,13 +67,7 @@ def clean_topk(sess: ort.InferenceSession, x0: np.ndarray, k: int) -> tuple[np.n
     return y0, topk
 
 
-def write_vnnlib(
-    out_path: pathlib.Path,
-    x0: np.ndarray,
-    eps: float,
-    topk: set[int],
-    n_out: int,
-) -> None:
+def build_vnnlib_text(x0: np.ndarray, eps: float, topk: set[int], n_out: int) -> str:
     n_in = x0.shape[0]
     others = [j for j in range(n_out) if j not in topk]
 
@@ -122,7 +94,47 @@ def write_vnnlib(
             lines.append(f"\t(and (>= Y_{j} Y_{i}))")
     lines.append("))")
 
-    out_path.write_text("\n".join(lines) + "\n")
+    return "\n".join(lines) + "\n"
+
+
+def result_path_for(results_dir: pathlib.Path, k: int, idx: int, eps: float) -> pathlib.Path:
+    return results_dir / f"mmimo_top{k}_idx{idx}_eps{eps:g}.result"
+
+
+def merge_manifest(
+    manifest_path: pathlib.Path,
+    new_rows: list[dict],
+) -> list[dict]:
+    """기존 manifest.csv 행(특히 이미 result가 있는 행)은 그대로 유지하면서,
+    새로 요청된 (idx, eps) 조합만 추가한다. (더 이상 out_dir을 스캔하지 않는다.)
+    """
+    existing: dict[tuple[int, float], dict] = {}
+    if manifest_path.exists():
+        with open(manifest_path, newline="") as f:
+            for row in csv.DictReader(f):
+                key = (int(row["idx"]), float(row["eps"]))
+                existing[key] = row
+
+    for row in new_rows:
+        key = (row["idx"], row["eps"])
+        existing.setdefault(key, {
+            "idx": str(row["idx"]),
+            "eps": repr(row["eps"]),
+            "net": row["net"],
+            "data": row["data"],
+            "k": str(row["k"]),
+            "abs_row": str(row["abs_row"]),
+            "result": row["result"],
+        })
+
+    merged = sorted(existing.values(), key=lambda r: (int(r["idx"]), float(r["eps"])))
+
+    with open(manifest_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
+        writer.writeheader()
+        writer.writerows(merged)
+
+    return merged
 
 
 def main() -> None:
@@ -148,7 +160,7 @@ def main() -> None:
         help="Comma-separated L_inf eps values to sweep",
     )
     parser.add_argument("--k", type=int, default=8, help="top-k")
-    parser.add_argument("--out-dir", default=str(SCRIPT_DIR / "vnnlib"))
+    parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR), help="Where manifest.csv is kept")
     parser.add_argument("--results-dir", default=str(DEFAULT_RESULTS_DIR), help="Where run_batch.py will write results")
     parser.add_argument("--no-data-in-file", type=int, default=20000, help="Samples per original source file")
     parser.add_argument("--no-test-files", type=int, default=2, help="Number of trailing files reserved for test")
@@ -175,23 +187,30 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     results_dir = pathlib.Path(args.results_dir)
 
-    n_written = 0
-    n_skipped = 0
+    new_rows = []
     for idx in indices:
         x0 = X[idx]
+        abs_row = test_start + idx
         y0, topk = clean_topk(sess, x0, args.k)
-        print(f"idx={idx} (abs row {test_start + idx}) clean_top{args.k}={sorted(topk)}")
+        print(f"idx={idx} (abs row {abs_row}) clean_top{args.k}={sorted(topk)}")
         for eps in eps_list:
-            out_path = out_dir / f"mmimo_top{args.k}_idx{idx}_eps{eps:g}.vnnlib"
-            if out_path.exists():
-                n_skipped += 1
-                continue
-            write_vnnlib(out_path, x0, eps, topk, n_out=n_out)
-            n_written += 1
-            print(f"  wrote {out_path}")
+            new_rows.append({
+                "idx": idx,
+                "eps": eps,
+                "net": args.net,
+                "data": args.data,
+                "k": args.k,
+                "abs_row": abs_row,
+                "result": str(result_path_for(results_dir, args.k, idx, eps)),
+            })
 
-    manifest_path = rebuild_manifest(out_dir, results_dir, net=args.net, k=args.k)
-    print(f"wrote {n_written} new vnnlib files, skipped {n_skipped} existing ones")
+    manifest_path = out_dir / "manifest.csv"
+    n_before = 0
+    if manifest_path.exists():
+        with open(manifest_path, newline="") as f:
+            n_before = sum(1 for _ in csv.DictReader(f))
+    merged = merge_manifest(manifest_path, new_rows)
+    print(f"manifest now has {len(merged)} instances ({len(merged) - n_before} newly added)")
     print(f"manifest: {manifest_path}")
 
 

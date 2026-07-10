@@ -21,9 +21,17 @@ run_batch.py          --manifest vnnlib/manifest.csv   ->  results/*.result (+ *
 summarize_results.py  --manifest vnnlib/manifest.csv   ->  summary.csv, robustness_summary.csv
 ```
 
-각 단계는 독립 실행 가능하고, 모두 **manifest.csv**(idx, eps, net, vnnlib, result)
-하나를 공통 인터페이스로 사용한다. 이미 만들어진 파일(.vnnlib, .result)은 다시
-만들지 않으므로 중간에 멈춰도 이어서 진행할 수 있다(resume).
+각 단계는 독립 실행 가능하고, 모두 **manifest.csv**(idx, eps, net, data, k,
+abs_row, result) 하나를 공통 인터페이스로 사용한다. 이미 결과가 있는 인스턴스는
+다시 돌리지 않으므로 중간에 멈춰도 이어서 진행할 수 있다(resume).
+
+**VNNLIB 텍스트 파일은 디스크에 영구 저장하지 않는다.** 인스턴스 하나당
+~26KB인데, 최종 목표(test 구간 전체 4만개 x eps 7개 = 28만 인스턴스)까지 가면
+수GB + 파일 수십만 개가 쌓여 공간과 파일시스템 성능을 심하게 낭비하기 때문이다.
+대신 `run_batch.py`가 NeuralSAT을 호출하기 직전에 (x0, clean_topk)로부터 임시
+파일로 즉석 생성하고, 실행이 끝나면(성공/실패 무관) 바로 삭제한다. 영구적으로
+남는 것은 manifest.csv(가벼운 idx/eps 목록)와 실제 검증 결과
+(results/*.result, *.log)뿐이다.
 
 ## 1. 데이터 분할 (`data_split.py`, `pickle_memmap.py`)
 
@@ -43,53 +51,75 @@ summarize_results.py  --manifest vnnlib/manifest.csv   ->  summary.csv, robustne
 
 이 두 모듈은 `generate_vnnlib.py`가 import해서 쓰며, 직접 실행할 일은 없다.
 
-## 2. VNNLIB 생성 (`generate_vnnlib.py`)
+## 2. VNNLIB 인스턴스 목록 생성 (`generate_vnnlib.py`)
 
-test 구간 내 상대 인덱스(0 = test 구간 첫 샘플)를 기준으로, 각 (idx, eps) 조합마다
-"clean top-k 선택이 절대 안 바뀐다"의 부정을 표현하는 VNNLIB 스펙을 만든다.
-NeuralSAT이 `unsat`을 내면 그 반경 안에서 top-k 선택이 절대 바뀌지 않음이
-증명된 것이고(certified robust), `sat`이면 반례가 존재하는 것이다.
+test 구간 내 상대 인덱스(0 = test 구간 첫 샘플)를 기준으로, 각 (idx, eps) 조합을
+manifest.csv 행으로 등록한다. 실제 VNNLIB 텍스트("clean top-k 선택이 절대 안
+바뀐다"의 부정을 표현하는 스펙)는 이 단계에서 만들지 않고, `run_batch.py`가
+실행 직전에 즉석 생성한다(아래 3단계 참고). NeuralSAT이 `unsat`을 내면 그
+반경 안에서 top-k 선택이 절대 바뀌지 않음이 증명된 것이고(certified robust),
+`sat`이면 반례가 존재하는 것이다.
 
 ```bash
-# test 구간 첫 100개 샘플 x 기본 eps 리스트(1e-6..1) 생성
+# test 구간 첫 100개 샘플 x 기본 eps 리스트(1e-6..1) 를 manifest에 등록
 python generate_vnnlib.py --num-samples 100
 
-# 이미 있는 .vnnlib은 건너뛰고, 새로 200개까지 확장
+# 이미 등록된 조합은 건너뛰고, 새로 200개까지 확장
 python generate_vnnlib.py --num-samples 200
 ```
 
 주요 옵션:
-- `--num-samples N` : test 구간 앞에서부터 N개 샘플(idx 0..N-1)에 대해 생성.
+- `--num-samples N` : test 구간 앞에서부터 N개 샘플(idx 0..N-1)에 대해 등록.
   **최종 목표는 test 구간 전체(40,000개)이지만, 지금은 이 옵션으로 원하는
   개수만큼만 점진적으로 늘려간다.** (`--indices`로 특정 idx만 지정하는 것도
   여전히 가능하지만 `--num-samples`가 주어지면 무시된다.)
 - `--eps` : 기본 `1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1` 고정 리스트.
 - `--k` : top-k, 기본 8.
-- `--out-dir` : vnnlib 저장 위치, 기본 `vnnlib/`.
+- `--out-dir` : manifest.csv 저장 위치, 기본 `vnnlib/`.
 - `--results-dir` : manifest.csv에 적힐 result 파일 위치(실제 실행은
   run_batch.py가 함), 기본 `results/`.
 
-실행할 때마다 `out-dir`에 있는 모든 `.vnnlib`을 다시 스캔해서
-`vnnlib/manifest.csv`를 처음부터 재생성한다 (idx, eps, net, vnnlib, result 컬럼).
-이미 존재하는 `.vnnlib` 파일은 다시 쓰지 않으므로, 여러 번 나눠서
-`--num-samples`를 늘려가며 실행해도 안전하다.
+실행할 때마다 기존 `manifest.csv`를 읽어 이미 등록된 (idx, eps) 행(및 그
+result 여부)은 그대로 유지하면서 새로 요청된 조합만 추가한다. 그래서 여러 번
+나눠서 `--num-samples`를 늘려가며 실행해도 안전하고, 디스크에는 매번 가벼운
+manifest.csv 한 장만 남는다.
 
 ## 3. NeuralSAT 배치 실행 (`run_batch.py`)
 
-`manifest.csv`를 읽어서, 아직 result 파일이 없는 인스턴스마다
-`src/main.py`를 서브프로세스로 한 번씩 호출한다. `main.py`의 옵션 기본값
-(timeout=3600s 등)은 그대로 사용하고 오버라이드하지 않는다.
+`manifest.csv`를 읽어서, 아직 result 파일이 없는 인스턴스마다 (x0, clean_topk)로
+VNNLIB 텍스트를 임시 파일로 즉석 생성하고 `src/main.py`를 서브프로세스로 한 번씩
+호출한 뒤, 실행이 끝나면(성공/실패 무관) 그 임시 파일을 바로 삭제한다. `main.py`의
+옵션 기본값(timeout=3600s 등)은 그대로 사용하고 오버라이드하지 않는다.
+
+eps 조기 종료가 idx 하나 안에서 작은 eps부터 순서대로 봐야 성립하므로, 병렬화
+단위는 **idx(데이터 샘플) 하나**다. idx마다 자신의 eps 스윕(조기 종료 포함)을
+순차로 처리하는 작업을 `--workers`개의 프로세스로 동시에 돌린다 (idx끼리는
+서로 완전히 독립적이라 병렬화하기 좋음). 기본값은 **물리 코어 수 - 1**(코어
+하나는 비워둠, `psutil.cpu_count(logical=False)` 기준 — Gurobi/LP 위주
+작업이라 하이퍼스레딩으로 늘어난 논리 코어는 크게 도움이 안 돼서 물리 코어로
+계산)이고, `--workers 1`을 주면 예전과 같은 순차 실행이 된다.
 
 ```bash
-# 아직 안 돌린 인스턴스 전부 실행
+# 아직 안 돌린 인스턴스 전부 실행 (기본 workers = 물리 코어 수 - 1)
 python run_batch.py
 
-# 이번엔 5개만 새로 실행 (파일럿/점검용)
+# 워커 수를 직접 지정 (6코어 머신 기준 예시)
+python run_batch.py --workers 5
+
+# 이번엔 idx 5개만 새로 실행 (파일럿/점검용, --limit은 이제 idx 단위)
 python run_batch.py --limit 5
 
 # 실제로 돌리지 않고 무엇을 실행할지만 확인
 python run_batch.py --dry-run
 ```
+
+4개 idx(28개 인스턴스, 그중 15개만 실제 실행되고 13개는 조기 종료로 스킵)를
+`--workers 3`으로 돌려본 결과, 실제 걸린 시간은 약 59초였다(순차로 다 돌렸을 때
+예상되는 약 197초 대비 약 3.3배). 여러 NeuralSAT 서브프로세스가 동시에 돌 때
+numpy/torch 스레드가 코어를 서로 잡아먹지 않도록 `OMP_NUM_THREADS` 등을
+`cpu_count // workers`로 낮춰서 넘기지만, Gurobi 내부 스레드는 일부 경로에서
+완전히 통제되지 않으므로 `--workers`를 올렸는데 체감 속도가 기대만큼 안 나오면
+낮춰서 다시 시도해볼 것.
 
 - 이미 result 파일이 있는 (idx, eps)는 건너뛴다 -> 중단 후 재실행하면
   이어서 진행된다.
@@ -114,14 +144,24 @@ python summarize_results.py
 
 ## 알려진 이슈 / 진행 상황
 
-- 파이프라인 코드(생성 -> manifest -> run_batch dry-run)는 실제 test 데이터로
-  검증 완료. `run_batch.py`가 `main.py`를 실제로 끝까지 실행해서 결과를 만드는
-  것까지는, 이 리포지토리의 conda 환경들(`neuralsat`, `AI_Verification`,
-  `crown`, `nnv`)에 `requirements.txt`가 요구하는 `torch`/`onnxruntime`이
-  일부 빠져 있어서 아직 end-to-end로 완전히 확인하지 못했다. `neuralsat` 환경에
-  `onnxruntime==1.16.3`, CPU 빌드 `torch==2.1.2`는 설치했지만 나머지
-  의존성(`onnx`, `gurobipy` 등) 점검은 남아있다.
+- `neuralsat` conda 환경에 `requirements.txt` 전체 설치 완료, idx=0(eps 7개)
+  기준으로 생성 -> run_batch(실제 `main.py` 서브프로세스 실행까지) -> summarize
+  전체 파이프라인이 end-to-end로 정상 동작함을 확인함(1번째 데이터 기준
+  robust radius = eps 1e-5).
+- VNNLIB 텍스트를 `.vnnlib` 파일로 영구 저장하던 초기 구조는 인스턴스당
+  ~26KB라 최종 규모(28만 인스턴스)에서 수GB + 파일 수십만 개가 쌓이는 문제가
+  있어, `run_batch.py`가 실행 직전에 임시 파일로 즉석 생성 후 즉시 삭제하는
+  방식으로 변경함. 디스크에는 manifest.csv와 results/*.result, *.log만 남는다.
 - 최종적으로는 test 구간 40,000개 전부를 대상으로 하되, 지금은
   `--num-samples`로 소규모부터 늘려가는 중이다. 40,000 x eps 7개 = 28만
   인스턴스는 인스턴스당 실행 시간에 따라 매우 오래 걸릴 수 있으므로, 파일럿
   결과를 보고 timeout/샘플 수/병렬화 여부를 다시 판단해야 한다.
+
+1. 인스턴스 목록(manifest) 100개 생성 
+python generate_vnnlib.py --num-samples 100
+
+2. neuralsat 배치 실행
+python run_batch.py\
+
+3. 결과 집계
+python summarize_results.py
