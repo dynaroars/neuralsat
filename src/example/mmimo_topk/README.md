@@ -1,0 +1,127 @@
+# mMIMO top-k 안테나 선택 강건성 검증 파이프라인
+
+mMIMO 안테나 선택 네트워크(256차원 입력 -> 16차원 출력, top-k 선택)의 로컬
+강건성(local robustness)을 NeuralSAT으로 검증하는 파이프라인. 원본 pickle
+데이터셋에서 test 구간만 떼어내 (데이터 idx, eps) 조합마다 VNNLIB 스펙을 만들고,
+NeuralSAT을 인스턴스별로 돌린 뒤 결과를 모아 idx별 certified-robust 반경을
+정리하는 것까지 4단계로 구성된다.
+
+## 파이프라인 개요
+
+```
+data_split.py / pickle_memmap.py   (test 구간 판별용 유틸, 직접 실행 X)
+        |
+        v
+generate_vnnlib.py   --num-samples N --eps ...   ->  vnnlib/*.vnnlib + vnnlib/manifest.csv
+        |
+        v
+run_batch.py          --manifest vnnlib/manifest.csv   ->  results/*.result (+ *.log)
+        |
+        v
+summarize_results.py  --manifest vnnlib/manifest.csv   ->  summary.csv, robustness_summary.csv
+```
+
+각 단계는 독립 실행 가능하고, 모두 **manifest.csv**(idx, eps, net, vnnlib, result)
+하나를 공통 인터페이스로 사용한다. 이미 만들어진 파일(.vnnlib, .result)은 다시
+만들지 않으므로 중간에 멈춰도 이어서 진행할 수 있다(resume).
+
+## 1. 데이터 분할 (`data_split.py`, `pickle_memmap.py`)
+
+원본 pickle(`mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle`, 약 3.2GB,
+`(1,600,000, 256)` float64 = 80개 파일 × 20,000샘플)은 전체를 메모리에 올리지
+않고 `pickle_memmap.py`의 memmap 유틸로 필요한 행 구간만 읽는다.
+
+- `pickle_memmap.peek_ndarray_info` : pickle 헤더만 읽어 shape/dtype/데이터
+  offset을 알아낸다 (raw 데이터는 안 읽음).
+- `pickle_memmap.load_row_range(path, start, end)` : `[start, end)` 행만
+  memmap으로 읽어온다.
+- `data_split.test_row_range(path, no_dataInFile, no_test_files)` : 전체
+  행 수만으로 test 구간의 절대 행 범위를 계산한다. 기본값(`no_dataInFile=20000,
+  no_test_files=2`) 기준 test 구간은 뒤에서 2개 파일분, 즉 절대 행
+  `1,560,000 ~ 1,600,000` (40,000개)이다. **train 구간(앞 78개 파일)은
+  검증 파이프라인에서 절대 사용하지 않는다.**
+
+이 두 모듈은 `generate_vnnlib.py`가 import해서 쓰며, 직접 실행할 일은 없다.
+
+## 2. VNNLIB 생성 (`generate_vnnlib.py`)
+
+test 구간 내 상대 인덱스(0 = test 구간 첫 샘플)를 기준으로, 각 (idx, eps) 조합마다
+"clean top-k 선택이 절대 안 바뀐다"의 부정을 표현하는 VNNLIB 스펙을 만든다.
+NeuralSAT이 `unsat`을 내면 그 반경 안에서 top-k 선택이 절대 바뀌지 않음이
+증명된 것이고(certified robust), `sat`이면 반례가 존재하는 것이다.
+
+```bash
+# test 구간 첫 100개 샘플 x 기본 eps 리스트(1e-6..1) 생성
+python generate_vnnlib.py --num-samples 100
+
+# 이미 있는 .vnnlib은 건너뛰고, 새로 200개까지 확장
+python generate_vnnlib.py --num-samples 200
+```
+
+주요 옵션:
+- `--num-samples N` : test 구간 앞에서부터 N개 샘플(idx 0..N-1)에 대해 생성.
+  **최종 목표는 test 구간 전체(40,000개)이지만, 지금은 이 옵션으로 원하는
+  개수만큼만 점진적으로 늘려간다.** (`--indices`로 특정 idx만 지정하는 것도
+  여전히 가능하지만 `--num-samples`가 주어지면 무시된다.)
+- `--eps` : 기본 `1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1` 고정 리스트.
+- `--k` : top-k, 기본 8.
+- `--out-dir` : vnnlib 저장 위치, 기본 `vnnlib/`.
+- `--results-dir` : manifest.csv에 적힐 result 파일 위치(실제 실행은
+  run_batch.py가 함), 기본 `results/`.
+
+실행할 때마다 `out-dir`에 있는 모든 `.vnnlib`을 다시 스캔해서
+`vnnlib/manifest.csv`를 처음부터 재생성한다 (idx, eps, net, vnnlib, result 컬럼).
+이미 존재하는 `.vnnlib` 파일은 다시 쓰지 않으므로, 여러 번 나눠서
+`--num-samples`를 늘려가며 실행해도 안전하다.
+
+## 3. NeuralSAT 배치 실행 (`run_batch.py`)
+
+`manifest.csv`를 읽어서, 아직 result 파일이 없는 인스턴스마다
+`src/main.py`를 서브프로세스로 한 번씩 호출한다. `main.py`의 옵션 기본값
+(timeout=3600s 등)은 그대로 사용하고 오버라이드하지 않는다.
+
+```bash
+# 아직 안 돌린 인스턴스 전부 실행
+python run_batch.py
+
+# 이번엔 5개만 새로 실행 (파일럿/점검용)
+python run_batch.py --limit 5
+
+# 실제로 돌리지 않고 무엇을 실행할지만 확인
+python run_batch.py --dry-run
+```
+
+- 이미 result 파일이 있는 (idx, eps)는 건너뛴다 -> 중단 후 재실행하면
+  이어서 진행된다.
+- 인스턴스 하나가 실패해도(리턴코드 != 0) 나머지는 계속 진행하고, 실패한
+  인스턴스는 `[FAILED]`로 표시된다 (원인은 `results/*.log` 참고).
+- 각 인스턴스 실행 시 `--export_runtime --export_cex`를 추가로 넘겨서, 결과
+  파일 첫 줄에 `status,runtime`을, sat인 경우 둘째 줄에 counterexample을 남긴다.
+
+## 4. 결과 집계 (`summarize_results.py`)
+
+```bash
+python summarize_results.py
+```
+
+- `manifest.csv` + `results/*.result`를 모아 `summary.csv`(idx, eps, status,
+  runtime)를 만든다. 아직 안 돌린 인스턴스는 status가 `not_run`으로 표시된다.
+- idx별로 eps 오름차순으로 봤을 때, 가장 작은 eps부터 연속으로 `unsat`인
+  구간의 마지막 eps를 **certified-robust 반경**으로 잡아 `robustness_summary.csv`
+  에 정리한다 (`robust_radius_eps`, 그 다음 첫 non-unsat eps/status,
+  `anomaly_nonmonotonic` — eps가 커질수록 sat/unknown 쪽으로 가는 게 자연스러운데
+  중간에 끊겼다가 더 큰 eps에서 다시 unsat이 나오면 표시).
+
+## 알려진 이슈 / 진행 상황
+
+- 파이프라인 코드(생성 -> manifest -> run_batch dry-run)는 실제 test 데이터로
+  검증 완료. `run_batch.py`가 `main.py`를 실제로 끝까지 실행해서 결과를 만드는
+  것까지는, 이 리포지토리의 conda 환경들(`neuralsat`, `AI_Verification`,
+  `crown`, `nnv`)에 `requirements.txt`가 요구하는 `torch`/`onnxruntime`이
+  일부 빠져 있어서 아직 end-to-end로 완전히 확인하지 못했다. `neuralsat` 환경에
+  `onnxruntime==1.16.3`, CPU 빌드 `torch==2.1.2`는 설치했지만 나머지
+  의존성(`onnx`, `gurobipy` 등) 점검은 남아있다.
+- 최종적으로는 test 구간 40,000개 전부를 대상으로 하되, 지금은
+  `--num-samples`로 소규모부터 늘려가는 중이다. 40,000 x eps 7개 = 28만
+  인스턴스는 인스턴스당 실행 시간에 따라 매우 오래 걸릴 수 있으므로, 파일럿
+  결과를 보고 timeout/샘플 수/병렬화 여부를 다시 판단해야 한다.
