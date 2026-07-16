@@ -156,7 +156,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--eps",
-        default="1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1",
+        default="1e-6,1e-5,0.0001,0.0002,0.0003,0.0004,0.0005,0.0006,0.0007,0.0008,0.0009,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.01,0.1,1.0",
         help="Comma-separated L_inf eps values to sweep",
     )
     parser.add_argument("--k", type=int, default=8, help="top-k")

@@ -123,6 +123,11 @@ numpy/torch 스레드가 코어를 서로 잡아먹지 않도록 `OMP_NUM_THREAD
 
 - 이미 result 파일이 있는 (idx, eps)는 건너뛴다 -> 중단 후 재실행하면
   이어서 진행된다.
+- 실행이 끝나면 `this session`(이번 실행 소요 시간)과 `cumulative total`(이
+  manifest에 대해 지금까지 실행한 모든 세션의 합, 세션 사이 공백은 안 셈)을
+  같이 출력한다. `vnnlib/.run_time_state.json`에 누적값을 저장해두므로,
+  `--num-samples`를 늘려가며 여러 번 나눠 돌려도 실제 가동 시간의 총합을
+  정확히 알 수 있다.
 - 인스턴스 하나가 실패해도(리턴코드 != 0) 나머지는 계속 진행하고, 실패한
   인스턴스는 `[FAILED]`로 표시된다 (원인은 `results/*.log` 참고).
 - 각 인스턴스 실행 시 `--export_runtime --export_cex`를 추가로 넘겨서, 결과
@@ -141,6 +146,9 @@ python summarize_results.py
   에 정리한다 (`robust_radius_eps`, 그 다음 첫 non-unsat eps/status,
   `anomaly_nonmonotonic` — eps가 커질수록 sat/unknown 쪽으로 가는 게 자연스러운데
   중간에 끊겼다가 더 큰 eps에서 다시 unsat이 나오면 표시).
+- eps별로 전체 idx 대비 **unsat** 비율을 막대그래프로 그려 `eps_unsat_ratio.png`에
+  저장한다(`--chart-out`으로 경로 변경 가능). 새 의존성 없이 이미 있는
+  Pillow만으로 그린 PNG 이미지다.
 
 ## 알려진 이슈 / 진행 상황
 
@@ -161,7 +169,7 @@ python summarize_results.py
 python generate_vnnlib.py --num-samples 100
 
 2. neuralsat 배치 실행
-python run_batch.py\
+python run_batch.py
 
 3. 결과 집계
 python summarize_results.py

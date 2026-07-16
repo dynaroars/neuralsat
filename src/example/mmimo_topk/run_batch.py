@@ -14,6 +14,11 @@ manifest.csv(가벼운 idx/eps 목록)와 실제 검증 결과(results/*.result,
 - --limit으로 이번 실행에서 새로 돌릴 idx(데이터 샘플) 개수를 제한할 수 있다
   (전체 4만개 중 일부만 우선 돌려보는 용도. 병렬화 이후로는 인스턴스가 아니라
   idx 단위로 센다).
+- 실행이 끝나면 이번 세션 소요 시간과, manifest 옆의 `.run_time_state.json`에
+  누적해온 전체 세션 합산 시간을 같이 출력한다. 중간에 멈췄다가(그 사이 공백은
+  세지 않고) 나중에 --num-samples를 늘려서 이어 돌려도 실제 가동 시간만
+  누적되므로, "지금까지 총 몇 시간 걸렸나"를 세션을 몇 번 나눠 돌렸든 정확히
+  알 수 있다.
 
 ## eps 조기 종료(early-stop)
 
@@ -51,6 +56,7 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
+import json
 import os
 import pathlib
 import subprocess
@@ -199,6 +205,36 @@ def group_by_idx(rows: list[dict]) -> list[tuple[int, list[dict]]]:
     return [(idx, list(grp)) for idx, grp in itertools.groupby(rows, key=lambda r: int(r["idx"]))]
 
 
+def load_cumulative_seconds(state_path: pathlib.Path) -> float:
+    """중간에 멈췄다가 나중에 --num-samples를 늘려서 이어 돌리는 경우를 위해,
+    이 manifest에 대해 지금까지 실행에 실제로 쓴 시간(공백 기간 제외, 세션들의
+    합)을 state_path에 누적해서 기록한다."""
+    if not state_path.exists():
+        return 0.0
+    try:
+        return float(json.loads(state_path.read_text()).get("cumulative_seconds", 0.0))
+    except (json.JSONDecodeError, OSError, ValueError):
+        return 0.0
+
+
+def save_cumulative_seconds(state_path: pathlib.Path, total_seconds: float) -> None:
+    state_path.write_text(json.dumps({"cumulative_seconds": total_seconds}))
+
+
+def format_duration(seconds: float) -> str:
+    # ASCII-only on purpose: this gets printed through `conda run`, which on Windows
+    # with a non-UTF-8 console codepage (e.g. cp949) crashes with UnicodeEncodeError
+    # on non-ASCII stdout -- easiest to just never emit non-ASCII here.
+    seconds = int(round(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m {s}s"
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to manifest.csv from generate_vnnlib.py")
@@ -216,7 +252,12 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Print what would run without executing")
     args = parser.parse_args()
 
+    run_start = time.time()
+
     manifest_path = pathlib.Path(args.manifest)
+    state_path = manifest_path.with_name(".run_time_state.json")
+    prior_cumulative = load_cumulative_seconds(state_path)
+
     main_py = pathlib.Path(args.main)
     rows = read_manifest(manifest_path)
     groups = group_by_idx(rows)
@@ -295,11 +336,17 @@ def main() -> None:
     except OSError:
         pass  # not empty or in use; leave it
 
+    elapsed = time.time() - run_start
+    cumulative = prior_cumulative + elapsed
+    save_cumulative_seconds(state_path, cumulative)
+
     print(
         f"done: {n_total} total, {n_skipped} already done, "
         f"{n_attempted - n_failed} newly completed, {n_implied} implied (skipped), {n_failed} failed "
         f"(workers={workers})"
     )
+    print(f"this session: {format_duration(elapsed)}")
+    print(f"cumulative total (all sessions, gaps excluded): {format_duration(cumulative)}")
 
 
 if __name__ == "__main__":

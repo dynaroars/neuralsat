@@ -1,4 +1,5 @@
 vnncomp2025_benchmarks/
+src/example/mmimo_topk/results/
 *.json
 generated_benchmark/
 benchmark/
