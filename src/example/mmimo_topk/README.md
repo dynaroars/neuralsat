@@ -26,8 +26,8 @@ abs_row, result) 하나를 공통 인터페이스로 사용한다. 이미 결과
 다시 돌리지 않으므로 중간에 멈춰도 이어서 진행할 수 있다(resume).
 
 **VNNLIB 텍스트 파일은 디스크에 영구 저장하지 않는다.** 인스턴스 하나당
-~26KB인데, 최종 목표(test 구간 전체 4만개 x eps 7개 = 28만 인스턴스)까지 가면
-수GB + 파일 수십만 개가 쌓여 공간과 파일시스템 성능을 심하게 낭비하기 때문이다.
+~26KB인데, 최종 목표(test 구간 전체 4만개 x eps 23개 = 92만 인스턴스)까지
+가면 수GB + 파일 수십만 개가 쌓여 공간과 파일시스템 성능을 심하게 낭비하기 때문이다.
 대신 `run_batch.py`가 NeuralSAT을 호출하기 직전에 (x0, clean_topk)로부터 임시
 파일로 즉석 생성하고, 실행이 끝나면(성공/실패 무관) 바로 삭제한다. 영구적으로
 남는 것은 manifest.csv(가벼운 idx/eps 목록)와 실제 검증 결과
@@ -69,11 +69,17 @@ python generate_vnnlib.py --num-samples 200
 ```
 
 주요 옵션:
-- `--num-samples N` : test 구간 앞에서부터 N개 샘플(idx 0..N-1)에 대해 등록.
+- `--num-samples N` : `--idx-start`부터 N개 샘플(기본 idx 0..N-1)에 대해 등록.
   **최종 목표는 test 구간 전체(40,000개)이지만, 지금은 이 옵션으로 원하는
   개수만큼만 점진적으로 늘려간다.** (`--indices`로 특정 idx만 지정하는 것도
   여전히 가능하지만 `--num-samples`가 주어지면 무시된다.)
-- `--eps` : 기본 `1e-6,1e-5,1e-4,1e-3,1e-2,1e-1,1` 고정 리스트.
+- `--idx-start` : `--num-samples`와 같이 써서 시작 idx를 지정 (기본 0). 여러
+  대의 컴퓨터가 test 구간을 나눠서 처리할 때 사용 (예: 컴퓨터 A는
+  `--idx-start 0 --num-samples 20000`, 컴퓨터 B는
+  `--idx-start 20000 --num-samples 20000`). **idx는 0-indexed**라서
+  "20001번째 샘플"은 `idx=20000`이다.
+- `--eps` : 기본 `1e-6,1e-5,1e-4,2e-4,...,9e-4,1e-3,2e-3,...,9e-3,1e-2,1e-1,1`
+  (23개, 반경별 sat 비율이 급격히 갈리는 1e-4~1e-3 구간을 촘촘하게 잡은 고정 리스트).
 - `--k` : top-k, 기본 8.
 - `--out-dir` : manifest.csv 저장 위치, 기본 `vnnlib/`.
 - `--results-dir` : manifest.csv에 적힐 result 파일 위치(실제 실행은
@@ -161,12 +167,14 @@ python summarize_results.py
   있어, `run_batch.py`가 실행 직전에 임시 파일로 즉석 생성 후 즉시 삭제하는
   방식으로 변경함. 디스크에는 manifest.csv와 results/*.result, *.log만 남는다.
 - 최종적으로는 test 구간 40,000개 전부를 대상으로 하되, 지금은
-  `--num-samples`로 소규모부터 늘려가는 중이다. 40,000 x eps 7개 = 28만
-  인스턴스는 인스턴스당 실행 시간에 따라 매우 오래 걸릴 수 있으므로, 파일럿
-  결과를 보고 timeout/샘플 수/병렬화 여부를 다시 판단해야 한다.
+  `--idx-start`/`--num-samples`로 여러 컴퓨터가 idx 구간을 나눠서 진행 중이다
+  (예: 컴퓨터 A는 idx 0~19999, 컴퓨터 B는 idx 20000~39999). eps는 23개로
+  늘렸으므로 40,000 x 23 = 92만 인스턴스 규모다. 인스턴스당 실행 시간에 따라
+  매우 오래 걸릴 수 있으므로, 파일럿 결과를 보고 timeout/샘플 수/병렬화 여부를
+  다시 판단해야 한다.
 
 1. 인스턴스 목록(manifest) 100개 생성 
-python generate_vnnlib.py --num-samples 100
+python generate_vnnlib.py --idx-start 20000 --num-samples 20000
 
 2. neuralsat 배치 실행
 python run_batch.py

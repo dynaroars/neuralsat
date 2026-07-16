@@ -151,8 +151,15 @@ def main() -> None:
         "--num-samples",
         type=int,
         default=None,
-        help="Generate specs for the first N test-split samples (indices 0..N-1). "
-        "Overrides --indices. Use this to scale up incrementally toward the full test split.",
+        help="Generate specs for N test-split samples starting at --idx-start (default: indices 0..N-1). "
+        "Overrides --indices. Use this to scale up incrementally toward the full test split, or to give "
+        "each machine a disjoint idx range (e.g. --idx-start 20000 --num-samples 20000).",
+    )
+    parser.add_argument(
+        "--idx-start",
+        type=int,
+        default=0,
+        help="First idx to generate when --num-samples is given (idx = idx-start .. idx-start+num-samples-1).",
     )
     parser.add_argument(
         "--eps",
@@ -167,7 +174,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.num_samples is not None:
-        indices = list(range(args.num_samples))
+        indices = list(range(args.idx_start, args.idx_start + args.num_samples))
     else:
         indices = [int(s) for s in args.indices.split(",")]
     eps_list = [float(s) for s in args.eps.split(",")]
@@ -180,8 +187,9 @@ def main() -> None:
     if max(indices) >= n_test or min(indices) < 0:
         raise ValueError(f"--indices must be within the test split range [0, {n_test}), got range end {max(indices)}")
 
-    # test 구간의 앞쪽부터 max(indices)+1 개 행만 읽는다 (test 구간 전체를 memmap으로 읽지 않음).
-    X = load_row_range(args.data, test_start, test_start + max(indices) + 1)
+    # 실제로 필요한 [min(indices), max(indices)] 구간만 memmap으로 읽는다.
+    row_lo, row_hi = min(indices), max(indices)
+    X = load_row_range(args.data, test_start + row_lo, test_start + row_hi + 1)
 
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -189,7 +197,7 @@ def main() -> None:
 
     new_rows = []
     for idx in indices:
-        x0 = X[idx]
+        x0 = X[idx - row_lo]
         abs_row = test_start + idx
         y0, topk = clean_topk(sess, x0, args.k)
         print(f"idx={idx} (abs row {abs_row}) clean_top{args.k}={sorted(topk)}")

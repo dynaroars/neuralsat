@@ -72,7 +72,7 @@ def load_test_rows(filepath, no_dataInFile, no_test_files):
 if __name__ == "__main__":
     # 사용 예시 (mMIMO-80 mf - FC HTH for Validation.py 기준)
     # 3GB대 원본 파일이므로 load_pickle(전체 로드) 대신 load_test_rows(memmap)를 사용한다.
-    input_path = "C:\AI_Verification\wireless\Pickle/mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
+    input_path = "C:\AI_Verification\wireless\Pickle\mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
 
     test_input = load_test_rows(input_path, no_dataInFile=20000, no_test_files=2)
 
