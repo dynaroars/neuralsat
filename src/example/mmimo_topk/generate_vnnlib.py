@@ -44,6 +44,7 @@ import numpy as np
 import onnxruntime as ort
 from data_split import test_row_range
 from pickle_memmap import load_row_range
+from config import pickle_file_path
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 DEFAULT_NET = (
@@ -51,9 +52,8 @@ DEFAULT_NET = (
     / "onnx"
     / "Baseline mMIMO FC H hard short 80 HTHNN_LAY2_491 RELU 20241018 PRUNED 0.93_NO_SIGMOID.onnx"
 )
-DEFAULT_DATA = pathlib.Path(
-    r"C:\AI_Verification\wireless\Pickle\mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D-003.pickle"
-)
+DEFAULT_DATA = pathlib.Path(pickle_file_path)
+
 DEFAULT_OUT_DIR = SCRIPT_DIR / "vnnlib"
 DEFAULT_RESULTS_DIR = SCRIPT_DIR / "results"
 
