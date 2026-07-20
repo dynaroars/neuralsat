@@ -1,0 +1,42 @@
+
+
+
+1. conda를 사용하여 python 3.11을 갖춘 환경 neuralsat311 생성하고 들어가기
+
+ - pip install numpy
+ - pip install onnxruntime
+
+2. neuralsat의 깃 repo를 clone하기 (김송헌의 repo)
+
+ - git clone https://github.com/songheon2/neuralsat
+
+3. 안테나 선택 신경망(onnx)와 데이터 파일(pickle) 2개 파일 준비 
+
+ - onnx/Baseline mMIMO FC H hard short 80 HTHNN_LAY2_491 RELU 20241018 PRUNED 0.93_NO_SIGMOID.onnx
+
+   D:\Work\Research\AI\wireless\onnx\Baseline mMIMO FC H hard short 80 HTHNN_LAY2_491 RELU 20241018 PRUNED 0.93_NO_SIGMOID.onnx
+
+ - Pickle/mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D.pickle
+
+   D:\Work\Research\AI\wireless\Pickle\mMIMO_AS_training_data_20000_80_H_HTH_ORG_1D.pickle
+
+4. neuralsat/src/example/mmimo_topk 폴더로 이동
+
+ - generate_vnnlib.py
+
+   * 신경망 파일 경로 설정은 불필요
+
+     (2026-07-20 현재) 김송헌 neuralsat repo에서 src/example/onnx에 
+     안테나 선택 신경망이 올라와 있으
+
+   * pickle 파일 경로 설정 
+
+5 neuralsat 실행
+
+  - python generate_vnnlib.py --idx-start 0 --num-samples 20
+
+   * mmimo_topk 폴더에서 실행
+
+   * --idx-start 0 => 40000개 시작 위치
+     --idx-start 20000 => 40000개 중 20000개 다음 시작 위치 
+
