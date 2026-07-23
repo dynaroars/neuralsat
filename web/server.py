@@ -11,13 +11,14 @@ import re
 import signal
 from pathlib import Path
 
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 
 NEURALSAT_ROOT = Path(os.environ.get("NEURALSAT_ROOT", Path(__file__).resolve().parent.parent))
 NEURALSAT_MAIN = NEURALSAT_ROOT / "src" / "main.py"
 EXAMPLE_ONNX_DIR = NEURALSAT_ROOT / "src" / "example" / "onnx"
 EXAMPLE_VNNLIB_DIR = NEURALSAT_ROOT / "src" / "example" / "vnnlib"
+CLASSIC_DIR = Path(__file__).resolve().parent / "frontend-classic"
 
 UPLOAD_DIR = Path(tempfile.gettempdir()) / f"neuralsat_uploads_{os.getuid()}"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -445,6 +446,10 @@ def _worker(job_id: str):
             if jobs[job_id]["status"] == "cancelled":
                 return
         _run_verification(job_id)
+
+@app.route("/", methods=["GET"])
+def index():
+    return send_from_directory(CLASSIC_DIR, "index.html")
 
 @app.route("/api/health", methods=["GET"])
 def health():
