@@ -19,12 +19,54 @@ NEURALSAT_MAIN = NEURALSAT_ROOT / "src" / "main.py"
 EXAMPLE_ONNX_DIR = NEURALSAT_ROOT / "src" / "example" / "onnx"
 EXAMPLE_VNNLIB_DIR = NEURALSAT_ROOT / "src" / "example" / "vnnlib"
 
-UPLOAD_DIR = Path(tempfile.gettempdir()) / "neuralsat_uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = Path(tempfile.gettempdir()) / f"neuralsat_uploads_{os.getuid()}"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 DEFAULT_TIMEOUT = 300
 MAX_TIMEOUT = 3600
+
+# Settings files must live here; clients may only reference a bare filename inside it.
+SETTINGS_DIR = NEURALSAT_ROOT / "src" / "example" / "settings"
+
+SHAPE_TOKEN_RE = re.compile(r'^\d+$')
+
+
+def _parse_shape(raw):
+    """Validate a whitespace-separated list of positive integers.
+
+    Returns (tokens, error). Rejecting anything else prevents extra argv
+    tokens (e.g. another `--flag`) from being smuggled into the solver
+    subprocess's command line via this field.
+    """
+    if not raw or not raw.strip():
+        return None, None
+    tokens = raw.split()
+    if not all(SHAPE_TOKEN_RE.match(t) for t in tokens):
+        return None, "must be whitespace-separated positive integers"
+    return tokens, None
+
+
+def _resolve_setting_file(raw):
+    """Resolve a client-supplied settings filename against SETTINGS_DIR.
+
+    Only a bare filename is accepted; anything containing a path separator,
+    or that resolves outside SETTINGS_DIR, is rejected. This prevents the
+    field from being used to read arbitrary files on the server.
+    """
+    if not raw or not raw.strip():
+        return None, None
+    name = raw.strip()
+    if "/" in name or "\\" in name or name in (".", ".."):
+        return None, "must be a bare filename, not a path"
+
+    base = SETTINGS_DIR.resolve()
+    candidate = (base / name).resolve()
+    if candidate != base and base not in candidate.parents:
+        return None, "must be a bare filename, not a path"
+    if not candidate.is_file():
+        return None, f"settings file not found: {name}"
+    return candidate, None
 
 app = Flask(__name__)
 CORS(app)
@@ -273,17 +315,13 @@ def _run_verification(job_id: str):
 
     input_shape = job.get("input_shape")
     if input_shape:
-        shapes = [s.strip() for s in input_shape.split() if s.strip()]
-        if shapes:
-            cmd.append("--input_shape")
-            cmd.extend(shapes)
+        cmd.append("--input_shape")
+        cmd.extend(input_shape)
 
     output_shape = job.get("output_shape")
     if output_shape:
-        shapes = [s.strip() for s in output_shape.split() if s.strip()]
-        if shapes:
-            cmd.append("--output_shape")
-            cmd.extend(shapes)
+        cmd.append("--output_shape")
+        cmd.extend(output_shape)
 
     setting_file = job.get("setting_file")
     if setting_file:
@@ -465,9 +503,19 @@ def verify():
     disable_restart = request.form.get("disable_restart") == "true"
     disable_stabilize = request.form.get("disable_stabilize") == "true"
     force_split = request.form.get("force_split")
-    input_shape = request.form.get("input_shape")
-    output_shape = request.form.get("output_shape")
-    setting_file = request.form.get("setting_file")
+
+    input_shape, err = _parse_shape(request.form.get("input_shape"))
+    if err:
+        return jsonify({"error": f"Invalid input_shape: {err}"}), 400
+
+    output_shape, err = _parse_shape(request.form.get("output_shape"))
+    if err:
+        return jsonify({"error": f"Invalid output_shape: {err}"}), 400
+
+    setting_file, err = _resolve_setting_file(request.form.get("setting_file"))
+    if err:
+        return jsonify({"error": f"Invalid setting_file: {err}"}), 400
+    setting_file = str(setting_file) if setting_file else None
 
     job_id = str(uuid.uuid4())[:8]
     job_dir = UPLOAD_DIR / job_id
