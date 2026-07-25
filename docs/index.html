@@ -68,6 +68,10 @@ whether the property holds.
 <input type="file" id="spec-file" accept=".vnnlib">
 <span id="spec-status" class="file-status"></span>
 </p>
+<p>
+<b>Specification contents</b> <span class="small">(view/edit before running &mdash; edits here are what actually gets verified)</span><br>
+<textarea id="vnnlib-editor" rows="10" style="width:100%; box-sizing:border-box; font-family:'Courier New',Courier,monospace; font-size:12px;" placeholder="(load an example or choose a .vnnlib file to view/edit its contents here)"></textarea>
+</p>
 
 <details>
 <summary><h2>2. Options</h2> <span class="small">(optional &mdash; click to configure NeuralSAT; defaults are used otherwise)</span></summary>
@@ -81,8 +85,8 @@ whether the property holds.
 </tr>
 <tr>
   <td><label for="opt-device"><tt>--device</tt></label></td>
-  <td><select id="opt-device"><option value="cuda" selected>cuda</option><option value="cpu">cpu</option></select></td>
-  <td>run on GPU or CPU</td>
+  <td><select id="opt-device"><option value="cuda">cuda</option><option value="cpu">cpu</option></select></td>
+  <td>run on GPU or CPU &mdash; <span id="device-detect" class="small">(checking backend hardware…)</span></td>
 </tr>
 <tr>
   <td><label for="opt-batch"><tt>--batch</tt></label></td><td><input type="number" id="opt-batch" size="6" value="1000" min="1" max="10000" step="100"></td>
@@ -124,8 +128,11 @@ whether the property holds.
 </tr>
 <tr>
   <td><label for="opt-setting_file"><tt>--setting_file</tt></label></td>
-  <td><input type="text" id="opt-setting_file" size="20" placeholder="preset.json"></td>
-  <td>bare filename of a preset on the server</td>
+  <td>
+    <select id="opt-setting_file-select"><option value="">(none)</option></select>
+    <input type="text" id="opt-setting_file" size="20" placeholder="or type a preset.json filename" style="margin-left:0.4em;">
+  </td>
+  <td>advanced <tt>Settings</tt> overrides &mdash; pick a preset or type a bare filename from the server's settings folder</td>
 </tr>
 </table>
 </fieldset>
@@ -174,6 +181,18 @@ var pollTimer = null;
 var logPollTimer = null;
 var startTime = 0;
 var quickExamples = [];
+var currentSpecName = null;
+var ACTIVE_JOB_KEY = "neuralsat_active_job";
+
+function saveActiveJob(jobId) {
+  try { localStorage.setItem(ACTIVE_JOB_KEY, jobId); } catch (e) { /* localStorage unavailable */ }
+}
+function clearActiveJob() {
+  try { localStorage.removeItem(ACTIVE_JOB_KEY); } catch (e) { /* localStorage unavailable */ }
+}
+function getActiveJob() {
+  try { return localStorage.getItem(ACTIVE_JOB_KEY); } catch (e) { return null; }
+}
 
 function $(id) { return document.getElementById(id); }
 
@@ -187,6 +206,39 @@ function formatBytes(n) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
   return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+/* ---------- hardware detection ---------- */
+
+function loadGpuInfo() {
+  apiFetch("/api/health").then(function (r) { return r.json(); }).then(function (data) {
+    var gpu = data.gpu || { available: false, name: null };
+    var deviceSel = $("opt-device");
+    var note = $("device-detect");
+    if (gpu.available) {
+      deviceSel.value = "cuda";
+      note.textContent = "detected: GPU (" + (gpu.name || "unknown") + ") — defaulting to cuda";
+    } else {
+      deviceSel.value = "cpu";
+      note.textContent = "detected: no GPU on backend — defaulting to cpu (example timings are CPU timings)";
+    }
+  }).catch(function () {
+    $("device-detect").textContent = "(could not detect backend hardware; defaulting to cuda)";
+  });
+}
+
+/* ---------- settings presets ---------- */
+
+function loadSettingsList() {
+  apiFetch("/api/settings").then(function (r) { return r.json(); }).then(function (data) {
+    var sel = $("opt-setting_file-select");
+    (data.settings_files || []).forEach(function (f) {
+      var opt = document.createElement("option");
+      opt.value = f.name;
+      opt.textContent = f.name;
+      sel.appendChild(opt);
+    });
+  }).catch(function () { /* settings presets are optional; ignore failure */ });
 }
 
 /* ---------- examples ---------- */
@@ -212,6 +264,11 @@ function setFileInput(inputEl, file) {
   inputEl.files = dt.files;
 }
 
+function setVnnlibText(name, text) {
+  currentSpecName = name;
+  $("vnnlib-editor").value = text || "";
+}
+
 function loadExample() {
   var idx = $("example-select").value;
   if (idx === "") return;
@@ -230,6 +287,9 @@ function loadExample() {
     setFileInput($("spec-file"), specFile);
     $("net-status").textContent = ex.net + " (" + formatBytes(netFile.size) + ")";
     $("spec-status").textContent = ex.spec + " (" + formatBytes(specFile.size) + ")";
+    return blobs[1].text();
+  }).then(function (specText) {
+    setVnnlibText(ex.spec, specText);
     setStatus("Example loaded. Click Verify to start.");
   }).catch(function () {
     setStatus("Failed to load example files.");
@@ -241,7 +301,11 @@ function loadExample() {
 function gatherFormData() {
   var fd = new FormData();
   fd.append("net", $("net-file").files[0]);
-  fd.append("spec", $("spec-file").files[0]);
+  // The spec sent is always the current *editor* contents, not necessarily
+  // the originally uploaded file's bytes, so in-place edits take effect.
+  var specName = currentSpecName || ($("spec-file").files[0] && $("spec-file").files[0].name) || "edited.vnnlib";
+  var specBlob = new Blob([$("vnnlib-editor").value], { type: "text/plain" });
+  fd.append("spec", specBlob, specName);
   fd.append("timeout", $("opt-timeout").value || 300);
   fd.append("device", $("opt-device").value);
   fd.append("batch", $("opt-batch").value || 1000);
@@ -259,7 +323,7 @@ function gatherFormData() {
 
 function runVerification() {
   if (!$("net-file").files[0]) { alert("Please choose an ONNX network file (or load an example)."); return; }
-  if (!$("spec-file").files[0]) { alert("Please choose a VNNLib specification file (or load an example)."); return; }
+  if (!$("vnnlib-editor").value.trim()) { alert("Please choose a VNNLib file (or load an example) — or paste/edit VNNLib text directly."); return; }
 
   $("run-btn").disabled = true;
   $("cancel-btn").disabled = false;
@@ -273,6 +337,7 @@ function runVerification() {
     .then(function (res) {
       if (!res.ok) { finish("Error: " + (res.data.error || "failed to start job")); return; }
       activeJobId = res.data.job_id;
+      saveActiveJob(activeJobId);
       renderAnalysis(res.data.onnx_info, res.data.vnnlib_info);
       pollTimer = setInterval(poll, 1500);
       logPollTimer = setInterval(pollLogs, 1500);
@@ -322,9 +387,51 @@ function finish(msg) {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (logPollTimer) { clearInterval(logPollTimer); logPollTimer = null; }
   activeJobId = null;
+  clearActiveJob();
   $("run-btn").disabled = false;
   $("cancel-btn").disabled = true;
   setStatus(msg);
+}
+
+/* ---------- resume a job that was still running across a page reload ---------- */
+
+function resumeActiveJob() {
+  var jobId = getActiveJob();
+  if (!jobId) return;
+
+  apiFetch("/api/status/" + jobId).then(function (r) {
+    if (!r.ok) { clearActiveJob(); return null; }
+    return r.json();
+  }).then(function (data) {
+    if (!data) return;
+
+    renderAnalysis(data.onnx_info, data.vnnlib_info);
+    if (data.vnnlib_info && data.vnnlib_info.raw_content) {
+      setVnnlibText(data.spec_name, data.vnnlib_info.raw_content);
+    }
+    if (data.net_name) { $("net-status").textContent = data.net_name; }
+    if (data.spec_name) { $("spec-status").textContent = data.spec_name; }
+
+    if (data.status === "running" || data.status === "queued") {
+      activeJobId = jobId;
+      startTime = Date.now() - (data.elapsed || 0) * 1000;
+      $("run-btn").disabled = true;
+      $("cancel-btn").disabled = false;
+      setStatus("Resumed job " + jobId + " — status: " + data.status);
+      pollTimer = setInterval(poll, 1500);
+      logPollTimer = setInterval(pollLogs, 1500);
+    } else if (data.status === "completed") {
+      renderResult(data);
+      setStatus("Showing result of previously running job (" + jobId + ").");
+      clearActiveJob();
+    } else {
+      // error / cancelled / unknown: nothing useful to resume
+      if (data.status === "error") {
+        $("results").innerHTML = "<b class=\"bad\">Execution error.</b> See raw output below.";
+      }
+      clearActiveJob();
+    }
+  }).catch(function () { clearActiveJob(); });
 }
 
 /* ---------- rendering ---------- */
@@ -413,10 +520,15 @@ function renderResult(data) {
 /* ---------- init ---------- */
 
 document.addEventListener("DOMContentLoaded", function () {
+  loadGpuInfo();
   loadExampleList();
+  loadSettingsList();
   $("example-select").addEventListener("change", loadExample);
   $("run-btn").addEventListener("click", runVerification);
   $("cancel-btn").addEventListener("click", cancelJob);
+  $("opt-setting_file-select").addEventListener("change", function () {
+    $("opt-setting_file").value = this.value;
+  });
   $("net-file").addEventListener("change", function () {
     var f = this.files[0];
     $("net-status").textContent = f ? f.name + " (" + formatBytes(f.size) + ")" : "";
@@ -424,7 +536,11 @@ document.addEventListener("DOMContentLoaded", function () {
   $("spec-file").addEventListener("change", function () {
     var f = this.files[0];
     $("spec-status").textContent = f ? f.name + " (" + formatBytes(f.size) + ")" : "";
+    if (f) {
+      f.text().then(function (text) { setVnnlibText(f.name, text); });
+    }
   });
+  resumeActiveJob();
 });
 </script>
 

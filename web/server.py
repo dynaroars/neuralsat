@@ -18,6 +18,25 @@ NEURALSAT_ROOT = Path(os.environ.get("NEURALSAT_ROOT", Path(__file__).resolve().
 NEURALSAT_MAIN = NEURALSAT_ROOT / "src" / "main.py"
 EXAMPLE_ONNX_DIR = NEURALSAT_ROOT / "src" / "example" / "onnx"
 EXAMPLE_VNNLIB_DIR = NEURALSAT_ROOT / "src" / "example" / "vnnlib"
+
+
+def _detect_gpu():
+    """Check once at startup whether the backend process can see a CUDA GPU.
+
+    Importing torch just for this is a couple seconds of one-time cost paid
+    at server boot, not per-request; the result is cached in GPU_INFO below
+    so /api/health and /api/verify don't re-import it on every call.
+    """
+    try:
+        import torch
+        available = torch.cuda.is_available()
+        name = torch.cuda.get_device_name(0) if available else None
+        return {"available": available, "name": name}
+    except Exception:
+        return {"available": False, "name": None}
+
+
+GPU_INFO = _detect_gpu()
 CLASSIC_DIR = Path(__file__).resolve().parent / "frontend-classic"
 
 UPLOAD_DIR = Path(tempfile.gettempdir()) / f"neuralsat_uploads_{os.getuid()}"
@@ -460,6 +479,7 @@ def health():
         "neuralsat_main_exists": NEURALSAT_MAIN.exists(),
         "active_jobs": sum(1 for j in jobs.values() if j["status"] == "running"),
         "queued_jobs": sum(1 for j in jobs.values() if j["status"] == "queued"),
+        "gpu": GPU_INFO,
     })
 
 @app.route("/api/verify", methods=["POST"])
@@ -496,9 +516,15 @@ def verify():
         return jsonify({"error": "Specification file must be .vnnlib format"}), 400
 
     timeout = min(int(request.form.get("timeout", DEFAULT_TIMEOUT)), MAX_TIMEOUT)
-    device = request.form.get("device", "cuda")
+    default_device = "cuda" if GPU_INFO["available"] else "cpu"
+    device = request.form.get("device", default_device)
     if device not in ("cpu", "cuda"):
-        device = "cuda"
+        device = default_device
+    if device == "cuda" and not GPU_INFO["available"]:
+        # main.py itself silently falls back to cpu when no CUDA is visible
+        # (src/main.py); mirror that here so the reported device matches
+        # what actually ran, instead of showing "cuda" for a CPU run.
+        device = "cpu"
     try:
         batch = int(request.form.get("batch", 1000))
     except (ValueError, TypeError):
@@ -674,24 +700,58 @@ def list_examples():
             if f.suffix == ".vnnlib"
         ], key=lambda x: x["size"])
 
+    # Timings below are all measured on CPU (no GPU present on the dev
+    # machine these were written on) and vary a lot with hardware; they're
+    # shown so users can pick a fast one, not as a promise. A GPU backend
+    # will typically be faster than the number shown, not slower.
     quick_examples = [
         {
-            "name": "FNN (tiny, ~1s)",
+            "name": "FNN (tiny, ~0.2s CPU)",
             "net": "fnn.onnx",
             "spec": "fnn.vnnlib",
-            "description": "A small fully-connected network with 2 inputs/outputs.",
+            "description": "A small fully-connected network with 2 inputs/outputs (sat).",
         },
         {
-            "name": "ACAS Xu 1_1 (prop 6, ~3s)",
+            "name": "MNIST small, idx 9 (~1.5s CPU)",
+            "net": "mnist_small.onnx",
+            "spec": "spec_idx_9_net_mnist_small_eps_0.400000_seed_36_output_0.vnnlib",
+            "description": "Small MNIST classifier, local-robustness property (unsat).",
+        },
+        {
+            "name": "ACAS Xu 1_1, prop 1 (~2s CPU)",
+            "net": "ACASXU_run2a_1_1_batch_2000.onnx",
+            "spec": "prop_1.vnnlib",
+            "description": "Aircraft collision avoidance network, property 1 (unsat).",
+        },
+        {
+            "name": "ACAS Xu 1_1, prop 3 (~4s CPU)",
+            "net": "ACASXU_run2a_1_1_batch_2000.onnx",
+            "spec": "prop_3.vnnlib",
+            "description": "Aircraft collision avoidance network, property 3 (unsat).",
+        },
+        {
+            "name": "ACAS Xu 1_1, prop 6 (~13s CPU)",
             "net": "ACASXU_run2a_1_1_batch_2000.onnx",
             "spec": "prop_6.vnnlib",
             "description": "Aircraft collision avoidance network, property 6 (unsat).",
         },
         {
-            "name": "ACAS Xu 1_9 (prop 7, ~6s)",
+            "name": "ACAS Xu 1_9, prop 7 (~43s CPU)",
             "net": "ACASXU_run2a_1_9_batch_2000.onnx",
             "spec": "prop_7.vnnlib",
-            "description": "Aircraft collision avoidance network, property 7 (sat).",
+            "description": "Aircraft collision avoidance network, property 7 (sat) — the harder ACAS Xu instance; noticeably slower without a GPU.",
+        },
+        {
+            "name": "MNIST FC medium-554 (~16s CPU)",
+            "net": "mnistfc-medium-net-554.onnx",
+            "spec": "test.vnnlib",
+            "description": "Larger fully-connected MNIST classifier (unsat).",
+        },
+        {
+            "name": "MNIST FC medium-151 (~31s CPU)",
+            "net": "mnistfc-medium-net-151.onnx",
+            "spec": "prop_2_0.03.vnnlib",
+            "description": "Medium fully-connected MNIST classifier, robustness eps=0.03 (unsat).",
         },
     ]
 
@@ -700,6 +760,17 @@ def list_examples():
         "vnnlib_files": vnnlib_files,
         "quick_examples": quick_examples,
     })
+
+@app.route("/api/settings", methods=["GET"])
+def list_settings():
+    settings_files = []
+    if SETTINGS_DIR.exists():
+        settings_files = sorted([
+            {"name": f.name, "size": f.stat().st_size}
+            for f in SETTINGS_DIR.iterdir()
+            if f.suffix == ".json"
+        ], key=lambda x: x["name"])
+    return jsonify({"settings_files": settings_files})
 
 @app.route("/api/example/<path:filename>", methods=["GET"])
 def download_example(filename: str):

@@ -172,3 +172,6 @@ dmypy.json
 # Visualizer exclusions
 !/web/frontend-classic/index.html
 !/docs/index.html
+
+# Web UI settings presets (see /api/settings in web/server.py)
+!/src/example/settings/*.json

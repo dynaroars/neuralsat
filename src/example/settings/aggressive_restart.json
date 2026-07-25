@@ -1,0 +1,5 @@
+{
+  "restart_max_runtime_percentage": 0.6,
+  "restart_current_hidden_branches": 5000,
+  "restart_visited_hidden_branches": 50000
+}
