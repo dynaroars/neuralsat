@@ -3,10 +3,11 @@ Description=Ngrok Tunnel Service for NeuralSAT
 After=network.target neuralsat-backend.service
 
 [Service]
+Type=simple
 User=webapp
 ExecStart=/usr/local/bin/ngrok http 80 --domain=oarless-chafflike-chung.ngrok-free.dev
 Restart=always
-RestartSec=10
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

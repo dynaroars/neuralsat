@@ -605,11 +605,11 @@ job:
 3. That SSH key is **restricted server-side** via a forced command in
    `webapp`'s `~/.ssh/authorized_keys`:
    ```
-   command="/home/webapp/neuralsat/web/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 ... neuralsat-ci-deploy
+   command="/home/webapp/neuralsat/web/deploy-backend.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 ... neuralsat-ci-deploy
    ```
    No matter what the workflow (or a leaked secret) tries to run, only
-   `web/deploy.sh` ever executes.
-4. `web/deploy.sh` does exactly two things: `git pull origin develop`, then
+   `web/deploy-backend.sh` ever executes.
+4. `web/deploy-backend.sh` does exactly two things: `git pull origin develop`, then
    `sudo systemctl restart neuralsat-backend`. The restart is passwordless
    because of a **scoped sudoers NOPASSWD rule** for `webapp` limited to
    exactly `systemctl restart neuralsat-backend` (`sudo -l` on `taco` shows
@@ -638,8 +638,10 @@ Key lessons from standing this up (in case it breaks again):
 Runs in the same workflow, independently of the backend job (no SSH/`taco`
 involved at all — it only pushes within this repo):
 1. Full checkout (`fetch-depth: 0`) of `develop`.
-2. `web/deploy-frontend.sh` — mirrors `dynaroars/dig`'s `web/deploy.sh`
-   exactly: builds a flat git tree (via `git hash-object` + `git mktree`)
+2. `web/deploy-frontend.sh` — mirrors `dynaroars/dig`'s `web/deploy-frontend.sh`
+   exactly (both repos use identical `deploy-backend.sh`/`deploy-frontend.sh`
+   naming, kept in sync deliberately): builds a flat git tree (via
+   `git hash-object` + `git mktree`)
    containing just `web/frontend-classic/*.html` (basenames only, no
    `web/frontend-classic/` prefix, so files land at the `gh-pages` branch
    *root*), compares its hash to `origin/gh-pages`'s current tree, and — if
@@ -660,12 +662,21 @@ exists holds for every future run.
   above; changing the real systemd units on `taco` requires editing
   `/etc/systemd/system/*.service` there directly.
 - Anything on the DIG side beyond its own analogous pipeline (separate repo
-  `dynaroars/dig`, separate deploy key, `web/deploy-backend.sh` for its
-  backend — note DIG's frontend-publish script is named `web/deploy.sh`,
-  the *opposite* naming convention from this repo's `deploy.sh`
-  (backend)/`deploy-frontend.sh` (frontend), since DIG's `deploy.sh` predates
-  this automation; triggers on push to `dev` not `develop`) — DIG and
-  NeuralSAT share the `taco`/`webapp` host but have fully independent
+  `dynaroars/dig`, separate deploy key, same `web/deploy-backend.sh` /
+  `web/deploy-frontend.sh` naming as this repo — deliberately kept
+  identical across both projects so either is easy to reason about once
+  you understand the other; triggers on push to `dev` not `develop`) — DIG
+  and NeuralSAT share the `taco`/`webapp` host but have fully independent
   deploy keys, scripts, and workflows; a compromised or malfunctioning key
   for one cannot affect the other's service (each forced command is scoped
   to that project's own script and systemd unit).
+- `web/neuralsat-ngrok-tunnel.service` — renamed from `ngrok-tunnel.service`
+  to match DIG's `dig-ngrok-tunnel.service` convention as part of migrating
+  it off the `azan` user (same domain, `oarless-chafflike-chung.ngrok-free.dev`,
+  reused via its existing ngrok authtoken copied into a new
+  `webapp`-owned config — no new domain reservation needed, and none
+  possible anyway since ngrok's free tier caps an account at one reserved
+  domain). Unlike the backend/frontend deploy scripts, cutting this over
+  requires manual root-level steps on `taco` (stop/disable the old unit,
+  install/enable the new one, `daemon-reload`) — CI never touches this
+  service.
