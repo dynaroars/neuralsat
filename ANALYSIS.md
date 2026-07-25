@@ -570,3 +570,79 @@ pre-tuned per architecture family (`resnet6/12/18/36`, `vae_base/wide/deep`).
   the whole pipeline to float64 (`setting.py:92-94`) for numerically
   verifiable exported proofs (APTP format, `helper/proof/`), at a
   performance cost.
+
+## 9. Web UI production deployment and CI/CD
+
+This section documents how `roars.dev/neuralsat` (the web demo, §5) is
+actually deployed — split across two independent pieces that know nothing
+about each other's deploy mechanism.
+
+### 9.1 Two independent deploy targets
+
+| Piece | What | How it's served | How it deploys |
+|---|---|---|---|
+| **Frontend** | `docs/index.html` (kept in sync with `web/frontend-classic/index.html` — see §4/§5) | GitHub Pages, serving this repo's `docs/` folder. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | Whoever edits `web/frontend-classic/index.html` must manually copy it to `docs/index.html` and commit — there is no build step or sync automation for this. |
+| **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled to the public internet via `ngrok` (domain `oarless-chafflike-chung.ngrok-free.dev`) since `taco` isn't otherwise publicly routed on that port. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated**: GitHub Actions deploys on every push to `develop` (§9.2). Not automated: `docs/index.html` sync (frontend) and any change to the systemd/nginx config files themselves (§9.3). |
+
+`taco`'s backend was originally deployed under a user `azan`; it was later
+migrated to run as `webapp` on the same host. The `web/*.service` and
+`web/nginx*.conf` files checked into this repo are **reference/setup docs
+only** — nothing deploys them automatically, and they drifted out of sync
+with the real `azan`→`webapp` migration for a while (fixed in commit
+`065eb64`). Don't trust them as ground truth for current deployment state
+without checking; they're a template for manual `systemctl`/`nginx` setup,
+not live configuration.
+
+### 9.2 Automated backend deploy (`.github/workflows/deploy.yml`)
+
+On every push to `develop` (or manual `workflow_dispatch`), a GitHub Actions
+job:
+1. Writes the `TACO_DEPLOY_SSH_KEY` repository secret to a key file and
+   pins `taco.roars.dev`'s host key (hardcoded in the workflow, not
+   `ssh-keyscan`'d at CI time, to avoid trusting the network for that).
+2. `ssh -tt` (pty forced — required because `sudo` on `taco` has `use_pty`
+   set) into `webapp@taco.roars.dev`.
+3. That SSH key is **restricted server-side** via a forced command in
+   `webapp`'s `~/.ssh/authorized_keys`:
+   ```
+   command="/home/webapp/neuralsat/web/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 ... neuralsat-ci-deploy
+   ```
+   No matter what the workflow (or a leaked secret) tries to run, only
+   `web/deploy.sh` ever executes.
+4. `web/deploy.sh` does exactly two things: `git pull origin develop`, then
+   `sudo systemctl restart neuralsat-backend`. The restart is passwordless
+   because of a **scoped sudoers NOPASSWD rule** for `webapp` limited to
+   exactly `systemctl restart neuralsat-backend` (`sudo -l` on `taco` shows
+   it, alongside equivalent grants for a second project, DIG, sharing the
+   same host/user — `dig-backend`, `dig-ngrok-tunnel`).
+
+Key lessons from standing this up (in case it breaks again):
+- The `authorized_keys` `command=` value **must be quoted**
+  (`command="/path",...`) — an unquoted value caused this sshd to reject
+  the key outright at the pre-auth probe stage (before ever checking the
+  signature), which looks identical to "wrong key" but isn't.
+- Don't `scp` the deploy script onto the target ahead of the first
+  automated pull as an untracked file — `git pull` refuses to fast-forward
+  over an untracked file at a path the incoming commit also touches
+  (`error: ... would be overwritten by merge`). Remove the untracked copy
+  (after confirming it's byte-identical to what's committed) before the
+  first real pull.
+- Never leave an unrestricted duplicate of a scoped deploy key in
+  `authorized_keys` "just for testing" — sshd matches the *first* line with
+  a given key blob, so an unrestricted duplicate added *after* the
+  restricted one is currently inert, but that's fragile, not a security
+  boundary. Delete it.
+
+### 9.3 What CI/CD does *not* cover
+
+- `docs/index.html` (frontend GH Pages copy) — manual sync only.
+- `web/*.service` / `web/nginx*.conf` — manual, and reference-only as noted
+  above; changing the real systemd units on `taco` requires editing
+  `/etc/systemd/system/*.service` there directly.
+- Anything on the DIG side beyond its own analogous pipeline (separate repo
+  `dynaroars/dig`, separate deploy key, `web/deploy-backend.sh`, triggers on
+  push to `dev` not `develop`) — DIG and NeuralSAT share the `taco`/`webapp`
+  host but have fully independent deploy keys, scripts, and workflows; a
+  compromised or malfunctioning key for one cannot affect the other's
+  service (each forced command is scoped to that project's own script and
+  systemd unit).
