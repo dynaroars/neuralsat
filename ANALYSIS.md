@@ -581,8 +581,8 @@ about each other's deploy mechanism.
 
 | Piece | What | How it's served | How it deploys |
 |---|---|---|---|
-| **Frontend** | `docs/index.html` (kept in sync with `web/frontend-classic/index.html` — see §4/§5) | GitHub Pages, serving this repo's `docs/` folder. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | Whoever edits `web/frontend-classic/index.html` must manually copy it to `docs/index.html` and commit — there is no build step or sync automation for this. |
-| **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled to the public internet via `ngrok` (domain `oarless-chafflike-chung.ngrok-free.dev`) since `taco` isn't otherwise publicly routed on that port. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated**: GitHub Actions deploys on every push to `develop` (§9.2). Not automated: `docs/index.html` sync (frontend) and any change to the systemd/nginx config files themselves (§9.3). |
+| **Frontend** | `web/frontend-classic/index.html`, published to the `gh-pages` branch (root) | GitHub Pages, configured to serve the `gh-pages` branch. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop`, mirroring `dynaroars/dig`'s pattern. Previously this was a manually-copied `docs/index.html` on the `develop` branch, which went stale twice before being replaced by this automation. |
+| **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled to the public internet via `ngrok` (domain `oarless-chafflike-chung.ngrok-free.dev`) since `taco` isn't otherwise publicly routed on that port. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated** (§9.2): GitHub Actions deploys on every push to `develop`. Not automated: any change to the systemd/nginx config files themselves (§9.4). |
 
 `taco`'s backend was originally deployed under a user `azan`; it was later
 migrated to run as `webapp` on the same host. The `web/*.service` and
@@ -593,7 +593,7 @@ with the real `azan`→`webapp` migration for a while (fixed in commit
 without checking; they're a template for manual `systemctl`/`nginx` setup,
 not live configuration.
 
-### 9.2 Automated backend deploy (`.github/workflows/deploy.yml`)
+### 9.2 Automated backend deploy (`.github/workflows/deploy.yml`, job `deploy-backend`)
 
 On every push to `develop` (or manual `workflow_dispatch`), a GitHub Actions
 job:
@@ -633,16 +633,39 @@ Key lessons from standing this up (in case it breaks again):
   restricted one is currently inert, but that's fragile, not a security
   boundary. Delete it.
 
-### 9.3 What CI/CD does *not* cover
+### 9.3 Automated frontend deploy (`.github/workflows/deploy.yml`, job `deploy-frontend`)
 
-- `docs/index.html` (frontend GH Pages copy) — manual sync only.
+Runs in the same workflow, independently of the backend job (no SSH/`taco`
+involved at all — it only pushes within this repo):
+1. Full checkout (`fetch-depth: 0`) of `develop`.
+2. `web/deploy-frontend.sh` — mirrors `dynaroars/dig`'s `web/deploy.sh`
+   exactly: builds a flat git tree (via `git hash-object` + `git mktree`)
+   containing just `web/frontend-classic/*.html` (basenames only, no
+   `web/frontend-classic/` prefix, so files land at the `gh-pages` branch
+   *root*), compares its hash to `origin/gh-pages`'s current tree, and — if
+   different — creates a new commit on top of `origin/gh-pages` and pushes
+   it. If unchanged, it's a no-op (`"gh-pages already up to date."`).
+3. Pushing to `gh-pages` uses the default `GITHUB_TOKEN` (job declares
+   `permissions: contents: write`) — no extra secret needed, since this
+   never leaves GitHub's own infrastructure, unlike the backend job.
+
+The `gh-pages` branch itself was bootstrapped once by hand (a root commit
+with the same flat-tree layout) before this automation existed; from that
+point on `deploy-frontend.sh`'s assumption that `origin/gh-pages` already
+exists holds for every future run.
+
+### 9.4 What CI/CD does *not* cover
+
 - `web/*.service` / `web/nginx*.conf` — manual, and reference-only as noted
   above; changing the real systemd units on `taco` requires editing
   `/etc/systemd/system/*.service` there directly.
 - Anything on the DIG side beyond its own analogous pipeline (separate repo
-  `dynaroars/dig`, separate deploy key, `web/deploy-backend.sh`, triggers on
-  push to `dev` not `develop`) — DIG and NeuralSAT share the `taco`/`webapp`
-  host but have fully independent deploy keys, scripts, and workflows; a
-  compromised or malfunctioning key for one cannot affect the other's
-  service (each forced command is scoped to that project's own script and
-  systemd unit).
+  `dynaroars/dig`, separate deploy key, `web/deploy-backend.sh` for its
+  backend — note DIG's frontend-publish script is named `web/deploy.sh`,
+  the *opposite* naming convention from this repo's `deploy.sh`
+  (backend)/`deploy-frontend.sh` (frontend), since DIG's `deploy.sh` predates
+  this automation; triggers on push to `dev` not `develop`) — DIG and
+  NeuralSAT share the `taco`/`webapp` host but have fully independent
+  deploy keys, scripts, and workflows; a compromised or malfunctioning key
+  for one cannot affect the other's service (each forced command is scoped
+  to that project's own script and systemd unit).
