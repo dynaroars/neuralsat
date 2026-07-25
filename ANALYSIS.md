@@ -584,14 +584,21 @@ about each other's deploy mechanism.
 | **Frontend** | `web/frontend-classic/index.html`, published to the `gh-pages` branch (root) | GitHub Pages, configured to serve the `gh-pages` branch. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop`, mirroring `dynaroars/dig`'s pattern. Previously this was a manually-copied `docs/index.html` on the `develop` branch, which went stale twice before being replaced by this automation. |
 | **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled to the public internet via `ngrok` (domain `oarless-chafflike-chung.ngrok-free.dev`) since `taco` isn't otherwise publicly routed on that port. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated** (§9.2): GitHub Actions deploys on every push to `develop`. Not automated: any change to the systemd/nginx config files themselves (§9.4). |
 
-`taco`'s backend was originally deployed under a user `azan`; it was later
-migrated to run as `webapp` on the same host. The `web/*.service` and
-`web/nginx*.conf` files checked into this repo are **reference/setup docs
-only** — nothing deploys them automatically, and they drifted out of sync
-with the real `azan`→`webapp` migration for a while (fixed in commit
-`065eb64`). Don't trust them as ground truth for current deployment state
-without checking; they're a template for manual `systemctl`/`nginx` setup,
-not live configuration.
+`taco`'s backend and ngrok tunnel were originally deployed under a user
+`azan`; both are now fully migrated to run as `webapp` (backend in commit
+`065eb64`'s doc fix + prior manual migration; the `ngrok-tunnel.service` →
+`neuralsat-ngrok-tunnel.service` cutover — same domain,
+`oarless-chafflike-chung.ngrok-free.dev`, reusing its existing authtoken
+copied into a new `webapp`-owned ngrok config — done manually on `taco`,
+verified end-to-end including a passwordless restart via the new scoped
+sudoers rule). The old `ngrok-tunnel.service` unit is stopped/disabled
+(and may already be removed). The `web/*.service` and `web/nginx*.conf`
+files checked into this repo are **reference/setup docs only** — nothing
+deploys them automatically, so they can still drift from the live
+`taco` state if it's changed by hand without a matching repo update (as
+happened once already, fixed in `065eb64`). Don't trust them as ground
+truth for current deployment state without checking; they're a template
+for manual `systemctl`/`nginx` setup, not live configuration.
 
 ### 9.2 Automated backend deploy (`.github/workflows/deploy.yml`, job `deploy-backend`)
 
@@ -671,12 +678,15 @@ exists holds for every future run.
   for one cannot affect the other's service (each forced command is scoped
   to that project's own script and systemd unit).
 - `web/neuralsat-ngrok-tunnel.service` — renamed from `ngrok-tunnel.service`
-  to match DIG's `dig-ngrok-tunnel.service` convention as part of migrating
-  it off the `azan` user (same domain, `oarless-chafflike-chung.ngrok-free.dev`,
-  reused via its existing ngrok authtoken copied into a new
-  `webapp`-owned config — no new domain reservation needed, and none
-  possible anyway since ngrok's free tier caps an account at one reserved
-  domain). Unlike the backend/frontend deploy scripts, cutting this over
-  requires manual root-level steps on `taco` (stop/disable the old unit,
-  install/enable the new one, `daemon-reload`) — CI never touches this
-  service.
+  to match DIG's `dig-ngrok-tunnel.service` convention, and **migrated off
+  `azan` onto `webapp`** (completed and verified live): same domain,
+  `oarless-chafflike-chung.ngrok-free.dev`, reusing its existing ngrok
+  authtoken copied into a new `webapp`-owned config — no new domain
+  reservation needed or possible, since ngrok's free tier caps an account
+  at one reserved domain. Cutover was a manual root-level job on `taco`
+  (stop/disable the old unit, install/enable the new one, `daemon-reload`,
+  plus a new scoped `NOPASSWD` sudoers rule so `webapp` can restart it
+  going forward, mirroring `dig-ngrok-tunnel`'s grant) — CI never touches
+  this service, unlike the backend/frontend deploy jobs. The old
+  `ngrok-tunnel.service` unit is stopped and disabled on `taco` (removal
+  of the file itself is a separate, optional cleanup step).
