@@ -728,7 +728,6 @@ class BoundLinear(BoundOptimizableActivation):
         gvars_array = np.array(v[0])
         # this layer shape (100,)
         # if last layer, this layer shape (9,) instead of (10,)!!!
-        this_layer_shape = self.lower.squeeze(0).shape
         out_lbs = self.lower.squeeze(0).detach().cpu().numpy() if self.lower is not None else None
         out_ubs = self.upper.squeeze(0).detach().cpu().numpy() if self.upper is not None else None
 
@@ -743,6 +742,11 @@ class BoundLinear(BoundOptimizableActivation):
             this_layer_weight = C.squeeze(0).mm(this_layer_weight)
         # if last layer, this layer weight (9,100) instead of (10,100)!!!
         this_layer_weight = this_layer_weight.detach().cpu().numpy()
+
+        # self.lower is None if this Linear isn't the graph's final node and
+        # doesn't feed a ReLU (e.g. a folded BatchNorm's Mul/Add) -- fall back
+        # to the weight matrix's output dim for the neuron count.
+        this_layer_shape = self.lower.squeeze(0).shape if self.lower is not None else this_layer_weight.shape
 
         this_layer_bias = None
         if has_bias:
