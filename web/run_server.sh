@@ -31,4 +31,4 @@ export NEURALSAT_ROOT="$REPO_DIR"
 
 echo "Starting server on port $PORT..."
 cd "$SCRIPT_DIR"
-gunicorn --bind "0.0.0.0:$PORT" --timeout 600 --workers 1 --threads 2 server:app
+exec gunicorn --bind "0.0.0.0:$PORT" --timeout 600 --workers 1 --threads 2 server:app
