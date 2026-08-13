@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   check-changes:
@@ -55,17 +57,27 @@ jobs:
   deploy-frontend:
     needs: check-changes
     if: needs.check-changes.outputs.frontend == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Publish frontend to gh-pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Stage site
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          ./web/deploy-frontend.sh
+          mkdir -p _site
+          cp web/*.html _site/
+
+      - name: Upload static web files
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -581,7 +581,7 @@ about each other's deploy mechanism.
 
 | Piece | What | How it's served | How it deploys |
 |---|---|---|---|
-| **Frontend** | `web/index.html`, published to the `gh-pages` branch (root) | GitHub Pages, configured to serve the `gh-pages` branch. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop`, mirroring `dynaroars/dig`'s pattern. Previously this was a manually-copied `docs/index.html` on the `develop` branch, which went stale twice before being replaced by this automation. |
+| **Frontend** | `web/index.html`, uploaded as a Pages deployment artifact (no branch involved) | GitHub Pages, configured with **Source: GitHub Actions** (not "Deploy from a branch"). Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop` via `actions/deploy-pages`, matching `dynaroars/dig`'s exact mechanism. Previously this was a manually-copied `docs/index.html` on the `develop` branch (went stale twice), then a custom `deploy-frontend.sh` pushing to a `gh-pages` branch (worked, but didn't match DIG's actual mechanism); both are retired now. |
 | **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled *directly* to the public internet via `ngrok` (domain `shingle-unhinge-concert.ngrok-free.dev`, dedicated to NeuralSAT — no nginx in the path) since `taco` isn't otherwise publicly routed on that port. This mirrors `dynaroars/dig`'s own `dig-ngrok-tunnel.service`, which tunnels straight to gunicorn the same way. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated** (§9.2): GitHub Actions deploys on every push to `develop`. Not automated: any change to the systemd config file itself (§9.4). |
 
 `taco`'s backend and ngrok tunnel were originally deployed under a user
@@ -657,25 +657,35 @@ Key lessons from standing this up (in case it breaks again):
 ### 9.3 Automated frontend deploy (`.github/workflows/deploy.yml`, job `deploy-frontend`)
 
 Runs in the same workflow, independently of the backend job (no SSH/`taco`
-involved at all — it only pushes within this repo):
-1. Full checkout (`fetch-depth: 0`) of `develop`.
-2. `web/deploy-frontend.sh` — mirrors `dynaroars/dig`'s `web/deploy-frontend.sh`
-   exactly (both repos use identical `deploy-backend.sh`/`deploy-frontend.sh`
-   naming, kept in sync deliberately): builds a flat git tree (via
-   `git hash-object` + `git mktree`)
-   containing just `web/*.html` (basenames only, no `web/` prefix, so
-   files land at the `gh-pages` branch *root*), compares its hash to
-   `origin/gh-pages`'s current tree, and — if
-   different — creates a new commit on top of `origin/gh-pages` and pushes
-   it. If unchanged, it's a no-op (`"gh-pages already up to date."`).
-3. Pushing to `gh-pages` uses the default `GITHUB_TOKEN` (job declares
-   `permissions: contents: write`) — no extra secret needed, since this
-   never leaves GitHub's own infrastructure, unlike the backend job.
+involved at all, and — as of this mechanism — no branch push within this
+repo either). This now matches `dynaroars/dig`'s `deploy-frontend` job
+exactly, via GitHub's Actions-native Pages deployment:
+1. Checkout of `develop`.
+2. `actions/configure-pages@v5` — prepares the Pages deployment context.
+3. Stage the site into `_site/`: just `cp web/*.html _site/` (DIG's
+   equivalent also copies a `web/examples/` directory into the artifact;
+   NeuralSAT has no such directory, since its examples are served from
+   the backend's `/api/example/<name>` instead of as static files).
+4. `actions/upload-pages-artifact@v3` uploads `_site/` as the deployment
+   artifact.
+5. `actions/deploy-pages@v4` (`id: deployment`) publishes it — this is
+   what actually updates the live site, via GitHub's Pages deployment
+   API, not a branch push. The job's `environment: github-pages` block
+   surfaces the deployed URL as `steps.deployment.outputs.page_url`.
 
-The `gh-pages` branch itself was bootstrapped once by hand (a root commit
-with the same flat-tree layout) before this automation existed; from that
-point on `deploy-frontend.sh`'s assumption that `origin/gh-pages` already
-exists holds for every future run.
+This needs `permissions: pages: write` and `id-token: write` (present at
+the workflow's top level, §9's frontmatter) — no repository secret is
+involved, same as the previous branch-push method.
+
+**One-time manual prerequisite, not automatable from a workflow run:**
+the repository's Pages settings (Settings → Pages → Build and
+deployment) must be set to **Source: GitHub Actions**, not "Deploy from
+a branch." If it's still set to deploy from the old `gh-pages` branch,
+this job will keep succeeding in the Actions log while the live site
+silently keeps serving the stale branch content instead. The `gh-pages`
+branch itself is now unused and can be deleted once the setting is
+confirmed switched and a deploy has been verified live (optional
+cleanup, not required for correctness).
 
 ### 9.4 What CI/CD does *not* cover
 
@@ -683,11 +693,12 @@ exists holds for every future run.
   the real systemd units on `taco` requires editing
   `/etc/systemd/system/*.service` there directly.
 - Anything on the DIG side beyond its own analogous pipeline (separate repo
-  `dynaroars/dig`, separate deploy key, same `web/deploy-backend.sh` /
-  `web/deploy-frontend.sh` naming as this repo — deliberately kept
-  identical across both projects so either is easy to reason about once
-  you understand the other; triggers on push to `dev` not `develop`) — DIG
-  and NeuralSAT share the `taco`/`webapp` host but have fully independent
+  `dynaroars/dig`, separate deploy key, same `web/deploy-backend.sh`
+  naming as this repo — deliberately kept identical across both projects
+  so either is easy to reason about once you understand the other;
+  triggers on push to `dev` not `develop`; its `deploy-frontend` job has
+  no separate script at all, same as NeuralSAT's now) — DIG and
+  NeuralSAT share the `taco`/`webapp` host but have fully independent
   deploy keys, scripts, and workflows; a compromised or malfunctioning key
   for one cannot affect the other's service (each forced command is scoped
   to that project's own script and systemd unit).
