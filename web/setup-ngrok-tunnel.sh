@@ -9,6 +9,14 @@
 # tunnels straight to its backend with no nginx in the path. See
 # ANALYSIS.md Sec 9 for the full history.
 #
+# The new domain lives under a *different* ngrok account than whatever
+# else webapp runs, so (also mirroring dig-ngrok-tunnel.service, which
+# uses its own --config=/home/webapp/ngrok-dig.yml for the same reason)
+# the tunnel authenticates via its own config file,
+# /home/webapp/ngrok-neuralsat.yml, instead of webapp's default ngrok
+# config -- so setting this up never touches or overwrites whatever
+# account/token webapp's other tunnel(s) rely on.
+#
 # Run this ON taco, as root, from a checkout of this repo at (or past) the
 # commit that introduced it:
 #   sudo ./web/setup-ngrok-tunnel.sh
@@ -28,6 +36,7 @@ UNIT_NAME="neuralsat-ngrok-tunnel.service"
 UNIT_SRC="$SCRIPT_DIR/$UNIT_NAME"
 UNIT_DST="/etc/systemd/system/$UNIT_NAME"
 DOMAIN="shingle-unhinge-concert.ngrok-free.dev"
+NGROK_CONFIG="/home/webapp/ngrok-neuralsat.yml"
 
 if [ ! -f "$UNIT_SRC" ]; then
     echo "Expected $UNIT_SRC -- run this from a checkout of the repo, not a copied script." >&2
@@ -36,12 +45,14 @@ fi
 
 echo "== NeuralSAT ngrok tunnel setup =="
 
-echo "-> Checking ngrok is configured for user 'webapp'..."
-if ! sudo -u webapp ngrok config check >/dev/null 2>&1; then
-    echo "[!] Couldn't verify an ngrok config for 'webapp'." >&2
-    echo "    Make sure the domain '$DOMAIN' is reserved (ngrok dashboard)" >&2
-    echo "    and an authtoken for that account is set up for webapp:" >&2
-    echo "      sudo -u webapp ngrok config add-authtoken <TOKEN>" >&2
+echo "-> Checking ngrok config at $NGROK_CONFIG (webapp)..."
+if ! sudo -u webapp ngrok config check --config "$NGROK_CONFIG" >/dev/null 2>&1; then
+    echo "[!] No valid ngrok config found at $NGROK_CONFIG for 'webapp'." >&2
+    echo "    This domain was reserved under a separate ngrok account, so it" >&2
+    echo "    needs its own authtoken in its own config file (not webapp's" >&2
+    echo "    default one, which other tunnels may still depend on). Get the" >&2
+    echo "    authtoken from that account's dashboard.ngrok.com, then run:" >&2
+    echo "      sudo -u webapp ngrok config add-authtoken <TOKEN> --config $NGROK_CONFIG" >&2
     echo "    Continuing anyway -- the service restart below will fail" >&2
     echo "    (and keep retrying via Restart=always) if this isn't set up." >&2
 fi

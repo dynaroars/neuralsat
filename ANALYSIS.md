@@ -594,9 +594,16 @@ config that lived at `web/nginx.conf`/`web/nginx-ngrok.conf`).
 
 That shared-domain arrangement has since been retired for NeuralSAT: the
 tunnel now points at a **domain dedicated to NeuralSAT alone**
-(`shingle-unhinge-concert.ngrok-free.dev`), `ngrok http 5050` straight to
-gunicorn, no nginx involved — the same shape as `dynaroars/dig`'s own
-tunnel. `web/nginx.conf` and `web/nginx-ngrok.conf` have been deleted from
+(`shingle-unhinge-concert.ngrok-free.dev`, reserved under a *different*
+ngrok account than whatever else `webapp` runs), `ngrok http 5050`
+straight to gunicorn, no nginx involved — the same shape as
+`dynaroars/dig`'s own tunnel, which for the identical reason (its own
+separate account) authenticates via its own
+`--config=/home/webapp/ngrok-dig.yml` rather than `webapp`'s default
+ngrok config. NeuralSAT's tunnel now does the same, via
+`--config=/home/webapp/ngrok-neuralsat.yml`, so setting it up never
+touches whatever config/token any other tunnel on the box depends on.
+`web/nginx.conf` and `web/nginx-ngrok.conf` have been deleted from
 this repo; CS Scheduler's continued public access (previously riding on
 the same tunnel) is being handled independently of NeuralSAT's deploy
 pipeline and isn't tracked here. The `web/*.service` file checked into
@@ -698,11 +705,16 @@ exists holds for every future run.
   It has since been repointed a second time, off the domain shared with
   CS Scheduler (`oarless-chafflike-chung.ngrok-free.dev`, fanned out via
   nginx) onto `shingle-unhinge-concert.ngrok-free.dev`, reserved
-  specifically for NeuralSAT, with `ExecStart` now `ngrok http 5050`
-  (straight to gunicorn — matching `dig-ngrok-tunnel.service` exactly,
-  no nginx). This repo change (and the matching `NGROK_API` constant in
-  `web/index.html`) is committed; the domain reservation itself and the
-  swap of the live systemd unit on `taco` are manual steps outside CI,
-  same as any other `web/*.service` change. CS Scheduler's continued
-  public access after losing the shared tunnel is being handled
-  separately, outside NeuralSAT's deploy pipeline.
+  specifically for NeuralSAT **under a separate ngrok account**, with
+  `ExecStart` now `ngrok http 5050 --config=/home/webapp/ngrok-neuralsat.yml`
+  (straight to gunicorn, own config file for the separate account —
+  matching `dig-ngrok-tunnel.service`'s own `--config=ngrok-dig.yml`
+  exactly, no nginx). `web/setup-ngrok-tunnel.sh` installs the unit and
+  checks/guides setup of that config file. This repo change (and the
+  matching `NGROK_API` constant in `web/index.html`) is committed; the
+  domain reservation itself, adding that account's authtoken to
+  `/home/webapp/ngrok-neuralsat.yml`, and running the setup script on
+  `taco` are manual steps outside CI, same as any other `web/*.service`
+  change. CS Scheduler's continued public access after losing the shared
+  tunnel is being handled separately, outside NeuralSAT's deploy
+  pipeline.
