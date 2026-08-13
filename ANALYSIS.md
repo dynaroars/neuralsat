@@ -581,24 +581,31 @@ about each other's deploy mechanism.
 
 | Piece | What | How it's served | How it deploys |
 |---|---|---|---|
-| **Frontend** | `web/frontend-classic/index.html`, published to the `gh-pages` branch (root) | GitHub Pages, configured to serve the `gh-pages` branch. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop`, mirroring `dynaroars/dig`'s pattern. Previously this was a manually-copied `docs/index.html` on the `develop` branch, which went stale twice before being replaced by this automation. |
-| **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled to the public internet via `ngrok` (domain `oarless-chafflike-chung.ngrok-free.dev`) since `taco` isn't otherwise publicly routed on that port. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated** (§9.2): GitHub Actions deploys on every push to `develop`. Not automated: any change to the systemd/nginx config files themselves (§9.4). |
+| **Frontend** | `web/index.html`, published to the `gh-pages` branch (root) | GitHub Pages, configured to serve the `gh-pages` branch. Reachable at `roars.dev/neuralsat` because the org's user/org Pages site (a separate repo) owns the custom domain `roars.dev`, and GitHub Pages cascades that domain to project pages under the same account. | **Automated** (§9.3): a GitHub Actions job publishes on every push to `develop`, mirroring `dynaroars/dig`'s pattern. Previously this was a manually-copied `docs/index.html` on the `develop` branch, which went stale twice before being replaced by this automation. |
+| **Backend** | `web/server.py` (Flask, gunicorn) + the `src/` verifier it shells out to | Runs as a systemd service on a machine called **`taco`**, under a **`webapp`** user account, port 5050, tunneled *directly* to the public internet via `ngrok` (domain `shingle-unhinge-concert.ngrok-free.dev`, dedicated to NeuralSAT — no nginx in the path) since `taco` isn't otherwise publicly routed on that port. This mirrors `dynaroars/dig`'s own `dig-ngrok-tunnel.service`, which tunnels straight to gunicorn the same way. `taco` does have a real GPU (`NVIDIA GeForce RTX 3080 Ti` — visible via `/api/health`'s `gpu` field once GPU auto-detect, §"web UI" work, was added). | **Automated** (§9.2): GitHub Actions deploys on every push to `develop`. Not automated: any change to the systemd config file itself (§9.4). |
 
 `taco`'s backend and ngrok tunnel were originally deployed under a user
 `azan`; both are now fully migrated to run as `webapp` (backend in commit
 `065eb64`'s doc fix + prior manual migration; the `ngrok-tunnel.service` →
-`neuralsat-ngrok-tunnel.service` cutover — same domain,
-`oarless-chafflike-chung.ngrok-free.dev`, reusing its existing authtoken
-copied into a new `webapp`-owned ngrok config — done manually on `taco`,
-verified end-to-end including a passwordless restart via the new scoped
-sudoers rule). The old `ngrok-tunnel.service` unit is stopped/disabled
-(and may already be removed). The `web/*.service` and `web/nginx*.conf`
-files checked into this repo are **reference/setup docs only** — nothing
-deploys them automatically, so they can still drift from the live
-`taco` state if it's changed by hand without a matching repo update (as
-happened once already, fixed in `065eb64`). Don't trust them as ground
-truth for current deployment state without checking; they're a template
-for manual `systemctl`/`nginx` setup, not live configuration.
+`neuralsat-ngrok-tunnel.service` cutover, then run under `webapp` sharing
+domain `oarless-chafflike-chung.ngrok-free.dev` with an unrelated
+"CS Scheduler" service, fanned out by a checked-in `nginx`/`nginx-ngrok`
+config that lived at `web/nginx.conf`/`web/nginx-ngrok.conf`).
+
+That shared-domain arrangement has since been retired for NeuralSAT: the
+tunnel now points at a **domain dedicated to NeuralSAT alone**
+(`shingle-unhinge-concert.ngrok-free.dev`), `ngrok http 5050` straight to
+gunicorn, no nginx involved — the same shape as `dynaroars/dig`'s own
+tunnel. `web/nginx.conf` and `web/nginx-ngrok.conf` have been deleted from
+this repo; CS Scheduler's continued public access (previously riding on
+the same tunnel) is being handled independently of NeuralSAT's deploy
+pipeline and isn't tracked here. The `web/*.service` file checked into
+this repo is **reference/setup docs only** — nothing deploys it
+automatically, so it can still drift from the live `taco` state if
+changed by hand without a matching repo update (as happened once already,
+fixed in `065eb64`). Don't trust it as ground truth for current deployment
+state without checking; it's a template for manual `systemctl` setup, not
+live configuration.
 
 ### 9.2 Automated backend deploy (`.github/workflows/deploy.yml`, job `deploy-backend`)
 
@@ -649,9 +656,9 @@ involved at all — it only pushes within this repo):
    exactly (both repos use identical `deploy-backend.sh`/`deploy-frontend.sh`
    naming, kept in sync deliberately): builds a flat git tree (via
    `git hash-object` + `git mktree`)
-   containing just `web/frontend-classic/*.html` (basenames only, no
-   `web/frontend-classic/` prefix, so files land at the `gh-pages` branch
-   *root*), compares its hash to `origin/gh-pages`'s current tree, and — if
+   containing just `web/*.html` (basenames only, no `web/` prefix, so
+   files land at the `gh-pages` branch *root*), compares its hash to
+   `origin/gh-pages`'s current tree, and — if
    different — creates a new commit on top of `origin/gh-pages` and pushes
    it. If unchanged, it's a no-op (`"gh-pages already up to date."`).
 3. Pushing to `gh-pages` uses the default `GITHUB_TOKEN` (job declares
@@ -665,8 +672,8 @@ exists holds for every future run.
 
 ### 9.4 What CI/CD does *not* cover
 
-- `web/*.service` / `web/nginx*.conf` — manual, and reference-only as noted
-  above; changing the real systemd units on `taco` requires editing
+- `web/*.service` — manual, and reference-only as noted above; changing
+  the real systemd units on `taco` requires editing
   `/etc/systemd/system/*.service` there directly.
 - Anything on the DIG side beyond its own analogous pipeline (separate repo
   `dynaroars/dig`, separate deploy key, same `web/deploy-backend.sh` /
@@ -679,14 +686,23 @@ exists holds for every future run.
   to that project's own script and systemd unit).
 - `web/neuralsat-ngrok-tunnel.service` — renamed from `ngrok-tunnel.service`
   to match DIG's `dig-ngrok-tunnel.service` convention, and **migrated off
-  `azan` onto `webapp`** (completed and verified live): same domain,
-  `oarless-chafflike-chung.ngrok-free.dev`, reusing its existing ngrok
-  authtoken copied into a new `webapp`-owned config — no new domain
-  reservation needed or possible, since ngrok's free tier caps an account
-  at one reserved domain. Cutover was a manual root-level job on `taco`
-  (stop/disable the old unit, install/enable the new one, `daemon-reload`,
-  plus a new scoped `NOPASSWD` sudoers rule so `webapp` can restart it
-  going forward, mirroring `dig-ngrok-tunnel`'s grant) — CI never touches
-  this service, unlike the backend/frontend deploy jobs. The old
-  `ngrok-tunnel.service` unit is stopped and disabled on `taco` (removal
-  of the file itself is a separate, optional cleanup step).
+  `azan` onto `webapp`** (completed and verified live). Cutover was a
+  manual root-level job on `taco` (stop/disable the old unit,
+  install/enable the new one, `daemon-reload`, plus a new scoped
+  `NOPASSWD` sudoers rule so `webapp` can restart it going forward,
+  mirroring `dig-ngrok-tunnel`'s grant) — CI never touches this service,
+  unlike the backend/frontend deploy jobs. The old `ngrok-tunnel.service`
+  unit is stopped and disabled on `taco` (removal of the file itself is a
+  separate, optional cleanup step).
+
+  It has since been repointed a second time, off the domain shared with
+  CS Scheduler (`oarless-chafflike-chung.ngrok-free.dev`, fanned out via
+  nginx) onto `shingle-unhinge-concert.ngrok-free.dev`, reserved
+  specifically for NeuralSAT, with `ExecStart` now `ngrok http 5050`
+  (straight to gunicorn — matching `dig-ngrok-tunnel.service` exactly,
+  no nginx). This repo change (and the matching `NGROK_API` constant in
+  `web/index.html`) is committed; the domain reservation itself and the
+  swap of the live systemd unit on `taco` are manual steps outside CI,
+  same as any other `web/*.service` change. CS Scheduler's continued
+  public access after losing the shared tunnel is being handled
+  separately, outside NeuralSAT's deploy pipeline.

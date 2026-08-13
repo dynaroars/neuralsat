@@ -37,7 +37,7 @@ def _detect_gpu():
 
 
 GPU_INFO = _detect_gpu()
-CLASSIC_DIR = Path(__file__).resolve().parent / "frontend-classic"
+CLASSIC_DIR = Path(__file__).resolve().parent
 
 UPLOAD_DIR = Path(tempfile.gettempdir()) / f"neuralsat_uploads_{os.getuid()}"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -89,7 +89,7 @@ def _resolve_setting_file(raw):
     return candidate, None
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": [r"https://([a-z0-9-]+\.)?roars\.dev$", r"http://localhost:\d+$", r"http://127\.0\.0\.1:\d+$"]}})
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 jobs: dict[str, dict] = {}
