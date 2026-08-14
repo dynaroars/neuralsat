@@ -402,31 +402,38 @@ def solve_full_assignment(self: 'abstractor.abstractor.NetworkAbstractor', input
     feasible = True
     adv = None
     output_vars = self.net.final_node().solver_vars
-    assert len(output_vars) == len(rhs), f"out shape not matching! {len(output_vars)} {len(rhs)}"
-    for out_idx in range(len(output_vars)):
-        objective_var = tmp_model.getVarByName(output_vars[out_idx].VarName)
-        tmp_model.setObjective(objective_var, grb.GRB.MINIMIZE)
+    # tmp_model is a copy of self.net.solver_model, so look up vars by name in it.
+    tmp_output_vars = [tmp_model.getVarByName(v.VarName) for v in output_vars]
+
+    # rhs[i] bounds the linear combination c[i] @ output, not a raw output_vars[i]
+    # (c is only identity for simple per-output margin specs; for genuine linear
+    # combinations, e.g. mmimo_topk's "Y_j - Y_i >= 0", c[i] mixes multiple outputs).
+    assert c.shape[-1] == len(output_vars), f"c shape not matching output! {tuple(c.shape)} {len(output_vars)}"
+    for row_idx in range(len(rhs)):
+        coeffs = c[row_idx].detach().cpu().numpy()
+        objective_expr = grb.LinExpr(coeffs, tmp_output_vars)
+        tmp_model.setObjective(objective_expr, grb.GRB.MINIMIZE)
         tmp_model.update()
         tmp_model.optimize()
 
         if tmp_model.status == 2:
             # print("Gurobi all node split: feasible!")
-            output_lb = objective_var.X
+            output_lb = tmp_model.ObjVal
         else:
             # print(f"Gurobi all node split: infeasible! Model status {tmp_model.status}")
             output_lb = float('inf')
 
-        if output_lb > rhs[out_idx]:
+        if output_lb > rhs[row_idx]:
             feasible = False
             adv = None
             break
-        
+
         input_vars = [tmp_model.getVarByName(f'inp_{dim}') for dim in range(math.prod(self.input_shape))]
         adv = torch.tensor([var.X for var in input_vars], device=self.device).view(self.input_shape)
         adv = torch.clamp(torch.clamp(adv, max=input_upper), min=input_lower)
         if check_solution(net=self.pytorch_model, adv=adv, cs=c, rhs=rhs, data_min=input_lower, data_max=input_upper):
             return True, adv
-        
+
     del tmp_model
     return feasible, adv
 
