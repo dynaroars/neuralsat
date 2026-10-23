@@ -1,0 +1,9 @@
+{{- /* math is rendered while building, with the KaTeX that Hugo embeds; its stylesheet is static/katex */ -}}
+{{- $opts := dict "output" "htmlAndMathml" "displayMode" (eq .Type "block") }}
+{{- with try (transform.ToMath .Inner $opts) }}
+  {{- with .Err }}
+    {{- errorf "Cannot render the math %q at %s: %s" $.Inner $.Position . }}
+  {{- else }}
+    {{- .Value }}
+  {{- end }}
+{{- end -}}

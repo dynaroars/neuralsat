@@ -4,11 +4,17 @@ To support a new layer, add a module providing ``TYPES`` (the torch module
 classes), ``parse``, ``forward`` and ``backward``, and register it below.
 A layer is a dict with the keys ``op``, ``in_shape`` and ``out_shape`` (shapes
 without the batch dimension) plus the parameters its module needs.
+
+The coefficients that ``backward`` receives are dense matrices, or patches (see
+``patches``) when the start node is conv-shaped; Conv2d, BatchNorm, AvgPool2d,
+MaxPool2d and the pointwise activations keep the patch form, the others only
+see dense coefficients.
 '''
 
 import torch
 
 from . import (
+    affine,
     avgpool,
     batchnorm,
     conv,
@@ -63,6 +69,39 @@ def forward(layer, x):
     return HANDLERS[layer['op']].forward(layer, x)
 
 
+def interval(layer, lower, upper):
+    # Output interval of a non-affine layer from flat input bounds.
+    return HANDLERS[layer['op']].interval(layer, lower, upper)
+
+
 def backward(layer, lo, hi, pre_bounds, alphas=None):
     # Back-substitute symbolic bounds ``lo`` and ``hi`` through one layer.
     return HANDLERS[layer['op']].backward(layer, lo, hi, pre_bounds, alphas)
+
+
+def absolute(layer):
+    '''An affine layer with absolute weights and no bias.
+
+    It maps the radius of a box to the radius of the image box.
+    '''
+    out = dict(layer)
+    for key in ('weight', 'scale'):
+        if key in out:
+            out[key] = out[key].abs()
+    for key in ('bias', 'shift'):
+        if out.get(key) is not None:
+            out[key] = torch.zeros_like(out[key])
+    return out
+
+
+def zonotope(layer, center, gens, lower, upper):
+    '''Push the flat zonotope ``(center, gens)`` through one layer.
+
+    ``lower`` and ``upper`` are the flat bounds of the layer's input; only a
+    non-affine layer reads them. Returns the new center and generators.
+    '''
+    if layer['op'] in NONLINEAR:
+        return HANDLERS[layer['op']].zonotope(layer, center, gens, lower,
+                                              upper)
+    return affine.zonotope(lambda x: forward(layer, x), layer['in_shape'],
+                           center, gens)

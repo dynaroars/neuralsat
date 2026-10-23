@@ -1,0 +1,54 @@
+baseURL = '/'
+locale = 'en-us'
+title = 'Minimal NeuralSAT'
+disableKinds = ['taxonomy', 'term', 'rss']
+
+[params]
+  description = 'A minimal functional NeuralSAT: how each layer of a neural network is bounded, and how branch and bound and DPLL(T) use those bounds to verify a robustness property.'
+
+# the shortcodes of the walkthrough emit HTML (details, div); the content is ours
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.goldmark.extensions.passthrough]
+  enable = true
+  [markup.goldmark.extensions.passthrough.delimiters]
+    block = [['$$', '$$']]
+    inline = [['$', '$']]
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 3
+
+[[menus.main]]
+  name = 'Leaderboard'
+  pageRef = '/'
+  weight = 1
+[[menus.main]]
+  name = 'About'
+  pageRef = '/about'
+  weight = 2
+[[menus.main]]
+  name = 'Walkthrough'
+  pageRef = '/walkthrough'
+  weight = 3
+[[menus.main]]
+  name = 'Bounding'
+  pageRef = '/bounding'
+  weight = 4
+[[menus.main]]
+  name = 'Layers'
+  pageRef = '/layers'
+  weight = 5
+[[menus.main]]
+  name = 'Search'
+  pageRef = '/search'
+  weight = 6
+[[menus.main]]
+  name = 'Results'
+  pageRef = '/results'
+  weight = 7
+[[menus.main]]
+  name = 'Reproduce'
+  pageRef = '/reproduce'
+  weight = 8

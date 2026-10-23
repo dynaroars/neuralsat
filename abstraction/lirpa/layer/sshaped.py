@@ -16,6 +16,8 @@ result is sound; the lines can differ in the third decimal.
 
 import torch
 
+from . import activation
+
 ITERATIONS = 60
 
 
@@ -70,6 +72,19 @@ def select(base, *overrides):
         slope, shift = torch.where(mask, k, slope), torch.where(
             mask, b, shift)
     return slope, shift
+
+
+def zonotope(func, dfunc, center, gens, lower, upper):
+    '''Zonotope of an increasing S-shaped function (DeepZ).
+
+    With the slope ``k`` set to the smaller derivative at the two ends, which
+    is the smallest on the interval, ``func(z) - k z`` is increasing, so it
+    lies between its values at ``lower`` and ``upper``.
+    '''
+    slope = torch.minimum(dfunc(lower), dfunc(upper))
+    return activation.parallelogram(
+        center, gens, slope, func(lower) - slope * lower,
+        func(upper) - slope * upper)
 
 
 def relax(func, dfunc, lower, upper, alpha=None):

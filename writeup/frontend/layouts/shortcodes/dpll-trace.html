@@ -1,0 +1,13 @@
+{{- /* DPLL(T) steps recorded by backend/exp/search_trace.py in data/search_trace.json */ -}}
+{{- with hugo.Data.search_trace }}
+<div class="scroll">
+<table>
+	<thead><tr><th>step</th><th>event</th><th>detail</th><th>margin lower bound</th><th>note</th></tr></thead>
+	<tbody>
+	{{- range .dpll.steps }}
+	<tr><td>{{ .step }}</td><td>{{ .event }}</td><td>{{ .detail }}</td><td>{{ with .margin }}{{ printf "%.4f" . }}{{ else }}&ndash;{{ end }}</td><td>{{ .result }}</td></tr>
+	{{- end }}
+	</tbody>
+</table>
+</div>
+{{- end }}

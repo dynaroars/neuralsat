@@ -1,0 +1,21 @@
+{{- /* the ranking written by backend/plot/cactus.py to data/summary.json, best first */ -}}
+{{- $rows := hugo.Data.summary }}
+{{- with index $rows 0 }}
+<p class="best">Best: <strong>{{ .search }} + {{ .abstraction }}</strong>, {{ .solved }} of {{ .total }} instances solved.</p>
+{{- end }}
+<div class="scroll">
+<table class="leaderboard">
+	<thead><tr><th>#</th><th>search + abstraction</th><th>solved</th><th>unsat</th><th>sat</th><th>unknown</th><th>PAR-2 (s)</th><th>solved time (s)</th></tr></thead>
+	<tbody>
+	{{- range $rows }}
+	<tr{{ if eq .rank 1 }} class="first"{{ end }}>
+		<td>{{ .rank }}</td>
+		<td>{{ .search }} + {{ .abstraction }}</td>
+		<td><span class="bar"><span style="width: {{ div (mul (float .solved) 100) .total }}%"></span></span> {{ .solved }}/{{ .total }}</td>
+		<td>{{ .unsat }}</td><td>{{ .sat }}</td><td>{{ .unknown }}</td>
+		<td>{{ printf "%.3f" .par2 }}</td><td>{{ printf "%.2f" .time }}</td>
+	</tr>
+	{{- end }}
+	</tbody>
+</table>
+</div>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="{{ site.Language.Lang }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}</title>
+	<meta name="description" content="{{ with .Params.description }}{{ . }}{{ else }}{{ site.Params.description }}{{ end }}">
+	<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+	{{- /* the file's hash in the address, so a browser never keeps an old copy after a change */}}
+	<link rel="stylesheet" type="text/css" href="{{ "style.css" | relURL }}?v={{ readFile "static/style.css" | md5 | truncate 10 "" }}">
+	{{- /* math is rendered at build time; this is KaTeX's own stylesheet and fonts, kept in static/katex */}}
+	<link rel="stylesheet" type="text/css" href="{{ "katex/katex.min.css" | relURL }}">
+</head>
+<body>
+<nav>
+	<a class="site" href="{{ "" | relURL }}">{{ site.Title }}</a>
+	<span class="links">
+	{{- range site.Menus.main }}
+	<a href="{{ .URL }}"{{ if or ($.IsHome | and (eq .URL "/")) (and (ne .URL "/") (hasPrefix $.RelPermalink .URL)) }} class="current"{{ end }}>{{ .Name }}</a>
+	{{- end }}
+	</span>
+	<button class="theme" type="button" title="Switch between light and dark" aria-label="Switch between light and dark">🌙</button>
+</nav>
+<main>
+<header><h1>{{ .Title }}</h1></header>
+<article>
+{{ block "main" . }}{{ end }}
+</article>
+</main>
+<footer>
+	Minimal functional NeuralSAT. Source in the repository: <code>abstraction/</code>, <code>search/</code>, <code>writeup/</code>.
+</footer>
+<script src="{{ "site.js" | relURL }}?v={{ readFile "static/site.js" | md5 | truncate 10 "" }}" defer></script>
+</body>
+</html>

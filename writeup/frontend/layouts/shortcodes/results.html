@@ -1,0 +1,11 @@
+{{- /* the summary table written by plot/cactus.py to data/summary.json */ -}}
+<div class="scroll">
+<table>
+	<thead><tr><th>configuration</th><th>solved</th><th>unsat</th><th>sat</th><th>unknown</th><th>solved time (s)</th></tr></thead>
+	<tbody>
+	{{- range hugo.Data.summary }}
+	<tr><td>{{ .search }} + {{ .abstraction }}</td><td>{{ .solved }}/{{ .total }}</td><td>{{ .unsat }}</td><td>{{ .sat }}</td><td>{{ .unknown }}</td><td>{{ printf "%.2f" .time }}</td></tr>
+	{{- end }}
+	</tbody>
+</table>
+</div>

@@ -1,0 +1,6 @@
+{{ define "main" -}}
+{{- if .Params.toc }}
+<details class="toc" open><summary>On this page</summary>{{ .TableOfContents }}</details>
+{{- end }}
+{{ .Content }}
+{{- end }}

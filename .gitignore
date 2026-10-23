@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+writeup/frontend/public/
+writeup/frontend/resources/
+.hugo_build.lock

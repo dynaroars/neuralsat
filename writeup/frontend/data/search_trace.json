@@ -1,0 +1,170 @@
+{
+ "instance": {
+  "sizes": [
+   2,
+   4,
+   4,
+   2
+  ],
+  "eps": 0.2622,
+  "x0": [
+   -0.6365,
+   0.2647
+  ],
+  "label": 1,
+  "root_margin": -0.0241
+ },
+ "bab": {
+  "status": "unsat",
+  "nodes": [
+   {
+    "node": 1,
+    "assignment": [],
+    "margin": -0.0241,
+    "result": "not proven",
+    "split": "r1.4"
+   },
+   {
+    "node": 2,
+    "assignment": [
+     "+r1.4"
+    ],
+    "margin": 0.0032,
+    "result": "proven",
+    "split": null
+   },
+   {
+    "node": 3,
+    "assignment": [
+     "-r1.4"
+    ],
+    "margin": -0.001,
+    "result": "not proven",
+    "split": "r1.2"
+   },
+   {
+    "node": 4,
+    "assignment": [
+     "+r1.2",
+     "-r1.4"
+    ],
+    "margin": 0.0101,
+    "result": "proven",
+    "split": null
+   },
+   {
+    "node": 5,
+    "assignment": [
+     "-r1.2",
+     "-r1.4"
+    ],
+    "margin": 0.0141,
+    "result": "proven",
+    "split": null
+   }
+  ]
+ },
+ "dpll": {
+  "status": "unsat",
+  "steps": [
+   {
+    "event": "theory check",
+    "detail": "-",
+    "margin": -0.0241,
+    "result": "not proven",
+    "step": 1
+   },
+   {
+    "event": "decide",
+    "detail": "+r1.4",
+    "margin": null,
+    "result": "try active first",
+    "step": 2
+   },
+   {
+    "event": "theory check",
+    "detail": "+r1.4",
+    "margin": 0.0032,
+    "result": "proven",
+    "step": 3
+   },
+   {
+    "event": "learn",
+    "detail": "-r1.4",
+    "margin": null,
+    "result": "the region where these hold is proven",
+    "step": 4
+   },
+   {
+    "event": "backjump",
+    "detail": "undo +r1.4 and later",
+    "margin": null,
+    "result": "the clause flips it",
+    "step": 5
+   },
+   {
+    "event": "propagate",
+    "detail": "-r1.4",
+    "margin": null,
+    "result": "forced by a learned clause",
+    "step": 6
+   },
+   {
+    "event": "theory check",
+    "detail": "-r1.4",
+    "margin": -0.001,
+    "result": "not proven",
+    "step": 7
+   },
+   {
+    "event": "decide",
+    "detail": "+r1.2",
+    "margin": null,
+    "result": "try active first",
+    "step": 8
+   },
+   {
+    "event": "theory check",
+    "detail": "+r1.2 -r1.4",
+    "margin": 0.0101,
+    "result": "proven",
+    "step": 9
+   },
+   {
+    "event": "learn",
+    "detail": "-r1.2",
+    "margin": null,
+    "result": "the region where these hold is proven",
+    "step": 10
+   },
+   {
+    "event": "backjump",
+    "detail": "undo +r1.2 and later",
+    "margin": null,
+    "result": "the clause flips it",
+    "step": 11
+   },
+   {
+    "event": "propagate",
+    "detail": "-r1.2",
+    "margin": null,
+    "result": "forced by a learned clause",
+    "step": 12
+   },
+   {
+    "event": "theory check",
+    "detail": "-r1.2 -r1.4",
+    "margin": 0.0141,
+    "result": "proven",
+    "step": 13
+   },
+   {
+    "event": "learn",
+    "detail": "empty",
+    "margin": null,
+    "result": "the region where these hold is proven",
+    "step": 14
+   }
+  ]
+ }
+}

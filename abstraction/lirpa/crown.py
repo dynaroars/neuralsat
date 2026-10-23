@@ -9,10 +9,11 @@ takes without the batch dimension, for example ``(1, 28, 28)``; the
 coefficients below are over the flattened values.
 
 For every layer output ``z_i`` that feeds a non-affine layer (and for the
-last one) we keep symbolic bounds
+last one) we keep concrete bounds. An affine ``z_i`` gets symbolic bounds
 ``coef_lo x + off_lo <= z_i <= coef_hi x + off_hi`` (``backsub``,
-Algorithm 1) and concretize them over the ball ``||x - x0||_inf <= eps``
-(``concretize``) with Hoelder's inequality.
+Algorithm 1) that are concretized over the ball ``||x - x0||_inf <= eps``
+(``concretize``) with Hoelder's inequality; a non-affine one gets the exact
+image of the interval before it.
 '''
 
 import math
@@ -20,6 +21,7 @@ import math
 import torch
 
 from . import layer as ops
+from .layer import patches as patch
 
 # -- Network -----------------------------------------------------------------
 
@@ -59,22 +61,40 @@ def bounded_layers(layers):
             if i == last or layers[i + 1]['op'] in ops.NONLINEAR]
 
 
+def use_interval(layers, i):
+    '''Whether the bounds of layer ``i`` come from interval propagation.
+
+    The output of a non-affine layer is the image of an interval, which the
+    layer gives exactly; auto_LiRPA does the same for its intermediate
+    bounds. The last layer is always bounded through the input.
+    '''
+    return i != len(layers) - 1 and layers[i]['op'] in ops.NONLINEAR
+
+
 # -- Symbolic bounds (Algorithm 1) -------------------------------------------
 
-def backsub(layers, bounds, i, like, alphas=None):
+def backsub(layers, bounds, i, like, alphas=None, patches=True):
     '''Symbolic bounds of the output of layer ``i`` over the input.
 
     Returns ``((coef_lo, off_lo), (coef_hi, off_hi))`` over the flattened
-    input. ``bounds`` maps a layer index to the flat concrete bounds
-    ``(l, u)`` of that layer's output; non-affine layers read the entry of
-    the layer before them. ``like`` is a tensor with the dtype and device of
-    the coefficients. ``alphas`` optionally maps a ReLU layer index to its
-    alpha slopes (see ``alphacrown``); None is vanilla CROWN.
+    input. With ``patches=True`` a conv-shaped start node keeps its
+    coefficients in patch form (see ``layer.patches``) until the input, where
+    ``concretize`` reads them directly; ``patches=False`` is the dense
+    reference and the result is the same. ``bounds`` maps a layer index to
+    the flat concrete bounds ``(l, u)`` of that layer's output; non-affine
+    layers read the entry of the layer before them. ``like`` is a tensor with
+    the dtype and device of the coefficients. ``alphas`` optionally maps a
+    ReLU layer index to its alpha slopes (see ``alphacrown``); None is
+    vanilla CROWN.
     '''
     alphas = alphas or {}
-    size = math.prod(layers[i]['out_shape'])
-    eye = torch.eye(size, dtype=like.dtype, device=like.device)
-    lo = hi = (eye, torch.zeros_like(eye[0]))
+    shape = layers[i]['out_shape']
+    size = math.prod(shape)
+    if patches and len(shape) == 3:
+        start = patch.identity(shape, like)
+    else:
+        start = torch.eye(size, dtype=like.dtype, device=like.device)
+    lo = hi = (start, torch.zeros(size, dtype=like.dtype, device=like.device))
     for j in range(i, -1, -1):
         lo, hi = ops.backward(layers[j], lo, hi, bounds.get(j - 1),
                               alphas.get(j))
@@ -88,6 +108,8 @@ def concretize(coef, off, x0, eps, sign):
 
     Returns a lower bound for ``sign=+1`` and an upper bound for ``sign=-1``.
     '''
+    if patch.is_patches(coef):
+        return patch.concretize(coef, off, x0, eps, sign)
     signed = sign * coef
     lower = signed @ x0 - (eps * signed.abs()).sum(-1) + sign * off
     return sign * lower
@@ -120,23 +142,28 @@ def split_effect(bound, split):
     return ((split > 0) & (lower < 0)) | ((split < 0) & (upper > 0))
 
 
-def layer_bounds(layers, x0, eps, splits=None, core=False):
+def layer_bounds(layers, x0, eps, splits=None, core=False, patches=True):
     '''Concrete bounds ``[(l, u)]`` of the layers in ``bounded_layers``.
 
     The bounds are flat tensors. ``splits`` maps a layer index of a ReLU or
     LeakyReLU to its phase split (see ``clamp_split``); None is the whole
     input region. With ``core=True`` the result is ``(bounds, effective)``
     where ``effective`` maps such a layer index to the mask of its splits
-    that changed a bound (``split_effect``).
+    that changed a bound (``split_effect``). ``patches=False`` keeps every
+    coefficient dense.
     '''
     splits = splits or {}
     flat = x0.reshape(-1)
     effective = {}
     bounds = {}
     for i in bounded_layers(layers):
-        (coef_lo, off_lo), (coef_hi, off_hi) = backsub(layers, bounds, i, flat)
-        bound = (concretize(coef_lo, off_lo, flat, eps, +1),
-                 concretize(coef_hi, off_hi, flat, eps, -1))
+        if use_interval(layers, i):
+            bound = ops.interval(layers[i], *bounds[i - 1])
+        else:
+            (coef_lo, off_lo), (coef_hi, off_hi) = backsub(
+                layers, bounds, i, flat, patches=patches)
+            bound = (concretize(coef_lo, off_lo, flat, eps, +1),
+                     concretize(coef_hi, off_hi, flat, eps, -1))
         split = splits.get(i + 1)
         if core and split is not None:
             effective[i + 1] = split_effect(bound, split)

@@ -19,6 +19,11 @@ def forward(layer, x):
     return functional.leaky_relu(x, layer['slope'])
 
 
+def interval(layer, lower, upper):
+    # Exact output interval of the monotone leaky relu.
+    return forward(layer, lower), forward(layer, upper)
+
+
 def relax(slope, lower, upper, alpha=None):
     '''Linear relaxations of leaky relu on ``[lower, upper]``.
 
@@ -38,6 +43,16 @@ def relax(slope, lower, upper, alpha=None):
         alpha = torch.where(chord > 0.5, 1.0, slope).to(upper.dtype)
     slope_lo = torch.where(unstable, alpha.clamp(slope, 1.0), stable)
     return (slope_lo, torch.zeros_like(upper)), (slope_hi, shift_hi)
+
+
+def zonotope(layer, center, gens, lower, upper):
+    '''Zonotope of the leaky relu output: the chord and its parallel through 0.
+
+    The function minus ``chord_slope * z`` is smallest at the kink, where it
+    is 0, so the strip runs from 0 up to the chord's intercept.
+    '''
+    _, (slope, shift) = relax(layer['slope'], lower, upper)
+    return activation.parallelogram(center, gens, slope, 0.0, shift)
 
 
 def backward(layer, lo, hi, pre_bounds, alphas=None):

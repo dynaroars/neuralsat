@@ -1,0 +1,7 @@
+{{- /* {{< fig "name" "caption" >}}: static/img/name-light.png and name-dark.png, the one that matches the theme shows */ -}}
+{{- $name := .Get 0 }}
+<figure>
+	<img class="light-only" src="{{ printf "img/%s-light.png" $name | relURL }}" alt="{{ .Get 1 }}">
+	<img class="dark-only" src="{{ printf "img/%s-dark.png" $name | relURL }}" alt="{{ .Get 1 }}">
+	<figcaption>{{ .Get 1 | markdownify }}</figcaption>
+</figure>

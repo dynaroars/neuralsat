@@ -13,6 +13,7 @@ specification rows.
 
 import torch
 
+from abstraction.lirpa import layer as ops
 from abstraction.lirpa.crown import (
     backsub,
     bounded_layers,
@@ -21,6 +22,7 @@ from abstraction.lirpa.crown import (
     from_sequential,
     margin_layers,
     split_effect,
+    use_interval,
 )
 
 
@@ -36,25 +38,29 @@ def init_alphas(layers, bounds, i):
     return alphas
 
 
-def evaluate(layers, bounds, i, x0, eps, alphas):
+def evaluate(layers, bounds, i, x0, eps, alphas, patches=True):
     # Concrete bounds of layer i for the given alphas.
     (coef_lo, off_lo), (coef_hi, off_hi) = backsub(
-        layers, bounds, i, x0, alphas)
+        layers, bounds, i, x0, alphas, patches)
     return (concretize(coef_lo, off_lo, x0, eps, +1),
             concretize(coef_hi, off_hi, x0, eps, -1))
 
 
-def tune_layer(layers, bounds, i, x0, eps, steps, lr):
+def tune_layer(layers, bounds, i, x0, eps, steps, lr, patches=True):
     '''Tightest bounds of layer ``i`` found by tuning alphas with Adam.'''
+    if use_interval(layers, i):
+        return ops.interval(layers[i], *bounds[i - 1])
     alphas = init_alphas(layers, bounds, i)
     params = [a for pair in alphas.values() for a in pair.values()]
-    best_lower, best_upper = evaluate(layers, bounds, i, x0, eps, alphas)
+    best_lower, best_upper = evaluate(
+        layers, bounds, i, x0, eps, alphas, patches)
     best_lower, best_upper = best_lower.detach(), best_upper.detach()
     if not params:
         return best_lower, best_upper
     optimizer = torch.optim.Adam(params, lr=lr)
     for _ in range(steps):
-        lower, upper = evaluate(layers, bounds, i, x0, eps, alphas)
+        lower, upper = evaluate(
+            layers, bounds, i, x0, eps, alphas, patches)
         best_lower = torch.maximum(best_lower, lower.detach())
         best_upper = torch.minimum(best_upper, upper.detach())
         optimizer.zero_grad()
@@ -64,11 +70,13 @@ def tune_layer(layers, bounds, i, x0, eps, steps, lr):
             for a in params:
                 a.clamp_(0.0, 1.0)
     with torch.no_grad():
-        lower, upper = evaluate(layers, bounds, i, x0, eps, alphas)
+        lower, upper = evaluate(
+            layers, bounds, i, x0, eps, alphas, patches)
     return torch.maximum(best_lower, lower), torch.minimum(best_upper, upper)
 
 
-def layer_bounds(layers, x0, eps, steps=20, lr=0.1, splits=None, core=False):
+def layer_bounds(layers, x0, eps, steps=20, lr=0.1, splits=None, core=False,
+                 patches=True):
     '''Concrete bounds ``[(l, u)]`` of the layers in ``bounded_layers``.
 
     ``splits`` maps a ReLU or LeakyReLU layer index to its phase split (see
@@ -80,7 +88,7 @@ def layer_bounds(layers, x0, eps, steps=20, lr=0.1, splits=None, core=False):
     effective = {}
     bounds = {}
     for i in bounded_layers(layers):
-        bound = tune_layer(layers, bounds, i, flat, eps, steps, lr)
+        bound = tune_layer(layers, bounds, i, flat, eps, steps, lr, patches)
         split = splits.get(i + 1)
         if core and split is not None:
             effective[i + 1] = split_effect(bound, split)

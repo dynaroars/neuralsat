@@ -1,0 +1,13 @@
+{{- /* BaB nodes recorded by backend/exp/search_trace.py in data/search_trace.json */ -}}
+{{- with hugo.Data.search_trace }}
+<div class="scroll">
+<table>
+	<thead><tr><th>node</th><th>assignment</th><th>margin lower bound</th><th>result</th><th>split on</th></tr></thead>
+	<tbody>
+	{{- range .bab.nodes }}
+	<tr><td>{{ .node }}</td><td>{{ if .assignment }}{{ delimit .assignment " " }}{{ else }}(none){{ end }}</td><td>{{ printf "%.4f" .margin }}</td><td>{{ .result }}</td><td>{{ with .split }}{{ . }}{{ else }}&ndash;{{ end }}</td></tr>
+	{{- end }}
+	</tbody>
+</table>
+</div>
+{{- end }}

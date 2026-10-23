@@ -1,0 +1,111 @@
+/* Colours: light by default, dark when the reader's system asks for it or when they use the switch in the
+   top bar (site.js sets data-theme on <html> and remembers the choice). */
+:root {
+    color-scheme: light ;
+    --bg: #ffffff ; --fg: #1b1b1b ; --link: #0645ad ; --line: #c9c9c9 ; --muted: #5a5a5a ;
+    --code: #f3f3f1 ; --th: #efefec ; --callout: #eef4fc ; --callout-bar: #2a78d6 ;
+}
+:root[data-theme="dark"] {
+    color-scheme: dark ;
+    --bg: #1a1a19 ; --fg: #e8e6e3 ; --link: #8ab4f8 ; --line: #45443f ; --muted: #b3b1ac ;
+    --code: #242422 ; --th: #2a2a28 ; --callout: #1b2533 ; --callout-bar: #6aa5ea ;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark ;
+        --bg: #1a1a19 ; --fg: #e8e6e3 ; --link: #8ab4f8 ; --line: #45443f ; --muted: #b3b1ac ;
+        --code: #242422 ; --th: #2a2a28 ; --callout: #1b2533 ; --callout-bar: #6aa5ea ;
+    }
+}
+
+/* each figure comes in a light and a dark version; the one that fits the theme shows */
+.dark-only { display: none ; }
+:root[data-theme="dark"] .light-only { display: none ; }
+:root[data-theme="dark"] .dark-only { display: inline ; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .light-only { display: none ; }
+    :root:not([data-theme="light"]) .dark-only { display: inline ; }
+}
+
+body {
+    font-family: sans-serif ;
+    background: var(--bg) ;
+    color: var(--fg) ;
+    margin: 0 ;
+    line-height: 1.55 ;
+}
+a { color: var(--link) ; }
+
+nav {
+    border-bottom: 1px solid var(--line) ;
+    padding: 0.7em 1em ;
+    display: flex ;
+    flex-wrap: wrap ;
+    align-items: baseline ;
+    gap: 0.4em 1.2em ;
+}
+nav a { text-decoration: none ; white-space: nowrap ; }
+nav a.site { font-weight: bold ; color: var(--fg) ; }
+nav a.current { text-decoration: underline ; }
+nav .links { display: flex ; flex-wrap: wrap ; gap: 0.2em 1.2em ; flex: 1 ; }
+nav .theme {
+    background: none ; border: 1px solid var(--line) ; color: var(--fg) ; font: inherit ;
+    cursor: pointer ; border-radius: 4px ; padding: 0 0.4em ;
+}
+
+main { max-width: 56rem ; margin: auto ; padding: 0 1em ; }
+header h1 { font-size: 1.8em ; margin: 1em 0 0.4em 0 ; }
+h2 { font-size: 1.35em ; margin-top: 2em ; border-bottom: 1px solid var(--line) ; padding-bottom: 0.15em ; }
+h3 { font-size: 1.1em ; margin-top: 1.6em ; }
+.anchor { visibility: hidden ; text-decoration: none ; color: var(--muted) ; font-weight: normal ; }
+h2:hover .anchor, h3:hover .anchor { visibility: visible ; }
+
+footer {
+    max-width: 56rem ; margin: 3em auto 2em auto ; padding: 0 1em ;
+    font-size: 0.85em ; color: var(--muted) ;
+}
+
+code, pre { font-family: monospace ; font-size: 0.92em ; }
+code { background: var(--code) ; padding: 0.05em 0.3em ; border-radius: 3px ; }
+pre { background: var(--code) ; padding: 0.7em 0.9em ; overflow-x: auto ; border-radius: 4px ; line-height: 1.4 ; }
+pre code { background: none ; padding: 0 ; }
+
+.scroll { overflow-x: auto ; }
+table { border-collapse: collapse ; margin: 1em 0 ; }
+th, td { border: 1px solid var(--line) ; padding: 0.3em 0.7em ; text-align: left ; vertical-align: top ; }
+th { background: var(--th) ; }
+
+blockquote {
+    margin: 1em 0 ; padding: 0.4em 1em ; background: var(--callout) ;
+    border-left: 4px solid var(--callout-bar) ; border-radius: 0 4px 4px 0 ;
+}
+blockquote p { margin: 0.4em 0 ; }
+
+figure { margin: 1.4em 0 ; text-align: center ; }
+figure img { max-width: 100% ; height: auto ; }
+figcaption { font-size: 0.9em ; color: var(--muted) ; margin-top: 0.4em ; text-align: left ; }
+
+details.toc { margin: 0.5em 0 1.5em 0 ; border: 1px solid var(--line) ; border-radius: 4px ; padding: 0.3em 0.9em ; }
+details.toc summary { cursor: pointer ; color: var(--muted) ; }
+details.toc ul { margin: 0.3em 0 0.3em 0 ; padding-left: 1.2em ; }
+details.toc nav { border: none ; padding: 0 ; display: block ; }
+
+.katex-display { overflow-x: auto ; padding: 0.6em 0 ; }
+
+/* back-substitution walks of the walkthrough page */
+details.walk { margin: 1em 0 ; border: 1px solid var(--line) ; border-radius: 4px ; padding: 0.2em 0.9em 0.6em ; }
+details.walk > summary { cursor: pointer ; font-weight: bold ; padding: 0.3em 0 ; }
+.card { display: flex ; gap: 0.8em ; margin: 0.9em 0 ; }
+.card .n {
+    flex: none ; width: 1.7em ; height: 1.7em ; border-radius: 50% ; background: var(--callout-bar) ;
+    color: #ffffff ; display: flex ; align-items: center ; justify-content: center ; font-size: 0.9em ;
+}
+.card .body { flex: 1 ; min-width: 0 ; border-left: 2px solid var(--line) ; padding-left: 0.9em ; }
+.card .body > :first-child { margin-top: 0 ; }
+
+/* leaderboard of the front page */
+table.leaderboard td:first-child { text-align: right ; color: var(--muted) ; }
+table.leaderboard tr.first td { font-weight: bold ; }
+.bar { display: inline-block ; width: 5.5em ; height: 0.7em ; background: var(--th) ; border-radius: 3px ; vertical-align: middle ; overflow: hidden ; }
+.bar span { display: block ; height: 100% ; background: var(--callout-bar) ; }
+p.best { font-size: 1.1em ; }

@@ -18,6 +18,11 @@ def forward(layer, x):
     return torch.relu(x)
 
 
+def interval(layer, lower, upper):
+    # Exact output interval of the monotone relu on ``[lower, upper]``.
+    return torch.relu(lower), torch.relu(upper)
+
+
 def relax(lower, upper, alpha=None):
     '''Linear relaxations of relu on ``[lower, upper]``.
 
@@ -37,6 +42,16 @@ def relax(lower, upper, alpha=None):
     slope_lo = torch.where(unstable, alpha.clamp(0.0, 1.0),
                            active.to(upper.dtype))
     return (slope_lo, zeros), (slope_hi, shift_hi)
+
+
+def zonotope(layer, center, gens, lower, upper):
+    '''Zonotope of the relu output (DeepZ).
+
+    A stable neuron is exact. An unstable one lies between the chord and the
+    parallel line through the origin, which touches the function at 0.
+    '''
+    _, (slope, shift) = relax(lower, upper)
+    return activation.parallelogram(center, gens, slope, 0.0, shift)
 
 
 def backward(layer, lo, hi, pre_bounds, alphas=None):

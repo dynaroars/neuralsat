@@ -2,6 +2,8 @@
 
 import torch
 
+from . import patches
+
 TYPES = (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)
 
 
@@ -33,6 +35,11 @@ def forward(layer, x):
 
 def substitute(coef, off, layer):
     # Substitute ``v = scale w + shift`` into ``coef v + off``.
+    if patches.is_patches(coef):
+        size = layer['out_shape'][1:]
+        slope, shift = (v.reshape(-1, 1, 1).expand(-1, *size).reshape(-1)
+                        for v in (layer['scale'], layer['shift']))
+        return patches.scale(coef, off, slope, shift)
     rows = coef.reshape(coef.shape[0], *layer['out_shape'])
     scale = channels(layer, layer['scale'])
     shift = channels(layer, layer['shift'])
